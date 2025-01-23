@@ -501,15 +501,14 @@ struct llama_vision_processor_uhd : llama_vision_processor {
             llama_image_u8 source_image;
             bicubic_resize(img, source_image, best_size.first, best_size.second);
             // source_image = image.resize(best_size, Image.Resampling.BICUBIC)
-            images[images.size()-1].push_back(source_image);
-        }
-        else if (multiple > 1) {
+            images.back().push_back(source_image);
+        } else if (multiple > 1) {
             auto best_size = find_best_resize(original_size, scale_resolution, patch_size);
             llama_image_u8 source_image;
             bicubic_resize(img, source_image, best_size.first, best_size.second);
             // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
             LLAMA_LOG_DEBUG("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img.nx, img.ny, best_size.first, best_size.second);
-            images[images.size()-1].push_back(source_image);
+            images.back().push_back(source_image);
 
             std::pair<int, int> best_grid = find_best_grid(max_slice_nums, multiple, log_ratio);
             LLAMA_LOG_DEBUG("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img.nx, img.ny, best_grid.first, best_grid.second);
@@ -541,7 +540,7 @@ struct llama_vision_processor_uhd : llama_vision_processor {
                             patch.buf[j+2] = refine_image.buf[i+2];
                         }
                     }
-                    images[images.size()-1].push_back(patch);
+                    images.back().push_back(patch);
                 }
             }
         }
@@ -948,7 +947,7 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
     // set raw input
     {
         struct ggml_tensor * inp_raw = ggml_graph_get_tensor(gf, "inp_raw");
-        float * data = (float *)malloc(ggml_nbytes(inp_raw));
+        std::vector<float> inp_buf(ggml_nelements(inp_raw));
 
         for (int i = 0; i < batch_size; i++) {
             const int nx = inp.px * inp.n_px;
@@ -959,14 +958,13 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
                 for (int k = 0; k < 3; k++) {
                     for (int y = 0; y < ny; y++) {
                         for (int x = 0; x < nx; x++) {
-                            data[(b * 3 * n) + k * n + y * nx + x] = inp.buf[b][3 * (y * nx + x) + k];
+                            inp_buf[(b * 3 * n) + k * n + y * nx + x] = inp.buf[b][3 * (y * nx + x) + k];
                         }
                     }
                 }
             }
         }
-        ggml_backend_tensor_set(inp_raw, data, 0, ggml_nbytes(inp_raw));
-        free(data);
+        ggml_backend_tensor_set(inp_raw, inp_buf.data(), 0, ggml_nbytes(inp_raw));
     }
 
     if (model.class_embedding) {
@@ -974,33 +972,57 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
         ggml_set_zero(inp_embd);
     }
 
-    {
+    if (hparams.arch == LLM_ARCH_VISION_MINICPMV) {
+        // inspired from siglip:
+        //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit
+        //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
         struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "inp_pos");
+        std::vector<int> pos_buf(ggml_nelements(positions));
+        GGML_ASSERT(num_positions == (int)pos_buf.size());
 
-        int* positions_data = (int*)malloc(ggml_nbytes(positions));
-        for (int i = 0; i < num_positions; i++) {
-            positions_data[i] = i;
+        int bucket_coords_h[70];
+        int bucket_coords_w[70];
+        for (size_t i = 0; i < inp.n_py; i++) {
+            bucket_coords_h[i] = std::floor(70.0*i/inp.n_py);
         }
-        ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
-        free(positions_data);
+        for (size_t i = 0; i < inp.n_px; i++) {
+            bucket_coords_w[i] = std::floor(70.0*i/inp.n_px);
+        }
+        for (size_t i = 0, id = 0; i < inp.n_py; i++){
+            for (size_t j = 0; j < inp.n_px; j++){
+                pos_buf[id++] = bucket_coords_h[i]*70 + bucket_coords_w[j];
+            }
+        }
+        ggml_backend_tensor_set(positions, pos_buf.data(), 0, ggml_nbytes(positions));
+
+    } else {
+        struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "inp_pos");
+        std::vector<int> pos_buf(ggml_nelements(positions));
+        GGML_ASSERT(num_positions == (int)pos_buf.size());
+        for (int i = 0; i < num_positions; i++) {
+            pos_buf[i] = i;
+        }
+        ggml_backend_tensor_set(positions, pos_buf.data(), 0, ggml_nbytes(positions));
     }
 
     struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "inp_patches");
     if (patches) {
-        int* patches_data = (int*)malloc(ggml_nbytes(patches));
+        std::vector<int> patches_buf(ggml_nelements(patches));
+        GGML_ASSERT(num_patches == (int)patches_buf.size());
         for (int i = 0; i < num_patches; i++) {
-            patches_data[i] = i + 1;
+            patches_buf[i] = i + 1;
         }
-        ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
-        free(patches_data);
+        ggml_backend_tensor_set(patches, patches_buf.data(), 0, ggml_nbytes(patches));
     }
 
     // compute
+    int64_t t_start = ggml_time_ms();
     ggml_backend_sched_graph_compute(ctx.sched, gf);
 
     // the last node is the embedding tensor
     struct ggml_tensor * output_node = ggml_graph_node(gf, -1);
     //LLAMA_LOG_INFO("%s: output tensor shape = %lld %lld %lld %lld\n", __func__, output->ne[0], output->ne[1], output->ne[2], output->ne[3]);
+    LLAMA_LOG_DEBUG("%s: compute time = %lld ms\n", __func__, ggml_time_ms() - t_start);
 
     // copy output node to context
     if (ctx.ctx_ggml) {
