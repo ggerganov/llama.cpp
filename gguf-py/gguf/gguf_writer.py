@@ -928,6 +928,9 @@ class GGUFWriter:
     def add_vision_vit_image_std(self, value: Sequence[float]) -> None:
         self.add_array(Keys.Vision.IMAGE_STD, value)
 
+    def add_vision_vit_scale_factor(self, value: int) -> None:
+        self.add_int32(Keys.Vision.Vit.SCALE_FACTOR, value)
+
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
         if not isinstance(value, str):
             template_default = None

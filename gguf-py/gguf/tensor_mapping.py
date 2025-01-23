@@ -794,6 +794,10 @@ class TensorNameMap:
             "multi_modal_projector.linear_{bid}",
         ),
 
+        MODEL_TENSOR.V_MMPROJ_FC: (
+            "model.connector.modality_projection.proj", # SmolVLM
+        ),
+
         MODEL_TENSOR.V_MMPROJ_MLP: (
             "model.mm_projector.mlp.mlp.{bid}",
         ),
@@ -809,51 +813,61 @@ class TensorNameMap:
         MODEL_TENSOR.V_ENC_EMBD_PATCH: (
             "vision_tower.vision_model.embeddings.patch_embedding",
             "vpm.embeddings.patch_embedding",
+            "model.vision_model.embeddings.patch_embedding", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_EMBD_POS: (
             "vision_tower.vision_model.embeddings.position_embedding",
             "vpm.embeddings.position_embedding",
+            "model.vision_model.embeddings.position_embedding", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_Q: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.q_proj",
             "vpm.encoder.layers.{bid}.self_attn.q_proj",
+            "model.vision_model.encoder.layers.{bid}.self_attn.q_proj", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_K: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.k_proj",
             "vpm.encoder.layers.{bid}.self_attn.k_proj",
+            "model.vision_model.encoder.layers.{bid}.self_attn.k_proj", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_V: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.v_proj",
             "vpm.encoder.layers.{bid}.self_attn.v_proj",
+            "model.vision_model.encoder.layers.{bid}.self_attn.v_proj", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_INPUT_NORM: (
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm1",
             "vpm.encoder.layers.{bid}.layer_norm1",
+            "model.vision_model.encoder.layers.{bid}.layer_norm1", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_OUTPUT: (
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.out_proj",
             "vpm.encoder.layers.{bid}.self_attn.out_proj",
+            "model.vision_model.encoder.layers.{bid}.self_attn.out_proj", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_OUTPUT_NORM: (
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm2",
             "vpm.encoder.layers.{bid}.layer_norm2",
+            "model.vision_model.encoder.layers.{bid}.layer_norm2", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_FFN_UP: (
             "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc1",
             "vpm.encoder.layers.{bid}.mlp.fc1",
+            "model.vision_model.encoder.layers.{bid}.mlp.fc1", # SmolVLM
         ),
 
         MODEL_TENSOR.V_ENC_FFN_DOWN: (
             "vision_tower.vision_model.encoder.layers.{bid}.mlp.fc2",
             "vpm.encoder.layers.{bid}.mlp.fc2",
+            "model.vision_model.encoder.layers.{bid}.mlp.fc2", # SmolVLM
         ),
 
         MODEL_TENSOR.V_PRE_NORM: (
@@ -862,6 +876,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.V_POST_NORM: (
             "vision_tower.vision_model.post_layernorm",
+            "model.vision_model.post_layernorm", # SmolVLM
         ),
 
         MODEL_TENSOR.V_RESMPL_POS_EMBD_K: (

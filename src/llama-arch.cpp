@@ -66,6 +66,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_VISION_LLAVA,     "llava"            },
     { LLM_ARCH_VISION_MOBILEVLM, "mobilevlm"        },
     { LLM_ARCH_VISION_MINICPMV,  "minicpmv"         },
+    { LLM_ARCH_VISION_IDEFICS3,  "idefics3"         },
     { LLM_ARCH_UNKNOWN,          "(unknown)"        },
 };
 
@@ -214,6 +215,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_VISION_VIT_PATCH_MERGE_TYPE,     "vision.vit.patch_merge_type"             },
     { LLM_KV_VISION_VIT_HEAD_COUNT,           "vision.vit.attention.head_count"         },
     { LLM_KV_VISION_VIT_LAYERNORM_EPS,        "vision.vit.attention.layer_norm_epsilon" },
+    { LLM_KV_VISION_VIT_SCALE_FACTOR,         "vision.vit.scale_factor"                 },
 
     // deprecated
     { LLM_KV_TOKENIZER_PREFIX_ID, "tokenizer.ggml.prefix_token_id" },
@@ -1386,6 +1388,25 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_V_TOK_EMBD_END_IMAGE,      "v.tok_embd.end_image"        },
             { LLM_TENSOR_V_TOK_EMBD_SLICE,          "v.tok_embd.slice"            },
             { LLM_TENSOR_V_TOK_EMBD_END_SLICE,      "v.tok_embd.end_slice"        },
+        }
+    },
+    {
+        LLM_ARCH_VISION_IDEFICS3,
+        {
+            { LLM_TENSOR_V_MMPROJ_FC,               "v.mmproj.fc"                 },
+            { LLM_TENSOR_V_ENC_EMBD_CLS,            "v.enc.embd.cls"              },
+            { LLM_TENSOR_V_ENC_EMBD_PATCH,          "v.enc.embd.patch"            },
+            { LLM_TENSOR_V_ENC_EMBD_POS,            "v.enc.embd.pos"              },
+            { LLM_TENSOR_V_ENC_ATTN_Q,              "v.enc.blk.%d.attn_q"         },
+            { LLM_TENSOR_V_ENC_ATTN_K,              "v.enc.blk.%d.attn_k"         },
+            { LLM_TENSOR_V_ENC_ATTN_V,              "v.enc.blk.%d.attn_v"         },
+            { LLM_TENSOR_V_ENC_INPUT_NORM,          "v.enc.blk.%d.input_norm"     },
+            { LLM_TENSOR_V_ENC_OUTPUT,              "v.enc.blk.%d.output"         },
+            { LLM_TENSOR_V_ENC_OUTPUT_NORM,         "v.enc.blk.%d.output_norm"    },
+            { LLM_TENSOR_V_ENC_FFN_UP,              "v.enc.blk.%d.ffn_up"         },
+            { LLM_TENSOR_V_ENC_FFN_DOWN,            "v.enc.blk.%d.ffn_down"       },
+            { LLM_TENSOR_V_PRE_NORM,                "v.pre_norm"                  },
+            { LLM_TENSOR_V_POST_NORM,               "v.post_norm"                 },
         }
     },
     {

@@ -48,6 +48,9 @@ struct llama_vision_model {
 
         std::array<int32_t, 32> image_grid_pinpoints; // TODO: should this be array of (x, y) pairs?
         int32_t image_crop_resolution;
+
+        // idefics3
+        int scale_factor = 0;
     };
     struct vision_hparams hparams;
     ggml_backend_buffer_type_t buft;

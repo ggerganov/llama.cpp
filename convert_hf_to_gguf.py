@@ -292,7 +292,10 @@ class Model:
             self.gguf_writer.add_vision_vit_head_count(self.vparams["num_attention_heads"])
             self.gguf_writer.add_vision_vit_image_mean(self.preprocessor_config["image_mean"])
             self.gguf_writer.add_vision_vit_image_std(self.preprocessor_config["image_std"])
-            self.gguf_writer.add_vision_vit_select_layer(self.find_hparam(["vision_feature_layer", "mm_vision_select_layer"]))
+            try:
+                self.gguf_writer.add_vision_vit_select_layer(self.find_hparam(["vision_feature_layer", "mm_vision_select_layer"]))
+            except KeyError:
+                self.gguf_writer.add_vision_vit_select_layer(0)
 
         self.gguf_writer.add_file_type(self.ftype)
         logger.info(f"gguf: file type = {self.ftype}")
@@ -506,8 +509,9 @@ class Model:
             hparams = json.load(f)
             if "text_config" in hparams:
                 text_config = hparams["text_config"]
+                model_id = text_config.get("_name_or_path", None)
                 # for example, llava-1.5-7b-hf misses the language model config, need to retrieve it via model ID
-                if "_name_or_path" in text_config:
+                if model_id is not None and model_id != "None" and model_id != "":
                     text_config = AutoConfig.from_pretrained(text_config["_name_or_path"]).to_dict()
                 hparams = {**text_config, **hparams}
             return hparams
@@ -1616,7 +1620,7 @@ class StableLMModel(Model):
                 raise ValueError(f"Unprocessed norms: {norms}")
 
 
-@Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM", "LlavaForConditionalGeneration", "MobileLlamaForCausalLM")
+@Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM", "LlavaForConditionalGeneration", "MobileLlamaForCausalLM", "Idefics3ForConditionalGeneration")
 class LlamaModel(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
 
@@ -1639,6 +1643,11 @@ class LlamaModel(Model):
             self.vparams = AutoConfig.from_pretrained(vision_model_id).to_dict()["vision_config"]
             self.preprocessor_config = AutoImageProcessor.from_pretrained(vision_model_id).to_dict()
             self.vision_arch = gguf.MODEL_ARCH.VISION_MOBILEVLM
+
+        if "vision_config" in self.hparams and model_type == "idefics3":
+            self.vparams = self.hparams["vision_config"]
+            self.preprocessor_config = self.load_preprocessor_config(self.dir_model)
+            self.vision_arch = gguf.MODEL_ARCH.VISION_IDEFICS3
 
         if self.vparams is not None and self.vision_arch is not None:
             self.v_tensor_map = gguf.get_tensor_name_map(self.vision_arch, self.vparams["num_hidden_layers"])
@@ -1694,14 +1703,20 @@ class LlamaModel(Model):
 
         # For vision model
         if self.vparams is not None:
+            max_pos_embd = -1
             self.gguf_writer.add_vision_vit_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
             # TODO: should not hardcode these, but they are currently missing from config.json
             if self.vision_arch == gguf.MODEL_ARCH.VISION_LLAVA:
                 self.gguf_writer.add_vision_vit_projector_type(gguf.constants.CLIPProjectorType.MLP)
+                max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
             if self.vision_arch == gguf.MODEL_ARCH.VISION_MOBILEVLM:
                 self.gguf_writer.add_vision_vit_projector_type(gguf.constants.CLIPProjectorType.LDPV2)
+                max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
+            if self.vision_arch == gguf.MODEL_ARCH.VISION_IDEFICS3:
+                self.gguf_writer.add_vision_vit_projector_type(gguf.constants.CLIPProjectorType.MLP)
+                self.gguf_writer.add_vision_vit_scale_factor(self.hparams["scale_factor"])
+                max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2
             self.gguf_writer.add_vision_vit_layer_norm_epsilon(1e-05)
-            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2 + 1
             self.gguf_writer.add_vision_vit_max_position_embeddings(max_pos_embd)
 
     @staticmethod
@@ -1717,19 +1732,23 @@ class LlamaModel(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
+        is_vision_tensor = "vision_tower" in name or "vision_model" in name
 
         # For vision model
         if name.startswith("language_model"):
             name = name.replace("language_model.", "")
+        if name.startswith("model.text_model"):
+            name = name.replace("text_model.", "") # for SmolVLM
         else:
             name = name.replace("model.vision_tower.", "")
-        if "post_layernorm" in name:
+        if "post_layernorm" in name and self.vision_arch != gguf.MODEL_ARCH.VISION_IDEFICS3:
             return [] # skip post_layernorm
 
-        if name.endswith(("q_proj.weight", "q_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
-        if name.endswith(("k_proj.weight", "k_proj.bias")):
-            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+        if not is_vision_tensor:
+            if name.endswith(("q_proj.weight", "q_proj.bias")):
+                data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+            if name.endswith(("k_proj.weight", "k_proj.bias")):
+                data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         # process the experts separately
         if name.find("block_sparse_moe.experts") != -1:

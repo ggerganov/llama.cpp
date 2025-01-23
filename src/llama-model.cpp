@@ -1265,6 +1265,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
         ml.get_key(LLM_KV_VISION_VIT_LAYERNORM_EPS,       vparams.eps,            true);
         ml.get_key(LLM_KV_VISION_VIT_SELECT_LAYER,        vparams.select_layer,   true);
         ml.get_key(LLM_KV_VISION_VIT_MAX_POS_EMBD,        vparams.max_pos_embd,   true);
+        ml.get_key(LLM_KV_VISION_VIT_SCALE_FACTOR,        vparams.scale_factor,   false);
         {
             std::string name;
             ml.get_key(LLM_KV_VISION_VIT_PROJECTOR_TYPE, name, true);
@@ -3579,6 +3580,42 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         layer.output_b   = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT,      "bias"  , i), {n_vembd}, 0);
                     }
                 } break;
+            case LLM_ARCH_VISION_IDEFICS3:
+                {
+                    int scale_factor = vit.hparams.scale_factor;
+                    vit.projection          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_FC,      "weight"), {n_vembd * scale_factor * scale_factor, n_embd});
+
+                    vit.patch_embeddings    = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd});
+                    vit.patch_bias          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "bias"  ), {n_vembd});
+                    vit.position_embeddings = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd});
+
+                    vit.post_norm_w         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "weight"), {n_vembd});
+                    vit.post_norm_b         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "bias"  ), {n_vembd});
+
+                    for (int i = 0; i < n_vlayer; ++i) {
+                        auto & layer = vit.layers[i];
+
+                        layer.k_w        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_K,      "weight", i), {n_vembd, n_vembd}, 0);
+                        layer.k_b        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_K,      "bias"  , i), {n_vembd}, 0);
+                        layer.v_w        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_V,      "weight", i), {n_vembd, n_vembd}, 0);
+                        layer.v_b        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_V,      "bias"  , i), {n_vembd}, 0);
+                        layer.q_w        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_Q,      "weight", i), {n_vembd, n_vembd}, 0);
+                        layer.q_b        = create_tensor(tn(LLM_TENSOR_V_ENC_ATTN_Q,      "bias"  , i), {n_vembd}, 0);
+
+                        layer.ffn_up_w   = create_tensor(tn(LLM_TENSOR_V_ENC_FFN_UP,      "weight", i), {n_vembd, n_vff}, 0);
+                        layer.ffn_up_b   = create_tensor(tn(LLM_TENSOR_V_ENC_FFN_UP,      "bias"  , i), {n_vff}, 0);
+                        layer.ffn_down_w = create_tensor(tn(LLM_TENSOR_V_ENC_FFN_DOWN,    "weight", i), {n_vff, n_vembd}, 0);
+                        layer.ffn_down_b = create_tensor(tn(LLM_TENSOR_V_ENC_FFN_DOWN,    "bias"  , i), {n_vembd}, 0);
+
+                        layer.norm_in_w  = create_tensor(tn(LLM_TENSOR_V_ENC_INPUT_NORM,  "weight", i), {n_vembd}, 0);
+                        layer.norm_in_b  = create_tensor(tn(LLM_TENSOR_V_ENC_INPUT_NORM,  "bias"  , i), {n_vembd}, 0);
+                        layer.norm_out_w = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT_NORM, "weight", i), {n_vembd}, 0);
+                        layer.norm_out_b = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT_NORM, "bias"  , i), {n_vembd}, 0);
+
+                        layer.output_w   = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT,      "weight", i), {n_vembd, n_vembd}, 0);
+                        layer.output_b   = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT,      "bias"  , i), {n_vembd}, 0);
+                    }
+                } break;
             default:
                 throw std::runtime_error("unknown vision architecture");
         }
@@ -4085,6 +4122,7 @@ enum llama_rope_type llama_model_rope_type(const struct llama_model * model) {
         case LLM_ARCH_VISION_LLAVA:
         case LLM_ARCH_VISION_MOBILEVLM:
         case LLM_ARCH_VISION_MINICPMV:
+        case LLM_ARCH_VISION_IDEFICS3:
             GGML_ABORT("vision arch does not use RoPE");
 
         // all model arches should be listed explicitly here

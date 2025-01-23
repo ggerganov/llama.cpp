@@ -42,7 +42,9 @@ struct llama_image_u8 {
 uint32_t llama_vision_n_mmproj_embd(const llama_vision_model & vmodel) {
     auto & proj_type = vmodel.hparams.proj_type;
     if (proj_type == VISION_PROJECTOR_TYPE_MLP) {
-        return vmodel.mm_2_b->ne[0];
+        return vmodel.mm_2_b
+            ? vmodel.mm_2_b->ne[0]
+            : vmodel.projection->ne[1]; // idefics3
     } else if (proj_type == VISION_PROJECTOR_TYPE_LDPV2) {
         return vmodel.mm_model_peg_0_b->ne[0];
     } else if (proj_type == VISION_PROJECTOR_TYPE_MINICPMV_2_5) {
@@ -903,6 +905,40 @@ struct llama_vision_graph_builder {
 
         return gf;
     }
+
+    struct ggml_cgraph * build_idefics3() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, VISION_GRAPH_MAX_NODE, false);
+        struct ggml_tensor * cur = build_vit();
+
+        // https://github.com/huggingface/transformers/blob/0a950e0bbe1ed58d5401a6b547af19f15f0c195e/src/transformers/models/idefics3/modeling_idefics3.py#L578
+        {
+            const int scale_factor = model.hparams.scale_factor;
+            const int n_embd = cur->ne[0];
+            const int seq    = cur->ne[1];
+            const int bsz    = 1; // batch size, always 1 for now since we don't support batching
+            const int height = std::sqrt(seq);
+            const int width  = std::sqrt(seq);
+            cur = ggml_reshape_4d(ctx0, cur, n_embd * scale_factor, width / scale_factor, height, bsz);
+            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+            cur = ggml_reshape_4d(ctx0, ggml_cont(ctx0, cur),
+                n_embd * scale_factor * scale_factor,
+                height / scale_factor,
+                width / scale_factor,
+                bsz);
+            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+            cur = ggml_reshape_3d(ctx0, ggml_cont(ctx0, cur),
+                n_embd * scale_factor * scale_factor,
+                seq / (scale_factor * scale_factor),
+                bsz);
+
+            cur = ggml_mul_mat(ctx0, model.projection, cur);
+        }
+
+        ggml_set_name(cur, "output");
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
 };
 
 static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_vision_tokens & inp) {
@@ -932,6 +968,9 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
             break;
         case LLM_ARCH_VISION_MINICPMV:
             gf = builder.build_minicpmv();
+            break;
+        case LLM_ARCH_VISION_IDEFICS3:
+            gf = builder.build_idefics3();
             break;
         default:
             GGML_ASSERT(false && "unsupported vision arch");
@@ -1064,6 +1103,7 @@ struct llama_vision_tokens * llama_vision_tokenize(
     switch (vctx.model->hparams.arch) {
         case LLM_ARCH_VISION_LLAVA:
         case LLM_ARCH_VISION_MOBILEVLM:
+        case LLM_ARCH_VISION_IDEFICS3:
             return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
         case LLM_ARCH_VISION_MINICPMV:
             //return new llama_vision_tokens(llama_vision_processor_uhd(vctx).tokenize(*bmp));

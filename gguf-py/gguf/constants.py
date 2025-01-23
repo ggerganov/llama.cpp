@@ -238,6 +238,7 @@ class Keys:
             PATCH_MERGE_TYPE    = "vision.vit.patch_merge_type"
             HEAD_COUNT          = "vision.vit.attention.head_count"
             LAYERNORM_EPS       = "vision.vit.attention.layer_norm_epsilon"
+            SCALE_FACTOR        = "vision.vit.scale_factor" # only used by idefics3 for now
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -311,6 +312,7 @@ class MODEL_ARCH(IntEnum):
     VISION_LLAVA     = auto()
     VISION_MOBILEVLM = auto()
     VISION_MINICPMV  = auto()
+    VISION_IDEFICS3  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -441,6 +443,7 @@ class MODEL_TENSOR(IntEnum):
     POSNET_ATTN_OUT      = auto()
     # vision
     V_MMPROJ             = auto()
+    V_MMPROJ_FC          = auto()
     V_MMPROJ_MLP         = auto()
     V_MMPROJ_PEG         = auto()
     V_ENC_EMBD_CLS       = auto()
@@ -535,6 +538,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.VISION_LLAVA:     "llava",
     MODEL_ARCH.VISION_MOBILEVLM: "mobilevlm",
     MODEL_ARCH.VISION_MINICPMV:  "minicpmv",
+    MODEL_ARCH.VISION_IDEFICS3:  "idefics3",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -664,6 +668,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.POSNET_ATTN_OUT:           "posnet.{bid}.attn_output",
     # vision
     MODEL_TENSOR.V_MMPROJ:                  "v.mmproj_{bid}",
+    MODEL_TENSOR.V_MMPROJ_FC:               "v.mmproj.fc",
     MODEL_TENSOR.V_MMPROJ_MLP:              "v.mmproj.mlp.{bid}",
     MODEL_TENSOR.V_MMPROJ_PEG:              "v.mmproj.peg.{bid}",
     MODEL_TENSOR.V_ENC_EMBD_CLS:            "v.enc.embd.cls",
@@ -1694,6 +1699,20 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.V_TOK_EMBD_END_IMAGE,
         MODEL_TENSOR.V_TOK_EMBD_SLICE,
         MODEL_TENSOR.V_TOK_EMBD_END_SLICE,
+    ],
+    MODEL_ARCH.VISION_IDEFICS3: [
+        MODEL_TENSOR.V_MMPROJ_FC,
+        MODEL_TENSOR.V_ENC_EMBD_PATCH,
+        MODEL_TENSOR.V_ENC_EMBD_POS,
+        MODEL_TENSOR.V_ENC_ATTN_Q,
+        MODEL_TENSOR.V_ENC_ATTN_K,
+        MODEL_TENSOR.V_ENC_ATTN_V,
+        MODEL_TENSOR.V_ENC_INPUT_NORM,
+        MODEL_TENSOR.V_ENC_OUTPUT,
+        MODEL_TENSOR.V_ENC_OUTPUT_NORM,
+        MODEL_TENSOR.V_ENC_FFN_UP,
+        MODEL_TENSOR.V_ENC_FFN_DOWN,
+        MODEL_TENSOR.V_POST_NORM,
     ],
     # TODO
 }
