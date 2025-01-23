@@ -195,7 +195,7 @@ class Opt {
             "Options:\n"
             "  -c, --context-size <value>\n"
             "      Context size (default: %d)\n"
-            "  -n, --ngl <value>\n"
+            "  -n, -ngl, --ngl <value>\n"
             "      Number of GPU layers (default: %d)\n"
             "  --temp <value>\n"
             "      Temperature (default: %.1f)\n"
