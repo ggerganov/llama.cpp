@@ -634,20 +634,20 @@ class LlamaData {
         return path.substr(pos + 1);
     }
 
-    int remove_proto(std::string & model_) {
-        const std::string::size_type pos = model_.find("://");
+    int rm_until_substring(std::string & model_, const std::string & substring) {
+        const std::string::size_type pos = model_.find(substring);
         if (pos == std::string::npos) {
             return 1;
         }
 
-        model_ = model_.substr(pos + 3);  // Skip past "://"
+        model_ = model_.substr(pos + substring.size());  // Skip past the substring
         return 0;
     }
 
     int resolve_model(std::string & model_) {
         int                            ret     = 0;
         if (string_starts_with(model_, "file://") || std::filesystem::exists(model_)) {
-            remove_proto(model_);
+            rm_until_substring(model_, "://");
 
             return ret;
         }
@@ -656,13 +656,16 @@ class LlamaData {
         const std::vector<std::string> headers = { "--header",
                                                    "Accept: application/vnd.docker.distribution.manifest.v2+json" };
         if (string_starts_with(model_, "hf://") || string_starts_with(model_, "huggingface://")) {
-            remove_proto(model_);
+            rm_until_substring(model_, "://");
+            ret = huggingface_dl(model_, headers, bn);
+        } else if (string_starts_with(model_, "hf.co/")) {
+            rm_until_substring(model_, "hf.co/");
             ret = huggingface_dl(model_, headers, bn);
         } else if (string_starts_with(model_, "ollama://")) {
-            remove_proto(model_);
+            rm_until_substring(model_, "://");
             ret = ollama_dl(model_, headers, bn);
         } else if (string_starts_with(model_, "https://")) {
-            download(model_, headers, bn, true);
+            ret = download(model_, headers, bn, true);
         } else {
             ret = ollama_dl(model_, headers, bn);
         }
