@@ -147,7 +147,8 @@ class Opt {
                 if (handle_option_with_value(argc, argv, i, context_size) == 1) {
                     return 1;
                 }
-            } else if (options_parsing && (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--ngl") == 0)) {
+            } else if (options_parsing &&
+                       (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "-ngl") == 0 || strcmp(argv[i], "--ngl") == 0)) {
                 if (handle_option_with_value(argc, argv, i, ngl) == 1) {
                     return 1;
                 }
