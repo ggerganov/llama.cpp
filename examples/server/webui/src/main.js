@@ -468,14 +468,22 @@ const mainApp = createApp({
         for await (const chunk of chunks) {
           const stop = chunk.stop;
           const addedContent = chunk.choices[0].delta.content;
-          const lastContent = this.pendingMsg.content || '';
+          const lastContent = this.pendingMsg.fullContent || '';
           if (addedContent) {
             this.pendingMsg = {
               id: this.pendingMsg.id,
               role: 'assistant',
-              content: lastContent + addedContent,
+              fullContent: lastContent + addedContent,
             };
           }
+          const regex = /<think>(.*?)?(?=(<\/think>)|$)/gis;
+          const matches = [];
+          let match;
+          while ((match = regex.exec(this.pendingMsg.fullContent)) !== null) {
+              matches.push(match[1]);
+          }
+          this.pendingMsg.content = this.pendingMsg.fullContent.replace(/<think>.*?(<\/think>|$)/gis, '');
+          this.pendingMsg.cot = matches.join('<br/>');
           const timings = chunk.timings;
           if (timings && this.config.showTokensPerSecond) {
             // only extract what's really needed, to save some space

@@ -261,6 +261,10 @@
           <span v-if="msg.content === null" class="loading loading-dots loading-md"></span>
           <!-- render message as markdown -->
           <div v-else dir="auto">
+            <details v-if="msg.role === 'assistant' && msg.cot" class="collapse bg-base-200" :open="isGenerating">
+              <summary class="collapse-title">Reasoning</summary>
+              <vue-markdown :source="msg.cot" dir="auto" class="collapse-content"></vue-markdown>
+            </details>
             <vue-markdown :source="msg.content"></vue-markdown>
           </div>
           <!-- render timings if enabled -->
