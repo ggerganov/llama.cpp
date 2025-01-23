@@ -50,6 +50,8 @@ const CONFIG_DEFAULT = {
   apiKey: '',
   systemMessage: 'You are a helpful assistant.',
   showTokensPerSecond: false,
+  showThoughtInProgress: false,
+  excludeThoughtOnReq: true,
   // make sure these default values are in sync with `common.h`
   samplers: 'edkypmxt',
   temperature: 0.8,
@@ -172,6 +174,7 @@ const MessageBubble = defineComponent({
     config: Object,
     msg: Object,
     isGenerating: Boolean,
+    showThoughtInProgress: Boolean,
     editUserMsgAndRegenerate: Function,
     regenerateMsg: Function,
   },
@@ -191,27 +194,27 @@ const MessageBubble = defineComponent({
     },
     splitMsgContent() {
       const content = this.msg.content;
-      if (this.msg.role !== "assistant") {
+      if (this.msg.role !== 'assistant') {
         return { content };
       }
-      let actualContent = "";
-      let cot = "";
+      let actualContent = '';
+      let cot = '';
       let isThinking = false;
-      let thinkSplit = content.split("<think>", 2);
+      let thinkSplit = content.split('<think>', 2);
       actualContent += thinkSplit[0];
       while (thinkSplit[1] !== undefined) {
         // <think> tag found
-        thinkSplit = thinkSplit[1].split("</think>", 2);
+        thinkSplit = thinkSplit[1].split('</think>', 2);
         cot += thinkSplit[0];
         isThinking = true;
         if (thinkSplit[1] !== undefined) {
           // </think> closing tag found
           isThinking = false;
-          thinkSplit = thinkSplit[1].split("<think>", 2);
+          thinkSplit = thinkSplit[1].split('<think>', 2);
           actualContent += thinkSplit[0];
         }
       }
-      return { content: actualContent, cot , isThinking};
+      return { content: actualContent, cot, isThinking };
     },
   },
   methods: {
