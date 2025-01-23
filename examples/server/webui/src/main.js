@@ -256,7 +256,7 @@ const StorageUtils = {
   },
   /**
    * can return null if convId does not exist
-   * @param {string} convId 
+   * @param {string} convId
    * @returns {Conversation | null}
    */
   getOneConversation(convId) {
@@ -264,8 +264,8 @@ const StorageUtils = {
   },
   /**
    * if convId does not exist, create one
-   * @param {string} convId 
-   * @param {Message} msg 
+   * @param {string} convId
+   * @param {Message} msg
    */
   appendMsg(convId, msg) {
     if (msg.content === null) return;
@@ -672,7 +672,7 @@ try {
 
 /**
  * filter out redundant fields upon sending to API
- * @param {Array<APIMessage>} messages 
+ * @param {Array<APIMessage>} messages
  * @returns {Array<APIMessage>}
  */
 function normalizeMsgsForAPI(messages) {
@@ -686,7 +686,7 @@ function normalizeMsgsForAPI(messages) {
 
 /**
  * recommended for DeepsSeek-R1, filter out content between <think> and </think> tags
- * @param {Array<APIMessage>} messages 
+ * @param {Array<APIMessage>} messages
  * @returns {Array<APIMessage>}
  */
 function filterThoughtFromMsgs(messages) {
