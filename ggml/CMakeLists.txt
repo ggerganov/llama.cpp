@@ -272,9 +272,25 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-set(GGML_BUILD_NUMBER        ${BUILD_NUMBER})
-set(GGML_BUILD_COMMIT        ${BUILD_COMMIT})
-set(GGML_INSTALL_VERSION 0.0.${BUILD_NUMBER})
+find_program(GIT_EXE NAMES git git.exe REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+execute_process(COMMAND ${GIT_EXE} rev-list --count HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GGML_BUILD_NUMBER
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(${GGML_BUILD_NUMBER} EQUAL 1)
+    message(WARNING
+        "GGML build version fixed at 1 likely due to a shallow clone.")
+endif()
+
+execute_process(COMMAND ${GIT_EXE} rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GGML_BUILD_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(GGML_INSTALL_VERSION 0.0.${GGML_BUILD_NUMBER})
 
 set(GGML_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
 set(GGML_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
