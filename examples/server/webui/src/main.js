@@ -190,18 +190,25 @@ const MessageBubble = defineComponent({
       };
     },
     splitMsgContent() {
-      // TODO: make it more efficient
       const content = this.msg.content;
       if (this.msg.role !== 'assistant'){
         return {content};
       }
-      const regex = /<think>(.*?)?(?=(<\/think>)|$)/gis;
-      const matches = [];
-      let match;
-      while ((match = regex.exec(content)) !== null) {
-          matches.push(match[1]);
+      let actualContent = '';
+      let cot = '';
+      let thinkSplit = content.split("<think>",2);
+      actualContent += thinkSplit[0];
+      while (thinkSplit[1]!==undefined){
+        // <think> tag found
+        thinkSplit = thinkSplit[1].split("</think>",2);
+        cot+=thinkSplit[0];
+        if(thinkSplit[1]!==undefined){
+          // </think> closing tag found
+          thinkSplit = thinkSplit[1].split("<think>",2);
+          actualContent+=thinkSplit[0];
+        }
       }
-      return {content : content.replace(/<think>.*?(<\/think>|$)/gis, ''), cot : matches.join('<br/>') };
+      return {content : actualContent, cot };
     },
   },
   methods: {
