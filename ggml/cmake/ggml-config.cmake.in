@@ -84,7 +84,7 @@ if (NOT GGML_SHARED_LIB)
 endif()
 
 set(_ggml_all_targets "")
-foreach(_ggml_backend @GGML_BACKENDS@)
+foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
     string(replace "-" "_" _ggml_backend_pfx "${_ggml_backend}")
 
     find_library(${_ggml_backend_pfx}_LIBRARY ${_ggml_backend}

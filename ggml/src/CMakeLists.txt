@@ -250,6 +250,13 @@ function(ggml_add_backend_library backend)
         target_compile_definitions(${backend} PRIVATE GGML_BACKEND_BUILD)
         target_compile_definitions(${backend} PUBLIC  GGML_BACKEND_SHARED)
     endif()
+
+    if(NOT GGML_AVAILABLE_BACKENDS)
+        set(GGML_AVAILABLE_BACKENDS "${backend}" CACHE INTERNAL "List of backends for cmake package")
+    else()
+        set(GGML_AVAILABLE_BACKENDS "${GGML_AVAILABLE_BACKENDS};${backend}"
+            CACHE INTERNAL "List of backends for cmake package")
+    endif()
 endfunction()
 
 function(ggml_add_backend backend)
