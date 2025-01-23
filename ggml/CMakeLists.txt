@@ -278,9 +278,8 @@ execute_process(COMMAND ${GIT_EXE} rev-list --count HEAD
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-if(${GGML_BUILD_NUMBER} EQUAL 1)
-    message(WARNING
-        "GGML build version fixed at 1 likely due to a shallow clone.")
+if(GGML_BUILD_NUMBER EQUAL 1)
+    message(WARNING "GGML build version fixed at 1 likely due to a shallow clone.")
 endif()
 
 execute_process(COMMAND ${GIT_EXE} rev-parse --short HEAD

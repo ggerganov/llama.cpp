@@ -252,10 +252,14 @@ function(ggml_add_backend_library backend)
     endif()
 
     if(NOT GGML_AVAILABLE_BACKENDS)
-        set(GGML_AVAILABLE_BACKENDS "${backend}" CACHE INTERNAL "List of backends for cmake package")
-    else()
-        set(GGML_AVAILABLE_BACKENDS "${GGML_AVAILABLE_BACKENDS};${backend}"
+        set(GGML_AVAILABLE_BACKENDS "${backend}"
             CACHE INTERNAL "List of backends for cmake package")
+    else()
+        list(FIND GGML_AVAILABLE_BACKENDS "${backend}" has_backend)
+        if(has_backend EQUAL -1)
+            set(GGML_AVAILABLE_BACKENDS "${GGML_AVAILABLE_BACKENDS};${backend}"
+                CACHE INTERNAL "List of backends for cmake package")
+        endif()
     endif()
 endfunction()
 
