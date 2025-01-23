@@ -191,24 +191,27 @@ const MessageBubble = defineComponent({
     },
     splitMsgContent() {
       const content = this.msg.content;
-      if (this.msg.role !== 'assistant'){
-        return {content};
+      if (this.msg.role !== "assistant") {
+        return { content };
       }
-      let actualContent = '';
-      let cot = '';
-      let thinkSplit = content.split("<think>",2);
+      let actualContent = "";
+      let cot = "";
+      let isThinking = false;
+      let thinkSplit = content.split("<think>", 2);
       actualContent += thinkSplit[0];
-      while (thinkSplit[1]!==undefined){
+      while (thinkSplit[1] !== undefined) {
         // <think> tag found
-        thinkSplit = thinkSplit[1].split("</think>",2);
-        cot+=thinkSplit[0];
-        if(thinkSplit[1]!==undefined){
+        thinkSplit = thinkSplit[1].split("</think>", 2);
+        cot += thinkSplit[0];
+        isThinking = true;
+        if (thinkSplit[1] !== undefined) {
           // </think> closing tag found
-          thinkSplit = thinkSplit[1].split("<think>",2);
-          actualContent+=thinkSplit[0];
+          isThinking = false;
+          thinkSplit = thinkSplit[1].split("<think>", 2);
+          actualContent += thinkSplit[0];
         }
       }
-      return {content : actualContent, cot };
+      return { content: actualContent, cot , isThinking};
     },
   },
   methods: {
