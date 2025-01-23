@@ -693,7 +693,9 @@ function filterThoughtFromMsgs(messages) {
   return messages.map((msg) => {
     return {
       role: msg.role,
-      content: msg.content.split('</think>').at(-1).trim(),
+      content: msg.role === 'assistant'
+        ? msg.content.split('</think>').at(-1).trim()
+        : msg.content,
     };
   });
 }
