@@ -188,7 +188,21 @@ const MessageBubble = defineComponent({
         prompt_per_second: this.msg.timings.prompt_n / (this.msg.timings.prompt_ms / 1000),
         predicted_per_second: this.msg.timings.predicted_n / (this.msg.timings.predicted_ms / 1000),
       };
-    }
+    },
+    splitMsgContent() {
+      // TODO: make it more efficient
+      const content = this.msg.content;
+      if (this.msg.role !== 'assistant'){
+        return {content};
+      }
+      const regex = /<think>(.*?)?(?=(<\/think>)|$)/gis;
+      const matches = [];
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+          matches.push(match[1]);
+      }
+      return {content : content.replace(/<think>.*?(<\/think>|$)/gis, ''), cot : matches.join('<br/>') };
+    },
   },
   methods: {
     copyMsg() {
@@ -468,22 +482,14 @@ const mainApp = createApp({
         for await (const chunk of chunks) {
           const stop = chunk.stop;
           const addedContent = chunk.choices[0].delta.content;
-          const lastContent = this.pendingMsg.fullContent || '';
+          const lastContent = this.pendingMsg.content || '';
           if (addedContent) {
             this.pendingMsg = {
               id: this.pendingMsg.id,
               role: 'assistant',
-              fullContent: lastContent + addedContent,
+              content: lastContent + addedContent,
             };
           }
-          const regex = /<think>(.*?)?(?=(<\/think>)|$)/gis;
-          const matches = [];
-          let match;
-          while ((match = regex.exec(this.pendingMsg.fullContent)) !== null) {
-              matches.push(match[1]);
-          }
-          this.pendingMsg.content = this.pendingMsg.fullContent.replace(/<think>.*?(<\/think>|$)/gis, '');
-          this.pendingMsg.cot = matches.join('<br/>');
           const timings = chunk.timings;
           if (timings && this.config.showTokensPerSecond) {
             // only extract what's really needed, to save some space
