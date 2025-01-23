@@ -4677,7 +4677,7 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_block_count(self.hparams["num_layers"])
         self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_head_count_kv(n_head_kv)
-        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layernorm_epsilon"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_rope_dimension_count(64)
         self.gguf_writer.add_add_bos_token(False)
