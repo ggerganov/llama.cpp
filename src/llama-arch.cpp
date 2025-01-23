@@ -1382,6 +1382,10 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
             { LLM_TENSOR_V_RESMPL_Q_NORM,           "v.resmpl.q_norm"             },
             { LLM_TENSOR_V_RESMPL_PROJ,             "v.resmpl.proj"               },
             { LLM_TENSOR_V_RESMPL_QUERY,            "v.resmpl.query"              },
+            { LLM_TENSOR_V_TOK_EMBD_IMAGE,          "v.tok_embd.image"            },
+            { LLM_TENSOR_V_TOK_EMBD_END_IMAGE,      "v.tok_embd.end_image"        },
+            { LLM_TENSOR_V_TOK_EMBD_SLICE,          "v.tok_embd.slice"            },
+            { LLM_TENSOR_V_TOK_EMBD_END_SLICE,      "v.tok_embd.end_slice"        },
         }
     },
     {

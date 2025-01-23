@@ -129,7 +129,11 @@ struct llama_vision_model {
     struct ggml_tensor * mm_model_ln_post_w   = nullptr;
     struct ggml_tensor * mm_model_ln_post_b   = nullptr;
 
-    struct ggml_tensor * image_newline = nullptr;
+    // special tokens
+    struct ggml_tensor * mm_tok_embd_image     = nullptr;
+    struct ggml_tensor * mm_tok_embd_end_image = nullptr;
+    struct ggml_tensor * mm_tok_embd_slice     = nullptr;
+    struct ggml_tensor * mm_tok_embd_end_slice = nullptr;
 };
 
 struct llama_vision_context {

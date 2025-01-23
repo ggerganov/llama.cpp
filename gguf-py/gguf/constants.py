@@ -467,6 +467,10 @@ class MODEL_TENSOR(IntEnum):
     V_RESMPL_Q_NORM      = auto() # minicpmv
     V_RESMPL_PROJ        = auto() # minicpmv
     V_RESMPL_QUERY       = auto() # minicpmv
+    V_TOK_EMBD_IMAGE     = auto() # embedding for <image> token
+    V_TOK_EMBD_END_IMAGE = auto() # embedding for </image> token
+    V_TOK_EMBD_SLICE     = auto() # embedding for <slice> token
+    V_TOK_EMBD_END_SLICE = auto() # embedding for </slice> token
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -686,6 +690,10 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.V_RESMPL_Q_NORM:           "v.resmpl.q_norm",
     MODEL_TENSOR.V_RESMPL_PROJ:             "v.resmpl.proj",
     MODEL_TENSOR.V_RESMPL_QUERY:            "v.resmpl.query",
+    MODEL_TENSOR.V_TOK_EMBD_IMAGE:          "v.tok_embd.image",
+    MODEL_TENSOR.V_TOK_EMBD_END_IMAGE:      "v.tok_embd.end_image",
+    MODEL_TENSOR.V_TOK_EMBD_SLICE:          "v.tok_embd.slice",
+    MODEL_TENSOR.V_TOK_EMBD_END_SLICE:      "v.tok_embd.end_slice",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -1682,6 +1690,10 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.V_RESMPL_Q_NORM,
         MODEL_TENSOR.V_RESMPL_PROJ,
         MODEL_TENSOR.V_RESMPL_QUERY,
+        MODEL_TENSOR.V_TOK_EMBD_IMAGE,
+        MODEL_TENSOR.V_TOK_EMBD_END_IMAGE,
+        MODEL_TENSOR.V_TOK_EMBD_SLICE,
+        MODEL_TENSOR.V_TOK_EMBD_END_SLICE,
     ],
     # TODO
 }

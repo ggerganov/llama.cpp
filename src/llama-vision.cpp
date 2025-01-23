@@ -895,6 +895,10 @@ struct llama_vision_graph_builder {
             cur = ggml_mul_mat(ctx0, model.mm_model_proj, cur);
         }
 
+        // add <image> and </image> token embeddings
+        cur = ggml_concat(ctx0, model.mm_tok_embd_image, cur, 1);
+        cur = ggml_concat(ctx0, cur, model.mm_tok_embd_end_image, 1);
+
         ggml_set_name(cur, "output");
         ggml_build_forward_expand(gf, cur);
 

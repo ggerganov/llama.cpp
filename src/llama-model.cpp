@@ -3549,6 +3549,12 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     vit.mm_model_ln_post_w     = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "weight"), {rs_n_embd});
                     vit.mm_model_ln_post_b     = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "bias"  ), {rs_n_embd});
 
+                    // tok embd
+                    vit.mm_tok_embd_image      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_IMAGE,      "weight"), {n_embd});
+                    vit.mm_tok_embd_end_image  = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_END_IMAGE,  "weight"), {n_embd});
+                    vit.mm_tok_embd_slice      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_SLICE,      "weight"), {n_embd});
+                    vit.mm_tok_embd_end_slice  = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_END_SLICE,  "weight"), {n_embd});
+
                     for (int i = 0; i < n_vlayer; ++i) {
                         auto & layer = vit.layers[i];
 

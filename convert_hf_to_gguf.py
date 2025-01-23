@@ -2339,6 +2339,7 @@ class MiniCPMVModel(Qwen2Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
     proj_type: gguf.constants.CLIPProjectorType | None
     resampler_n_embd = 0
+    tok_embd_tensor: Tensor | None = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -2361,6 +2362,8 @@ class MiniCPMVModel(Qwen2Model):
             for tname, tensor in self.get_tensors():
                 if tname == "resampler.ln_post.bias":
                     self.resampler_n_embd = tensor.shape[0]
+                if tname.endswith("embed_tokens.weight"):
+                    self.tok_embd_tensor = tensor
             if self.resampler_n_embd < 2:
                 raise ValueError("Failed to detect resampler embedding size")
         else:
@@ -2371,6 +2374,16 @@ class MiniCPMVModel(Qwen2Model):
             self.preprocessor_config["image_std"] = [0.5, 0.5, 0.5]
             self.hparams["vision_feature_layer"] = 0
             self.v_tensor_map = gguf.get_tensor_name_map(self.vision_arch, self.vparams["num_hidden_layers"])
+
+    def get_embd_of_tokens(self, map_token_to_tensor_name: Iterable[tuple[str, str]]) -> Iterable[tuple[str, Tensor]]:
+        if self.tok_embd_tensor is None:
+            raise ValueError("Token embedding tensor not found")
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(self.dir_model, trust_remote_code=True)
+        for token, tensor_name in map_token_to_tensor_name:
+            tok_id = tokenizer.get_vocab()[token]
+            row = self.tok_embd_tensor[tok_id]
+            yield tensor_name, row
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
@@ -2388,6 +2401,14 @@ class MiniCPMVModel(Qwen2Model):
             self.format_tensor_name(gguf.MODEL_TENSOR.V_RESMPL_POS_EMBD_K, is_vision=True),
             torch.from_numpy(self._get_2d_sincos_pos_embed(self.resampler_n_embd, (70, 70)))
         )
+        added_tokens = [
+            ("<image>",  gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_IMAGE    ] + ".weight"),
+            ("</image>", gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_END_IMAGE] + ".weight"),
+            ("<slice>",  gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_SLICE    ] + ".weight"),
+            ("</slice>", gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_END_SLICE] + ".weight"),
+        ]
+        for tensor_name, tensor in self.get_embd_of_tokens(added_tokens):
+            yield tensor_name, tensor
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
@@ -2404,6 +2425,7 @@ class MiniCPMVModel(Qwen2Model):
             name_k = name.replace("in_proj_", "in_proj_k.") # in_proj_k.(weight|bias)
             name_v = name.replace("in_proj_", "in_proj_v.") # in_proj_v.(weight|bias)
             return [
+                # TODO: permute these
                 (self.map_tensor_name(name_q), split_tensor[0]),
                 (self.map_tensor_name(name_k), split_tensor[1]),
                 (self.map_tensor_name(name_v), split_tensor[2]),
@@ -2412,6 +2434,9 @@ class MiniCPMVModel(Qwen2Model):
         # append .weight to these tensors
         if name == "resampler.proj" or name == "resampler.query":
             name += ".weight"
+
+        if name.startswith("resampler.proj"):
+            data_torch = data_torch.transpose(-1, -2).contiguous()
 
         if "post_layernorm" in name:
             return [] # skip post_layernorm

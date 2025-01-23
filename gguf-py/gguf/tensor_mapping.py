@@ -907,6 +907,22 @@ class TensorNameMap:
         MODEL_TENSOR.V_RESMPL_QUERY: (
             "resampler.query",
         ),
+
+        MODEL_TENSOR.V_TOK_EMBD_IMAGE:(
+            "v.tok_embd.image", # tensor generated from token embeddings
+        ),
+
+        MODEL_TENSOR.V_TOK_EMBD_END_IMAGE:(
+            "v.tok_embd.end_image", # tensor generated from token embeddings
+        ),
+
+        MODEL_TENSOR.V_TOK_EMBD_SLICE:(
+            "v.tok_embd.slice", # tensor generated from token embeddings
+        ),
+
+        MODEL_TENSOR.V_TOK_EMBD_END_SLICE:(
+            "v.tok_embd.end_slice", # tensor generated from token embeddings
+        ),
     }
 
     # architecture-specific block mappings
