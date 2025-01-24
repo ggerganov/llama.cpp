@@ -31,7 +31,7 @@ env:
   LLAMA_LOG_COLORS: 1
   LLAMA_LOG_PREFIX: 1
   LLAMA_LOG_TIMESTAMPS: 1
-  CREATE_ARTIFACTS: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' || contains(github.event.head_commit.message, '[pack]') }}
+  CREATE_ARTIFACTS: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' || contains(github.event.pull_request.labels.*.name, 'artifacts') }}
 
 jobs:
   macOS-latest-cmake-arm64:
