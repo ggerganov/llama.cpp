@@ -56,6 +56,8 @@ add_library(${TARGET} STATIC
     arg.cpp
     arg.h
     base64.hpp
+    chat-handler.cpp
+    chat-handler.hpp
     chat-template.hpp
     common.cpp
     common.h
@@ -72,7 +74,6 @@ add_library(${TARGET} STATIC
     sampling.h
     speculative.cpp
     speculative.h
-    tool-call.cpp
     )
 
 if (BUILD_SHARED_LIBS)

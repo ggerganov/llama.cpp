@@ -20,7 +20,7 @@ namespace minja {
 class chat_template {
   public:
 
-  private:
+//   private:
     bool supports_tools_ = true;
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
@@ -28,6 +28,7 @@ class chat_template {
     bool requires_typed_content_ = false;
     bool supports_system_role_ = true;
     bool supports_parallel_tool_calls_ = false;
+    bool supports_code_interpreter_ = false;
     std::string source_;
     std::string bos_token_;
     std::string eos_token_;
@@ -60,8 +61,29 @@ class chat_template {
         });
         supports_tools_ = source.find("tools") != std::string::npos;
 
-        auto renders_string_arguments =
+        requires_object_arguments_ = 
             try_raw_render({
+                {
+                    {"role", "user"},
+                    {"content", "Hey"}
+                },
+                {
+                    {"role", "assistant"},
+                    {"tool_calls", json::array({
+                        {
+                            {"id", "call_1___"},
+                            {"type", "function"},
+                            {"function", {
+                                {"arguments", {
+                                    {"code", "print('Hello, World!')"},
+                                }},
+                                {"name", "ipython"},
+                            }},
+                        },
+                    })},
+                }
+            }, {}, false).find("{\"code\": \"print") != std::string::npos
+            && try_raw_render({
                 {
                     {"role", "user"},
                     {"content", "Hey"}
@@ -79,32 +101,8 @@ class chat_template {
                         },
                     })},
                 }
-            }, {}, false).find("{\"code\": \"print") != std::string::npos;
-        if (!renders_string_arguments) {
-            auto renders_object_arguments =
-                try_raw_render({
-                    {
-                        {"role", "user"},
-                        {"content", "Hey"}
-                    },
-                    {
-                        {"role", "assistant"},
-                        {"tool_calls", json::array({
-                            {
-                                {"id", "call_1___"},
-                                {"type", "function"},
-                                {"function", {
-                                    {"arguments", {
-                                        {"code", "print('Hello, World!')"},
-                                    }},
-                                    {"name", "ipython"},
-                                }},
-                            },
-                        })},
-                    }
-                }, {}, false).find("{\"code\": \"print") != std::string::npos;
-            requires_object_arguments_ = renders_object_arguments;
-        }
+            }, {}, false).find("{\"code\": \"print") == std::string::npos;
+
         supports_parallel_tool_calls_ = source.find("tool_call_id") != std::string::npos;
 
         supports_system_role_ = try_raw_render({
@@ -114,6 +112,8 @@ class chat_template {
 
         requires_typed_content_ = try_raw_render({{{"role", "user"},   {"content", "Hey"}}}, {}, false).find("Hey") == std::string::npos
             && try_raw_render({{{"role", "user"},   {"content", {{{"type", "text"}, {"text", "Hey"}}}}}}, {}, false).find("Hey") != std::string::npos;
+
+        supports_code_interpreter_ = source.find("code_interpreter") != std::string::npos;
     }
 
     const std::string & source() const { return source_; }
@@ -130,8 +130,45 @@ class chat_template {
         bool adjust_inputs = true) const
     {
         json actual_messages;
+        json actual_tools;
 
-        // First, "fix" messages so they have a chance to be rendered correctly by the template
+        auto has_code_interpreter = false;
+        for (const auto & tool : tools) {
+            if (tool.contains("type") && tool.at("type") == "code_interpreter") {
+                has_code_interpreter = true;
+                break;
+            }
+        }
+
+        if (adjust_inputs && !tools.is_null() && !supports_code_interpreter_ && has_code_interpreter) {
+            actual_tools = json::array();
+            for (const auto & tool : tools) {
+                if (tool.contains("type") && tool.at("type") == "code_interpreter") {
+                    static const auto python_tool = json::parse(R"({
+                        "type": "function",
+                        "function": {
+                            "name": "ipython",
+                            "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "description": "The code to run in the ipython interpreter."
+                                    }
+                                },
+                                "required": ["code"]
+                            }
+                        }
+                    })");
+                    actual_tools.push_back(python_tool);
+                } else {
+                    actual_tools.push_back(tool);
+                }
+            }
+        } else if (!tools.is_null()) {
+            actual_tools = tools;
+        }
 
         if (adjust_inputs && (requires_object_arguments_ || !supports_system_role_ || !supports_tools_ || requires_typed_content_)) {
             actual_messages = json::array();
@@ -173,7 +210,12 @@ class chat_template {
                             if (tool_call["type"] == "function") {
                                 auto & function = tool_call.at("function");
                                 std::string arguments = function.at("arguments");
-                                function["arguments"] = json::parse(arguments);
+                                try {
+                                    function["arguments"] = json::parse(arguments);
+                                } catch (const std::exception & ecvt) {
+                                    fprintf(stderr, "Failed to parse arguments: %s\n", ecvt.what());
+                                    function["arguments"] = arguments;
+                                }
                             }
                         }
                     }
@@ -242,6 +284,9 @@ class chat_template {
         } else {
             actual_messages = messages;
         }
+        // if (adjust_inputs) {
+        //     fprintf(stderr, "Messages: %s\n", actual_messages.dump(2).c_str());
+        // }
 
         auto context = minja::Context::make(json({
             {"messages", actual_messages},
@@ -251,8 +296,12 @@ class chat_template {
         }));
 
         if (!tools.is_null()) {
-            auto tools_val = minja::Value(tools);
+            auto tools_val = minja::Value(actual_tools);
             context->set("tools", tools_val);
+            if (has_code_interpreter) {
+                auto builtin_tools_val = minja::Value(json {"code_interpreter"});
+                context->set("builtin_tools", builtin_tools_val);
+            }
         }
         if (!extra_context.is_null()) {
             for (auto & kv : extra_context.items()) {

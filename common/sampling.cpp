@@ -154,7 +154,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
     std::vector<const char *> trigger_words;
     trigger_words.reserve(params.grammar_trigger_words.size());
     for (const auto & str : params.grammar_trigger_words) {
-        trigger_words.push_back(str.c_str());
+        trigger_words.push_back(str.word.c_str());
     }
     auto * result = new common_sampler {
         /* .params = */ params,

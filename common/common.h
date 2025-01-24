@@ -109,6 +109,11 @@ enum common_conversation_mode {
     COMMON_CONVERSATION_MODE_AUTO     = 2,
 };
 
+struct common_grammar_trigger {
+    std::string word;
+    bool at_start;
+};
+
 // sampling parameters
 struct common_params_sampling {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
@@ -154,9 +159,9 @@ struct common_params_sampling {
         COMMON_SAMPLER_TYPE_TEMPERATURE,
     };
 
-    std::string grammar; // optional BNF-like grammar to constrain sampling
-    std::vector<std::string> grammar_trigger_words;  // optional trigger words to enable grammar
-    std::vector<llama_token> grammar_trigger_tokens; // optional trigger tokens to enable grammar
+    std::string                         grammar; // optional BNF-like grammar to constrain sampling
+    std::vector<common_grammar_trigger> grammar_trigger_words;  // optional trigger words to enable grammar
+    std::vector<llama_token>            grammar_trigger_tokens; // optional trigger tokens to enable grammar
 
     std::vector<llama_logit_bias> logit_bias; // logit biases to apply
 

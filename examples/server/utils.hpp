@@ -17,8 +17,8 @@
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 #include "minja.hpp"
+#include "chat-handler.hpp"
 #include "chat-template.hpp"
-#include "tool-call.h"
 
 #include <random>
 #include <sstream>
@@ -581,24 +581,18 @@ static json oaicompat_completion_params_parse(const json & body) {
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
     const common_chat_template & tmpl,
-    common_tool_call_style tool_call_style,
     bool use_jinja)
 {
     json llama_params;
 
     auto tools = json_value(body, "tools", json());
-    auto has_tools = tools.is_array() && !tools.empty();
     auto stream = json_value(body, "stream", false);
 
-    if (has_tools) {
+    if (tools.is_array() && !tools.empty()) {
         if (stream) {
             throw std::runtime_error("Cannot use tools with stream");
         }
-        if (use_jinja) {
-            if (tool_call_style == common_tool_call_style::COMMON_TOOL_CALL_STYLE_UNKNOWN) {
-                throw std::runtime_error("Chat template does not seem to support tools. Override the model template with --chat-template.");
-            }
-        } else {
+        if (!use_jinja) {
             throw std::runtime_error("tools param requires --jinja flag");
         }
     }
@@ -627,31 +621,15 @@ static json oaicompat_completion_params_parse(
 
     // Apply chat template to the list of messages
     if (use_jinja) {
-        bool allow_content = tool_choice != "required";
-        if (tool_choice != "none" && has_tools) {
-            llama_params["tools"] = tools;
-            llama_params["tool_call_style"] = tool_call_style;
-
-            auto parallel_tool_calls = body.contains("parallel_tool_calls") ? body.at("parallel_tool_calls") : json();
-            llama_params["parallel_tool_calls"] = parallel_tool_calls;
-
-            auto handler = common_tool_call_handler_init(tool_call_style, tmpl, allow_content, parallel_tool_calls, body.at("messages"), tools, llama_params["json_schema"]);
-            llama_params["prompt"] = handler.prompt;
-
-            for (const auto & stop : handler.additional_stops) {
-                llama_params["stop"].push_back(stop);
-            }
-            if (!handler.grammar_triggers.empty()) {
-                llama_params["grammar_trigger_words"] = handler.grammar_triggers;
-            }
-            if (!handler.grammar.empty()) {
-                if (llama_params.contains("grammar")) {
-                    throw std::runtime_error("Cannot use custom grammar constraints with tools.");
-                }
-                llama_params["grammar"] = handler.grammar;
-            }
-        } else {
-            llama_params["prompt"] = tmpl.apply(body.at("messages"), tools, /* add_generation_prompt= */ true);
+        llama_params["tools"] = tools;
+        auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
+        if (tool_choice != "none" && tool_choice != "auto" && tool_choice != "required") {
+            throw std::runtime_error("Invalid tool_choice: " + tool_choice);
+        }
+        llama_params["tool_choice"] = tool_choice;
+        llama_params["parallel_tool_calls"] = json_value(body, "parallel_tool_calls", false);
+        if (tool_choice != "none" && llama_params.contains("grammar")) {
+            throw std::runtime_error("Cannot use custom grammar constraints with tools.");
         }
     } else {
         llama_params["prompt"] = format_chat(tmpl, body.at("messages"));
