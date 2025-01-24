@@ -17,7 +17,7 @@ find_library(GGML_LIBRARY ggml
 add_library(ggml::ggml UNKNOWN IMPORTED)
 set_target_properties(ggml::ggml
     PROPERTIES
-        INTERFACE_LINK_LIBRARIES "${GGML_LIBRARY}")
+        IMPORTED_LOCATION "${GGML_LIBRARY}")
 
 find_library(GGML_BASE_LIBRARY ggml-base
     REQUIRED
@@ -27,7 +27,7 @@ find_library(GGML_BASE_LIBRARY ggml-base
 add_library(ggml::ggml-base UNKNOWN IMPORTED)
 set_target_properties(ggml::ggml-base
     PROPERTIES
-        INTERFACE_LINK_LIBRARIES "${GGML_BASE_LIBRARY}")
+        IMPORTED_LOCATION "${GGML_BASE_LIBRARY}")
 
 if (NOT GGML_SHARED_LIB)
     if (APPLE AND GGML_ACCELERATE)
@@ -91,7 +91,8 @@ endif()
 
 set(_ggml_all_targets "")
 foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
-    string(replace "-" "_" _ggml_backend_pfx "${_ggml_backend}")
+    string(REPLACE "-" "_" _ggml_backend_pfx "${_ggml_backend}")
+    string(TOUPPER "${_ggml_backend_pfx}" _ggml_backend_pfx)
 
     find_library(${_ggml_backend_pfx}_LIBRARY ${_ggml_backend}
         REQUIRED
@@ -105,7 +106,7 @@ foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
         PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${GGML_INCLUDE_DIR}"
             IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
-            IMPORTED_LOCATION "${_ggml_backend_pfx}_LIBRARY"
+            IMPORTED_LOCATION "${${_ggml_backend_pfx}_LIBRARY}"
             INTERFACE_COMPILE_FEATURES cxx_std_17
             POSITION_INDEPENDENT_CODE ON)
 

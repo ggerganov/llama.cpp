@@ -269,7 +269,7 @@ endif()
 # Create CMake package
 #
 
-# * Generate version info based on git commit.
+# Generate version info based on git commit.
 
 find_program(GIT_EXE NAMES git git.exe REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 execute_process(COMMAND ${GIT_EXE} rev-list --count HEAD
@@ -288,7 +288,7 @@ execute_process(COMMAND ${GIT_EXE} rev-parse --short HEAD
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-# * Capture variables prefixed with GGML_.
+# Capture variables prefixed with GGML_.
 
 set(variable_set_statements
 "
@@ -296,6 +296,8 @@ set(variable_set_statements
 ####### Any changes to this file will be overwritten by the next CMake run        #######
 
 ")
+
+set(GGML_SHARED_LIB ${BUILD_SHARED_LIBS})
 
 get_cmake_property(all_variables VARIABLES)
 foreach(variable_name IN LISTS all_variables)
@@ -310,7 +312,7 @@ endforeach()
 
 set(GGML_VARIABLES_EXPANDED ${variable_set_statements})
 
-# * Create the CMake package and set install location.
+# Create the CMake package and set install location.
 
 set(GGML_INSTALL_VERSION 0.0.${GGML_BUILD_NUMBER})
 set(GGML_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
