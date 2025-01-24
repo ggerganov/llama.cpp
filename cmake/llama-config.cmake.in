@@ -24,7 +24,7 @@ set_target_properties(llama
         INTERFACE_LINK_LIBRARIES "ggml::ggml;ggml::ggml-base;"
         IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
         IMPORTED_LOCATION "${llama_LIBRARY}"
-        INTERFACE_COMPILE_FEATURES cxx_std_17
+        INTERFACE_COMPILE_FEATURES c_std_90
         POSITION_INDEPENDENT_CODE ON)
 
 check_required_components(Llama)

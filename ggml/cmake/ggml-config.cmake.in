@@ -107,7 +107,7 @@ foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
             INTERFACE_INCLUDE_DIRECTORIES "${GGML_INCLUDE_DIR}"
             IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
             IMPORTED_LOCATION "${${_ggml_backend_pfx}_LIBRARY}"
-            INTERFACE_COMPILE_FEATURES cxx_std_17
+            INTERFACE_COMPILE_FEATURES c_std_90
             POSITION_INDEPENDENT_CODE ON)
 
     string(REGEX MATCH "^ggml-cpu" is_cpu_variant "${_ggml_backend}")
