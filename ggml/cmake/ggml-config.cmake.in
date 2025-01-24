@@ -99,7 +99,7 @@ foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
         HINTS ${GGML_LIB_DIR}
         NO_CMAKE_FIND_ROOT_PATH)
 
-    message(STATUS "Found ${${_ggml_backend_pfx}_LIBRARY}}")
+    message(STATUS "Found ${${_ggml_backend_pfx}_LIBRARY}")
 
     add_library(ggml::${_ggml_backend} UNKNOWN IMPORTED)
     set_target_properties(ggml::${_ggml_backend}
