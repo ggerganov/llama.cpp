@@ -10064,3 +10064,4 @@ void llama_perf_context_reset(struct llama_context * ctx) {
     ctx->t_eval_us   = ctx->n_eval = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
 }
+

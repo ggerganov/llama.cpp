@@ -31,7 +31,7 @@ env:
   LLAMA_LOG_COLORS: 1
   LLAMA_LOG_PREFIX: 1
   LLAMA_LOG_TIMESTAMPS: 1
-  CREATE_RELEASE: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' || contains(github.event.head_commit.message, '[pack]') }}
+  CREATE_ARTIFACTS: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' || contains(github.event.head_commit.message, '[pack]') }}
 
 jobs:
   macOS-latest-cmake-arm64:
@@ -86,14 +86,14 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
@@ -150,14 +150,14 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
@@ -222,14 +222,14 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
           zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
@@ -791,14 +791,14 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
           Copy-Item .\examples\run\linenoise.cpp\LICENSE .\build\bin\Release\linenoise.cpp.txt
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip .\build\bin\Release\*
 
       - name: Upload artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip
@@ -941,19 +941,19 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
           name: llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           echo "Cuda install location: ${{ env.CUDA_PATH }}"
           $dst='.\build\bin\cudart\'
@@ -962,7 +962,7 @@ jobs:
           7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
@@ -1009,7 +1009,7 @@ jobs:
 
       - name: Build the release package
         id: pack_artifacts
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         run: |
           echo "cp oneAPI running time dll files in ${{ env.ONEAPI_ROOT }} to ./build/bin"
 
@@ -1034,7 +1034,7 @@ jobs:
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
       - name: Upload the release package
-        if: ${{ env.CREATE_RELEASE }}
+        if: ${{ env.CREATE_ARTIFACTS == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
@@ -1078,7 +1078,7 @@ jobs:
           cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
 
   windows-latest-cmake-hip-release:
-    if: ${{ env.CREATE_RELEASE }}
+    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' || contains(github.event.head_commit.message, '[pack]') }}
     runs-on: windows-latest
 
     strategy:
