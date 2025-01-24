@@ -7,6 +7,7 @@
 #include <cstring>
 #include <climits>
 #include <stdexcept>
+#include <cerrno>
 
 #ifdef __has_include
     #if __has_include(<unistd.h>)
@@ -35,7 +36,7 @@
 
 // TODO: consider moving to llama-impl.h if needed in more places
 #if defined(_WIN32)
-std::string llama_format_win_err(DWORD err) {
+static std::string llama_format_win_err(DWORD err) {
     LPSTR buf;
     size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);

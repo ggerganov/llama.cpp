@@ -7,18 +7,17 @@
 
 #include <algorithm>
 #include <cassert>
+#include <codecvt>
 #include <cstddef>
 #include <cstdint>
+#include <locale>
 #include <map>
 #include <regex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
-#include <locale>
-#include <codecvt>
 
 size_t unicode_len_utf8(char src) {
     const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };

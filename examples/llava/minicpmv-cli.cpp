@@ -54,7 +54,7 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
         ctx_params.n_ctx = params->n_ctx;
     }
 
-    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx_llama = llama_init_from_model(model, ctx_params);
 
     if (ctx_llama == NULL) {
         LOG_ERR("%s: failed to create the llama_context\n" , __func__);
@@ -140,6 +140,9 @@ static void process_image(struct llava_context * ctx_llava, struct llava_image_e
     else if (has_minicpmv_projector == 3) {
         system_prompt = "<|im_start|>user\n";
     }
+    else if (has_minicpmv_projector == 4) {
+        system_prompt = "<|im_start|>user\n";
+    }
     LOG_INF("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
     process_eval_image_embed(ctx_llava, embeds, params->n_batch, &n_past, idx++);
@@ -167,8 +170,12 @@ static const char * sample(struct common_sampler * smpl,
                            int * n_past) {
     const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
     common_sampler_accept(smpl, id, true);
+
+    const llama_model * model = llama_get_model(ctx_llama);
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
     static std::string ret;
-    if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
+    if (llama_vocab_is_eog(vocab, id)) {
         ret = "</s>";
     } else {
         ret = common_token_to_piece(ctx_llama, id);
@@ -223,6 +230,9 @@ static struct common_sampler * llama_init(struct llava_context * ctx_llava, comm
         else if (has_minicpmv_projector == 3) {
             user_prompt = "<|im_start|>user\n" + prompt;
         }
+        else if (has_minicpmv_projector == 4) {
+            user_prompt = "<|im_start|>user\n" + prompt;
+        }
     }
 
     eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
@@ -230,6 +240,9 @@ static struct common_sampler * llama_init(struct llava_context * ctx_llava, comm
         eval_string(ctx_llava->ctx_llama, "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", params->n_batch, &n_past, false);
     }
     else if (has_minicpmv_projector == 3) {
+        eval_string(ctx_llava->ctx_llama, "<|im_end|><|im_start|>assistant\n", params->n_batch, &n_past, false);
+    }
+    else if (has_minicpmv_projector == 4) {
         eval_string(ctx_llava->ctx_llama, "<|im_end|><|im_start|>assistant\n", params->n_batch, &n_past, false);
     }
 
@@ -304,7 +317,6 @@ int main(int argc, char ** argv) {
                     const auto * tmp = llama_loop(ctx_llava, smpl, n_past);
                     response += tmp;
                     if (strcmp(tmp, "</s>") == 0) break;
-                    if (strstr(tmp, "###")) break; // Yi-VL behavior
                     printf("%s", tmp);// mistral llava-1.6
                     if (strstr(response.c_str(), "<user>")) break; // minicpm-v
                     fflush(stdout);

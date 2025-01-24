@@ -414,15 +414,42 @@ static void prompt_add(llama_tokens & prompt, const llama_tokens & tokens) {
     prompt.insert(prompt.end(), tokens.begin(), tokens.end());
 }
 
-static void prompt_add(llama_tokens & prompt, const llama_model * model, const std::string & txt, bool add_special, bool parse_special) {
-    auto tmp = common_tokenize(model, txt, add_special, parse_special);
+static void prompt_add(llama_tokens & prompt, const llama_vocab * vocab, const std::string & txt, bool add_special, bool parse_special) {
+    auto tmp = common_tokenize(vocab, txt, add_special, parse_special);
     prompt_add(prompt, tmp);
 }
 
-static void prompt_init(llama_tokens & prompt, const llama_model * model) {
+static void prompt_init(llama_tokens & prompt, const llama_vocab * vocab) {
     prompt.clear();
 
-    prompt_add(prompt, model, "<|im_start|>\n", true, true);
+    prompt_add(prompt, vocab, "<|im_start|>\n", true, true);
+}
+
+static std::vector<llama_token> prepare_guide_tokens(const llama_vocab * vocab, const std::string & str) {
+    const std::string& delimiter = "<|text_sep|>";
+
+    std::vector<llama_token> result;
+    size_t start = 0;
+    size_t end = str.find(delimiter);
+
+    //first token is always a newline, as it was not previously added
+    result.push_back(common_tokenize(vocab, "\n", false, true)[0]);
+
+    while (end != std::string::npos) {
+        std::string current_word = str.substr(start, end - start);
+        auto tmp = common_tokenize(vocab, current_word, false, true);
+        result.push_back(tmp[0]);
+        start = end + delimiter.length();
+        end = str.find(delimiter, start);
+    }
+
+    // Add the last part
+    std::string current_word = str.substr(start);
+    auto tmp = common_tokenize(vocab, current_word, false, true);
+    if (tmp.size() > 0) {
+        result.push_back(tmp[0]);
+    }
+    return result;
 }
 
 int main(int argc, char ** argv) {
@@ -462,6 +489,8 @@ int main(int argc, char ** argv) {
     model_ttc = llama_init_ttc.model.get();
     ctx_ttc   = llama_init_ttc.context.get();
 
+    const llama_vocab * vocab = llama_model_get_vocab(model_ttc);
+
     // TODO: refactor in a common struct
     params.model     = params.vocoder.model;
     params.model_url = params.vocoder.model_url;
@@ -492,6 +521,7 @@ int main(int argc, char ** argv) {
     const auto t_main_start = ggml_time_us();
 
     std::vector<llama_token> codes;
+    std::vector<llama_token> guide_tokens;
 
     // process prompt and generate voice codes
     {
@@ -499,20 +529,23 @@ int main(int argc, char ** argv) {
 
         std::vector<llama_token> prompt_inp;
 
-        prompt_init(prompt_inp, model_ttc);
+        prompt_init(prompt_inp, vocab);
 
-        prompt_add(prompt_inp, model_ttc, "<|text_start|>the<|text_sep|>overall<|text_sep|>package<|text_sep|>from<|text_sep|>just<|text_sep|>two<|text_sep|>people<|text_sep|>is<|text_sep|>pretty<|text_sep|>remarkable<|text_sep|>sure<|text_sep|>i<|text_sep|>have<|text_sep|>some<|text_sep|>critiques<|text_sep|>about<|text_sep|>some<|text_sep|>of<|text_sep|>the<|text_sep|>gameplay<|text_sep|>aspects<|text_sep|>but<|text_sep|>its<|text_sep|>still<|text_sep|>really<|text_sep|>enjoyable<|text_sep|>and<|text_sep|>it<|text_sep|>looks<|text_sep|>lovely<|text_sep|>", false, true);
+        prompt_add(prompt_inp, vocab, "<|text_start|>the<|text_sep|>overall<|text_sep|>package<|text_sep|>from<|text_sep|>just<|text_sep|>two<|text_sep|>people<|text_sep|>is<|text_sep|>pretty<|text_sep|>remarkable<|text_sep|>sure<|text_sep|>i<|text_sep|>have<|text_sep|>some<|text_sep|>critiques<|text_sep|>about<|text_sep|>some<|text_sep|>of<|text_sep|>the<|text_sep|>gameplay<|text_sep|>aspects<|text_sep|>but<|text_sep|>its<|text_sep|>still<|text_sep|>really<|text_sep|>enjoyable<|text_sep|>and<|text_sep|>it<|text_sep|>looks<|text_sep|>lovely<|text_sep|>", false, true);
 
         // convert the input text into the necessary format expected by OuteTTS
         {
             std::string prompt_clean = process_text(params.prompt);
+            if (params.vocoder.use_guide_tokens) {
+                guide_tokens = prepare_guide_tokens(vocab, prompt_clean);
+            }
 
             LOG_INF("%s: prompt: '%s'\n", __func__, prompt_clean.c_str());
 
-            prompt_add(prompt_inp, model_ttc, prompt_clean, false, true);
+            prompt_add(prompt_inp, vocab, prompt_clean, false, true);
         }
 
-        prompt_add(prompt_inp, model_ttc, "<|text_end|>\n", false, true);
+        prompt_add(prompt_inp, vocab, "<|text_end|>\n", false, true);
 
         // disabled to save time on tokenizing each time
         // TODO: load voices from the json files
@@ -549,7 +582,7 @@ it<|t_0.09|><|code_start|><|848|><|1366|><|395|><|1601|><|1513|><|593|><|1302|><
 looks<|t_0.27|><|code_start|><|1281|><|1266|><|1755|><|572|><|248|><|1751|><|1257|><|695|><|1380|><|457|><|659|><|585|><|1315|><|1105|><|1776|><|736|><|24|><|736|><|654|><|1027|><|code_end|>
 lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|1481|><|1721|><|1123|><|438|><|1246|><|1251|><|795|><|659|><|1381|><|1658|><|217|><|1772|><|562|><|952|><|107|><|1129|><|1112|><|467|><|550|><|1079|><|840|><|1615|><|1469|><|1380|><|168|><|917|><|836|><|1827|><|437|><|583|><|67|><|595|><|1087|><|1646|><|1493|><|1677|><|code_end|>)";
 
-        auto tmp = common_tokenize(model_ttc, voice_data, false, true);
+        auto tmp = common_tokenize(vocab, voice_data, false, true);
         printf("\n\n");
         for (int i = 0; i < tmp.size(); ++i) {
             printf("%d, ", tmp[i]);
@@ -715,6 +748,8 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         int n_past   = batch.n_tokens;
         int n_decode = 0;
 
+        bool next_token_uses_guide_token = true;
+
         while (n_decode <= n_predict) {
             // prepare the next batch
             common_batch_clear(batch);
@@ -726,7 +761,17 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
                     continue;
                 }
 
-                const llama_token new_token_id = common_sampler_sample(smpl[i], ctx_ttc, i_batch[i]);
+                llama_token new_token_id = common_sampler_sample(smpl[i], ctx_ttc, i_batch[i]);
+
+                //guide tokens help prevent hallucinations by forcing the TTS to use the correct word
+                if (!guide_tokens.empty() && next_token_uses_guide_token && !llama_vocab_is_control(vocab, new_token_id) && !llama_vocab_is_eog(vocab, new_token_id)) {
+                    llama_token guide_token = guide_tokens[0];
+                    guide_tokens.erase(guide_tokens.begin());
+                    new_token_id = guide_token; //ensure correct word fragment is used
+                }
+
+                //this is the token id that always precedes a new word
+                next_token_uses_guide_token = (new_token_id == 198);
 
                 common_sampler_accept(smpl[i], new_token_id, true);
 
@@ -735,9 +780,9 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
                 const auto * cands = common_sampler_get_candidates(smpl[i]);
 
                 // is it an end of generation? -> mark the stream as finished
-                if (llama_token_is_eog(model_ttc, new_token_id) || n_decode == n_predict) {
+                if (llama_vocab_is_eog(vocab, new_token_id) || n_decode == n_predict) {
                     std::string reason;
-                    if (llama_token_is_eog(model_ttc, new_token_id)) {
+                    if (llama_vocab_is_eog(vocab, new_token_id)) {
                         reason = "eos";
                     } else {
                         reason = "n_predict";
@@ -873,7 +918,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
 #if 1
     // spectral operations
-    const int n_embd = llama_n_embd(model_cts);
+    const int n_embd = llama_model_n_embd(model_cts);
     const float * embd = llama_get_embeddings(ctx_cts);
 
     auto audio = embd_to_audio(embd, n_codes, n_embd, params.cpuparams.n_threads);
