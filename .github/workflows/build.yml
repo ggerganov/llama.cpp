@@ -158,8 +158,8 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
           name: llama-bin-macos-x64.zip
 
-  ubuntu-latest-cmake:
-    runs-on: ubuntu-latest
+  ubuntu-cpu-cmake:
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Clone
@@ -1191,7 +1191,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-latest-cmake
+      - ubuntu-cpu-cmake
       - windows-latest-cmake
       - windows-2019-cmake-cuda
       - windows-latest-cmake-hip-release
