@@ -56,7 +56,7 @@ jobs:
           mkdir build
           cd build
           cmake .. \
-            -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON \
+            -DCMAKE_BUILD_RPATH="@loader_path" \
             -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_CURL=ON \
             -DGGML_METAL_USE_BF16=ON \
@@ -119,7 +119,7 @@ jobs:
           # Metal is disabled due to intermittent failures with Github runners not having a GPU:
           # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
           cmake -B build \
-            -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON \
+            -DCMAKE_BUILD_RPATH="@loader_path" \
             -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_CURL=ON \
             -DGGML_METAL=OFF \
