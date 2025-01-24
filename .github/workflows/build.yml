@@ -1464,3 +1464,37 @@ jobs:
 #          popd
 #          emcmake cmake . -DCMAKE_BUILD_TYPE=${{ matrix.build }}
 #          make
+
+  openEuler-latest-cmake-cann:
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'Ascend NPU') }}
+    defaults:
+      run:
+       shell: bash -el {0}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        cann:
+          - '8.0.rc3.beta1-910b-openeuler22.03-py3.10'
+        device:
+          - 'ascend910b3'
+        build:
+          - 'Release'
+    container: ascendai/cann:${{ matrix.cann }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          yum update -y
+          yum install -y git gcc gcc-c++ make cmake
+
+      - name: Build
+        run: |
+          export LD_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64:${ASCEND_TOOLKIT_HOME}/$(uname -m)-linux/devlib/:${LD_LIBRARY_PATH}
+
+          cmake -S . -B build \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
+              -DGGML_CANN=on \
+              -DSOC_TYPE=${{ matrix.device }}
+          cmake --build build -j $(nproc)
