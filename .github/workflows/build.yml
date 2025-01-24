@@ -491,41 +491,6 @@ jobs:
             -DGGML_SYCL_F16=ON
           cmake --build . --config Release -j $(nproc)
 
-  # TODO: build with GGML_METAL=OFF because test-backend-ops fail on "Apple Paravirtual device" and I don't know
-  #       how to debug it.
-  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7132125951/job/19422043567?pr=4359#step:5:6584
-  #       would be great if we fix these
-  macOS-latest-cmake:
-    runs-on: macos-latest
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Dependencies
-        id: depends
-        continue-on-error: true
-        run: |
-          brew update
-
-      - name: Build
-        id: cmake_build
-        run: |
-          sysctl -a
-          mkdir build
-          cd build
-          cmake .. \
-            -DLLAMA_FATAL_WARNINGS=ON \
-            -DGGML_METAL=OFF
-          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
-
-      - name: Test
-        id: cmake_test
-        run: |
-          cd build
-          ctest -L main --verbose --timeout 900
-
   macOS-latest-cmake-ios:
     runs-on: macos-latest
 
@@ -1241,7 +1206,6 @@ jobs:
 
     needs:
       - ubuntu-cmake
-      - macOS-latest-cmake
       - windows-latest-cmake
       - windows-2019-cmake-cuda
       - windows-latest-cmake-hip-release
