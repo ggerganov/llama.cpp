@@ -88,7 +88,7 @@ jobs:
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/* ./build/lib/* ./build/include/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -151,7 +151,7 @@ jobs:
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/* ./build/lib/* ./build/include/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -220,7 +220,7 @@ jobs:
         run: |
           cp LICENSE ./build/bin/
           cp examples/run/linenoise.cpp/LICENSE ./build/bin/LICENSE.linenoise.cpp
-          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/* ./build/lib/* ./build/include/*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -1026,7 +1026,7 @@ jobs:
           cp "${{ env.ONEAPI_ROOT }}/tbb/latest/bin/tbb12.dll" ./build/bin
 
           echo "cp oneAPI running time dll files to ./build/bin done"
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/* ./build/lib/* ./build/include/*
 
       - name: Upload the release package
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
