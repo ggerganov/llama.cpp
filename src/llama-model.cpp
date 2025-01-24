@@ -247,7 +247,7 @@ static ggml_backend_buffer_type_t select_weight_buft(const llama_hparams & hpara
 }
 
 // CPU: ACCEL -> CPU extra -> GPU host -> CPU
-static buft_list_t make_cpu_buft_list(const std::vector<ggml_backend_dev_t> & devices) {
+static buft_list_t make_cpu_buft_list(const std::vector<ggml_backend_dev_t> & devices, int n_threads) {
     buft_list_t buft_list;
 
     // add ACCEL buffer types
@@ -268,7 +268,7 @@ static buft_list_t make_cpu_buft_list(const std::vector<ggml_backend_dev_t> & de
     auto ggml_backend_dev_get_extra_bufts_fn = (ggml_backend_dev_get_extra_bufts_t)
         ggml_backend_reg_get_proc_address(cpu_reg, "ggml_backend_dev_get_extra_bufts");
     if (ggml_backend_dev_get_extra_bufts_fn) {
-        ggml_backend_buffer_type_t * extra_bufts = ggml_backend_dev_get_extra_bufts_fn(cpu_dev);
+        ggml_backend_buffer_type_t * extra_bufts = ggml_backend_dev_get_extra_bufts_fn(cpu_dev, n_threads);
         while (extra_bufts && *extra_bufts) {
             buft_list.emplace_back(cpu_dev, *extra_bufts);
             ++extra_bufts;
@@ -1264,7 +1264,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
     const bool use_mmap_buffer = true;
 
     // build a list of buffer types for the CPU and GPU devices
-    pimpl->cpu_buft_list = make_cpu_buft_list(devices);
+    pimpl->cpu_buft_list = make_cpu_buft_list(devices, params.n_threads);
     for (auto * dev : devices) {
         buft_list_t buft_list = make_gpu_buft_list(dev, split_mode, tensor_split);
         // add CPU buffer types as a fallback
@@ -3768,6 +3768,7 @@ struct llama_model_params llama_model_default_params() {
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
         /*.check_tensors               =*/ false,
+        /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS,
     };
 
 #ifdef GGML_USE_METAL

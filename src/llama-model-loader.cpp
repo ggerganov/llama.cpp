@@ -445,7 +445,8 @@ llama_model_loader::llama_model_loader(
         std::vector<std::string> & splits,
         bool use_mmap,
         bool check_tensors,
-        const struct llama_model_kv_override * param_overrides_p) {
+        const struct llama_model_kv_override * param_overrides_p,
+        int n_threads) {
     int trace = 0;
     if (getenv("LLAMA_TRACE")) {
         trace = atoi(getenv("LLAMA_TRACE"));
@@ -683,6 +684,7 @@ llama_model_loader::llama_model_loader(
 
     this->use_mmap = use_mmap;
     this->check_tensors = check_tensors;
+    this->n_threads = n_threads;
 }
 
 std::string llama_model_loader::get_arch_name() const {

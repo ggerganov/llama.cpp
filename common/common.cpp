@@ -1099,6 +1099,8 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
         mparams.kv_overrides = params.kv_overrides.data();
     }
 
+    mparams.n_threads = params.cpuparams.n_threads;
+
     return mparams;
 }
 
