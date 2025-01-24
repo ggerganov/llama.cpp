@@ -1463,32 +1463,31 @@ jobs:
     defaults:
       run:
        shell: bash -el {0}
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        build: ['Release']
-        cann: ['openeuler-python3.10-cann8.0.rc3.beta1']
-        device: ['ascend910b3']
-    container:
-        image: ascendai/cann:${{ matrix.cann }}
+        cann:
+          - '8.0.rc3.beta1-910b-openeuler22.03-py3.10'
+        device:
+          - 'ascend910b3'
+        build:
+          - 'Release'
+    container: ascendai/cann:${{ matrix.cann }}
     steps:
-    - name: Clone
-      id: checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Dependencies
-      run: |
+      - name: Dependencies
+        run: |
           yum update -y
-          yum install git cmake gcc gcc-c++ make -y
+          yum install -y git gcc gcc-c++ make cmake
 
-    - name: Build
-      run: |
-          export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/x86_64-linux/devlib/:${LD_LIBRARY_PATH}
-          mkdir build
-          cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build }}\
-            -DGGML_CANN=on\
-            -DSOC_TYPE=${{ matrix.device }}
-          cmake --build . -j $(nproc)
+      - name: Build
+        run: |
+          export LD_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64:${ASCEND_TOOLKIT_HOME}/$(uname -m)-linux/devlib/:${LD_LIBRARY_PATH}
+
+          cmake -S . -B build \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
+              -DGGML_CANN=on \
+              -DSOC_TYPE=${{ matrix.device }}
+          cmake --build build -j $(nproc)
