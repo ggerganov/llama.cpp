@@ -393,6 +393,7 @@ enum llm_tensor {
 enum llm_tensor_layer {
     LLM_TENSOR_LAYER_INPUT,
     LLM_TENSOR_LAYER_REPEATING,
+    LLM_TENSOR_LAYER_PROJECTION,
     LLM_TENSOR_LAYER_OUTPUT,
 };
 

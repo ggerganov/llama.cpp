@@ -15,13 +15,13 @@
 
 // export llama_image_u8 to bmp file for debugging
 // https://codereview.stackexchange.com/questions/195121/writing-a-bitmap-image-from-c
-struct img_size;
 static int bmp_export(const struct llama_image_u8 &img, const std::string &location);
 #endif
 
 struct img_size {
     int width;
     int height;
+    img_size(int w, int h) : width(w), height(h) {}
 };
 
 // RGB uint8 image
@@ -89,7 +89,7 @@ static img_size select_best_resolution(const img_size & original_size, const std
     int original_width  = original_size.width;
     int original_height = original_size.height;
 
-    img_size best_fit;
+    img_size best_fit(0, 0);
     int max_effective_resolution = 0;
     int min_wasted_resolution = std::numeric_limits<int>::max();
 
@@ -314,12 +314,12 @@ struct llama_vision_processor_llava : llama_vision_processor {
             // "spatial_unpad" with "anyres" processing for llava-1.6
             std::vector<img_size> possible_resolutions;
             for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i += 2) {
-                img_size s;
+                img_size s(0, 0);
                 s.width  = params.image_grid_pinpoints[i];
                 s.height = params.image_grid_pinpoints[i+1];
                 possible_resolutions.push_back(s);
             }
-            img_size best_resolution = select_best_resolution({img.nx, img.ny}, possible_resolutions);
+            img_size best_resolution = select_best_resolution(img_size(img.nx, img.ny), possible_resolutions);
             // debug_image_save_to_bmp(*img, "input.bmp");
             temp = resize_and_pad_image(img, best_resolution);  // we do not pad with mean-bg color anymore in llava-1.6
             // debug_image_save_to_bmp(*temp, "resized.bmp");
@@ -415,9 +415,9 @@ struct llama_vision_processor_uhd : llama_vision_processor {
         return std::max(static_cast<int>(std::round(static_cast<float>(length) / patch_size) * patch_size), patch_size);
     }
 
-    std::pair<int, int> find_best_resize(std::pair<int, int> original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
-        int width = original_size.first;
-        int height = original_size.second;
+    img_size find_best_resize(const img_size & original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
+        int width = original_size.width;
+        int height = original_size.height;
         if ((width * height > scale_resolution * scale_resolution) || allow_upscale) {
             float r = static_cast<float>(width) / height;
             height = static_cast<int>(scale_resolution / std::sqrt(r));
@@ -425,14 +425,14 @@ struct llama_vision_processor_uhd : llama_vision_processor {
         }
         int best_width = ensure_divide(width, patch_size);
         int best_height = ensure_divide(height, patch_size);
-        return std::make_pair(best_width, best_height);
+        return img_size(best_width, best_height);
     }
 
-    std::pair<int, int> get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
-        int width, height;
-        std::tie(width, height) = original_size;
-        int grid_x, grid_y;
-        std::tie(grid_x, grid_y) = grid;
+    img_size get_refine_size(const img_size & original_size, const img_size & grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
+        int width = original_size.width;
+        int height = original_size.height;
+        int grid_x = grid.width;
+        int grid_y = grid.height;
 
         int refine_width = ensure_divide(width, grid_x);
         int refine_height = ensure_divide(height, grid_y);
@@ -441,16 +441,14 @@ struct llama_vision_processor_uhd : llama_vision_processor {
         int grid_height = refine_height / grid_y;
 
         // auto best_grid_size = find_best_resize(std::make_tuple(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); (old line)
-        auto best_grid_size = find_best_resize(std::make_pair(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); // (new line) => fixes conversion for make_tuple to make_pair
-        int best_grid_width, best_grid_height;
-        std::tie(best_grid_width, best_grid_height) = best_grid_size;
+        auto best_grid = find_best_resize({grid_width, grid_height}, scale_resolution, patch_size, allow_upscale); // (new line) => fixes conversion for make_tuple to make_pair
 
-        // std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
-        std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
+        // img_size refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
+        img_size refine_size = img_size(best_grid.width * grid_x, best_grid.height * grid_y); // (new line)
         return refine_size;
     }
 
-    std::pair<int, int> find_best_grid(const int max_slice_nums, const int multiple, const float log_ratio) {
+    img_size find_best_grid(const int max_slice_nums, const int multiple, const float log_ratio) {
         std::vector<int> candidate_split_grids_nums;
         for (int i : {multiple - 1, multiple, multiple + 1}) {
             if (i == 1 || i > max_slice_nums) {
@@ -459,7 +457,7 @@ struct llama_vision_processor_uhd : llama_vision_processor {
             candidate_split_grids_nums.push_back(i);
         }
 
-        std::vector<std::pair<int, int>> candidate_grids;
+        std::vector<img_size> candidate_grids;
         for (int split_grids_nums : candidate_split_grids_nums) {
             int m = 1;
             while (m <= split_grids_nums) {
@@ -470,10 +468,10 @@ struct llama_vision_processor_uhd : llama_vision_processor {
             }
         }
 
-        std::pair<int, int> best_grid{1, 1};
+        img_size best_grid = img_size(1, 1);
         float min_error = std::numeric_limits<float>::infinity();
         for (const auto& grid : candidate_grids) {
-            float error = std::abs(log_ratio - std::log(1.0 * grid.first / grid.second));
+            float error = std::abs(log_ratio - std::log(1.0 * grid.width / grid.height));
             if (error < min_error) {
                 best_grid = grid;
                 min_error = error;
@@ -487,7 +485,7 @@ struct llama_vision_processor_uhd : llama_vision_processor {
             const int max_slice_nums = 9,
             const int scale_resolution = 448,
             const int patch_size = 14) {
-        const std::pair<int, int> original_size={img.nx,img.ny};
+        const img_size original_size = img_size(img.nx, img.ny);
         const int original_width = img.nx;
         const int original_height = img.ny;
         const float log_ratio = log(1.0*original_width/original_height);
@@ -501,34 +499,36 @@ struct llama_vision_processor_uhd : llama_vision_processor {
         if (multiple <= 1) {
             auto best_size = find_best_resize(original_size, scale_resolution, patch_size, true);
             llama_image_u8 source_image;
-            bicubic_resize(img, source_image, best_size.first, best_size.second);
+            bicubic_resize(img, source_image, best_size.width, best_size.height);
             // source_image = image.resize(best_size, Image.Resampling.BICUBIC)
             images.back().push_back(source_image);
         } else if (multiple > 1) {
             auto best_size = find_best_resize(original_size, scale_resolution, patch_size);
             llama_image_u8 source_image;
-            bicubic_resize(img, source_image, best_size.first, best_size.second);
+            bicubic_resize(img, source_image, best_size.width, best_size.height);
             // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
-            LLAMA_LOG_DEBUG("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img.nx, img.ny, best_size.first, best_size.second);
+            LLAMA_LOG_DEBUG("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img.nx, img.ny, best_size.width, best_size.height);
             images.back().push_back(source_image);
 
-            std::pair<int, int> best_grid = find_best_grid(max_slice_nums, multiple, log_ratio);
-            LLAMA_LOG_DEBUG("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img.nx, img.ny, best_grid.first, best_grid.second);
+            img_size best_grid = find_best_grid(max_slice_nums, multiple, log_ratio);
+            LLAMA_LOG_DEBUG("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img.nx, img.ny, best_grid.width, best_grid.height);
 
             auto refine_size = get_refine_size(original_size, best_grid, scale_resolution, patch_size, true);
             llama_image_u8 refine_image;
-            bicubic_resize(img, refine_image, refine_size.first, refine_size.second);
+            // TODO: so far, we spend most of the time in bicubic_resize, we should optimize it
+            bicubic_resize(img, refine_image, refine_size.width, refine_size.height);
 
-            LLAMA_LOG_DEBUG("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image.nx, refine_image.ny, refine_size.first, refine_size.second);
+            LLAMA_LOG_DEBUG("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image.nx, refine_image.ny, refine_size.width, refine_size.height);
 
             // split_to_patches
             int width = refine_image.nx;
             int height = refine_image.ny;
-            int grid_x = int(width / best_grid.first);
-            int grid_y = int(height / best_grid.second);
-            for (int patches_i = 0, ic = 0; patches_i < height && ic < best_grid.second; patches_i += grid_y, ic += 1){
+            int grid_x = int(width / best_grid.width);
+            int grid_y = int(height / best_grid.height);
+            for (int patches_i = 0, ic = 0; patches_i < height && ic < best_grid.height; patches_i += grid_y, ic += 1){
+                std::vector<llama_image_u8> patches_out;
                 images.push_back(std::vector<llama_image_u8>());
-                for(int patches_j = 0, jc = 0; patches_j < width && jc < best_grid.first; patches_j += grid_x, jc += 1){
+                for (int patches_j = 0, jc = 0; patches_j < width && jc < best_grid.width; patches_j += grid_x, jc += 1) {
                     llama_image_u8 patch;
                     patch.nx = grid_x;
                     patch.ny = grid_y;
@@ -542,8 +542,9 @@ struct llama_vision_processor_uhd : llama_vision_processor {
                             patch.buf[j+2] = refine_image.buf[i+2];
                         }
                     }
-                    images.back().push_back(patch);
+                    patches_out.push_back(std::move(patch));
                 }
+                images.push_back(std::move(patches_out));
             }
         }
         return images;
@@ -551,7 +552,6 @@ struct llama_vision_processor_uhd : llama_vision_processor {
 
     virtual llama_vision_tokens tokenize(const llama_image_u8 & img) override {
         auto & params = ctx.model->hparams;
-        GGML_ASSERT(params.arch == LLM_ARCH_VISION_MINICPMV);
 
         std::vector<std::vector<llama_image_u8>> imgs = slice_image(img);
 
@@ -573,6 +573,10 @@ struct llama_vision_processor_uhd : llama_vision_processor {
     }
 };
 
+//
+// cgraph builder
+//
+
 // TODO: move this to llm_build_context in llama.cpp
 struct llama_vision_graph_builder {
     llama_vision_context & ctx;
@@ -590,6 +594,7 @@ struct llama_vision_graph_builder {
     int img_h;
     bool use_gelu;
     int n_layers;
+    int rs_n_embd;
     vision_projector_type proj_type;
 
     llama_vision_graph_builder(llama_vision_context & ctx, const llama_vision_tokens & inp) : ctx(ctx), model(*ctx.model) {
@@ -950,7 +955,7 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
         GGML_ASSERT(batch_size == 1); // TODO: support multiple images
     }
 
-    img_size image_size{(int)hparams.image_size, (int)hparams.image_size};
+    img_size image_size     = img_size((int)hparams.image_size, (int)hparams.image_size);
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size.width / patch_size) * (image_size.height / patch_size));
     const int num_positions = num_patches + (model.class_embedding ? 1 : 0);
@@ -1016,23 +1021,25 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
         //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit
         //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
         struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "inp_pos");
-        std::vector<int> pos_buf(ggml_nelements(positions));
-        GGML_ASSERT(num_positions == (int)pos_buf.size());
+        std::vector<int> buf(ggml_nelements(positions));
+        GGML_ASSERT(num_positions == (int)buf.size());
 
         int bucket_coords_h[70];
         int bucket_coords_w[70];
-        for (size_t i = 0; i < inp.n_py; i++) {
-            bucket_coords_h[i] = std::floor(70.0*i/inp.n_py);
+        size_t h = inp.py;
+        size_t w = inp.py;
+        for (size_t i = 0; i < h; i++) {
+            bucket_coords_h[i] = std::floor(70.0*i/h);
         }
-        for (size_t i = 0; i < inp.n_px; i++) {
-            bucket_coords_w[i] = std::floor(70.0*i/inp.n_px);
+        for (size_t i = 0; i < w; i++) {
+            bucket_coords_w[i] = std::floor(70.0*i/w);
         }
-        for (size_t i = 0, id = 0; i < inp.n_py; i++){
-            for (size_t j = 0; j < inp.n_px; j++){
-                pos_buf[id++] = bucket_coords_h[i]*70 + bucket_coords_w[j];
+        for (size_t i = 0, id = 0; i < h; i++){
+            for (size_t j = 0; j < w; j++){
+                buf[id++] = bucket_coords_h[i]*70 + bucket_coords_w[j];
             }
         }
-        ggml_backend_tensor_set(positions, pos_buf.data(), 0, ggml_nbytes(positions));
+        ggml_backend_tensor_set(positions, buf.data(), 0, ggml_nbytes(positions));
 
     } else {
         struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "inp_pos");
@@ -1055,6 +1062,7 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
     }
 
     // compute
+    LLAMA_LOG_DEBUG("%s: compute start\n", __func__);
     int64_t t_start = ggml_time_ms();
     ggml_backend_sched_graph_compute(ctx.sched, gf);
 
@@ -1106,7 +1114,6 @@ struct llama_vision_tokens * llama_vision_tokenize(
         case LLM_ARCH_VISION_IDEFICS3:
             return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
         case LLM_ARCH_VISION_MINICPMV:
-            //return new llama_vision_tokens(llama_vision_processor_uhd(vctx).tokenize(*bmp));
             return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
         default:
             GGML_ASSERT(false && "unsupported arch");

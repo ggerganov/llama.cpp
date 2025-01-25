@@ -217,6 +217,11 @@ static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w
                 ggml_tensor * b = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_embd, w->ne[1], 1, 1);
                 op_tensor = ggml_im2col(ctx, w, b, 1, 0, 0, 0, 1, 0, false, GGML_TYPE_F16);
             } break;
+        case GGML_OP_CONCAT:
+            {
+                ggml_tensor * b = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, w->ne[0], w->ne[1], w->ne[2], w->ne[3]);
+                op_tensor = ggml_concat(ctx, w, b, 0);
+            } break;
         default:
             GGML_ABORT("%s: missing test for op %s for tensor %s", __func__, ggml_op_name(op), w->name);
     }
@@ -1469,7 +1474,9 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             }
 
             // sanity checks
-            if (info.layer == LLM_TENSOR_LAYER_INPUT || info.layer == LLM_TENSOR_LAYER_OUTPUT) {
+            if (info.layer == LLM_TENSOR_LAYER_PROJECTION) {
+                // nothing to check
+            } else if (info.layer == LLM_TENSOR_LAYER_INPUT || info.layer == LLM_TENSOR_LAYER_OUTPUT) {
                 if (tn.bid != -1) {
                     GGML_ABORT("input/output layer tensor %s used with a layer number", tn.str().c_str());
                 }
@@ -1490,6 +1497,9 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     break;
                 case LLM_TENSOR_LAYER_REPEATING:
                     buft_list = pimpl->dev_layer.at(tn.bid).buft_list;
+                    break;
+                case LLM_TENSOR_LAYER_PROJECTION:
+                    buft_list = pimpl->dev_layer.back().buft_list;
                     break;
                 default:
                     GGML_ABORT("invalid layer %d for tensor %s", info.layer, tn.str().c_str());
@@ -3469,7 +3479,6 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
 
         // TODO: vit is cpu only for now
         vit.buft = ggml_backend_cpu_buffer_type();
-        ggml_context * ctx_vision = ctx_map.at(vit.buft);
         vit.layers.resize(n_vlayer);
 
         switch (vparams.arch) {
@@ -3477,27 +3486,27 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             case LLM_ARCH_VISION_MOBILEVLM:
                 {
                     if (vparams.arch == LLM_ARCH_VISION_LLAVA) {
-                        vit.mm_1_w = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ, "weight", 1), {n_vembd, n_vff});
-                        vit.mm_1_b = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ, "bias"  , 1), {n_vff});
-                        vit.mm_2_w = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ, "weight", 2), {n_vff,   n_vff});
-                        vit.mm_2_b = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ, "bias"  , 2), {n_vff});
+                        vit.mm_1_w = create_tensor(tn(LLM_TENSOR_V_MMPROJ, "weight", 1), {n_vembd, n_vff}, 0);
+                        vit.mm_1_b = create_tensor(tn(LLM_TENSOR_V_MMPROJ, "bias"  , 1), {n_vff}, 0);
+                        vit.mm_2_w = create_tensor(tn(LLM_TENSOR_V_MMPROJ, "weight", 2), {n_vff,   n_vff}, 0);
+                        vit.mm_2_b = create_tensor(tn(LLM_TENSOR_V_MMPROJ, "bias"  , 2), {n_vff}, 0);
                     } else if (vparams.arch == LLM_ARCH_VISION_MOBILEVLM) {
-                        vit.mm_model_mlp_0_w = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_MLP, "weight", 0), {n_vembd,   n_embd});
-                        vit.mm_model_mlp_0_b = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_MLP, "bias",   0), {n_embd});
-                        vit.mm_model_mlp_2_w = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_MLP, "weight", 2), {n_embd,    n_embd});
-                        vit.mm_model_mlp_2_b = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_MLP, "bias",   2), {n_embd});
-                        vit.mm_model_peg_0_w = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_PEG, "weight", 0), {n_channel, n_channel, 1, n_embd});
-                        vit.mm_model_peg_0_b = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_PEG, "bias",   0), {n_embd});
+                        vit.mm_model_mlp_0_w = create_tensor(tn(LLM_TENSOR_V_MMPROJ_MLP, "weight", 0), {n_vembd,   n_embd}, 0);
+                        vit.mm_model_mlp_0_b = create_tensor(tn(LLM_TENSOR_V_MMPROJ_MLP, "bias",   0), {n_embd}, 0);
+                        vit.mm_model_mlp_2_w = create_tensor(tn(LLM_TENSOR_V_MMPROJ_MLP, "weight", 2), {n_embd,    n_embd}, 0);
+                        vit.mm_model_mlp_2_b = create_tensor(tn(LLM_TENSOR_V_MMPROJ_MLP, "bias",   2), {n_embd}, 0);
+                        vit.mm_model_peg_0_w = create_tensor(tn(LLM_TENSOR_V_MMPROJ_PEG, "weight", 0), {n_channel, n_channel, 1, n_embd}, 0);
+                        vit.mm_model_peg_0_b = create_tensor(tn(LLM_TENSOR_V_MMPROJ_PEG, "bias",   0), {n_embd}, 0);
                     }
 
-                    vit.class_embedding     = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_CLS            ), {n_vembd});
-                    vit.patch_embeddings    = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd});
-                    vit.position_embeddings = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd});
+                    vit.class_embedding     = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_CLS            ), {n_vembd}, 0);
+                    vit.patch_embeddings    = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd}, 0);
+                    vit.position_embeddings = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd}, 0);
 
-                    vit.pre_norm_w          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_PRE_NORM,       "weight"), {n_vembd});
-                    vit.pre_norm_b          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_PRE_NORM,       "bias"  ), {n_vembd});
-                    vit.post_norm_w         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "weight"), {n_vembd}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                    vit.post_norm_b         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "bias"  ), {n_vembd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    vit.pre_norm_w          = create_tensor(tn(LLM_TENSOR_V_PRE_NORM,       "weight"), {n_vembd}, 0);
+                    vit.pre_norm_b          = create_tensor(tn(LLM_TENSOR_V_PRE_NORM,       "bias"  ), {n_vembd}, 0);
+                    vit.post_norm_w         = create_tensor(tn(LLM_TENSOR_V_POST_NORM,      "weight"), {n_vembd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    vit.post_norm_b         = create_tensor(tn(LLM_TENSOR_V_POST_NORM,      "bias"  ), {n_vembd}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                     for (int i = 0; i < n_vlayer; ++i) {
                         auto & layer = vit.layers[i];
@@ -3525,36 +3534,15 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                 } break;
             case LLM_ARCH_VISION_MINICPMV:
                 {
-                    vit.patch_embeddings    = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd});
-                    vit.patch_bias          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "bias"  ), {n_vembd});
-                    vit.position_embeddings = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd});
-
-                    // resampler
-                    int rs_n_embd = llama_vision_n_mmproj_embd(vit);
-                    vit.mm_model_pos_embed_k   = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_POS_EMBD_K,   "weight"), {rs_n_embd, max_pos_embd});
-                    vit.mm_model_query         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_QUERY,        "weight"), {rs_n_embd, 64}); // why 64?
-                    vit.mm_model_proj          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_PROJ,         "weight"), {rs_n_embd, rs_n_embd});
-                    vit.mm_model_kv_proj       = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_KV,           "weight"), {n_vembd,   rs_n_embd});
-                    vit.mm_model_attn_q_w      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_Q,       "weight"), {rs_n_embd, rs_n_embd});
-                    vit.mm_model_attn_q_b      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_Q,       "bias"  ), {rs_n_embd});
-                    vit.mm_model_attn_k_w      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_K,       "weight"), {rs_n_embd, rs_n_embd});
-                    vit.mm_model_attn_k_b      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_K,       "bias"  ), {rs_n_embd});
-                    vit.mm_model_attn_v_w      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_V,       "weight"), {rs_n_embd, rs_n_embd});
-                    vit.mm_model_attn_v_b      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_V,       "bias"  ), {rs_n_embd});
-                    vit.mm_model_attn_o_w      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_OUT,     "weight"), {rs_n_embd, rs_n_embd});
-                    vit.mm_model_attn_o_b      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_ATTN_OUT,     "bias"  ), {rs_n_embd});
-                    vit.mm_model_ln_q_w        = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_Q_NORM,       "weight"), {rs_n_embd});
-                    vit.mm_model_ln_q_b        = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_Q_NORM,       "bias"  ), {rs_n_embd});
-                    vit.mm_model_ln_kv_w       = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_KV_NORM,      "weight"), {rs_n_embd});
-                    vit.mm_model_ln_kv_b       = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_KV_NORM,      "bias"  ), {rs_n_embd});
-                    vit.mm_model_ln_post_w     = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "weight"), {rs_n_embd});
-                    vit.mm_model_ln_post_b     = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "bias"  ), {rs_n_embd});
+                    vit.patch_embeddings    = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd}, 0);
+                    vit.patch_bias          = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "bias"  ), {n_vembd}, 0);
+                    vit.position_embeddings = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd}, 0);
 
                     // tok embd
-                    vit.mm_tok_embd_image      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_IMAGE,      "weight"), {n_embd});
-                    vit.mm_tok_embd_end_image  = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_END_IMAGE,  "weight"), {n_embd});
-                    vit.mm_tok_embd_slice      = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_SLICE,      "weight"), {n_embd});
-                    vit.mm_tok_embd_end_slice  = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_TOK_EMBD_END_SLICE,  "weight"), {n_embd});
+                    vit.mm_tok_embd_image      = create_tensor(tn(LLM_TENSOR_V_TOK_EMBD_IMAGE,      "weight"), {n_embd}, 0);
+                    vit.mm_tok_embd_end_image  = create_tensor(tn(LLM_TENSOR_V_TOK_EMBD_END_IMAGE,  "weight"), {n_embd}, 0);
+                    vit.mm_tok_embd_slice      = create_tensor(tn(LLM_TENSOR_V_TOK_EMBD_SLICE,      "weight"), {n_embd}, 0);
+                    vit.mm_tok_embd_end_slice  = create_tensor(tn(LLM_TENSOR_V_TOK_EMBD_END_SLICE,  "weight"), {n_embd}, 0);
 
                     for (int i = 0; i < n_vlayer; ++i) {
                         auto & layer = vit.layers[i];
@@ -3579,18 +3567,41 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         layer.output_w   = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT,      "weight", i), {n_vembd, n_vembd}, 0);
                         layer.output_b   = create_tensor(tn(LLM_TENSOR_V_ENC_OUTPUT,      "bias"  , i), {n_vembd}, 0);
                     }
+
+                    // resampler, we consider it as one layer on top of the encoder
+                    int il = n_vlayer - 1;
+                    int rs_n_embd = llama_vision_n_mmproj_embd(vit);
+                    vit.mm_model_pos_embed_k   = create_tensor(tn(LLM_TENSOR_V_RESMPL_POS_EMBD_K,   "weight", il), {rs_n_embd, max_pos_embd}, 0);
+                    vit.mm_model_query         = create_tensor(tn(LLM_TENSOR_V_RESMPL_QUERY,        "weight", il), {rs_n_embd, 64}, 0); // why 64?
+                    vit.mm_model_proj          = create_tensor(tn(LLM_TENSOR_V_RESMPL_PROJ,         "weight", il), {rs_n_embd, rs_n_embd}, 0);
+                    vit.mm_model_kv_proj       = create_tensor(tn(LLM_TENSOR_V_RESMPL_KV,           "weight", il), {n_vembd,   rs_n_embd}, 0);
+                    vit.mm_model_attn_q_w      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_Q,       "weight", il), {rs_n_embd, rs_n_embd}, 0);
+                    vit.mm_model_attn_q_b      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_Q,       "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_attn_k_w      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_K,       "weight", il), {rs_n_embd, rs_n_embd}, 0);
+                    vit.mm_model_attn_k_b      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_K,       "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_attn_v_w      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_V,       "weight", il), {rs_n_embd, rs_n_embd}, 0);
+                    vit.mm_model_attn_v_b      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_V,       "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_attn_o_w      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_OUT,     "weight", il), {rs_n_embd, rs_n_embd}, 0);
+                    vit.mm_model_attn_o_b      = create_tensor(tn(LLM_TENSOR_V_RESMPL_ATTN_OUT,     "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_q_w        = create_tensor(tn(LLM_TENSOR_V_RESMPL_Q_NORM,       "weight", il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_q_b        = create_tensor(tn(LLM_TENSOR_V_RESMPL_Q_NORM,       "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_kv_w       = create_tensor(tn(LLM_TENSOR_V_RESMPL_KV_NORM,      "weight", il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_kv_b       = create_tensor(tn(LLM_TENSOR_V_RESMPL_KV_NORM,      "bias"  , il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_post_w     = create_tensor(tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "weight", il), {rs_n_embd}, 0);
+                    vit.mm_model_ln_post_b     = create_tensor(tn(LLM_TENSOR_V_RESMPL_POST_NORM,    "bias"  , il), {rs_n_embd}, 0);
+
                 } break;
             case LLM_ARCH_VISION_IDEFICS3:
                 {
                     int scale_factor = vit.hparams.scale_factor;
-                    vit.projection          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_MMPROJ_FC,      "weight"), {n_vembd * scale_factor * scale_factor, n_embd});
+                    vit.projection          = create_tensor(tn(LLM_TENSOR_V_MMPROJ_FC,      "weight"), {n_vembd * scale_factor * scale_factor, n_embd}, 0);
 
-                    vit.patch_embeddings    = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd});
-                    vit.patch_bias          = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "bias"  ), {n_vembd});
-                    vit.position_embeddings = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd});
+                    vit.patch_embeddings    = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "weight"), {patch_size, patch_size, n_channel, n_vembd}, 0);
+                    vit.patch_bias          = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_PATCH, "bias"  ), {n_vembd}, 0);
+                    vit.position_embeddings = create_tensor(tn(LLM_TENSOR_V_ENC_EMBD_POS,   "weight"), {n_vembd, max_pos_embd}, 0);
 
-                    vit.post_norm_w         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "weight"), {n_vembd});
-                    vit.post_norm_b         = ml.create_tensor(ctx_vision, tn(LLM_TENSOR_V_POST_NORM,      "bias"  ), {n_vembd});
+                    vit.post_norm_w         = create_tensor(tn(LLM_TENSOR_V_POST_NORM,      "weight"), {n_vembd}, 0);
+                    vit.post_norm_b         = create_tensor(tn(LLM_TENSOR_V_POST_NORM,      "bias"  ), {n_vembd}, 0);
 
                     for (int i = 0; i < n_vlayer; ++i) {
                         auto & layer = vit.layers[i];

@@ -1008,6 +1008,29 @@ class Model:
             self.gguf_writer.add_add_eos_token(field.parts[-1].tolist()[0])
 
 
+# TODO: maybe merge this with Model in the future
+class VisionModelHelper:
+    model: Model
+    tok_embd_tensor: Tensor | None = None
+
+    def __init__(self, model: Model):
+        self.model = model
+        # TODO: how to do this without reading the whole safetensor file?
+        for tname, tensor in model.get_tensors():
+            if tname.endswith("embed_tokens.weight"):
+                self.tok_embd_tensor = tensor
+
+    def get_embd_for_tokens(self, map_token_to_tensor_name: Iterable[tuple[str, gguf.MODEL_TENSOR]], tensor_name_postfix = '.weight') -> Iterable[tuple[str, Tensor]]:
+        if self.tok_embd_tensor is None:
+            raise ValueError("Token embedding tensor not found")
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(self.model.dir_model, trust_remote_code=True)
+        for token, tensor_name in map_token_to_tensor_name:
+            tok_id = tokenizer.get_vocab()[token]
+            row = self.tok_embd_tensor[tok_id]
+            yield gguf.TENSOR_NAMES[tensor_name] + tensor_name_postfix, row
+
+
 @Model.register("GPTNeoXForCausalLM")
 class GPTNeoXModel(Model):
     model_arch = gguf.MODEL_ARCH.GPTNEOX
@@ -2355,11 +2378,11 @@ class Qwen2VLModel(Model):
 
 @Model.register("MiniCPMV")
 class MiniCPMVModel(Qwen2Model):
-    # based on minicpmv-surgery.py, not sure why it is Qwen2Model instead of MiniCPMModel
+    # MiniCPM-V 2.5 is Qwen2 and 2.6 is Qwen-2.5
     model_arch = gguf.MODEL_ARCH.QWEN2
     proj_type: gguf.constants.CLIPProjectorType | None
     resampler_n_embd = 0
-    tok_embd_tensor: Tensor | None = None
+    vhelper: VisionModelHelper | None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -2378,56 +2401,49 @@ class MiniCPMVModel(Qwen2Model):
                 self.proj_type = gguf.constants.CLIPProjectorType.MINICPMV_2_6
             else:
                 raise ValueError(f"Unsupported MiniCPM-V version: {version}")
+            self.vhelper = VisionModelHelper(self)
             # TODO: how to do this without reading the whole safetensor file?
             for tname, tensor in self.get_tensors():
                 if tname == "resampler.ln_post.bias":
                     self.resampler_n_embd = tensor.shape[0]
-                if tname.endswith("embed_tokens.weight"):
-                    self.tok_embd_tensor = tensor
             if self.resampler_n_embd < 2:
                 raise ValueError("Failed to detect resampler embedding size")
         else:
             raise ValueError("Expected vision_config, but not found")
 
-        if self.vparams is not None and self.vision_arch is not None and self.preprocessor_config is not None:
-            self.preprocessor_config["image_mean"] = [0.5, 0.5, 0.5]
-            self.preprocessor_config["image_std"] = [0.5, 0.5, 0.5]
-            self.hparams["vision_feature_layer"] = 0
-            self.v_tensor_map = gguf.get_tensor_name_map(self.vision_arch, self.vparams["num_hidden_layers"])
-
-    def get_embd_of_tokens(self, map_token_to_tensor_name: Iterable[tuple[str, str]]) -> Iterable[tuple[str, Tensor]]:
-        if self.tok_embd_tensor is None:
-            raise ValueError("Token embedding tensor not found")
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(self.dir_model, trust_remote_code=True)
-        for token, tensor_name in map_token_to_tensor_name:
-            tok_id = tokenizer.get_vocab()[token]
-            row = self.tok_embd_tensor[tok_id]
-            yield tensor_name, row
+        assert self.vparams is not None
+        assert self.vision_arch is not None
+        assert self.preprocessor_config is not None
+        self.preprocessor_config["image_mean"] = [0.5, 0.5, 0.5]
+        self.preprocessor_config["image_std"] = [0.5, 0.5, 0.5]
+        self.hparams["vision_feature_layer"] = 0
+        self.v_tensor_map = gguf.get_tensor_name_map(self.vision_arch, self.vparams["num_hidden_layers"])
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        # For vision model
-        if self.vparams is not None and self.proj_type is not None:
-            self.gguf_writer.add_vision_vit_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
-            self.gguf_writer.add_vision_vit_projector_type(self.proj_type)
-            self.gguf_writer.add_vision_vit_layer_norm_epsilon(1e-06)
-            max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2
-            self.gguf_writer.add_vision_vit_max_position_embeddings(max_pos_embd)
+        assert self.vparams is not None and self.proj_type is not None
+        self.gguf_writer.add_vision_vit_patch_merge_type(gguf.CLIPPatchMergeType.FLAT)
+        self.gguf_writer.add_vision_vit_projector_type(self.proj_type)
+        self.gguf_writer.add_vision_vit_layer_norm_epsilon(1e-06)
+        max_pos_embd = (self.vparams["image_size"] // self.vparams["patch_size"])**2
+        self.gguf_writer.add_vision_vit_max_position_embeddings(max_pos_embd)
 
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+        # because the model operates excusively on 70x70 patches for now, we should precompute the positional embeddings to gain performance
+        # in the future, we can do it in cpp if we figure out how to do it efficiently
         yield (
             self.format_tensor_name(gguf.MODEL_TENSOR.V_RESMPL_POS_EMBD_K, is_vision=True),
             torch.from_numpy(self._get_2d_sincos_pos_embed(self.resampler_n_embd, (70, 70)))
         )
+        assert self.vhelper is not None
         added_tokens = [
-            ("<image>",  gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_IMAGE    ] + ".weight"),
-            ("</image>", gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_END_IMAGE] + ".weight"),
-            ("<slice>",  gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_SLICE    ] + ".weight"),
-            ("</slice>", gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.V_TOK_EMBD_END_SLICE] + ".weight"),
+            ("<image>",  gguf.MODEL_TENSOR.V_TOK_EMBD_IMAGE),
+            ("</image>", gguf.MODEL_TENSOR.V_TOK_EMBD_END_IMAGE),
+            ("<slice>",  gguf.MODEL_TENSOR.V_TOK_EMBD_SLICE),
+            ("</slice>", gguf.MODEL_TENSOR.V_TOK_EMBD_END_SLICE),
         ]
-        for tensor_name, tensor in self.get_embd_of_tokens(added_tokens):
+        for tensor_name, tensor in self.vhelper.get_embd_for_tokens(added_tokens):
             yield tensor_name, tensor
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
