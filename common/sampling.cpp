@@ -153,7 +153,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     struct llama_sampler * grmr;
     if (params.grammar.compare(0, 4, "llg:") == 0) {
-#ifdef LLAMA_LLGUIDANCE
+#ifdef LLAMA_USE_LLGUIDANCE
         auto gp = params.grammar.find(':', 4);
         if (gp == std::string::npos) {
             GGML_ABORT("invalid serialized grammar");
@@ -162,7 +162,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         auto grm_data = params.grammar.c_str() + gp + 1;
         grmr = llama_sampler_init_llg(model, grm_type.c_str(), grm_data);
 #else
-        GGML_ABORT("llguidance (LLAMA_LLGUIDANCE cmake parameter) is not enabled");
+        GGML_ABORT("llguidance (cmake -DLLAMA_LLGUIDANCE=ON) is not enabled");
 #endif
     } else {
         grmr = llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root");
