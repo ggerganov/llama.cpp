@@ -57,7 +57,7 @@ void main() {
         A_TYPE sa = 0.0;
         [[unroll]] for (uint j = 0; j < head_size; j += 4) {
             vec4 s_vec = vec4(state[j], state[j+1], state[j+2], state[j+3]);
-            vec4 a_vec = vec4(a[j], a[j+1], a[j+2], a[j+3]);
+            vec4 a_vec = vec4(_a[j], _a[j+1], _a[j+2], _a[j+3]);
             sa += dot(s_vec, a_vec);
         }
 
