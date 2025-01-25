@@ -85,6 +85,10 @@ struct vk_pipeline_struct {
     uint32_t parameter_count;
     std::array<uint32_t, 3> wg_denoms;
     uint32_t align;
+    // set to true to request the pipeline is compiled after the dryrun
+    bool needed {};
+    // set to true when the shader has been compiled
+    bool compiled {};
 };
 
 typedef std::shared_ptr<vk_pipeline_struct> vk_pipeline;
@@ -186,8 +190,11 @@ struct vk_device_struct {
     bool mul_mat_id_m;
     bool mul_mat_id_s;
 
-    vk_matmul_pipeline pipeline_matmul_f32;
-    vk_matmul_pipeline pipeline_matmul_f32_f16;
+    // set to true to indicate that some shaders need to be compiled after the dryrun
+    bool need_compiles {};
+
+    vk_matmul_pipeline pipeline_matmul_f32 {};
+    vk_matmul_pipeline pipeline_matmul_f32_f16 {};
     vk_matmul_pipeline2 pipeline_matmul_f16;
     vk_matmul_pipeline2 pipeline_matmul_f16_f32;
     vk_pipeline pipeline_matmul_split_k_reduce;
@@ -195,7 +202,7 @@ struct vk_device_struct {
     vk_matmul_pipeline2 pipeline_dequant_mul_mat_mat_f16[GGML_TYPE_COUNT];
     vk_matmul_pipeline2 pipeline_dequant_mul_mat_mat[GGML_TYPE_COUNT];
 
-    vk_matmul_pipeline pipeline_matmul_id_f32;
+    vk_matmul_pipeline pipeline_matmul_id_f32 {};
     vk_matmul_pipeline2 pipeline_matmul_id_f16;
     vk_matmul_pipeline2 pipeline_matmul_id_f16_f32;
 
@@ -776,13 +783,6 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
     GGML_ASSERT(parameter_count > 0);
     GGML_ASSERT(wg_denoms[0] > 0 && wg_denoms[1] > 0 && wg_denoms[2] > 0); // NOLINT
 
-    pipeline = std::make_shared<vk_pipeline_struct>();
-    pipeline->name = name;
-    pipeline->parameter_count = parameter_count;
-    pipeline->push_constant_size = push_constant_size;
-    pipeline->wg_denoms = wg_denoms;
-    pipeline->align = align;
-
     vk::ShaderModuleCreateInfo shader_module_create_info({}, spv_size, reinterpret_cast<const uint32_t *>(spv_data));
     pipeline->shader_module = device->device.createShaderModule(shader_module_create_info);
 
@@ -865,6 +865,7 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
     }
 
     pipeline->pipeline = device->device.createComputePipeline(VK_NULL_HANDLE, compute_pipeline_create_info).value;
+    pipeline->compiled = true;
 
     {
         std::lock_guard<std::mutex> guard(device->mutex);
@@ -875,12 +876,6 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
         std::lock_guard<std::mutex> guard(compile_count_mutex);
         assert(compile_count > 0);
         compile_count--;
-
-        // "Progress bar" for shader compiles
-        static uint32_t total_compile_count = 0;
-        if ((total_compile_count++ % 10) == 0) {
-            std::cerr << ".";
-        }
     }
     compile_count_cond.notify_all();
 }
@@ -906,6 +901,10 @@ static void ggml_vk_destroy_pipeline(vk::Device& device, vk_pipeline& pipeline) 
 static void ggml_pipeline_request_descriptor_sets(vk_device& device, vk_pipeline& pipeline, uint32_t n) {
     VK_LOG_DEBUG("ggml_pipeline_request_descriptor_sets(" << pipeline->name << ", " << n << ")");
     device->pipeline_descriptor_set_requirements[pipeline->name] += n;
+    if (!pipeline->compiled) {
+        pipeline->needed = true;
+        device->need_compiles = true;
+    }
 }
 
 static void ggml_pipeline_allocate_descriptor_sets(vk_device& device) {
@@ -1388,8 +1387,6 @@ static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vec
 static void ggml_vk_load_shaders(vk_device& device) {
     VK_LOG_DEBUG("ggml_vk_load_shaders(" << device->name << ")");
 
-    std::cerr << "ggml_vulkan: Compiling shaders";
-
     // some shaders have a minimum subgroup size
     const uint32_t subgroup_size_16 = std::max(device->subgroup_size, 16u);
     const uint32_t subgroup_size_32 = std::max(device->subgroup_size, 32u);
@@ -1527,15 +1524,33 @@ static void ggml_vk_load_shaders(vk_device& device) {
         }
     }
 
-    device->pipeline_matmul_f32 = std::make_shared<vk_matmul_pipeline_struct>();
-    device->pipeline_matmul_f32_f16 = std::make_shared<vk_matmul_pipeline_struct>();
-
-    device->pipeline_matmul_id_f32 = std::make_shared<vk_matmul_pipeline_struct>();
+    if (!device->pipeline_matmul_f32) {
+        device->pipeline_matmul_f32 = std::make_shared<vk_matmul_pipeline_struct>();
+    }
+    if (!device->pipeline_matmul_f32_f16) {
+        device->pipeline_matmul_f32_f16 = std::make_shared<vk_matmul_pipeline_struct>();
+    }
+    if (!device->pipeline_matmul_id_f32) {
+        device->pipeline_matmul_id_f32 = std::make_shared<vk_matmul_pipeline_struct>();
+    }
 
     std::vector<std::future<void>> compiles;
     auto const &ggml_vk_create_pipeline = [&](vk_device& device, vk_pipeline& pipeline, const std::string &name, size_t spv_size, const void* spv_data, const std::string &entrypoint,
                                               uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, const std::vector<uint32_t>& specialization_constants,
                                               uint32_t align, bool disable_robustness = false, bool require_full_subgroups = false, uint32_t required_subgroup_size = 0) {
+
+        if (!pipeline) {
+            pipeline = std::make_shared<vk_pipeline_struct>();
+            pipeline->name = name;
+            pipeline->parameter_count = parameter_count;
+            pipeline->push_constant_size = push_constant_size;
+            pipeline->wg_denoms = wg_denoms;
+            pipeline->align = align;
+        }
+
+        if (!pipeline->needed || pipeline->compiled) {
+            return;
+        }
         {
             // wait until fewer than N compiles are in progress
             uint32_t N = std::max(1u, std::thread::hardware_concurrency());
@@ -2050,7 +2065,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
     for (auto &c : compiles) {
         c.wait();
     }
-    std::cerr << "Done!" << std::endl;
+    device->need_compiles = false;
 }
 
 static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDeviceProperties& props, const vk::PhysicalDeviceDriverProperties& driver_props);
@@ -7655,6 +7670,9 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_vk_build_graph(ctx, cgraph->nodes[i], i, nullptr, 0, true, false, false);
+    }
+    if (ctx->device->need_compiles) {
+        ggml_vk_load_shaders(ctx->device);
     }
     ggml_vk_preallocate_buffers(ctx);
     ggml_pipeline_allocate_descriptor_sets(ctx->device);
