@@ -6483,24 +6483,6 @@ struct llm_build_context {
                             0);
                 cb(kv_cache, "kv_cache", il);
 
-                // {kv_lora_rank, n_head * (n_embd_head_qk_nope + n_embd_head_v)} * {kv_lora_rank, n_tokens} -> {n_head * (n_embd_head_qk_nope + n_embd_head_v), n_tokens}
-                struct ggml_tensor * kv = ggml_mul_mat(ctx0, model.layers[il].wkv_b, kv_cache);
-                cb(kv, "kv", il);
-
-                // split into {n_head * n_embd_head_qk_nope, n_tokens}
-                struct ggml_tensor * k_nope = ggml_view_3d(ctx0, kv, n_embd_head_qk_nope, n_head, n_kv,
-                        ggml_row_size(kv->type, n_embd_head_qk_nope + hparams.n_embd_head_v),
-                        ggml_row_size(kv->type, n_head * (n_embd_head_qk_nope + hparams.n_embd_head_v)),
-                        0);
-                cb(k_nope, "k_nope", il);
-
-                // and {n_head * n_embd_head_v, n_tokens}
-                struct ggml_tensor * v_states = ggml_view_3d(ctx0, kv, hparams.n_embd_head_v, n_head, n_kv,
-                        ggml_row_size(kv->type, (n_embd_head_qk_nope + hparams.n_embd_head_v)),
-                        ggml_row_size(kv->type, (n_embd_head_qk_nope + hparams.n_embd_head_v)*n_head),
-                        ggml_row_size(kv->type, (n_embd_head_qk_nope)));
-                cb(v_states, "v_states", il);
-
                 q_pe = ggml_cont(ctx0, q_pe); // TODO: the CUDA backend does not support non-contiguous RoPE
                 q_pe = ggml_rope_ext(
                     ctx0, q_pe, inp_pos, nullptr,
@@ -6524,9 +6506,6 @@ struct llm_build_context {
                 // note: storing RoPE-ed version of K^R in the KV cache
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_pe, kr_cache_view));
 
-                struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope, q_pe, 0);
-                cb(q_states, "q_states", il);
-
                 struct ggml_tensor * kr_cache =
                     ggml_view_2d(ctx0, kv_self.kr_l[il],
                             n_embd_head_qk_rope, n_kv,
@@ -6534,36 +6513,62 @@ struct llm_build_context {
                             0);
                 cb(kr_cache, "kr_cache", il);
 
-                // TODO is there a better way?
-                struct ggml_tensor * kr_rep_shape = ggml_new_tensor_3d(ctx0, kr_cache->type, kr_cache->ne[0], kr_cache->ne[1], n_head);
-                struct ggml_tensor * kr_rep = ggml_repeat(ctx0, kr_cache, kr_rep_shape);
-                kr_rep = ggml_permute(ctx0, kr_rep, 0, 2, 1, 3);
-                struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope, kr_rep, 0);
-                cb(k_states, "k_states", il);
+                struct ggml_tensor * wk_b = ggml_view_3d(ctx0, model.layers[il].wk_b, n_embd_head_qk_nope, kv_lora_rank, n_head, ggml_row_size(model.layers[il].wk_b->type, n_embd_head_qk_nope), ggml_row_size(model.layers[il].wk_b->type, kv_lora_rank * n_embd_head_qk_nope), 0);
+                cb(wk_b, "wk_b", il);
 
-                q_states = ggml_permute(ctx0, q_states, 0, 2, 1, 3);
-                cb(q_states, "q_states", il);
+                struct ggml_tensor * q_nope_perm = ggml_permute(ctx0, q_nope, 0, 2, 3, 1);
+                cb(q_nope_perm, "q_nope_perm", il);
 
-                k_states = ggml_permute(ctx0, k_states, 0, 2, 1, 3);
-                cb(k_states, "k_states", il);
+                struct ggml_tensor * q_nope2 = ggml_mul_mat(ctx0, wk_b, q_nope_perm);
+                cb(q_nope2, "q_nope2", il);
 
-                struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_states, q_states);
-                cb(kq, "kq", il);
+                struct ggml_tensor * q_nope2_perm = ggml_permute(ctx0, q_nope2, 0, 1, 3, 2);
+                cb(q_nope2_perm, "q_nope2_perm", il);
+
+                struct ggml_tensor * kv_cache_perm = ggml_cont(ctx0, ggml_permute(ctx0, kv_cache, 1, 0, 2, 3));
+                cb(kv_cache_perm, "kv_cache_perm", il);
+
+                struct ggml_tensor * scores1 = ggml_mul_mat(ctx0, kv_cache, q_nope2_perm);
+                cb(scores1, "scores1", il);
+
+                struct ggml_tensor * q_pe_perm = ggml_permute(ctx0, q_pe, 0, 3, 2, 1);
+                cb(q_pe_perm, "q_pe_perm", il);
+
+                struct ggml_tensor * kr_cache_perm = ggml_permute(ctx0, kr_cache, 0, 2, 3, 1);
+                cb(kr_cache_perm, "kr_cache_perm", il);
+
+                struct ggml_tensor * scores2 = ggml_mul_mat(ctx0, kr_cache, q_pe_perm);
+                cb(scores2, "scores2", il);
+
+                struct ggml_tensor * scores = ggml_add(ctx0, scores1, scores2);
+                cb(scores, "scores", il);
+
+                struct ggml_tensor * kq = ggml_permute(ctx0, scores, 0, 3, 1, 2);
+
+                struct ggml_tensor * wv_b = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v, n_head, ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank), ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v), 0);
+                cb(wv_b, "wv_b", il);
 
                 kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                 cb(kq, "kq_soft_max_ext", il);
 
-                v_states = ggml_permute(ctx0, v_states, 1, 2, 0, 3);
-                cb(v_states, "v_states", il);
+                struct ggml_tensor * kq_perm = ggml_permute(ctx0, kq, 0, 2, 3, 1);
+                cb(kq_perm, "kq_perm", il);
 
-                v_states = ggml_cont(ctx0, v_states);
+                struct ggml_tensor * kqv1 = ggml_mul_mat(ctx0, kv_cache_perm, kq_perm);
+                cb(kqv1, "kqv1", il);
 
-                struct ggml_tensor * kqv = ggml_mul_mat(ctx0, v_states, kq);
-                cb(kqv, "kqv", il);
+                struct ggml_tensor * kqv1_trans = ggml_permute(ctx0, kqv1, 0, 1, 3, 2);
+                cb(kqv1_trans, "kqv1_trans", il);
+
+                struct ggml_tensor * kqv2 = ggml_mul_mat(ctx0, wv_b, kqv1_trans);
+                cb(kqv2, "kqv2", il);
+
+                struct ggml_tensor * kqv2_trans = ggml_permute(ctx0, kqv2, 0, 3, 2, 1);
+                cb(kqv2_trans, "kqv2_trans", il);
 
                 GGML_ASSERT(kv_self.size == n_ctx);
 
-                struct ggml_tensor * kqv_merged = ggml_permute(ctx0, kqv, 0, 2, 1, 3);
+                struct ggml_tensor * kqv_merged = ggml_permute(ctx0, kqv2_trans, 0, 2, 1, 3);
                 cb(kqv_merged, "kqv_merged", il);
 
                 cur = ggml_cont_2d(ctx0, kqv_merged, n_embd_head_v*n_head, n_tokens);

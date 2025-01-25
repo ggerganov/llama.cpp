@@ -105,6 +105,7 @@ bool llama_kv_cache_init(
         // DeepSeek MLA
         const uint32_t n_embd_head_qk_rope = hparams.n_rot;
         const uint32_t kv_lora_rank = hparams.n_lora_kv;
+        LLAMA_LOG_DEBUG("%s: layer %d: n_embd_head_qk_rope = %d, kv_lora_rank = %d\n", __func__, i, n_embd_head_qk_rope, kv_lora_rank);
         ggml_tensor * kr = ggml_new_tensor_1d(ctx, cache.type_kr, n_embd_head_qk_rope*kv_size);
         ggml_tensor * kv = ggml_new_tensor_1d(ctx, cache.type_kv, kv_lora_rank*kv_size);
         ggml_format_name(kr, "cache_kr_l%d", i);

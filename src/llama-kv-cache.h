@@ -49,8 +49,8 @@ struct llama_kv_cache {
     ggml_type type_k = GGML_TYPE_F16;
     ggml_type type_v = GGML_TYPE_F16;
 
-    ggml_type type_kr = GGML_TYPE_F32;
-    ggml_type type_kv = GGML_TYPE_F32;
+    ggml_type type_kr = GGML_TYPE_F16;
+    ggml_type type_kv = GGML_TYPE_F16;
 
     std::vector<llama_kv_cell> cells;
 
