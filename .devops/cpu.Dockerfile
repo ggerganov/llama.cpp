@@ -12,9 +12,9 @@ WORKDIR /app
 COPY . .
 
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        cmake -S . -B build -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS=ON -DLLAMA_CURL=ON -DCMAKE_BUILD_TYPE=Release; \
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DGGML_BACKEND_DL=ON -DGGML_NATIVE=OFF -DGGML_CPU_ALL_VARIANTS=ON; \
     else \
-        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release; \
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON; \
     fi && \
     cmake --build build -j $(nproc)
 
