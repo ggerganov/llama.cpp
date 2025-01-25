@@ -96,8 +96,8 @@ if (GGML_HIP_GRAPHS)
     add_compile_definitions(GGML_HIP_GRAPHS)
 endif()
 
-if (GGML_CUDA_NO_VMM)
-    add_compile_definitions(GGML_CUDA_NO_VMM)
+if (GGML_HIP_NO_VMM)
+    add_compile_definitions(GGML_HIP_NO_VMM)
 endif()
 
 if (CXX_IS_HIPCC)
