@@ -1427,15 +1427,15 @@ struct server_queue {
     int post(server_task task, bool front = false) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         GGML_ASSERT(task.id != -1);
+        // if this is cancel task make sure to clean up pending tasks
+        if (task.type == SERVER_TASK_TYPE_CANCEL) {
+            cleanup_pending_task(task.id_target);
+        }
         QUE_DBG("new task, id = %d, front = %d\n", task.id, front);
         if (front) {
             queue_tasks.push_front(std::move(task));
         } else {
             queue_tasks.push_back(std::move(task));
-        }
-        // if this is cancel task make sure to clean up pending tasks
-        if (task.type == SERVER_TASK_TYPE_CANCEL) {
-            cleanup_pending_task(task.id_target);
         }
         condition_tasks.notify_one();
         return task.id;
@@ -1448,15 +1448,15 @@ struct server_queue {
             if (task.id == -1) {
                 task.id = id++;
             }
+            // if this is cancel task make sure to clean up pending tasks
+            if (task.type == SERVER_TASK_TYPE_CANCEL) {
+                cleanup_pending_task(task.id_target);
+            }
             QUE_DBG("new task, id = %d/%d, front = %d\n", task.id, (int) tasks.size(), front);
             if (front) {
                 queue_tasks.push_front(std::move(task));
             } else {
                 queue_tasks.push_back(std::move(task));
-            }
-            // if this is cancel task make sure to clean up pending tasks
-            if (task.type == SERVER_TASK_TYPE_CANCEL) {
-                cleanup_pending_task(task.id_target);
             }
         }
         condition_tasks.notify_one();
@@ -1554,10 +1554,10 @@ struct server_queue {
     }
 
 private:
-    void cleanup_pending_task(int id_task) {
+    void cleanup_pending_task(int id_target) {
         // no need lock because this is called exclusively by post()
-        auto rm_func = [id_task](const server_task & task) {
-            return task.id_target == id_task;
+        auto rm_func = [id_target](const server_task & task) {
+            return task.id_target == id_target;
         };
         queue_tasks.erase(
             std::remove_if(queue_tasks.begin(),          queue_tasks.end(),          rm_func),
