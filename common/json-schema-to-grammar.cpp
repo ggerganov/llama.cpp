@@ -991,11 +991,15 @@ public:
 };
 
 std::string json_schema_to_grammar(const json & schema) {
+#ifdef LLAMA_LLGUIDANCE
+    return "llg:json:" + schema.dump();
+#else
     return build_grammar([&](const llama_grammar_builder & callbacks) {
         auto copy = schema;
         callbacks.resolve_refs(copy);
         callbacks.add_schema("", copy);
     });
+#endif
 }
 
 std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb) {
