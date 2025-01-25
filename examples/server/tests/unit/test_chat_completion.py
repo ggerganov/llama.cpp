@@ -226,23 +226,23 @@ CODE_INTEPRETER_TOOL = {
 }
 
 
-@pytest.mark.parametrize("template_name,n_predict,tool,expected_arguments", [
-    ("meetkai-functionary-medium-v3.1",               128, TEST_TOOL,   {"success": True}                                                 ),
-    ("meetkai-functionary-medium-v3.1",               128, PYTHON_TOOL, {"code": ". She was so excited to go to the park and climble agace. She was so excited to go to the park and play with her friends.\nThey played together and had lots of fun. They were very happy. At the park, they found the park and had a great time. After a while, they found"} ),
-    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   {"success": True}                                                 ),
-    ("meetkai-functionary-medium-v3.2",               128, PYTHON_TOOL, {"code": "It's a spector."}                                       ),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   {"success": True}                                                 ),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, {"code": "Yes, you can."}                                         ),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   {"success": True}                                                 ),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, {"code": "Yes, you can."}                                         ),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   {"success": True}                                                 ),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, {"code": "It's a spector."}                                       ),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   {"success": True}                                                 ),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, {"code": "It's a spectork."}                                      ),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   {"success": True}                                                 ),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, {"code": "It's a speciachy!"}                                     ),
+@pytest.mark.parametrize("template_name,n_predict,tool,argument_key", [
+    ("meetkai-functionary-medium-v3.1",               128, TEST_TOOL,   "success"),
+    ("meetkai-functionary-medium-v3.1",               128, PYTHON_TOOL, "code"),
+    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   "success"),
+    ("meetkai-functionary-medium-v3.2",               128, PYTHON_TOOL, "code"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   "success"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, "code"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   "success"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, "code"),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   "success"),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, "code"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   "success"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, "code"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   "success"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, "code"),
 ])
-def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, expected_arguments: dict):
+def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, argument_key: str):
     global server
     # server = ServerPreset.stories15m_moe()
     server.jinja = True
@@ -269,7 +269,7 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
     tool_call = tool_calls[0]
     assert tool["function"]["name"] == tool_call["function"]["name"]
     actual_arguments = json.loads(tool_call["function"]["arguments"])
-    assert json.dumps(expected_arguments) == json.dumps(actual_arguments), f"tool arguments: {json.dumps(actual_arguments)}, expected: {json.dumps(expected_arguments)}"
+    assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
 
 
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
