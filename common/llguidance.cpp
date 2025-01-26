@@ -7,6 +7,8 @@
 
 #    include "llguidance.h"
 
+#    include <cmath>
+
 struct llama_sampler_llg {
     const llama_vocab * vocab;
     std::string         grammar_kind;
@@ -21,7 +23,7 @@ static LlgConstraint * llama_sampler_llg_new(LlgTokenizer * tokenizer, const cha
                                              const char * grammar_data) {
     LlgConstraintInit cinit;
     llg_constraint_init_set_defaults(&cinit, tokenizer);
-    const char *log_level = getenv("LLGUIDANCE_LOG_LEVEL");
+    const char * log_level = getenv("LLGUIDANCE_LOG_LEVEL");
     if (log_level && *log_level) {
         cinit.log_stderr_level = atoi(log_level);
     }
