@@ -990,16 +990,17 @@ public:
     }
 };
 
-std::string json_schema_to_grammar(const json & schema) {
+std::string json_schema_to_grammar(const json & schema, bool force_gbnf) {
 #ifdef LLAMA_USE_LLGUIDANCE
-    return "%llguidance {}\nstart: %json " + schema.dump();
-#else
+    if (!force_gbnf) {
+        return "%llguidance {}\nstart: %json " + schema.dump();
+    }
+#endif // LLAMA_USE_LLGUIDANCE
     return build_grammar([&](const llama_grammar_builder & callbacks) {
         auto copy = schema;
         callbacks.resolve_refs(copy);
         callbacks.add_schema("", copy);
     });
-#endif // LLAMA_USE_LLGUIDANCE
 }
 
 std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb) {
