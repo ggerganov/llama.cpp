@@ -7,26 +7,27 @@
 #include "ggml-cpu.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
+#include "gguf.h"
 
-#ifdef GGML_USE_CUDA
-#include "ggml-cuda.h"
-#endif
-
-#ifdef GGML_USE_SYCL
-#include "ggml-sycl.h"
-#endif
-
-#ifdef GGML_USE_METAL
-#include "ggml-metal.h"
-#endif
-
-#ifdef GGML_USE_CANN
-#include "ggml-cann.h"
-#endif
-
-#ifdef GGML_USE_VULKAN
-#include "ggml-vulkan.h"
-#endif
+//#ifdef GGML_USE_CUDA
+//#include "ggml-cuda.h"
+//#endif
+//
+//#ifdef GGML_USE_SYCL
+//#include "ggml-sycl.h"
+//#endif
+//
+//#ifdef GGML_USE_METAL
+//#include "ggml-metal.h"
+//#endif
+//
+//#ifdef GGML_USE_CANN
+//#include "ggml-cann.h"
+//#endif
+//
+//#ifdef GGML_USE_VULKAN
+//#include "ggml-vulkan.h"
+//#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -274,7 +275,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
             {
                 const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
                 int arr_n = gguf_get_arr_n(ctx_gguf, i);
-                const void * data = gguf_get_arr_data(ctx_gguf, i);
+                const void * data = arr_type == GGUF_TYPE_STRING ? nullptr : gguf_get_arr_data(ctx_gguf, i);
                 std::stringstream ss;
                 ss << "[";
                 for (int j = 0; j < arr_n; j++) {
@@ -736,6 +737,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         else if (ctx->minicpmv_version == 3) {
             pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
         }
+        else if (ctx->minicpmv_version == 4) {
+            pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
+        }
         ggml_set_name(pos_embed, "pos_embed");
         ggml_set_input(pos_embed);
     }
@@ -1070,6 +1074,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                     n_head = hidden_size/d_head;
                     num_query = 64;
                 }
+                else if (ctx->minicpmv_version == 4) {
+                    hidden_size = 3584;
+                    n_head = hidden_size/d_head;
+                    num_query = 64;
+                }
 
                 struct ggml_tensor * Q = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_q_w, q), model.mm_model_attn_q_b);
                 Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
@@ -1266,30 +1275,30 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
     }
 
-#ifdef GGML_USE_CUDA
-    new_clip->backend = ggml_backend_cuda_init(0);
-    LOG_INF("%s: CLIP using CUDA backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_METAL
-    new_clip->backend = ggml_backend_metal_init();
-    LOG_INF("%s: CLIP using Metal backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_CANN
-    new_clip->backend = ggml_backend_cann_init(0);
-    LOG_INF("%s: CLIP using CANN backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_VULKAN
-    new_clip->backend = ggml_backend_vk_init(0);
-    LOG_INF("%s: CLIP using Vulkan backend\n", __func__);
-#endif
-
-#ifdef GGML_USE_SYCL
-    new_clip->backend = ggml_backend_sycl_init(0);
-    LOG_INF("%s: CLIP using SYCL backend\n", __func__);
-#endif
+//#ifdef GGML_USE_CUDA
+//    new_clip->backend = ggml_backend_cuda_init(0);
+//    LOG_INF("%s: CLIP using CUDA backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_METAL
+//    new_clip->backend = ggml_backend_metal_init();
+//    LOG_INF("%s: CLIP using Metal backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_CANN
+//    new_clip->backend = ggml_backend_cann_init(0);
+//    LOG_INF("%s: CLIP using CANN backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_VULKAN
+//    new_clip->backend = ggml_backend_vk_init(0);
+//    LOG_INF("%s: CLIP using Vulkan backend\n", __func__);
+//#endif
+//
+//#ifdef GGML_USE_SYCL
+//    new_clip->backend = ggml_backend_sycl_init(0);
+//    LOG_INF("%s: CLIP using SYCL backend\n", __func__);
+//#endif
 
     if (!new_clip->backend) {
         new_clip->backend = ggml_backend_cpu_init();
@@ -2102,6 +2111,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
                 images[images.size()-1].push_back(patch);
             }
         }
+        clip_image_u8_free(refine_image);
     }
     return images;
 }
@@ -2138,6 +2148,13 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
                 normalize_image_u8_to_f32(imgs[i][j], res, ctx->image_mean, ctx->image_std);
                 res_imgs->data[idx++] = *res;
                 clip_image_f32_free(res);
+            }
+        }
+        for (size_t i = 0; i < imgs.size(); ++i) {
+            for (size_t j = 0; j < imgs[i].size(); ++j) {
+                if (imgs[i][j] != nullptr) {
+                    clip_image_u8_free(imgs[i][j]);
+                }
             }
         }
         return true;
@@ -2412,6 +2429,9 @@ int clip_n_patches_by_img(const struct clip_ctx * ctx, struct clip_image_f32 * i
         else if (ctx->minicpmv_version == 3) {
             n_patches = 64;
         }
+        else if (ctx->minicpmv_version == 4) {
+            n_patches = 64;
+        }
     } else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
         int patch_size = params.patch_size * 2;
         int x_patch = img->nx / patch_size + (int)(img->nx % patch_size > 0);
@@ -2597,8 +2617,8 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
             struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
-            int bucket_coords_h[70];
-            int bucket_coords_w[70];
+            int bucket_coords_h[1024];
+            int bucket_coords_w[1024];
             for (int i = 0; i < pos_h; i++){
                 bucket_coords_h[i] = std::floor(70.0*i/pos_h);
             }
@@ -2624,6 +2644,9 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
                 embed_dim = 4096;
             }
             else if (ctx->minicpmv_version == 3) {
+                embed_dim = 3584;
+            }
+            else if (ctx->minicpmv_version == 4) {
                 embed_dim = 3584;
             }
             auto pos_embed_t = get_2d_sincos_pos_embed(embed_dim, std::make_pair(pos_w, pos_h));
@@ -2825,7 +2848,8 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         total_size_org += orig_size;
         total_size_new += new_size;
         gguf_set_tensor_type(ctx_out, name.c_str(), new_type);
-        gguf_set_tensor_data(ctx_out, name.c_str(), new_data, new_size);
+        GGML_ASSERT(gguf_get_tensor_size(ctx_out, gguf_find_tensor(ctx_out, name.c_str())) == new_size);
+        gguf_set_tensor_data(ctx_out, name.c_str(), new_data);
         fout.write((const char *)new_data, new_size);
         size_t pad = GGML_PAD(new_size, gguf_get_alignment(ctx_out)) - new_size;
         for (size_t j = 0; j < pad; ++j) {
@@ -2873,6 +2897,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return 4096;
         }
         else if (ctx->minicpmv_version == 3) {
+            return 3584;
+        }
+        else if (ctx->minicpmv_version == 4) {
             return 3584;
         }
     }

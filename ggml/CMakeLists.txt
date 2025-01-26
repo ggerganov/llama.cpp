@@ -58,7 +58,8 @@ else()
     set(GGML_BLAS_VENDOR_DEFAULT "Generic")
 endif()
 
-if (CMAKE_CROSSCOMPILING)
+if (CMAKE_CROSSCOMPILING OR DEFINED ENV{SOURCE_DATE_EPOCH})
+    message(STATUS "Setting GGML_NATIVE_DEFAULT to OFF")
     set(GGML_NATIVE_DEFAULT OFF)
 else()
     set(GGML_NATIVE_DEFAULT ON)
@@ -153,6 +154,8 @@ option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashA
 option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
 
 option(GGML_HIP                             "ggml: use HIP"                                   OFF)
+option(GGML_HIP_GRAPHS                      "ggml: use HIP graph, experimental, slow"         OFF)
+option(GGML_HIP_NO_VMM                      "ggml: do not try to use HIP VMM"                 ON)
 option(GGML_HIP_UMA                         "ggml: use HIP unified memory architecture"       OFF)
 option(GGML_VULKAN                          "ggml: use Vulkan"                                OFF)
 option(GGML_VULKAN_CHECK_RESULTS            "ggml: run Vulkan op checks"                      OFF)
@@ -184,6 +187,9 @@ option(GGML_OPENCL                          "ggml: use OpenCL"                  
 option(GGML_OPENCL_PROFILING                "ggml: use OpenCL profiling (increases overhead)" OFF)
 option(GGML_OPENCL_EMBED_KERNELS            "ggml: embed kernels"                             ON)
 option(GGML_OPENCL_USE_ADRENO_KERNELS       "ggml: use optimized kernels for Adreno"          ON)
+
+# toolchain for vulkan-shaders-gen
+set   (GGML_VULKAN_SHADERS_GEN_TOOLCHAIN "" CACHE FILEPATH "ggml: toolchain file for vulkan-shaders-gen")
 
 # extra artifacts
 option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
@@ -243,7 +249,8 @@ set(GGML_PUBLIC_HEADERS
     include/ggml-metal.h
     include/ggml-rpc.h
     include/ggml-sycl.h
-    include/ggml-vulkan.h)
+    include/ggml-vulkan.h
+    include/gguf.h)
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #if (GGML_METAL)
@@ -251,26 +258,6 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #endif()
 install(TARGETS ggml LIBRARY PUBLIC_HEADER)
 install(TARGETS ggml-base LIBRARY)
-
-# FIXME: this should be done in the backend cmake files
-if (GGML_METAL)
-    # FIXME: does this need to be installed with GGML_METAL_EMBED_LIBRARY?
-    install(
-        FILES src/ggml-metal/ggml-metal.metal
-        PERMISSIONS
-            OWNER_READ
-            OWNER_WRITE
-            GROUP_READ
-            WORLD_READ
-        DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    if (NOT GGML_METAL_EMBED_LIBRARY)
-        install(
-            FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
-            DESTINATION ${CMAKE_INSTALL_BINDIR}
-        )
-    endif()
-endif()
 
 if (GGML_STANDALONE)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ggml.pc.in

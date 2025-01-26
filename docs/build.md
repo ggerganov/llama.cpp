@@ -127,6 +127,8 @@ For detailed info, please refer to [llama.cpp for SYCL](./backend/SYCL.md).
 
 This provides GPU acceleration using an NVIDIA GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from the [NVIDIA developer site](https://developer.nvidia.com/cuda-downloads).
 
+If you are using Fedora (using Fedora Workstation, or an 'Atomic' variant such as Silverblue), or would like to set up CUDA in a toolbox, please consider our [Fedora CUDA guide](./cuda-fedora.md). Unfortunately, the process is not as simple as one might expect.
+
 - Using `CMake`:
 
   ```bash
@@ -284,7 +286,7 @@ You don't need to install Vulkan SDK. It will be installed inside the container.
 
 ```sh
 # Build the image
-docker build -t llama-cpp-vulkan -f .devops/llama-cli-vulkan.Dockerfile .
+docker build -t llama-cpp-vulkan --target light -f .devops/vulkan.Dockerfile .
 
 # Then, use it:
 docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33

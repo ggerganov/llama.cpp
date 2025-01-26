@@ -26,6 +26,7 @@ from .constants import (
     RopeScalingType,
     PoolingType,
     TokenType,
+    ExpertGatingFuncType,
 )
 
 from .quants import quant_shape_from_byte_shape
@@ -715,6 +716,12 @@ class GGUFWriter:
     def add_expert_weights_scale(self, value: float) -> None:
         self.add_float32(Keys.LLM.EXPERT_WEIGHTS_SCALE.format(arch=self.arch), value)
 
+    def add_expert_weights_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.EXPERT_WEIGHTS_NORM.format(arch=self.arch), value)
+
+    def add_expert_gating_func(self, value: ExpertGatingFuncType) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_GATING_FUNC.format(arch=self.arch), value.value)
+
     def add_swin_norm(self, value: bool) -> None:
         self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
 
@@ -735,6 +742,9 @@ class GGUFWriter:
 
     def add_wkv_head_size(self, size: int) -> None:
         self.add_uint32(Keys.WKV.HEAD_SIZE.format(arch=self.arch), size)
+
+    def add_token_shift_count(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.TOKEN_SHIFT_COUNT.format(arch=self.arch), count)
 
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
@@ -846,9 +856,6 @@ class GGUFWriter:
 
     def add_pad_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.PAD_ID, id)
-
-    def add_cls_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.CLS_ID, id)
 
     def add_mask_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.MASK_ID, id)

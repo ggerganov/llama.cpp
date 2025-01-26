@@ -3,11 +3,10 @@
 The purpose of this example is to demonstrate a minimal usage of llama.cpp for running models.
 
 ```bash
-llama-run granite-code
+llama-run granite3-moe
 ```
 
 ```bash
-llama-run -h
 Description:
   Runs a llm
 
@@ -17,8 +16,10 @@ Usage:
 Options:
   -c, --context-size <value>
       Context size (default: 2048)
-  -n, --ngl <value>
+  -n, -ngl, --ngl <value>
       Number of GPU layers (default: 0)
+  --temp <value>
+      Temperature (default: 0.8)
   -v, --verbose, --log-verbose
       Set verbosity level to infinity (i.e. log all messages, useful for debugging)
   -h, --help

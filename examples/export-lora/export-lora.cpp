@@ -1,12 +1,13 @@
-#include "arg.h"
-#include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
+#include "gguf.h"
+
+#include "arg.h"
+#include "common.h"
 
 #include <map>
 #include <vector>
 #include <string>
-#include <thread>
 #include <fstream>
 
 static bool g_verbose = false;
@@ -128,7 +129,7 @@ struct lora_merge_ctx {
 
     lora_merge_ctx(
             std::string & base_fname,
-            std::vector<common_lora_adapter_info> & lora_files,
+            std::vector<common_adapter_lora_info> & lora_files,
             std::string & outfile,
             int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
@@ -265,8 +266,8 @@ struct lora_merge_ctx {
             fout.write((const char *)data.data(), data.size());
         }
 
-        printf("%s : merged %ld tensors with lora adapters\n", __func__, n_merged);
-        printf("%s : wrote %ld tensors to output file\n", __func__, trans.size());
+        printf("%s : merged %zu tensors with lora adapters\n", __func__, n_merged);
+        printf("%s : wrote %zu tensors to output file\n", __func__, trans.size());
     }
 
     void copy_tensor(struct ggml_tensor * base) {
@@ -344,15 +345,25 @@ struct lora_merge_ctx {
             gf = ggml_new_graph(ctx0);
             struct ggml_tensor * cur = inp_base;
             for (size_t i = 0; i < adapters.size(); ++i) {
-                struct ggml_tensor * a_T = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_cast(ctx0, inp_a[i], GGML_TYPE_F32)));
-                struct ggml_tensor * delta = ggml_mul_mat(ctx0, a_T, ggml_cast(ctx0, inp_b[i], GGML_TYPE_F32));
+                struct ggml_tensor * delta;
+                bool is_tok_embd = string_starts_with(name_base, "token_embd");
+                if (is_tok_embd) {
+                    printf("%s :     detected token embeddings tensor\n", __func__);
+                    delta = ggml_mul_mat(ctx0,
+                        ggml_cast(ctx0, inp_b[i], GGML_TYPE_F32),
+                        ggml_cast(ctx0, inp_a[i], GGML_TYPE_F32));
+                } else {
+                    delta = ggml_mul_mat(ctx0,
+                        ggml_cont(ctx0, ggml_transpose(ctx0, ggml_cast(ctx0, inp_a[i], GGML_TYPE_F32))),
+                        ggml_cast(ctx0, inp_b[i], GGML_TYPE_F32));
+                }
                 // scale
                 const float alpha = adapters[i]->alpha;
                 const float rank  = (float) inp_b[i]->ne[0];
                 const float scale = alpha ? adapters[i]->scale * alpha / rank : adapters[i]->scale;
                 delta = ggml_scale(ctx0, delta, scale);
                 cur = ggml_add(ctx0, delta, cur);
-                printf("%s :   + merging from adapter[%ld] type=%s\n", __func__, i, ggml_type_name(inp_a[i]->type));
+                printf("%s :   + merging from adapter[%zu] type=%s\n", __func__, i, ggml_type_name(inp_a[i]->type));
                 printf("%s :     input_scale=%f calculated_scale=%f rank=%d\n", __func__, adapters[i]->scale, scale, (int) inp_b[i]->ne[0]);
             }
             cur = ggml_cast(ctx0, cur, out->type);

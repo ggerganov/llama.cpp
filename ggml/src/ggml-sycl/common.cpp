@@ -11,6 +11,8 @@
 //
 
 #include "common.hpp"
+
+#include "ggml-backend-impl.h"
 #include "ggml-impl.h"
 
 int get_current_device_id() {
@@ -49,6 +51,10 @@ void ggml_sycl_host_free(void* ptr) try {
   std::exit(1);
 }
 
+bool gpu_has_xmx(sycl::device &dev) {
+    return dev.has(sycl::aspect::ext_intel_matrix);
+}
+
 int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size) {
   const int64_t max_range = std::numeric_limits<int>::max();
   int64_t sycl_down_blk_size = block_size;
@@ -65,9 +71,9 @@ void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *sr
                                  const ggml_sycl_op_flatten_t op) try {
 
     const bool use_src1 = src1 != nullptr;
-
-    GGML_ASSERT(!use_src1 || src1->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
-    GGML_ASSERT(              dst->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    if(use_src1)
+      GGML_ASSERT(strcmp(src1->buffer->buft->iface.get_name(src1->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
 
     // dd = data device
     float * src0_ddf = (float *) src0->data;
