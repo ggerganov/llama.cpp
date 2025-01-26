@@ -43,9 +43,9 @@ def get_tensor_name(name: str) -> str:
         return "model.image_newline"
     if name.startswith("multi_modal_projector"):
         name = name.replace("multi_modal_projector", "mm")
-        if name.endswith("linear_1"):
+        if "linear_1" in name:
             name = name.replace("linear_1", "0")
-        if name.endswith("linear_2"):
+        if "linear_2" in name:
             name = name.replace("linear_2", "1")
         return name
 
@@ -251,7 +251,7 @@ if has_vision_encoder:
     fout.add_uint32("clip.vision.projection_dim", visual_projection_dim)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), v_hparams["num_attention_heads"])
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), v_hparams["layer_norm_eps"])
-    block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"] # Why is this decremented? Should be 27...
+    block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
                             #     /**
                             #      "image_grid_pinpoints": [
