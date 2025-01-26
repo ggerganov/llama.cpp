@@ -69,7 +69,9 @@ ggml_add_backend_library(ggml-hip
                         )
 
 # TODO: do not use CUDA definitions for HIP
-target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)
+if (NOT GGML_BACKEND_DL)
+    target_compile_definitions(ggml PUBLIC GGML_USE_CUDA)
+endif()
 
 add_compile_definitions(GGML_USE_HIP)
 
@@ -87,6 +89,14 @@ endif()
 
 if (GGML_CUDA_NO_PEER_COPY)
     add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+endif()
+
+if (GGML_HIP_GRAPHS)
+    add_compile_definitions(GGML_HIP_GRAPHS)
+endif()
+
+if (GGML_HIP_NO_VMM)
+    add_compile_definitions(GGML_HIP_NO_VMM)
 endif()
 
 if (CXX_IS_HIPCC)

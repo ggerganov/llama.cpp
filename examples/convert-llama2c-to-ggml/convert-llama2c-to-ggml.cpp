@@ -1,4 +1,6 @@
 #include "ggml.h"
+#include "gguf.h"
+
 #include "llama.h"
 #include "common.h"
 #include "log.h"
@@ -689,8 +691,8 @@ static void save_as_llama_model(
     gguf_set_val_u32(ctx, KV_TOKENIZER_UNK_ID, UNKNOWN_TOKEN_ID);
     gguf_set_val_u32(ctx, KV_TOKENIZER_BOS_ID, BOS_TOKEN_ID);
     gguf_set_val_u32(ctx, KV_TOKENIZER_EOS_ID, EOS_TOKEN_ID);
-    gguf_set_val_u32(ctx, KV_TOKENIZER_SEP_ID, -1);
-    gguf_set_val_u32(ctx, KV_TOKENIZER_PAD_ID, -1);
+    gguf_set_val_u32(ctx, KV_TOKENIZER_SEP_ID, LLAMA_TOKEN_NULL);
+    gguf_set_val_u32(ctx, KV_TOKENIZER_PAD_ID, LLAMA_TOKEN_NULL);
 
     gguf_set_val_u32(ctx, KV_CONTEXT_LENGTH, model->hparams.n_ctx);
     gguf_set_val_u32(ctx, KV_EMBEDDING_LENGTH, model->hparams.n_embd);
@@ -909,7 +911,7 @@ int main(int argc, char ** argv) {
     load_vocab(params.fn_vocab_model, &config, &vocab);
 
     struct my_llama_model model;
-    model.hparams.n_vocab   = config.vocab_size; //llama_n_vocab(lctx);
+    model.hparams.n_vocab   = config.vocab_size; //llama_vocab_n_vocab(lctx);
     model.hparams.n_ctx     = params.n_ctx;
     model.hparams.n_embd    = config.dim; //params.n_embd;
     model.hparams.n_ff      = config.hidden_dim;

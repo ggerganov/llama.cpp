@@ -26,6 +26,9 @@ from re import RegexFlag
 import wget
 
 
+DEFAULT_HTTP_TIMEOUT = 10 if "LLAMA_SANITIZE" not in os.environ else 30
+
+
 class ServerResponse:
     headers: dict
     status_code: int
@@ -69,13 +72,14 @@ class ServerProcess:
     pooling: str | None = None
     draft: int | None = None
     api_key: str | None = None
-    response_format: str | None = None
     lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
     draft_min: int | None = None
     draft_max: int | None = None
     no_webui: bool | None = None
+    jinja: bool | None = None
     chat_template: str | None = None
+    chat_template_file: str | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -88,7 +92,7 @@ class ServerProcess:
         if "PORT" in os.environ:
             self.server_port = int(os.environ["PORT"])
 
-    def start(self, timeout_seconds: int = 10) -> None:
+    def start(self, timeout_seconds: int | None = DEFAULT_HTTP_TIMEOUT) -> None:
         if "LLAMA_SERVER_BIN_PATH" in os.environ:
             server_path = os.environ["LLAMA_SERVER_BIN_PATH"]
         elif os.name == "nt":
@@ -166,8 +170,12 @@ class ServerProcess:
             server_args.extend(["--draft-min", self.draft_min])
         if self.no_webui:
             server_args.append("--no-webui")
+        if self.jinja:
+            server_args.append("--jinja")
         if self.chat_template:
             server_args.extend(["--chat-template", self.chat_template])
+        if self.chat_template_file:
+            server_args.extend(["--chat-template-file", self.chat_template_file])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -219,17 +227,18 @@ class ServerProcess:
         path: str,
         data: dict | Any | None = None,
         headers: dict | None = None,
+        timeout: float | None = None,
     ) -> ServerResponse:
         url = f"http://{self.server_host}:{self.server_port}{path}"
         parse_body = False
         if method == "GET":
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=timeout)
             parse_body = True
         elif method == "POST":
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)
             parse_body = True
         elif method == "OPTIONS":
-            response = requests.options(url, headers=headers)
+            response = requests.options(url, headers=headers, timeout=timeout)
         else:
             raise ValueError(f"Unimplemented method: {method}")
         result = ServerResponse()

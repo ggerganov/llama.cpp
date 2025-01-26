@@ -216,7 +216,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     return true;
 }
 
-static clip_image_f32 * only_v2_5_reshape_by_patch(clip_image_f32 * image, int patch_size) {
+static clip_image_f32 * reshape_by_patch(clip_image_f32 * image, int patch_size) {
     int width = image->nx;
     int height = image->ny;
     int num_patches = (height / patch_size) * (width / patch_size);
@@ -277,13 +277,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
                 encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
             }
             else {
-                int has_minicpmv_projector = clip_is_minicpmv(ctx_clip);
-                if (has_minicpmv_projector == 2) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, only_v2_5_reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
-                }
-                else if (has_minicpmv_projector == 3) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
-                }
+                encoded = clip_image_encode(ctx_clip, n_threads, reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
             }
 
             if (!encoded) {
@@ -313,6 +307,9 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         load_image_size->height = img->ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
         LOG_INF("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+        delete[] img_res_v.data;
+        img_res_v.size = 0;
+        img_res_v.data = nullptr;
     }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
         // flat / default llava-1.5 type embedding
@@ -384,7 +381,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
 bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip) {
         // make sure that the correct mmproj was used, i.e., compare apples to apples
-    int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
+    int n_llama_embd = llama_model_n_embd(llama_get_model(ctx_llama));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
     if (n_image_embd != n_llama_embd) {
         LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
@@ -456,7 +453,7 @@ struct llava_embd_batch {
 };
 
 bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+    int n_embd  = llama_model_n_embd(llama_get_model(ctx_llama));
 
     for (int i = 0; i < image_embed->n_image_pos; i += n_batch) {
         int n_eval = image_embed->n_image_pos - i;

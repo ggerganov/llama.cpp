@@ -1,4 +1,5 @@
 import pytest
+import requests
 import time
 from openai import OpenAI
 from utils import *
@@ -405,3 +406,23 @@ def test_n_probs_post_sampling():
             assert "bytes" in prob and type(prob["bytes"]) == list
         # because the test model usually output token with either 100% or 0% probability, we need to check all the top_probs
         assert any(prob["prob"] == 1.0 for prob in tok["top_probs"])
+
+
+def test_cancel_request():
+    global server
+    server.n_ctx = 4096
+    server.n_predict = -1
+    server.n_slots = 1
+    server.server_slots = True
+    server.start()
+    # send a request that will take a long time, but cancel it before it finishes
+    try:
+        server.make_request("POST", "/completion", data={
+            "prompt": "I believe the meaning of life is",
+        }, timeout=0.1)
+    except requests.exceptions.ReadTimeout:
+        pass # expected
+    # make sure the slot is free
+    time.sleep(1) # wait for HTTP_POLLING_SECONDS
+    res = server.make_request("GET", "/slots")
+    assert res.body[0]["is_processing"] == False
