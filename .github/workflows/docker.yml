@@ -32,6 +32,7 @@ jobs:
     env:
       COMMIT_SHA: ${{ github.sha }}
     strategy:
+      fail-fast: true
       matrix:
         config:
           # Multi-stage build
