@@ -21,6 +21,7 @@ static LlgConstraint *llama_sampler_llg_new(LlgTokenizer *tokenizer,
         const char * grammar_kind, const char * grammar_data) {
     LlgConstraintInit cinit;
     llg_constraint_init_set_defaults(&cinit, tokenizer);
+    // cinit.log_stderr_level = 2;
     auto c = llg_new_constraint_any(&cinit, grammar_kind, grammar_data);
     if (llg_get_error(c)) {
         LOG_ERR("llg error: %s\n", llg_get_error(c));
@@ -135,8 +136,13 @@ static size_t llama_sampler_llg_tokenize_fn(const void *user_data,
                                 size_t output_tokens_len)
 {
     const llama_vocab *vocab = (const llama_vocab *)user_data;
-    int r = llama_tokenize(vocab, (const char *) bytes, bytes_len, 
-        (int32_t*)output_tokens, output_tokens_len, false, true);
+    int r = 0;
+    try {
+        r = llama_tokenize(vocab, (const char *) bytes, bytes_len, 
+            (int32_t*)output_tokens, output_tokens_len, false, true);
+    } catch (const std::exception &e) {
+        GGML_ABORT("llama_tokenize failed: %s\n", e.what());
+    }
     if (r < 0)
         return -r;
     return r;
@@ -197,7 +203,7 @@ static LlgTokenizer *llama_sampler_llg_new_tokenizer(const llama_vocab * vocab) 
         /* .token_lens                         = */ token_lens,
         /* .token_bytes                        = */ token_bytes,
         /* .tokenizer_json                     = */ nullptr,
-        /* .tokenize_assumes_string            = */ false,
+        /* .tokenize_assumes_string            = */ true,
         /* .tokenize_fn                        = */ llama_sampler_llg_tokenize_fn,
         /* .use_approximate_greedy_tokenize_fn = */ false,
         /* .tokenize_user_data                 = */ vocab,
