@@ -254,7 +254,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_vocab_get_add_bos(vocab);
+    const bool add_bos = llama_vocab_get_add_bos(vocab) && !params.use_jinja;
     if (!llama_model_has_encoder(model)) {
         GGML_ASSERT(!llama_vocab_get_add_eos(vocab));
     }
