@@ -9405,6 +9405,7 @@ static struct llama_model * llama_model_load_from_file_impl(
             model->devices.push_back(*dev);
         }
     } else {
+        std::vector<ggml_backend_dev_t> rpc_servers;
         // use all available devices
         for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
             ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -9415,9 +9416,18 @@ static struct llama_model * llama_model_load_from_file_impl(
                     break;
 
                 case GGML_BACKEND_DEVICE_TYPE_GPU:
-                    model->devices.push_back(dev);
+                    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+                    if (ggml_backend_reg_name(reg) == std::string("RPC")) {
+                        rpc_servers.push_back(dev);
+                    } else {
+                        model->devices.push_back(dev);
+                    }
                     break;
             }
+        }
+        // add RPC servers at the front of the list
+        if (!rpc_servers.empty()) {
+            model->devices.insert(model->devices.begin(), rpc_servers.begin(), rpc_servers.end());
         }
     }
 
