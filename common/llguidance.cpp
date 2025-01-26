@@ -21,7 +21,10 @@ static LlgConstraint * llama_sampler_llg_new(LlgTokenizer * tokenizer, const cha
                                              const char * grammar_data) {
     LlgConstraintInit cinit;
     llg_constraint_init_set_defaults(&cinit, tokenizer);
-    // cinit.log_stderr_level = 2;
+    const char *log_level = getenv("LLGUIDANCE_LOG_LEVEL");
+    if (log_level && *log_level) {
+        cinit.log_stderr_level = atoi(log_level);
+    }
     auto c = llg_new_constraint_any(&cinit, grammar_kind, grammar_data);
     if (llg_get_error(c)) {
         LOG_ERR("llg error: %s\n", llg_get_error(c));
