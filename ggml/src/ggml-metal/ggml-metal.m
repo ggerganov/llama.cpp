@@ -73,7 +73,7 @@ static id<MTLDevice> ggml_backend_metal_device_acq(struct ggml_backend_metal_dev
         ctx->has_simdgroup_mm = [ctx->mtl_device supportsFamily:MTLGPUFamilyApple7];
 
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
-        ctx->has_residency_sets = true;
+        ctx->has_residency_sets = getenv("GGML_METAL_NO_RESIDENCY") == NULL;
 #endif
 
         ctx->has_bfloat  = [ctx->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
@@ -1058,11 +1058,19 @@ struct ggml_backend_metal_buffer_context {
 };
 
 // rset init
-static bool ggml_backend_metal_buffer_rset_init(struct ggml_backend_metal_buffer_context * ctx, id<MTLDevice> device) {
+static bool ggml_backend_metal_buffer_rset_init(
+        struct ggml_backend_metal_buffer_context * ctx,
+        struct ggml_backend_metal_device_context * ctx_dev,
+        id<MTLDevice> device) {
+    ctx->rset = nil;
+
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
     if (@available(macOS 15.0, *)) {
-        MTLResidencySetDescriptor * desc;
-        desc = [[MTLResidencySetDescriptor alloc] init];
+        if (!ctx_dev->has_residency_sets) {
+            return true;
+        }
+
+        MTLResidencySetDescriptor * desc = [[MTLResidencySetDescriptor alloc] init];
         desc.label = @"ggml_backend_metal";
         desc.initialCapacity = ctx->n_buffers;
 
@@ -1088,8 +1096,6 @@ static bool ggml_backend_metal_buffer_rset_init(struct ggml_backend_metal_buffer
 #else
     GGML_UNUSED(device);
 #endif
-
-    ctx->rset = nil;
 
     return true;
 }
@@ -4386,7 +4392,7 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
         return NULL;
     }
 
-    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+    if (!ggml_backend_metal_buffer_rset_init(ctx, ctx_dev, device)) {
         GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
         free(ctx);
         ggml_backend_metal_device_rel(ctx_dev);
@@ -4536,7 +4542,7 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
         }
     }
 
-    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+    if (!ggml_backend_metal_buffer_rset_init(ctx, ctx_dev, device)) {
         GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
         free(ctx);
         ggml_backend_metal_device_rel(ctx_dev);
@@ -4856,7 +4862,7 @@ static ggml_backend_buffer_t ggml_backend_metal_device_buffer_from_ptr(ggml_back
         }
     }
 
-    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+    if (!ggml_backend_metal_buffer_rset_init(ctx, ctx_dev, device)) {
         GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
         free(ctx);
         ggml_backend_metal_device_rel(ctx_dev);
