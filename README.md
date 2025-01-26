@@ -16,6 +16,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ## Hot topics
 
+- **How to use [MTLResidencySet](https://developer.apple.com/documentation/metal/mtlresidencyset?language=objc) to keep the GPU memory active?** https://github.com/ggerganov/llama.cpp/pull/11427
 - **VS Code extension for FIM completions:** https://github.com/ggml-org/llama.vscode
 - Vim/Neovim plugin for FIM completions: https://github.com/ggml-org/llama.vim
 - Introducing GGUF-my-LoRA https://github.com/ggerganov/llama.cpp/discussions/10123
