@@ -115,7 +115,7 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         }
     } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>")) {
         return LLM_CHAT_TEMPLATE_PHI_3;
-    } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|user|>")) {
+    } else if (tmpl_contains("\n<|assistant|>") && tmpl_contains("<|user|>")) {
         return LLM_CHAT_TEMPLATE_FALCON_3;
     } else if (tmpl_contains("<|user|>") && tmpl_contains("<|endoftext|>")) {
         return LLM_CHAT_TEMPLATE_ZEPHYR;
