@@ -96,7 +96,7 @@ if (LLAMA_LLGUIDANCE)
     set(LLGUIDANCE_PATH ${LLGUIDANCE_SRC}/target/release)
     ExternalProject_Add(llguidance_ext
         GIT_REPOSITORY https://github.com/guidance-ai/llguidance
-        GIT_TAG d7b382916c466e6f26869671b8480229dc930423
+        GIT_TAG 7c96a46ba52a3929fa1e57355e6fb12c5abb78db
         PREFIX ${CMAKE_BINARY_DIR}/llguidance
         SOURCE_DIR ${LLGUIDANCE_SRC}
         BUILD_IN_SOURCE TRUE
