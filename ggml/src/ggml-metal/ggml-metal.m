@@ -24,8 +24,6 @@
 #define GGML_METAL_HAS_RESIDENCY_SETS 1
 #endif
 
-#define UNUSED(x) (void)(x)
-
 // globals
 
 // overload of MTLGPUFamilyMetal3 (not available in some environments)
@@ -1064,12 +1062,12 @@ static bool ggml_backend_metal_buffer_rset_init(
         id<MTLDevice> device) {
     ctx->rset = nil;
 
+    if (!ctx_dev->has_residency_sets) {
+        return true;
+    }
+
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
     if (@available(macOS 15.0, *)) {
-        if (!ctx_dev->has_residency_sets) {
-            return true;
-        }
-
         MTLResidencySetDescriptor * desc = [[MTLResidencySetDescriptor alloc] init];
         desc.label = @"ggml_backend_metal";
         desc.initialCapacity = ctx->n_buffers;
@@ -1094,6 +1092,7 @@ static bool ggml_backend_metal_buffer_rset_init(
         return true;
     }
 #else
+    GGML_UNUSED(ctx_dev);
     GGML_UNUSED(device);
 #endif
 
@@ -4278,19 +4277,19 @@ static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
 static void ggml_backend_metal_buffer_memset_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
     memset((char *)tensor->data + offset, value, size);
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     memcpy((char *)tensor->data + offset, data, size);
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_get_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     memcpy(data, (const char *)tensor->data + offset, size);
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static bool ggml_backend_metal_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
@@ -4300,7 +4299,7 @@ static bool ggml_backend_metal_buffer_cpy_tensor(ggml_backend_buffer_t buffer, c
     }
     return false;
 
-    UNUSED(buffer);
+    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
@@ -4326,7 +4325,7 @@ static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
 static const char * ggml_backend_metal_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
     return "Metal";
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t size_aligned) {
@@ -4350,8 +4349,8 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
     }
 #endif
 #endif
-    UNUSED(device);
-    UNUSED(size_aligned);
+    GGML_UNUSED(device);
+    GGML_UNUSED(size_aligned);
 }
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -4406,7 +4405,7 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
 
 static size_t ggml_backend_metal_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return 32;
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static size_t ggml_backend_metal_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
@@ -4416,13 +4415,13 @@ static size_t ggml_backend_metal_buffer_type_get_max_size(ggml_backend_buffer_ty
 
     return max_size;
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static bool ggml_backend_metal_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
     return true;
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
@@ -4445,7 +4444,7 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
 static const char * ggml_backend_metal_buffer_from_ptr_type_get_name(ggml_backend_buffer_type_t buft) {
     return "Metal_Mapped";
 
-    UNUSED(buft);
+    GGML_UNUSED(buft);
 }
 
 static ggml_backend_buffer_type_t ggml_backend_metal_buffer_from_ptr_type(void) {
@@ -4557,7 +4556,7 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
 static const char * ggml_backend_metal_name(ggml_backend_t backend) {
     return "Metal";
 
-    UNUSED(backend);
+    GGML_UNUSED(backend);
 }
 
 static void ggml_backend_metal_free(ggml_backend_t backend) {
@@ -4882,7 +4881,7 @@ static bool ggml_backend_metal_device_supports_buft(ggml_backend_dev_t dev, ggml
     return buft->iface.get_name == ggml_backend_metal_buffer_type_get_name ||
             buft->iface.get_name == ggml_backend_metal_buffer_from_ptr_type_get_name;
 
-    UNUSED(dev);
+    GGML_UNUSED(dev);
 }
 
 static bool ggml_backend_metal_device_offload_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
