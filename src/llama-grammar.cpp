@@ -1156,7 +1156,7 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
     GGML_ASSERT(grammar.vocab != nullptr);
 
     const auto & piece = grammar.vocab->token_to_piece(token);
-    
+
     if (grammar.awaiting_trigger) {
         if (std::find(grammar.trigger_tokens.begin(), grammar.trigger_tokens.end(), token) != grammar.trigger_tokens.end()) {
             grammar.awaiting_trigger = false;
