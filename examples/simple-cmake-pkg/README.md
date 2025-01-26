@@ -15,12 +15,9 @@ When hardware acceleration libraries are used (e.g. CUDA, Metal, Vulkan, etc.), 
 ```sh
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-mkdir build
-mkdir inst
 cmake -S . -B build
 cmake --build build
 cmake --install build --prefix inst
-```
 
 ### Build simple-cmake-pkg
 
