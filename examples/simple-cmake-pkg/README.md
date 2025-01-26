@@ -23,7 +23,6 @@ cmake --install build --prefix inst
 
 ```sh
 cd examples/simple-cmake-pkg
-mkdir build
 cmake -S . -B build -DCMAKE_PREFIX_PATH=../../inst/lib/cmake
 cmake --build build
 ```
