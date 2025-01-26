@@ -19,6 +19,11 @@
 // max number of MTLCommandBuffer used to submit a graph for processing
 #define GGML_METAL_MAX_COMMAND_BUFFERS 8
 
+// create residency sets only on macOS >= 15.0
+#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#define GGML_METAL_HAS_RESIDENCY_SETS 1
+#endif
+
 #define UNUSED(x) (void)(x)
 
 // globals
@@ -39,6 +44,7 @@ static struct ggml_backend_metal_device_context {
 
     bool has_simdgroup_reduction;
     bool has_simdgroup_mm;
+    bool has_residency_sets;
     bool has_bfloat;
     bool use_bfloat;
 
@@ -48,6 +54,7 @@ static struct ggml_backend_metal_device_context {
     /*.mtl_device_ref_count    =*/ 0,
     /*.has_simdgroup_reduction =*/ false,
     /*.has_simdgroup_mm        =*/ false,
+    /*.has_residency_sets      =*/ false,
     /*.has_bfloat              =*/ false,
     /*.use_bfloat              =*/ false,
     /*.name                    =*/ "",
@@ -64,6 +71,10 @@ static id<MTLDevice> ggml_backend_metal_device_acq(struct ggml_backend_metal_dev
         ctx->has_simdgroup_reduction |= [ctx->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
 
         ctx->has_simdgroup_mm = [ctx->mtl_device supportsFamily:MTLGPUFamilyApple7];
+
+#if defined(GGML_METAL_HAS_RESIDENCY_SETS)
+        ctx->has_residency_sets = true;
+#endif
 
         ctx->has_bfloat  = [ctx->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
         ctx->has_bfloat |= [ctx->mtl_device supportsFamily:MTLGPUFamilyApple6];
@@ -483,6 +494,11 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
     GGML_LOG_INFO("%s: picking default device: %s\n", __func__, [[device name] UTF8String]);
 
     ctx->queue  = [device newCommandQueue];
+    if (ctx->queue == nil) {
+        GGML_LOG_ERROR("%s: error: failed to create command queue\n", __func__);
+        return NULL;
+    }
+
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
 
     id<MTLLibrary> metal_library;
@@ -649,6 +665,7 @@ static struct ggml_backend_metal_context * ggml_metal_init(ggml_backend_dev_t de
 
     GGML_LOG_INFO("%s: simdgroup reduction   = %s\n", __func__, ctx_dev->has_simdgroup_reduction     ? "true" : "false");
     GGML_LOG_INFO("%s: simdgroup matrix mul. = %s\n", __func__, ctx_dev->has_simdgroup_mm            ? "true" : "false");
+    GGML_LOG_INFO("%s: has residency sets    = %s\n", __func__, ctx_dev->has_residency_sets          ? "true" : "false");
     GGML_LOG_INFO("%s: has bfloat            = %s\n", __func__, ctx_dev->has_bfloat                  ? "true" : "false");
     GGML_LOG_INFO("%s: use bfloat            = %s\n", __func__, ctx_dev->use_bfloat                  ? "true" : "false");
     GGML_LOG_INFO("%s: hasUnifiedMemory      = %s\n", __func__, ctx_dev->mtl_device.hasUnifiedMemory ? "true" : "false");
@@ -1035,7 +1052,59 @@ struct ggml_backend_metal_buffer_context {
     // multiple buffers are used only to avoid the maximum buffer size limitation when using mmap
     int n_buffers;
     struct ggml_backend_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
+
+    // optional MTLResidencySet
+    id rset;
 };
+
+// rset init
+static bool ggml_backend_metal_buffer_rset_init(struct ggml_backend_metal_buffer_context * ctx, id<MTLDevice> device) {
+#if defined(GGML_METAL_HAS_RESIDENCY_SETS)
+    if (@available(macOS 15.0, *)) {
+        MTLResidencySetDescriptor * desc;
+        desc = [[MTLResidencySetDescriptor alloc] init];
+        desc.label = @"ggml_backend_metal";
+        desc.initialCapacity = ctx->n_buffers;
+
+        NSError * error;
+        ctx->rset = [device newResidencySetWithDescriptor:desc error:&error];
+        if (error) {
+            GGML_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+            return false;
+        }
+
+        for (int i = 0; i < ctx->n_buffers; i++) {
+            [ctx->rset addAllocation:ctx->buffers[i].metal];
+        }
+
+        [ctx->rset commit];
+        [ctx->rset requestResidency];
+
+        return true;
+    }
+#else
+    GGML_UNUSED(device);
+#endif
+
+    ctx->rset = nil;
+
+    return true;
+}
+
+// rset free
+static void ggml_backend_metal_buffer_rset_free(struct ggml_backend_metal_buffer_context * ctx) {
+#if defined(GGML_METAL_HAS_RESIDENCY_SETS)
+    if (@available(macOS 15.0, *)) {
+        if (ctx->rset) {
+            [ctx->rset endResidency];
+            [ctx->rset removeAllAllocations];
+            [ctx->rset release];
+        }
+    }
+#else
+    GGML_UNUSED(ctx);
+#endif
+}
 
 // finds the Metal buffer that contains the tensor data on the GPU device
 // the assumption is that there is 1-to-1 mapping between the host and device memory buffers, so we can find the
@@ -4086,7 +4155,7 @@ static enum ggml_status ggml_metal_graph_compute(
         // the main thread commits the first few commands immediately
         // command_buffer[n_cb]
         {
-            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBufferWithUnretainedReferences];
+            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBuffer];
             ctx->command_buffers[n_cb] = command_buffer;
 
             [command_buffer enqueue];
@@ -4096,7 +4165,7 @@ static enum ggml_status ggml_metal_graph_compute(
         // prepare the rest of the command buffers asynchronously
         // command_buffer[0.. n_cb)
         for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
-            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBufferWithUnretainedReferences];
+            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBuffer];
             ctx->command_buffers[cb_idx] = command_buffer;
 
             // always enqueue the first two command buffers
@@ -4176,6 +4245,8 @@ static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) 
     for (int i = 0; i < ctx->n_buffers; i++) {
         [ctx->buffers[i].metal release];
     }
+
+    ggml_backend_metal_buffer_rset_free(ctx);
     ggml_backend_metal_device_rel(buffer->buft->device->context);
 
     if (ctx->owned) {
@@ -4284,7 +4355,8 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
         size_aligned += (size_page - (size_aligned % size_page));
     }
 
-    id<MTLDevice> device = ggml_backend_metal_device_acq(buft->device->context);
+    struct ggml_backend_metal_device_context * ctx_dev = (struct ggml_backend_metal_device_context *)buft->device->context;
+    id<MTLDevice> device = ggml_backend_metal_device_acq(ctx_dev);
 
     ctx->all_data = ggml_metal_host_malloc(size_aligned);
     ctx->all_size = size_aligned;
@@ -4307,7 +4379,14 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
     if (size_aligned > 0 && (ctx->all_data == NULL || ctx->buffers[0].metal == nil)) {
         GGML_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
         free(ctx);
-        ggml_backend_metal_device_rel(buft->device->context);
+        ggml_backend_metal_device_rel(ctx_dev);
+        return NULL;
+    }
+
+    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+        GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
+        free(ctx);
+        ggml_backend_metal_device_rel(ctx_dev);
         return NULL;
     }
 
@@ -4400,7 +4479,8 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
         size_aligned += (size_page - (size_aligned % size_page));
     }
 
-    id<MTLDevice> device = ggml_backend_metal_device_acq(&g_ggml_ctx_dev_main);
+    struct ggml_backend_metal_device_context * ctx_dev = &g_ggml_ctx_dev_main;
+    id<MTLDevice> device = ggml_backend_metal_device_acq(ctx_dev);
 
     // the buffer fits into the max buffer size allowed by the device
     if (size_aligned <= device.maxBufferLength) {
@@ -4451,6 +4531,13 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
 
             ++ctx->n_buffers;
         }
+    }
+
+    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+        GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
+        free(ctx);
+        ggml_backend_metal_device_rel(ctx_dev);
+        return NULL;
     }
 
     return ggml_backend_buffer_init(ggml_backend_metal_buffer_from_ptr_type(), ggml_backend_metal_buffer_i, ctx, size);
@@ -4764,6 +4851,13 @@ static ggml_backend_buffer_t ggml_backend_metal_device_buffer_from_ptr(ggml_back
 
             ++ctx->n_buffers;
         }
+    }
+
+    if (!ggml_backend_metal_buffer_rset_init(ctx, device)) {
+        GGML_LOG_ERROR("%s: error: failed to initialize residency set\n", __func__);
+        free(ctx);
+        ggml_backend_metal_device_rel(ctx_dev);
+        return NULL;
     }
 
     return ggml_backend_buffer_init(ggml_backend_metal_buffer_from_ptr_type(), ggml_backend_metal_buffer_i, ctx, size);
