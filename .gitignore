@@ -143,4 +143,3 @@ poetry.toml
 # Local scripts
 /run-vim.sh
 /run-chat.sh
-include/llguidance.h
