@@ -60,6 +60,7 @@ struct llama_kv_cache {
     // DeepSeek MLA
     std::vector<struct ggml_tensor *> kr_l; // per layer
     std::vector<struct ggml_tensor *> kv_l;
+    std::vector<struct ggml_tensor *> kvt_l;
 
     std::vector<ggml_context_ptr> ctxs;
     std::vector<ggml_backend_buffer_ptr> bufs;

@@ -6476,12 +6476,25 @@ struct llm_build_context {
                 // note: storing c^KV in the KV cache
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, kv_compressed, kv_cache_view));
 
+                struct ggml_tensor * kv_cache_trans_view = ggml_view_2d(ctx0, kv_self.kvt_l[il], n_tokens, kv_lora_rank, ggml_row_size(kv_self.kv_l[il]->type, kv_self.size), ggml_row_size(kv_self.kv_l[il]->type, kv_head));
+                cb(kv_cache_trans_view, "kv_cache_trans_view", il);
+
+                // note: storing transposed c^KV in the transposed KV cache
+                ggml_build_forward_expand(gf, ggml_cpy(ctx0, ggml_transpose(ctx0, kv_compressed), kv_cache_trans_view));
+
                 struct ggml_tensor * kv_cache =
                     ggml_view_2d(ctx0, kv_self.kv_l[il],
                             kv_lora_rank, n_kv,
                             ggml_row_size(kv_self.kv_l[il]->type, kv_lora_rank),
                             0);
                 cb(kv_cache, "kv_cache", il);
+
+                struct ggml_tensor * kv_cache_trans =
+                    ggml_view_2d(ctx0, kv_self.kvt_l[il],
+                            n_kv, kv_lora_rank,
+                            ggml_row_size(kv_self.kv_l[il]->type, kv_self.size),
+                            0);
+                cb(kv_cache_trans, "kv_cache_trans", il);
 
                 q_pe = ggml_cont(ctx0, q_pe); // TODO: the CUDA backend does not support non-contiguous RoPE
                 q_pe = ggml_rope_ext(
@@ -6551,9 +6564,6 @@ struct llm_build_context {
 
                 struct ggml_tensor * kq_perm = ggml_permute(ctx0, kq, 0, 2, 3, 1);
                 cb(kq_perm, "kq_soft_max_ext_perm", il);
-
-                struct ggml_tensor * kv_cache_trans = ggml_cont(ctx0, ggml_transpose(ctx0, kv_cache));
-                cb(kv_cache_trans, "kv_cache_trans", il);
 
                 struct ggml_tensor * kqv_compressed = ggml_mul_mat(ctx0, kv_cache_trans, kq_perm);
                 cb(kqv_compressed, "kqv_compressed", il);
