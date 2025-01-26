@@ -999,7 +999,7 @@ std::string json_schema_to_grammar(const json & schema) {
         callbacks.resolve_refs(copy);
         callbacks.add_schema("", copy);
     });
-#endif
+#endif // LLAMA_USE_LLGUIDANCE
 }
 
 std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb) {

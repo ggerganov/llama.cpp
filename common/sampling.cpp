@@ -157,7 +157,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         grmr = llama_sampler_init_llg(model, "lark", params.grammar.c_str());
 #else
         GGML_ABORT("llguidance (cmake -DLLAMA_LLGUIDANCE=ON) is not enabled");
-#endif
+#endif // LLAMA_USE_LLGUIDANCE
     } else {
         grmr = llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root");
     }

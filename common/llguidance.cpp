@@ -8,8 +8,8 @@
 #include "llguidance.h"
 
 struct llama_sampler_llg {
-    const struct llama_model * model;
-    const struct llama_vocab * vocab;
+    const llama_model * model;
+    const llama_vocab * vocab;
     std::string grammar_kind;
     std::string grammar_data;
     LlgTokenizer *tokenizer;
@@ -31,11 +31,11 @@ static LlgConstraint *llama_sampler_llg_new(LlgTokenizer *tokenizer,
     return c;
 }
 
-static const char * llama_sampler_llg_name(const struct llama_sampler * /*smpl*/) {
+static const char * llama_sampler_llg_name(const llama_sampler * /*smpl*/) {
     return "llguidance";
 }
 
-static void llama_sampler_llg_accept_impl(struct llama_sampler * smpl, llama_token token) {
+static void llama_sampler_llg_accept_impl(llama_sampler * smpl, llama_token token) {
     auto * ctx = (llama_sampler_llg *) smpl->ctx;
     if (ctx->grammar) {
         LlgCommitResult res;
@@ -44,7 +44,7 @@ static void llama_sampler_llg_accept_impl(struct llama_sampler * smpl, llama_tok
     }
 }
 
-static void llama_sampler_llg_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+static void llama_sampler_llg_apply(llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_llg *) smpl->ctx;
     if (ctx->grammar) {
         if (!ctx->has_llg_res) {
@@ -76,7 +76,7 @@ static void llama_sampler_llg_apply(struct llama_sampler * smpl, llama_token_dat
     }
 }
 
-static void llama_sampler_llg_reset(struct llama_sampler * smpl) {
+static void llama_sampler_llg_reset(llama_sampler * smpl) {
     auto * ctx = (llama_sampler_llg *) smpl->ctx;
     if (!ctx->grammar) {
         return;
@@ -88,7 +88,7 @@ static void llama_sampler_llg_reset(struct llama_sampler * smpl) {
     ctx->has_llg_res = false;
 }
 
-static struct llama_sampler * llama_sampler_llg_clone(const struct llama_sampler * smpl) {
+static llama_sampler * llama_sampler_llg_clone(const llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_llg *) smpl->ctx;
 
     auto * result = llama_sampler_init_llg(ctx->model, nullptr, nullptr);
@@ -108,7 +108,7 @@ static struct llama_sampler * llama_sampler_llg_clone(const struct llama_sampler
     return result;
 }
 
-static void llama_sampler_llg_free(struct llama_sampler * smpl) {
+static void llama_sampler_llg_free(llama_sampler * smpl) {
     const auto * ctx = (llama_sampler_llg *) smpl->ctx;
 
     if (ctx->grammar) {
@@ -119,7 +119,7 @@ static void llama_sampler_llg_free(struct llama_sampler * smpl) {
     delete ctx;
 }
 
-static struct llama_sampler_i llama_sampler_llg_i = {
+static llama_sampler_i llama_sampler_llg_i = {
     /* .name   = */ llama_sampler_llg_name,
     /* .accept = */ llama_sampler_llg_accept_impl,
     /* .apply  = */ llama_sampler_llg_apply,
@@ -135,7 +135,7 @@ static size_t llama_sampler_llg_tokenize_fn(const void *user_data,
                                 uint32_t *output_tokens,
                                 size_t output_tokens_len)
 {
-    const struct llama_vocab *vocab = (const struct llama_vocab *)user_data;
+    const llama_vocab *vocab = (const llama_vocab *)user_data;
     int r = llama_tokenize(vocab, (const char *) bytes, bytes_len, 
         (int32_t*)output_tokens, output_tokens_len, false, true);
     if (r < 0)
@@ -143,16 +143,16 @@ static size_t llama_sampler_llg_tokenize_fn(const void *user_data,
     return r;
 }
 
-static LlgTokenizer *llama_sampler_llg_new_tokenizer(const struct llama_model * model) {
+static LlgTokenizer *llama_sampler_llg_new_tokenizer(const llama_model * model) {
     // TODO store the tokenizer in the model somehow
-    static const struct llama_model *model_cache;
+    static const llama_model *model_cache;
     static LlgTokenizer *tokenizer_cache;
 
     if (model_cache == model) {
         return llg_clone_tokenizer(tokenizer_cache);
     }
 
-    const struct llama_vocab *vocab = llama_model_get_vocab(model);
+    const llama_vocab *vocab = llama_model_get_vocab(model);
 
     auto tok_eos = llama_vocab_eot(vocab);
     if (tok_eos == LLAMA_TOKEN_NULL)
@@ -226,7 +226,7 @@ static LlgTokenizer *llama_sampler_llg_new_tokenizer(const struct llama_model * 
     return tokenizer;
 }
 
-struct llama_sampler * llama_sampler_init_llg(const struct llama_model * model, 
+llama_sampler * llama_sampler_init_llg(const llama_model * model, 
         const char * grammar_kind, const char * grammar_data) {
     auto * ctx = new llama_sampler_llg;
 
@@ -263,4 +263,4 @@ struct llama_sampler * llama_sampler_init_llg(const struct llama_model * model,
     };
 }
 
-#endif
+#endif // LLAMA_USE_LLGUIDANCE

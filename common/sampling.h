@@ -104,6 +104,6 @@ std::vector<enum common_sampler_type> common_sampler_types_from_names(const std:
 std::vector<enum common_sampler_type> common_sampler_types_from_chars(const std::string & chars);
 
 #ifdef LLAMA_USE_LLGUIDANCE
-struct llama_sampler * llama_sampler_init_llg(const struct llama_model * model, 
+struct llama_sampler * llama_sampler_init_llg(const llama_model * model, 
         const char * grammar_kind, const char * grammar_data);
-#endif
+#endif // LLAMA_USE_LLGUIDANCE
