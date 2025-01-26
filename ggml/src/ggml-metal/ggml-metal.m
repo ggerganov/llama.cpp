@@ -1070,8 +1070,11 @@ static bool ggml_backend_metal_buffer_rset_init(struct ggml_backend_metal_buffer
         ctx->rset = [device newResidencySetWithDescriptor:desc error:&error];
         if (error) {
             GGML_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+            [desc release];
             return false;
         }
+
+        [desc release];
 
         for (int i = 0; i < ctx->n_buffers; i++) {
             [ctx->rset addAllocation:ctx->buffers[i].metal];
