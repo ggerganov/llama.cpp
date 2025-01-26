@@ -38,6 +38,7 @@ endif()
 
 find_package(hip     REQUIRED)
 find_package(hipblas REQUIRED)
+find_package(rocblas REQUIRED)
 
 message(STATUS "HIP and hipBLAS found")
 
@@ -110,4 +111,4 @@ if (GGML_STATIC)
     message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
 endif()
 
-target_link_libraries(ggml-hip PRIVATE ggml-base hip::host roc::hipblas)
+target_link_libraries(ggml-hip PRIVATE ggml-base hip::host roc::rocblas roc::hipblas)

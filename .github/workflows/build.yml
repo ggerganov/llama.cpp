@@ -361,7 +361,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git cmake hipblas-dev
+          sudo apt-get install -y build-essential git cmake rocblas-dev hipblas-dev
 
       - name: Build with native CMake HIP support
         id: cmake_build
@@ -1125,7 +1125,10 @@ jobs:
             -DGGML_HIP=ON `
             -DGGML_RPC=ON
           cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
+          md "build\bin\rocblas\library\"
           cp "${env:HIP_PATH}\bin\hipblas.dll" "build\bin\"
+          cp "${env:HIP_PATH}\bin\rocblas.dll" "build\bin\"
+          cp "${env:HIP_PATH}\bin\rocblas\library\*" "build\bin\rocblas\library\"
 
       - name: Determine tag name
         id: tag

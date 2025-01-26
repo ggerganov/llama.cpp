@@ -93,6 +93,7 @@ let
   rocmBuildInputs = with rocmPackages; [
     clr
     hipblas
+    rocblas
   ];
 
   vulkanBuildInputs = [
