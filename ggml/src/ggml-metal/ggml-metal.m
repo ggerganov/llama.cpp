@@ -4155,7 +4155,7 @@ static enum ggml_status ggml_metal_graph_compute(
         // the main thread commits the first few commands immediately
         // command_buffer[n_cb]
         {
-            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBuffer];
+            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBufferWithUnretainedReferences];
             ctx->command_buffers[n_cb] = command_buffer;
 
             [command_buffer enqueue];
@@ -4165,7 +4165,7 @@ static enum ggml_status ggml_metal_graph_compute(
         // prepare the rest of the command buffers asynchronously
         // command_buffer[0.. n_cb)
         for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
-            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBuffer];
+            id<MTLCommandBuffer> command_buffer = [ctx->queue commandBufferWithUnretainedReferences];
             ctx->command_buffers[cb_idx] = command_buffer;
 
             // always enqueue the first two command buffers
