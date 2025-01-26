@@ -353,10 +353,10 @@ static void test_simple_grammar() {
     // Test case for a simple grammar
     test_grammar("simple grammar",
                  R"""(
-            root ::= expr
-            expr ::= term ("+" term)*
-            term ::= number
-            number ::= [0-9]+)""",
+            start: expr
+            expr: term ("+" term)*
+            term: number
+            number: /[0-9]+/ )""",
                  // Passing strings
                  {
                      "42",
@@ -377,14 +377,14 @@ static void test_complex_grammar() {
     test_grammar("medium complexity grammar",
                  // Grammar
                  R"""(
-            root ::= expression
-            expression ::= term ws (("+"|"-") ws term)*
-            term ::= factor ws (("*"|"/") ws factor)*
-            factor ::= number | variable | "(" expression ")" | function-call
-            number ::= [0-9]+
-            variable ::= [a-zA-Z_][a-zA-Z0-9_]*
-            function-call ::= variable ws "(" (expression ("," ws expression)*)? ")"
-            ws ::= [ \t\n\r]?)""",
+            start: expression
+            expression: term ws (("+"|"-") ws term)*
+            term: factor ws (("*"|"/") ws factor)*
+            factor: number | variable | "(" expression ")" | function-call
+            number: /[0-9]+/
+            variable: /[a-zA-Z_][a-zA-Z0-9_]*/
+            function-call: variable ws "(" (expression ("," ws expression)*)? ")"
+            ws: /[ \t\n\r]?/ )""",
                  // Passing strings
                  { "42",
                    "1*2*3*4*5",
@@ -434,7 +434,7 @@ static void test_special_chars() {
     test_grammar("special characters",
                  // Grammar
                  R"""(
-            root ::= ... "abc" ...
+            start: /.../ "abc" /.../
             )""",
                  // Passing strings
                  { "abcabcabc", "aaaabcccc",
@@ -450,7 +450,7 @@ static void test_quantifiers() {
     test_grammar(
         "* quantifier",
         // Grammar
-        R"""(root ::= "a"*)""",
+        R"""(start: "a"*)""",
         // Passing strings
         { "", "a", "aaaaa", "aaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
         // Failing strings
@@ -458,14 +458,14 @@ static void test_quantifiers() {
     test_grammar(
         "+ quantifier",
         // Grammar
-        R"""(root ::= "a"+)""",
+        R"""(start: "a"+)""",
         // Passing strings
         { "a", "aaaaa", "aaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
         // Failing strings
         { "", "b", "ab", "aab", "ba", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab" });
     test_grammar("? quantifier",
                  // Grammar
-                 R"""(root ::= "a"?)""",
+                 R"""(start: "a"?)""",
                  // Passing strings
                  { "", "a" },
                  // Failing strings
@@ -478,9 +478,9 @@ static void test_quantifiers() {
     test_grammar("mixed quantifiers",
                  // Grammar
                  R"""(
-            root ::= cons+ vowel* cons? (vowel cons)*
-            vowel ::= [aeiouy]
-            cons ::= [bcdfghjklmnpqrstvwxyz]
+            start: cons+ vowel* cons? (vowel cons)*
+            vowel: [aeiouy]
+            cons: [bcdfghjklmnpqrstvwxyz]
             )""",
                  // Passing strings
                  {
@@ -501,7 +501,7 @@ static void test_quantifiers() {
     test_grammar("simple exact repetition",
                  // Grammar
                  R"""(
-            root ::= [ab]{4}
+            start: [ab]{4}
         )""",
                  // Passing strings
                  {
@@ -518,7 +518,7 @@ static void test_quantifiers() {
     test_grammar("simple min repetition",
                  // Grammar
                  R"""(
-            root ::= [ab]{4,}
+            start: [ab]{4,}
         )""",
                  // Passing strings
                  {
@@ -535,7 +535,7 @@ static void test_quantifiers() {
     test_grammar("simple max repetition",
                  // Grammar
                  R"""(
-            root ::= [ab]{0,4}
+            start: [ab]{0,4}
         )""",
                  // Passing strings
                  {
@@ -552,7 +552,7 @@ static void test_quantifiers() {
     test_grammar("min / max repetition",
                  // Grammar
                  R"""(
-            root ::= ("0x" [A-F0-9]{2} " "?){3,5}
+            start: ("0x" [A-F0-9]{2} " "?){3,5}
         )""",
                  // Passing strings
                  {
