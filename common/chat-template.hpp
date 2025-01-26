@@ -61,7 +61,7 @@ class chat_template {
         });
         supports_tools_ = source.find("tools") != std::string::npos;
 
-        requires_object_arguments_ = 
+        requires_object_arguments_ =
             try_raw_render({
                 {
                     {"role", "user"},
@@ -298,7 +298,7 @@ class chat_template {
         if (!tools.is_null()) {
             auto tools_val = minja::Value(actual_tools);
             context->set("tools", tools_val);
-            if (has_code_interpreter) {
+            if (has_code_interpreter && !extra_context.contains("builtin_tools")) {
                 auto builtin_tools_val = minja::Value(json {"code_interpreter"});
                 context->set("builtin_tools", builtin_tools_val);
             }

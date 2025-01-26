@@ -211,7 +211,6 @@ struct server_task {
     static slot_params params_from_json_cmpl(
             const llama_context * ctx,
             const common_params & params_base,
-            const common_chat_template * tmpl,
             const json & data) {
         const llama_model * model = llama_get_model(ctx);
         const llama_vocab * vocab = llama_model_get_vocab(model);
@@ -330,30 +329,19 @@ struct server_task {
             }
         }
 
-        if (tmpl && params_base.use_jinja) {
-            common_chat_params chat_params;
-            chat_params.messages = json_value(data, "messages", json::array());
-            chat_params.tools = json_value(data, "tools", json());
-            chat_params.tool_choice = json_value(data, "tool_choice", std::string("auto"));
-            chat_params.json_schema = json_value(data, "json_schema", json());
-            chat_params.parallel_tool_calls = json_value(data, "parallel_tool_calls", false);
-            chat_params.stream = json_value(data, "stream", false);
-
-            auto chat_data = common_chat_init(*tmpl, chat_params);
-            params.chat_parser = std::move(chat_data.handler);
-            params.sampling.grammar = chat_data.grammar;
-            for (const auto & stop : chat_data.additional_stops) {
-                params.antiprompt.push_back(stop);
+        if (!params_base.use_jinja) {
+            if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
+                throw std::runtime_error("Either \"json_schema\" or \"grammar\" can be specified, but not both");
             }
-            for (const auto & trigger : chat_data.grammar_triggers) {
-                auto ids = common_tokenize(vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
-                if (ids.size() == 1) {
-                    LOG_INF("Grammar trigger token: %s (%d)\n", trigger.word.c_str(), ids[0]);
-                    params.sampling.grammar_trigger_tokens.push_back(ids[0]);
-                    continue;
+            if (data.contains("json_schema") && !data.contains("grammar")) {
+                try {
+                    auto schema                  = json_value(data, "json_schema", json::object());
+                    params.sampling.grammar = json_schema_to_grammar(schema);
+                } catch (const std::exception & e) {
+                    throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
                 }
-                LOG_INF("Grammar trigger word: %s\n", trigger.word.c_str());
-                params.sampling.grammar_trigger_words.push_back(trigger);
+            } else {
+                params.sampling.grammar = json_value(data, "grammar", defaults.sampling.grammar);
             }
         }
 
@@ -363,15 +351,13 @@ struct server_task {
         }
         if (data.contains("json_schema") && !data.contains("grammar")) {
             try {
-                auto schema                  = json_value(data, "json_schema", json::object());
-                params.sampling.grammar = json_schema_to_grammar(schema);
+                params.sampling.grammar = json_schema_to_grammar(json_value(data, "json_schema", json::object()));
             } catch (const std::exception & e) {
                 throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
             }
         } else {
             params.sampling.grammar = json_value(data, "grammar", defaults.sampling.grammar);
         }
-        LOG_INF("Grammar: %s\n", params.sampling.grammar.c_str());
 
         {
             params.sampling.logit_bias.clear();
@@ -2248,9 +2234,15 @@ struct server_context {
     }
 
     void send_partial_response(server_slot & slot, const completion_token_output & tkn) {
-        auto opt_msg = slot.params.chat_parser->parse_partial(tkn.text_to_send);
-        if (!opt_msg) {
-            return;
+        common_chat_msg msg;
+        if (slot.params.chat_parser) {
+            if (auto opt_msg = slot.params.chat_parser->parse_partial(tkn.text_to_send)) {
+                msg = *opt_msg;
+            } else {
+                return;
+            }
+        } else {
+            msg.content = tkn.text_to_send;
         }
         auto res = std::make_unique<server_task_result_cmpl_partial>();
 
@@ -2267,7 +2259,7 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        res->oaicompat_chat_msg = *opt_msg;
+        res->oaicompat_chat_msg = msg;
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -2308,7 +2300,11 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        res->oaicompat_chat_msg = slot.params.chat_parser->parse_final(slot.generated_text);
+        res->oaicompat_chat_msg = slot.params.chat_parser ? slot.params.chat_parser->parse_final(slot.generated_text) : common_chat_msg {
+            /* .role = */ "assistant",
+            /* .content = */ slot.generated_text,
+            /* .tool_calls = */ {}
+        };
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -3773,7 +3769,7 @@ int main(int argc, char ** argv) {
             std::function<bool()> is_connection_closed,
             httplib::Response & res,
             oaicompat_type oaicompat,
-            const common_chat_template * tmpl) {
+            const common_chat_template * tmpl = nullptr) {
         GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
         if (ctx_server.params_base.embedding) {
@@ -3785,21 +3781,29 @@ int main(int argc, char ** argv) {
         std::vector<server_task> tasks;
 
         try {
-            fprintf(stderr, "PROMPT: %s\n", data.at("prompt").get<std::string>().c_str());
-            std::string prompt;
+            common_chat_data chat_data;
             if (tmpl && ctx_server.params_base.use_jinja) {
-                auto chat_data = common_chat_init(*tmpl, {
-                    /* .messages = */ json_data(data, "messages", json::array()),
-                    /* .tools = */   json_data(data, "tools", json()),
-                    /
+                chat_data = common_chat_init(*tmpl, {
+                    /* .messages = */ json_value(data, "messages", json::array()),
+                    /* .tools = */   json_value(data, "tools", json()),
+                    /* .tool_choice = */ json_value(data, "tool_choice", std::string("auto")),
+                    /* .json_schema = */ json_value(data, "json_schema", json()),
+                    /* .parallel_tool_calls = */ json_value(data, "json_schema", true),
+                    /* .stream = */ json_value(data, "json_schema", false),
+                    /* .grammar = */ json_value(data, "grammar", std::string("")),
                 });
-                
-                prompt = ctx_server.chat_templates.template_default->render(data.at("prompt").get<std::string>());
+                if (data.contains("grammar")) {
+                    chat_data.grammar = data.at("grammar");
+                }
             } else {
-                prompt = data.at("prompt").get<std::string>();
+                chat_data.prompt = data.at("prompt");
+                if (data.contains("grammar")) {
+                    chat_data.grammar = data.at("grammar");
+                } else if (data.contains("json_schema")) {
+                    chat_data.grammar = json_schema_to_grammar(data.at("json_schema"));
+                }
             }
-                task.params.chat_parser               = common_chat_init()
-            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, data.at("prompt"), true, true);
+            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, chat_data.prompt, true, true);
             tasks.reserve(tokenized_prompts.size());
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
                 server_task task = server_task(type);
@@ -3811,16 +3815,27 @@ int main(int argc, char ** argv) {
                 task.params           = server_task::params_from_json_cmpl(
                                             ctx_server.ctx,
                                             ctx_server.params_base,
-                                            nullptr,
                                             data);
                 task.id_selected_slot = json_value(data, "id_slot", -1);
 
                 // OAI-compat
                 task.params.oaicompat                 = oaicompat;
                 task.params.oaicompat_cmpl_id         = completion_id;
-                task.params.chat_parser               = common_chat_init()
-                task.params.oaicompat_tools           = json_value(data, "tools", json());
-                task.params.oaicompat_tool_call_style = tool_call_style;
+                task.params.sampling.grammar          = chat_data.grammar;
+                for (const auto & trigger : chat_data.grammar_triggers) {
+                    auto ids = common_tokenize(ctx_server.vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
+                    if (ids.size() == 1) {
+                        LOG_INF("Grammar trigger token: %s (%d)\n", trigger.word.c_str(), ids[0]);
+                        task.params.sampling.grammar_trigger_tokens.push_back(ids[0]);
+                        continue;
+                    }
+                    LOG_INF("Grammar trigger word: %s\n", trigger.word.c_str());
+                    task.params.sampling.grammar_trigger_words.push_back(trigger);
+                }
+                task.params.antiprompt                = chat_data.additional_stops;
+                if (chat_data.parser) {
+                    task.params.chat_parser           = i == tokenized_prompts.size() ? std::move(chat_data.parser) : std::move(chat_data.parser->clone());
+                }
                 // oaicompat_model is already populated by params_from_json_cmpl
 
                 tasks.push_back(task);
@@ -4005,7 +4020,8 @@ int main(int argc, char ** argv) {
             data,
             req.is_connection_closed,
             res,
-            OAICOMPAT_TYPE_CHAT);
+            OAICOMPAT_TYPE_CHAT,
+            &chat_template);
     };
 
     const auto handle_models = [&params, &ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
