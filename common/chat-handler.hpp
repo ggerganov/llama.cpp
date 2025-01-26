@@ -22,6 +22,7 @@ struct common_chat_params {
     json json_schema;
     bool parallel_tool_calls;
     bool stream;
+    std::string grammar;
 };
 
 class common_chat_parser {
@@ -30,14 +31,15 @@ public:
 
     virtual std::optional<common_chat_msg> parse_partial(const std::string & input) = 0;
     virtual common_chat_msg parse_final(const std::string & input) = 0;
+    virtual std::unique_ptr<common_chat_parser> clone() const = 0;
 };
 
 struct common_chat_data {
-    std::string prompt;
+    json prompt;
     std::string grammar;
     std::vector<common_grammar_trigger> grammar_triggers;
     std::vector<std::string> additional_stops;
-    std::unique_ptr<class common_chat_parser> handler;
+    std::unique_ptr<class common_chat_parser> parser;
 };
 
 struct common_chat_data common_chat_init(const common_chat_template & tmpl, const struct common_chat_params & params);
