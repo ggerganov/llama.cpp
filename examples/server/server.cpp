@@ -3788,11 +3788,14 @@ int main(int argc, char ** argv) {
                     /* .tools = */   json_value(data, "tools", json()),
                     /* .tool_choice = */ json_value(data, "tool_choice", std::string("auto")),
                     /* .json_schema = */ json_value(data, "json_schema", json()),
-                    /* .parallel_tool_calls = */ json_value(data, "json_schema", true),
-                    /* .stream = */ json_value(data, "json_schema", false),
+                    /* .parallel_tool_calls = */ json_value(data, "parallel_tool_calls", false),
+                    /* .stream = */ json_value(data, "stream", false),
                     /* .grammar = */ json_value(data, "grammar", std::string("")),
                 });
                 if (data.contains("grammar")) {
+                    if (!chat_data.grammar.empty()) {
+                        throw std::runtime_error("Cannot provide grammar and tools");
+                    }
                     chat_data.grammar = data.at("grammar");
                 }
             } else {

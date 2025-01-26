@@ -226,23 +226,31 @@ CODE_INTEPRETER_TOOL = {
 }
 
 
-@pytest.mark.parametrize("template_name,n_predict,tool,argument_key", [
-    ("meetkai-functionary-medium-v3.1",               128, TEST_TOOL,   "success"),
-    ("meetkai-functionary-medium-v3.1",               128, PYTHON_TOOL, "code"),
-    ("meetkai-functionary-medium-v3.2",               128, TEST_TOOL,   "success"),
-    ("meetkai-functionary-medium-v3.2",               128, PYTHON_TOOL, "code"),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, TEST_TOOL,   "success"),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", 128, PYTHON_TOOL, "code"),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, TEST_TOOL,   "success"),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   128, PYTHON_TOOL, "code"),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, TEST_TOOL,   "success"),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, PYTHON_TOOL, "code"),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, TEST_TOOL,   "success"),
-    ("meta-llama-Llama-3.2-3B-Instruct",              128, PYTHON_TOOL, "code"),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, TEST_TOOL,   "success"),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          128, PYTHON_TOOL, "code"),
+@pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
+    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          None),
+    ("meetkai-functionary-medium-v3.1",               CODE_INTEPRETER_TOOL, None),
+    ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
+    ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          None),
+    ("meetkai-functionary-medium-v3.2",               CODE_INTEPRETER_TOOL, None),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          None),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", CODE_INTEPRETER_TOOL, None),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          None),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   CODE_INTEPRETER_TOOL, None),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          None),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         CODE_INTEPRETER_TOOL, None),
+    ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          None),
+    # # ("meta-llama-Llama-3.2-3B-Instruct",              CODE_INTEPRETER_TOOL, None),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          None),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          CODE_INTEPRETER_TOOL, None),
 ])
-def test_completion_with_required_tool(template_name: str, n_predict: int, tool: dict, argument_key: str):
+def test_completion_with_required_tool(template_name: str, tool: dict, argument_key: str | None):
+    n_predict = 512
     global server
     # server = ServerPreset.stories15m_moe()
     server.jinja = True
@@ -267,9 +275,13 @@ def test_completion_with_required_tool(template_name: str, n_predict: int, tool:
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
-    assert tool["function"]["name"] == tool_call["function"]["name"]
-    actual_arguments = json.loads(tool_call["function"]["arguments"])
-    assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
+    expected_function_name = "python" if tool["type"] == "code_interpreter" else tool["function"]["name"]
+    assert expected_function_name == tool_call["function"]["name"]
+    actual_arguments = tool_call["function"]["arguments"]
+    assert isinstance(actual_arguments, str)
+    if argument_key is not None:
+        actual_arguments = json.loads(actual_arguments)
+        assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
 
 
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
