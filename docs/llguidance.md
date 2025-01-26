@@ -1,13 +1,8 @@
-# LLGuidance support in llama.cpp
+# LLGuidance Support in llama.cpp
 
-[LLGuidance](https://github.com/guidance-ai/llguidance) is a library for constrained decoding (also called constrained sampling or structured outputs) for Large Langauge Models (LLMs).
-It was developed as the backend for [Guidance](https://github.com/guidance-ai/guidance) library, but can be also used standalone.
+[LLGuidance](https://github.com/guidance-ai/llguidance) is a library for constrained decoding (also called constrained sampling or structured outputs) for Large Language Models (LLMs). Initially developed as the backend for the [Guidance](https://github.com/guidance-ai/guidance) library, it can also be used independently.
 
-LLGuidance supports JSON Schemas or arbitrary context-free grammars (CFGs) in
-a [variant](https://github.com/guidance-ai/llguidance/blob/main/parser/src/lark/README.md) of Lark syntax.
-It is [very fast](https://github.com/guidance-ai/jsonschemabench/tree/main/maskbench)
-and has [excellent](https://github.com/guidance-ai/llguidance/blob/main/parser/src/json/README.md) JSON Schema coverage.
-It does, however, complicate llama.cpp build process, as it requires Rust compiler.
+LLGuidance supports JSON Schemas and arbitrary context-free grammars (CFGs) written in a [variant](https://github.com/guidance-ai/llguidance/blob/main/parser/src/lark/README.md) of Lark syntax. It is [very fast](https://github.com/guidance-ai/jsonschemabench/tree/main/maskbench) and has [excellent](https://github.com/guidance-ai/llguidance/blob/main/parser/src/json/README.md) JSON Schema coverage but requires the Rust compiler, which complicates the llama.cpp build process.
 
 ## Building
 
@@ -18,49 +13,41 @@ cmake -B build -DLLAMA_LLGUIDANCE=ON
 make -C build -j
 ```
 
-This requires the Rust compiler and `cargo` tool to be [installed](https://www.rust-lang.org/tools/install).
+This requires the Rust compiler and the `cargo` tool to be [installed](https://www.rust-lang.org/tools/install).
 
 ## Interface
 
-There are no new command line arguments or `common_params`.
-When enabled, any grammar starting with `%llguidance` is passed to LLGuidance, not the [current](../grammars/README.md) llama.cpp Grammars.
-Additionally, when JSON Schema is requested (eg., with `-j` argument to `llama-cli`), it's also passed to LLGuidance.
+There are no new command-line arguments or modifications to `common_params`. When enabled, grammars starting with `%llguidance` are passed to LLGuidance instead of the [current](../grammars/README.md) llama.cpp grammars. Additionally, JSON Schema requests (e.g., using the `-j` argument in `llama-cli`) are also passed to LLGuidance.
 
 ## Performance
 
-Computing "token mask" (ie., set of all allowed tokens), for a llama3 tokenizer (with 128k tokens),
-for [JSON Schema Bench](https://github.com/guidance-ai/jsonschemabench) takes on avarage 50μs of single-core CPU time. The p99 time is 0.5ms, and p100 is 20ms.
-
-This is due to lexer/parser split and a bunch of [optimizations](https://github.com/guidance-ai/llguidance/blob/main/docs/optimizations.md).
+Computing a "token mask" (i.e., the set of allowed tokens) for a llama3 tokenizer with 128k tokens takes, on average, 50μs of single-core CPU time for the [JSON Schema Bench](https://github.com/guidance-ai/jsonschemabench). The p99 time is 0.5ms, and the p100 time is 20ms. These results are due to the lexer/parser split and several [optimizations](https://github.com/guidance-ai/llguidance/blob/main/docs/optimizations.md).
 
 ## JSON Schema
 
-LLGuidance tries to be faithful to the JSON Schema specification where possible.
-In particular, unlike in current Grammars, `additionalProperties` defaults to `true`, and any whitespace is allowed.
-You can of course set `"additionalProperties": false` yourself.
-LLGuidance will also follow definition order of properties in the `"properties": {}` object,
-regardless if they are required or not (current Grammars always put required properties first).
+LLGuidance adheres closely to the JSON Schema specification. For example:
 
-If a schema is not fully supported by LLGuidance, it will error out with a message.
-That is, no JSON Schema keywords are silently ignored.
+- `additionalProperties` defaults to `true`, unlike current grammars, though you can set `"additionalProperties": false` if needed.
+- any whitespace is allowed.
+- The definition order in the `"properties": {}` object is maintained, regardless of whether properties are required (current grammars always puts required properties first).
 
-## Why not re-use GBNF format?
+Unsupported schemas result in an error message—no keywords are silently ignored.
 
-GBNF has no concept of a lexer.
+## Why Not Reuse GBNF Format?
 
-For virtually all programming languages (including JSON), lexers, typically built using regular expressions, are used to convert a stream of bytes into a stream of lexemes (also called tokens, but that name conflicts with LLM tokens).
-Then, the context-free grammar (CFG) parser can operate on lexemes, and there is way fewer of them than bytes.
-Because regular expressions are cheaper to evaluate than context-free grammars, this two-step process is faster than parsing the whole input with a CFG.
+GBNF lacks the concept of a lexer.
 
-Typically the LLM tokens are somewhat aligned with lexemes, meaning that when executing the grammar against all tokens, the parser needs to be involved in 0.5% or less of cases, leaving the rest to the lexer.
+Most programming languages, including JSON, use a two-step process: a lexer (built with regular expressions) converts a byte stream into lexemes, which are then processed by a CFG parser. This approach is faster because lexers are cheaper to evaluate, and there is ~10x fewer lexemes than bytes.
 
-However, the user has to specify the distinction between lexemes and CFG symbols.
-In [Lark](https://github.com/lark-parser/lark) this is done by making the lexemes names all uppercase,
-while CFG symbols are all lowercase.
+LLM tokens often align with lexemes, so the parser is engaged in under 0.5% of tokens, with the lexer handling the rest.
 
-For example, this is a very simplified grammar for the C programming language:
+However, the user has to provide the distinction between lexemes and CFG symbols. In [Lark](https://github.com/lark-parser/lark), lexeme names are uppercase, while CFG symbols are lowercase.
+
+For example, a simplified C grammar in Lark:
 
 ```lark
+%llguidance {}
+
 start: program
 
 program: (function_definition | declaration)*
@@ -95,16 +82,10 @@ NUMBER: /[0-9]+/
 %ignore /[ \t\f\r\n]+/
 ```
 
-The GBNF grammar would be very similar, but `ID` and `NUMBER` would typically be
-lowercase, and would be internally translated to a CFG, instead of being kept as regular expressions.
-Also, in the last line we define that all whitespace should be ignored.
-This would have to specified explicitly everywhere in the GBNF format.
+In GBNF, lexemes like `ID` and `NUMBER` are typically lowercase and converted to CFG rules instead of remaining regular expressions. Ignoring whitespace would need to be explicitly specified everywhere.
 
-While it is possible to write a grammar with only lowercase symbols, it will be much slower than a grammar with lexemes.
-You will also eventually get an error about 'single-byte lexemes' from LLGuidance.
-Typically, renaming some symbols to uppercase will fix this.
+Writing grammars without lexemes would be slower and might result in "single-byte lexeme" errors in LLGuidance, fixable by renaming symbols to uppercase.
 
-## Error handling
+## Error Handling
 
-Currently, errors are just printed to stderr, and the generation continues.
-This can hopefully be improved in the future.
+Errors are currently printed to `stderr`, and generation continues. Improved error handling may be added in the future.
