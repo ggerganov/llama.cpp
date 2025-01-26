@@ -220,7 +220,7 @@ static LlgTokenizer *llama_sampler_llg_new_tokenizer(const llama_vocab * vocab) 
     vocab_cache = vocab;
     tokenizer_cache = tokenizer;
 
-    return tokenizer;
+    return llg_clone_tokenizer(tokenizer_cache);
 }
 
 llama_sampler * llama_sampler_init_llg(const llama_vocab * vocab, 
