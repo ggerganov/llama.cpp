@@ -992,7 +992,7 @@ public:
 
 std::string json_schema_to_grammar(const json & schema) {
 #ifdef LLAMA_USE_LLGUIDANCE
-    return "llg:json:" + schema.dump();
+    return "%llguidance {}\nstart: %json " + schema.dump();
 #else
     return build_grammar([&](const llama_grammar_builder & callbacks) {
         auto copy = schema;
