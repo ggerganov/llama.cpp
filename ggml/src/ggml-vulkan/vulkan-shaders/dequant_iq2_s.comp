@@ -11,7 +11,7 @@ void main() {
     // Each thread handles 1 subblock (32 values with 2 scales)
     const uint ib = gl_WorkGroupID.x * 32 + gl_LocalInvocationID.x / 8;
 
-    init_iq_shmem();
+    init_iq_shmem(gl_WorkGroupSize);
 
     if (ib >= p.nel / 256) {
         return;

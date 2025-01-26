@@ -380,10 +380,10 @@ const uvec2[256] iq2xxs_grid_const = {
 
 shared uvec2 iq2xxs_grid[256];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    for (uint i = gl_LocalInvocationIndex.x; i < iq2xxs_grid.length(); i += gl_WorkGroupSize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < iq2xxs_grid.length(); i += wgsize.x) {
         iq2xxs_grid[i] = iq2xxs_grid_const[i];
     }
     barrier();
@@ -547,10 +547,10 @@ const uvec2 iq2xs_grid_const[512] = {
 
 shared uvec2 iq2xs_grid[512];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    for (uint i = gl_LocalInvocationIndex.x; i < iq2xs_grid.length(); i += gl_WorkGroupSize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < iq2xs_grid.length(); i += wgsize.x) {
         iq2xs_grid[i] = iq2xs_grid_const[i];
     }
     barrier();
@@ -836,10 +836,10 @@ const uvec2 iq2s_grid_const[1024] = {
 
 shared uvec2 iq2s_grid[1024];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    for (uint i = gl_LocalInvocationIndex.x; i < iq2s_grid.length(); i += gl_WorkGroupSize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < iq2s_grid.length(); i += wgsize.x) {
         iq2s_grid[i] = iq2s_grid_const[i];
     }
     barrier();
@@ -904,10 +904,10 @@ const uint32_t iq3xxs_grid_const[256] = {
 
 shared uint32_t iq3xxs_grid[256];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    for (uint i = gl_LocalInvocationIndex.x; i < iq3xxs_grid.length(); i += gl_WorkGroupSize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < iq3xxs_grid.length(); i += wgsize.x) {
         iq3xxs_grid[i] = iq3xxs_grid_const[i];
     }
     barrier();
@@ -1011,10 +1011,10 @@ const uint32_t iq3s_grid_const[512] = {
 
 shared uint32_t iq3s_grid[512];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    for (uint i = gl_LocalInvocationIndex.x; i < iq3s_grid.length(); i += gl_WorkGroupSize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < iq3s_grid.length(); i += wgsize.x) {
         iq3s_grid[i] = iq3s_grid_const[i];
     }
     barrier();
@@ -1050,11 +1050,11 @@ const int8_t kvalues_iq4nl_const[16] = {
 
 shared FLOAT_TYPE kvalues_iq4nl[16];
 
-void init_iq_shmem()
+void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
-    if (gl_LocalInvocationIndex.x < 16) {
-        kvalues_iq4nl[gl_LocalInvocationIndex.x] = FLOAT_TYPE(kvalues_iq4nl_const[gl_LocalInvocationIndex.x]);
+    for (uint i = gl_LocalInvocationIndex.x; i < kvalues_iq4nl.length(); i += wgsize.x) {
+        kvalues_iq4nl[i] = FLOAT_TYPE(kvalues_iq4nl_const[i]);
     }
     barrier();
 }
