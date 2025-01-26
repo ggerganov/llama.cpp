@@ -7215,13 +7215,25 @@ struct llm_build_context {
                 struct ggml_tensor * Qcur = nullptr;
                 struct ggml_tensor * Kcur = nullptr;
                 struct ggml_tensor * Vcur = nullptr;
-                if(model.type == LLM_TYPE_1_5B|| model.type == LLM_TYPE_4B){
+                if(model.type == LLM_TYPE_1_5B|| model.type == LLM_TYPE_4B || model.type == LLM_TYPE_9B){
                     Qcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wq, cur);
                     cb(Qcur, "Qcur", il);
+                    if (model.layers[il].bq) {
+                        Qcur = ggml_add(ctx0, Qcur, model.layers[il].bq);
+                        cb(Qcur, "Qcur", il);
+                    }
                     Kcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wk, cur);
                     cb(Kcur, "Kcur", il);
+                    if (model.layers[il].bk) {
+                        Kcur = ggml_add(ctx0, Kcur, model.layers[il].bk);
+                        cb(Kcur, "Kcur", il);
+                    }
                     Vcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wv, cur);
                     cb(Vcur, "Vcur", il);
+                    if (model.layers[il].bv) {
+                        Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
+                        cb(Vcur, "Vcur", il);
+                    }
                 }else{
                     cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wqkv, cur);
                     cb(cur, "wqkv", il);

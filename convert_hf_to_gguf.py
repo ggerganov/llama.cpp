@@ -4622,53 +4622,12 @@ class ChatGLMModel(Model):
         vocab_size = hparams.get("padded_vocab_size",hparams["vocab_size"])
         assert max(tokenizer.get_vocab().values()) < vocab_size
 
-        if(hparams["partial_rotary_factor"] == 1.0):
-            # only for glm-edge series
-            tokens, toktypes, tokpre = self.get_vocab_base()
-            self.gguf_writer.add_tokenizer_model("gpt2")
-            self.gguf_writer.add_tokenizer_pre(tokpre)
-            self.gguf_writer.add_token_list(tokens)
-            self.gguf_writer.add_token_types(toktypes)
-            special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
-        else:
-            # for glm4 series
-            tokpre = self.get_vocab_base_pre(tokenizer)
-            merges = []
-            vocab = {}
-            mergeable_ranks = tokenizer._mergeable_ranks
-            for token, rank in mergeable_ranks.items():
-                vocab[ChatGLMModel.token_bytes_to_string(token)] = rank
-                if len(token) == 1:
-                    continue
-                merged = ChatGLMModel.bpe(mergeable_ranks, token, max_rank=rank)
-                assert len(merged) >= 2 and len(merged) <= 7
-                merges.append(' '.join(map(ChatGLMModel.token_bytes_to_string, merged)))
-
-            # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
-            added_vocab = tokenizer.get_added_vocab()
-            reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
-
-            for i in range(vocab_size):
-                if i not in reverse_vocab:
-                    tokens.append(f"[PAD{i}]")
-                    toktypes.append(gguf.TokenType.UNUSED)
-                elif reverse_vocab[i] in added_vocab:
-                    tokens.append(reverse_vocab[i])
-                    if tokenizer.added_tokens_decoder[i].special:
-                        toktypes.append(gguf.TokenType.CONTROL)
-                    else:
-                        toktypes.append(gguf.TokenType.USER_DEFINED)
-                else:
-                    tokens.append(reverse_vocab[i])
-                    toktypes.append(gguf.TokenType.NORMAL)
-
-            self.gguf_writer.add_tokenizer_model("gpt2")
-            self.gguf_writer.add_tokenizer_pre(tokpre)
-            self.gguf_writer.add_token_list(tokens)
-            self.gguf_writer.add_token_types(toktypes)
-
-            special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-            special_vocab.merges = merges
+        tokens, toktypes, tokpre = self.get_vocab_base()
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
         # only add special tokens when they were not already loaded from config.json
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eot", tokenizer.get_added_vocab()["<|user|>"])
