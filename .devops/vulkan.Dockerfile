@@ -55,8 +55,8 @@ RUN apt-get update \
     git \
     python3 \
     python3-pip \
-    && pip install --upgrade pip setuptools wheel \
-    && pip install -r requirements.txt \
+    && pip install --upgrade --break-system-packages pip setuptools wheel \
+    && pip install -r --break-system-packages requirements.txt \
     && apt autoremove -y \
     && apt clean -y \
     && rm -rf /tmp/* /var/tmp/* \
