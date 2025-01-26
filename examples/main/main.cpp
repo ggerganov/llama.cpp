@@ -3,6 +3,10 @@
 #include "console.h"
 #include "log.h"
 #include "sampling.h"
+// vvv REMOVE BEFORE MERGING
+#include "llama-model.h"
+#include "llama-impl.h"
+// ^^^ REMOVE BEFORE MERGING
 #include "llama.h"
 #include "chat-template.hpp"
 
@@ -912,6 +916,13 @@ int main(int argc, char ** argv) {
     }
 
     LOG("\n\n");
+    // vvv REMOVE BEFORE MERGING
+    for (auto * dev : model->devices) {
+        size_t free, total; // NOLINT
+        ggml_backend_dev_memory(dev, &free, &total);
+        LLAMA_LOG_INFO("%s: using device %s (%s) - %zu MiB free\n", __func__, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), free/1024/1024);
+    }
+    // ^^^ REMOVE BEFORE MERGING
     common_perf_print(ctx, smpl);
 
     common_sampler_free(smpl);
