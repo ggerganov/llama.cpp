@@ -350,15 +350,6 @@ struct server_task {
             throw std::runtime_error("Either \"json_schema\" or \"grammar\" can be specified, but not both");
         }
         if (data.contains("json_schema") && !data.contains("grammar")) {
-            try {
-                params.sampling.grammar = json_schema_to_grammar(json_value(data, "json_schema", json::object()));
-            } catch (const std::exception & e) {
-                throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
-            }
-        } else {
-            params.sampling.grammar = json_value(data, "grammar", defaults.sampling.grammar);
-        }
-
         {
             params.sampling.logit_bias.clear();
             params.ignore_eos = json_value(data, "ignore_eos", false);
@@ -2783,8 +2774,8 @@ struct server_context {
         // track if given slot can be batched with slots already in the batch
         server_slot * slot_batched = nullptr;
 
-        auto accept_special_token = [&](llama_token token) {
-            const auto & trigger_tokens = params_base.sampling.grammar_trigger_tokens;
+        auto accept_special_token = [&](server_slot & slot, llama_token token) {
+            const auto & trigger_tokens = slot.params.sampling.grammar_trigger_tokens;
             return params_base.special || std::find(trigger_tokens.begin(), trigger_tokens.end(), token) != trigger_tokens.end();
         };
 
@@ -3151,7 +3142,7 @@ struct server_context {
 
                 completion_token_output result;
                 result.tok          = id;
-                result.text_to_send = common_token_to_piece(ctx, result.tok, accept_special_token(result.tok));
+                result.text_to_send = common_token_to_piece(ctx, result.tok, accept_special_token(slot, result.tok));
                 result.prob         = 1.0f; // TODO: set it here instead of doing inside populate_token_probs
 
                 if (slot.params.sampling.n_probs > 0) {
@@ -3240,7 +3231,7 @@ struct server_context {
                     completion_token_output result;
 
                     result.tok          = ids[i];
-                    result.text_to_send = common_token_to_piece(ctx, result.tok, accept_special_token(result.tok));
+                    result.text_to_send = common_token_to_piece(ctx, result.tok, accept_special_token(slot, result.tok));
                     result.prob         = 1.0f; // set later
 
                     // TODO: set result.probs
