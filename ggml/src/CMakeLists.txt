@@ -308,7 +308,7 @@ if (GGML_CPU_ALL_VARIANTS)
         # MSVC doesn't support AMX
         ggml_add_cpu_backend_variant(sapphirerapids AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8)
     endif()
-else ()
+elseif (GGML_CPU)
     ggml_add_cpu_backend_variant_impl("")
 endif()
 
