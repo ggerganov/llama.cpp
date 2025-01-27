@@ -1722,14 +1722,8 @@ void quantize_row_q8_K(const float * restrict x, void * restrict y, int64_t k) {
 
             // Pack into 16 i8 values
             v128_t i8 = wasm_i8x16_narrow_i16x8(
-                wasm_i16x8_narrow_i32x4(
-                    wasm_i32x4_min(wasm_i32x4_max(i0, wasm_i32x4_splat(-127)), wasm_i32x4_splat(127)),
-                    wasm_i32x4_min(wasm_i32x4_max(i1, wasm_i32x4_splat(-127)), wasm_i32x4_splat(127))
-                ),
-                wasm_i16x8_narrow_i32x4(
-                    wasm_i32x4_min(wasm_i32x4_max(i2, wasm_i32x4_splat(-127)), wasm_i32x4_splat(127)),
-                    wasm_i32x4_min(wasm_i32x4_max(i3, wasm_i32x4_splat(-127)), wasm_i32x4_splat(127))
-                )
+                wasm_i16x8_narrow_i32x4(i0, i1),
+                wasm_i16x8_narrow_i32x4(i2, i3)
             );
             wasm_v128_store(yc[i].qs + j, i8);
 
