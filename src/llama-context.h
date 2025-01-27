@@ -28,6 +28,9 @@ struct llama_batch_manager_i {
     virtual void restore() = 0;
     virtual void update() = 0;
     virtual void finalize() = 0;
+
+    // TODO: might be temporary
+    int64_t n_outputs_all = 0;
 };
 
 // TODO: make implementation details private
@@ -98,7 +101,7 @@ struct llama_context {
     void *              abort_callback_data = nullptr;
 
     // TODO: do not pass logits_all explicitly
-    std::unique_ptr<llama_batch_manager_i> prepare_batch(const llama_batch & batch, bool logits_all);
+    std::unique_ptr<llama_batch_manager_i> prepare_batch(const llama_batch & batch);
 
     // returns the result of ggml_backend_sched_graph_compute_async execution
     enum ggml_status compute_graph(
