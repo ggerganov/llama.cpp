@@ -6,8 +6,8 @@
 
 const common_grammar_options grammar_options {
     /* .dotall = */ false,
-    /* .compact_spaces = */ false,
-    // /* .compact_spaces = */ true,
+    // /* .compact_spaces = */ false,
+    /* .compact_spaces = */ true,
 };
 
 static bool parse_json(std::string::const_iterator & it, const std::string::const_iterator & end, json & out) {
