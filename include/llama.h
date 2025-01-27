@@ -1328,7 +1328,7 @@ extern "C" {
     typedef bool (*llama_opt_param_filter)(const struct ggml_tensor * tensor, void * userdata);
 
     // always returns true
-    bool llama_opt_param_filter_all(const struct ggml_tensor * tensor, void * userdata);
+    LLAMA_API bool llama_opt_param_filter_all(const struct ggml_tensor * tensor, void * userdata);
 
     struct llama_opt_params {
         uint32_t n_ctx_train; // assumed context size post training, use context size specified in llama_context if 0
