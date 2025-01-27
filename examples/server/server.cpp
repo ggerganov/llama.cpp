@@ -333,7 +333,7 @@ struct server_task {
             if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
                 throw std::runtime_error("Either \"json_schema\" or \"grammar\" can be specified, but not both");
             }
-            if (data.contains("json_schema") && !data.contains("grammar")) {
+            if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
                 try {
                     auto schema                  = json_value(data, "json_schema", json::object());
                     params.sampling.grammar = json_schema_to_grammar(schema);
@@ -345,11 +345,6 @@ struct server_task {
             }
         }
 
-        // process "json_schema" and "grammar"
-        if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
-            throw std::runtime_error("Either \"json_schema\" or \"grammar\" can be specified, but not both");
-        }
-        if (data.contains("json_schema") && !data.contains("grammar")) {
         {
             params.sampling.logit_bias.clear();
             params.ignore_eos = json_value(data, "ignore_eos", false);

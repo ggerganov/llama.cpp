@@ -143,28 +143,10 @@ class chat_template {
         if (adjust_inputs && !tools.is_null() && !supports_code_interpreter_ && has_code_interpreter) {
             actual_tools = json::array();
             for (const auto & tool : tools) {
-                if (tool.contains("type") && tool.at("type") == "code_interpreter") {
-                    static const auto python_tool = json::parse(R"({
-                        "type": "function",
-                        "function": {
-                            "name": "python",
-                            "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "code": {
-                                        "type": "string",
-                                        "description": "The code to run in the ipython interpreter."
-                                    }
-                                },
-                                "required": ["code"]
-                            }
-                        }
-                    })");
-                    actual_tools.push_back(python_tool);
-                } else {
-                    actual_tools.push_back(tool);
+                if (tool.contains("type") && tool.at("type") == "code_interpreter" && !supports_code_interpreter_) {
+                    continue;
                 }
+                actual_tools.push_back(tool);
             }
         } else if (!tools.is_null()) {
             actual_tools = tools;
@@ -295,10 +277,6 @@ class chat_template {
         if (!tools.is_null()) {
             auto tools_val = minja::Value(actual_tools);
             context->set("tools", tools_val);
-            if (has_code_interpreter && !extra_context.contains("builtin_tools")) {
-                auto builtin_tools_val = minja::Value(json {"code_interpreter"});
-                context->set("builtin_tools", builtin_tools_val);
-            }
         }
         if (!extra_context.is_null()) {
             for (auto & kv : extra_context.items()) {

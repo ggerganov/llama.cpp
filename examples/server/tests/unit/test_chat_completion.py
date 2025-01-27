@@ -221,34 +221,22 @@ PYTHON_TOOL = {
     }
 }
 
-CODE_INTEPRETER_TOOL = {
-    "type": "code_interpreter",
-}
-
 
 @pytest.mark.parametrize("template_name,tool,argument_key", [
-    # TODO: fix special handling of python tool for these templates:
     ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
-    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          None), # "code"), # TODO: fix
-    ("meetkai-functionary-medium-v3.1",               CODE_INTEPRETER_TOOL, None),
+    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
     ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code"),
-    ("meetkai-functionary-medium-v3.2",               CODE_INTEPRETER_TOOL, None),
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success"),
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code"),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", CODE_INTEPRETER_TOOL, None),
     ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success"),
     ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code"),
-    ("meta-llama-Llama-3.2-3B-Instruct",              CODE_INTEPRETER_TOOL, None),
     ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success"),
     ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code"),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          CODE_INTEPRETER_TOOL, None),
     ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success"),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          None), # "code"), # TODO: fix
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   CODE_INTEPRETER_TOOL, None),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code"),
     ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          None), # "code"), # TODO: fix
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         CODE_INTEPRETER_TOOL, None),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
 ])
 def test_completion_with_required_tool(template_name: str, tool: dict, argument_key: str | None):
     n_predict = 512
@@ -321,29 +309,19 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("tool,expected_arguments,hf_repo,hf_file,template_override", [
+    (PYTHON_TOOL,          None,                 "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,          None,                 "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          None,                 "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,          None,                 "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (PYTHON_TOOL,          None,                 "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (PYTHON_TOOL,          None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q6_K_L.gguf", None),
     # TODO: fix these models
-    # (PYTHON_TOOL,          {"code": "print('Hello, World!')"},  "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
-    # (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"},  "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
-    # # (PYTHON_TOOL,          {"code": "print(\"Hello, World!\")"}, "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    # # (CODE_INTEPRETER_TOOL, {"code": "print(\"Hello, World!\")"}, "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    # (PYTHON_TOOL,          {"code": "print("},                   "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    # (CODE_INTEPRETER_TOOL, {"code": "print("},                   "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    # (PYTHON_TOOL,          {"code": "print(\"hello world\")"},   "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    # (CODE_INTEPRETER_TOOL, {"code": "print("},                   "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello, World!')"},   "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"},   "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello, World!')"},   "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')"},   "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello World!')"},    "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello World!')"},    "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,          {"code": "print('Hello, world!')"},   "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, world!')"},   "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch-Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (PYTHON_TOOL,          {"code": "print('Hello World!')"},    "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello World!')"},    "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (PYTHON_TOOL,          {"code": "print('Hello, World!')\n"}, "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q6_K_L.gguf", None),
-    (CODE_INTEPRETER_TOOL, {"code": "print('Hello, World!')\n"}, "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q6_K_L.gguf", ("mistralai-Mistral-Nemo-Instruct-2407", None)),
+    (PYTHON_TOOL,          '{"code":"print("}',  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    # (PYTHON_TOOL,          None,                 "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    # (PYTHON_TOOL,          None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
 ])
-def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world_tool_call(tool: dict, expected_arguments: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 2
     server.jinja = True
@@ -377,9 +355,15 @@ def test_hello_world_tool_call(tool: dict, expected_arguments: dict, hf_repo: st
         assert tool["function"]["name"] == tool_call["function"]["name"]
     elif tool["type"] == "code_interpreter":
         assert re.match('i?python', tool_call["function"]["name"])
-    actual_arguments = json.loads(tool_call["function"]["arguments"])
-    code = actual_arguments["code"]
-    assert re.match(r'''print\(("[Hh]ello,? [Ww]orld!?"|'[Hh]ello,? [Ww]orld!?')\)''', code), f'Expected hello world, got {code}'
+    actual_arguments = tool_call["function"]["arguments"]
+    if expected_arguments is not None:
+        assert actual_arguments == expected_arguments
+    else:
+        actual_arguments = json.loads(actual_arguments)
+        assert 'code' in actual_arguments, f"code not found in {json.dumps(actual_arguments)}"
+        code = actual_arguments["code"]
+        assert isinstance(code, str), f"Expected code to be a string, got {type(code)}: {json.dumps(code)}"
+        assert re.match(r'''print\(("[Hh]ello,? [Ww]orld!?"|'[Hh]ello,? [Ww]orld!?')\)''', code), f'Expected hello world, got {code}'
 
 
 def test_logprobs():
