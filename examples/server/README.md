@@ -1116,19 +1116,19 @@ curl http://localhost:8080/v1/chat/completions \
     "model": "gpt-3.5-turbo",
     "tools": [
       {
-        "type": "function",
-        "function": {
-          "name": "python",
-          "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "description": "The code to run in the ipython interpreter."
+        "type":"function",
+        "function":{
+          "name":"get_current_weather",
+          "description":"Get the current weather in a given location",
+          "parameters":{
+            "type":"object",
+            "properties":{
+              "location":{
+                "type":"string",
+                "description":"The city and state, e.g. San Francisco, CA"
               }
             },
-            "required": ["code"]
+            "required":["location"]
           }
         }
       }
@@ -1136,7 +1136,7 @@ curl http://localhost:8080/v1/chat/completions \
     "messages": [
       {
         "role": "user",
-        "content": "Print a hello world message with python."
+        "content": "What is the weather like in Istanbul?."
       }
     ]
   }'
