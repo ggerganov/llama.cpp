@@ -1500,27 +1500,26 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // but for IBM granite, we have multiple feature layers that get concatenated.
         //
         // Here, we should standardize all values to uint values so that we can use -1 as unset values.
-        // try {
-        //     int idx = get_key_idx(ctx, KEY_VISION_FEATURE_LAYER);
-        //     int n = gguf_get_arr_n(ctx, idx);
-        //     const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
-        //     // HACK - need to set a good invalid number here; or maybe not, I guess it could just
-        //     // be that it's not set in GGUF, we read all numbers as valid, and from this point on,
-        //     // -1 is the sad one
-        //     for (int i = 0; i < 4 && i < n && vision_feature_layer[i] != 0; ++i) {
-        //         hparams.vision_feature_layer[i] = vision_feature_layer[i];
-        //     }
-        //     if (n < 4)
-        //         hparams.image_grid_pinpoints[n] = -1;
-        // } catch (std::runtime_error & /*e*/) {
-        //     // -1 -> taking the final layer output
-        //     hparams.vision_feature_layer[0] = -1;
-        // }
-        // HACK for testing without GGUF hparams for now
-        hparams.vision_feature_layer[0] = 3;
-        hparams.vision_feature_layer[1] = 7;
-        hparams.vision_feature_layer[2] = 15;
-        hparams.vision_feature_layer[3] = 24; // TODO This is wrong and should be 26, but the converter seems to be chopping layers off; investigate
+        try {
+            LOG_INF("ABOUT TO GET VISION FEATURE LAYER KEYS\n");
+            int idx = get_key_idx(ctx, KEY_VISION_FEATURE_LAYER);
+            LOG_INF("VISION FEATURE LAYER IDX %d\n", idx);
+            int n = gguf_get_arr_n(ctx, idx);
+            LOG_INF("GETTING %d VISION FEATURE LAYERS \n", n);
+            const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
+            // HACK - need to set a good invalid number here; or maybe not, I guess it could just
+            // be that it's not set in GGUF, we read all numbers as valid, and from this point on,
+            // -1 is the sad one
+            for (int i = 0; i < MAX_VISION_FEATURE_LAYERS && i < n && vision_feature_layer[i] != 0; ++i) {
+                hparams.vision_feature_layer[i] = vision_feature_layer[i];
+                LOG_INF("feature layer %d - %d | ", i, vision_feature_layer[i]);
+            }
+            if (n < MAX_IMAGE_GRID_PINPOINTS)
+                hparams.image_grid_pinpoints[n] = -1;
+        } catch (std::runtime_error & /*e*/) {
+            LOG_INF("VISION FEATURE LAYER RETRIEVAL FAILED");
+            hparams.vision_feature_layer[0] = -1;
+        }
 
         try {
             int idx = get_key_idx(ctx, KEY_MM_PATCH_MERGE_TYPE);
