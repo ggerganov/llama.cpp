@@ -170,6 +170,9 @@ static std::string format(const char * fmt, ...) {
 #define TN_GLM_BOI_W "adapter.boi"
 #define TN_GLM_EOI_W "adapter.eoi"
 
+// Other constants for max array lengths of hparams etc
+#define MAX_IMAGE_GRID_PINPOINTS 64
+#define MAX_VISION_FEATURE_LAYERS 4
 
 enum projector_type {
     PROJECTOR_TYPE_MLP,
@@ -430,7 +433,6 @@ static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u
 //
 // clip layers
 //
-
 struct clip_hparams {
     int32_t image_size;
     int32_t patch_size;
@@ -444,9 +446,9 @@ struct clip_hparams {
 
     char mm_patch_merge_type[32] = "flat"; // spatial_unpad or flat (default)
 
-    int32_t image_grid_pinpoints[32]; // TODO - check to make sure this is okay for our model...
+    int32_t image_grid_pinpoints[MAX_IMAGE_GRID_PINPOINTS];
     int32_t image_crop_resolution;
-    int32_t vision_feature_layer[4];
+    int32_t vision_feature_layer[MAX_VISION_FEATURE_LAYERS];
 };
 
 struct clip_layer {
@@ -1473,10 +1475,13 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
             const int32_t * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
-            for (int i = 0; i < 32 && i < n && pinpoints[i] != 0; ++i) {
+            LOG_INF("Grid pinpoints | max %d | actual %d  ", MAX_IMAGE_GRID_PINPOINTS, n);
+            for (int i = 0; i < MAX_IMAGE_GRID_PINPOINTS && i < n && pinpoints[i] != 0; ++i) {
+                LOG_INF(" %d  ", i);
                 hparams.image_grid_pinpoints[i] = pinpoints[i];
             }
-            if (n < 32)
+            LOG_INF("\n");
+            if (n < MAX_IMAGE_GRID_PINPOINTS)
                 hparams.image_grid_pinpoints[n] = 0;
         } catch (std::runtime_error & /*e*/) {
             hparams.image_grid_pinpoints[0]=0;
@@ -1546,7 +1551,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             LOG_INF("v_image_mean       %f %f %f\n", new_clip->image_mean[0], new_clip->image_mean[1], new_clip->image_mean[2]);
             LOG_INF("v_image_std        %f %f %f\n", new_clip->image_std[0], new_clip->image_std[1], new_clip->image_std[2]);
             LOG_INF("v_image_grid_pinpoints: ");
-            for (int i = 0; i < 32 && (hparams.image_grid_pinpoints[i] != 0); ++i) {
+            for (int i = 0; i < MAX_IMAGE_GRID_PINPOINTS && (hparams.image_grid_pinpoints[i] != 0); ++i) {
                 LOG_INF("%d ", hparams.image_grid_pinpoints[i]);
             }
             LOG_INF("\n");
@@ -2305,7 +2310,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         if (params.image_grid_pinpoints[0] != 0) {
             // "spatial_unpad" with "anyres" processing for llava-1.6
             std::vector<std::pair<int, int>> possible_resolutions;
-            for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
+            for (int i = 0; i < MAX_IMAGE_GRID_PINPOINTS && params.image_grid_pinpoints[i] != 0; i+=2) {
                 possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
             }
             std::pair<int, int> best_resolution = select_best_resolution({img->nx, img->ny}, possible_resolutions);
