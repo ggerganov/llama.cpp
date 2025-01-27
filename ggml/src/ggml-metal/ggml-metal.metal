@@ -1397,7 +1397,7 @@ kernel void kernel_rwkv_wkv6_f32(
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]])  {
-        
+
     const uint head_size = 64; // rwkv6
     const uint batch_id = tgpig.x / H;
     const uint head_id = tgpig.x % H;
@@ -1438,7 +1438,7 @@ kernel void kernel_rwkv_wkv6_f32(
 
         const float v_val = v[t];
         float y = 0.0;
-        
+
         #pragma unroll(64)
         for (uint j = 0; j < head_size; j += 4) {
             float4 k_vec = float4(_k[j], _k[j+1], _k[j+2], _k[j+3]);
@@ -1484,7 +1484,7 @@ kernel void kernel_rwkv_wkv7_f32(
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]])  {
-        
+
     const uint head_size = 64;
     const uint batch_id = tgpig.x / H;
     const uint head_id = tgpig.x % H;

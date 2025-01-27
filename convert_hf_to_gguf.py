@@ -3484,6 +3484,9 @@ class RWKV6Qwen2Model(Rwkv6Model):
 class Rwkv7Model(Rwkv6Model):
     model_arch = gguf.MODEL_ARCH.RWKV7
 
+    def calc_lora_rank(self, hidden_size, exponent, multiplier):
+        return max(1, round(hidden_size ** exponent * multiplier / 32)) * 32
+
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
         head_size = self.hparams["head_size"]
@@ -3492,11 +3495,10 @@ class Rwkv7Model(Rwkv6Model):
         intermediate_size = self.hparams["intermediate_size"] if self.hparams["intermediate_size"] is not None else (hidden_size * 4)
 
         # ICLR: In-Context-Learning-Rate
-        calc_lora_rank = lambda exponent, multiplier: max(1, round(hidden_size ** exponent * multiplier / 32)) * 32
-        lora_rank_decay = self.hparams["lora_rank_decay"] if self.hparams["lora_rank_decay"] is not None else calc_lora_rank(0.5, 1.8)
-        lora_rank_iclr = self.hparams["lora_rank_iclr"] if self.hparams["lora_rank_iclr"] is not None else calc_lora_rank(0.5, 1.8)
-        lora_rank_value_residual_mix = self.hparams["lora_rank_value_residual_mix"] if self.hparams["lora_rank_value_residual_mix"] is not None else calc_lora_rank(0.5, 1.3)
-        lora_rank_gate = self.hparams["lora_rank_gate"] if self.hparams["lora_rank_gate"] is not None else calc_lora_rank(0.8, 0.6)
+        lora_rank_decay = self.hparams["lora_rank_decay"] if self.hparams["lora_rank_decay"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+        lora_rank_iclr = self.hparams["lora_rank_iclr"] if self.hparams["lora_rank_iclr"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+        lora_rank_value_residual_mix = self.hparams["lora_rank_value_residual_mix"] if self.hparams["lora_rank_value_residual_mix"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.3)
+        lora_rank_gate = self.hparams["lora_rank_gate"] if self.hparams["lora_rank_gate"] is not None else self.calc_lora_rank(hidden_size, 0.8, 0.6)
 
         # RWKV isn't context limited
         self.gguf_writer.add_context_length(1048576)
