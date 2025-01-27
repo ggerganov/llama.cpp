@@ -46,7 +46,7 @@ def get_tensor_name(name: str) -> str:
         if "linear_1" in name:
             name = name.replace("linear_1", "0")
         if "linear_2" in name:
-            name = name.replace("linear_2", "1")
+            name = name.replace("linear_2", "2")
         return name
 
     if "projection" in name:
