@@ -3555,6 +3555,84 @@ class Rwkv7Model(Rwkv6Model):
             yield (new_name, data_torch)
 
 
+@Model.register("RwkvHybridForCausalLM")
+class ARwkv7Model(Model):
+    model_arch = gguf.MODEL_ARCH.ARWKV7
+
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        hidden_size = self.hparams["hidden_size"]
+        head_size = self.hparams["head_size"]
+        rms_norm_eps = self.hparams["rms_norm_eps"]
+        intermediate_size = self.hparams["intermediate_size"]
+        wkv_has_gate = self.hparams["wkv_has_gate"]
+        assert self.hparams["wkv_version"] == 7
+
+        # ICLR: In-Context-Learning-Rate
+        lora_rank_decay = 64
+        lora_rank_iclr = 64
+        lora_rank_value_residual_mix = 32
+        lora_rank_gate = 128 if wkv_has_gate else 0
+
+        # RWKV isn't context limited
+        self.gguf_writer.add_context_length(1048576)
+        self.gguf_writer.add_embedding_length(hidden_size)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
+        self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_decay_lora_rank(lora_rank_decay)
+        self.gguf_writer.add_iclr_lora_rank(lora_rank_iclr)
+        self.gguf_writer.add_value_residual_mix_lora_rank(lora_rank_value_residual_mix)
+        self.gguf_writer.add_gate_lora_rank(lora_rank_gate)
+        self.gguf_writer.add_feed_forward_length(intermediate_size)
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_token_shift_count(1)
+
+        # required by llama.cpp, unused
+        self.gguf_writer.add_head_count(0)
+
+    lerp_weights: dict[int, dict[str, Tensor]] = {}
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        if bid is not None and "self_attn.time_mixer.x_" in name:
+            try:
+                self.lerp_weights[bid][name] = data_torch
+            except KeyError:
+                self.lerp_weights[bid] = {name: data_torch}
+            if all(f"model.layers.{bid}.self_attn.time_mixer.x_{i}" in self.lerp_weights[bid].keys() for i in ["r", "w", "k", "v", "a", "g"]):
+                new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
+                data = torch.stack([self.lerp_weights[bid][f"model.layers.{bid}.self_attn.time_mixer.x_{i}"].squeeze(0) for i in ["r", "w", "k", "v", "a", "g"]], dim=0)
+                yield (new_name, data)
+            return
+        else:
+            data_torch = data_torch.squeeze()
+            new_name = self.map_tensor_name(name)
+
+            if not (new_name.endswith(".weight") or new_name.endswith(".bias")):
+                new_name += ".weight"
+
+            if any(
+                new_name.endswith(t) for t in [
+                    "time_mix_w1.weight", "time_mix_w2.weight",
+                    "time_mix_a1.weight", "time_mix_a2.weight",
+                    "time_mix_v1.weight", "time_mix_v2.weight",
+                    "time_mix_g1.weight", "time_mix_g2.weight",
+                ]
+            ):
+                data_torch = data_torch.transpose(0, 1)
+
+            if 'r_k' in new_name:
+                data_torch = data_torch.flatten()
+
+            yield (new_name, data_torch)
+
+
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")
 class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
