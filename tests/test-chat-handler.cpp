@@ -353,6 +353,10 @@ static std::string get_message_prompt_delta(const common_chat_template & tmpl, c
     throw std::runtime_error("Full message does not start with prefix");
   }
 
+  if (full == prefix) {
+    throw std::runtime_error("Full message is the same as the prefix");
+  }
+
   auto delta = full.substr(prefix.size());
 
   // Strip end tokens
@@ -398,7 +402,7 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
 
     auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {
       {"role", "assistant"},
-      {"content", ""},
+      {"content", {}},
       {"tool_calls", tool_calls}
     }, tools);
     if (!match_string(content_less_delta, grammar.get())) {
@@ -490,7 +494,7 @@ static void test_grammars() {
   }
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja"), "<s>", "</s>");
-    test_template(tmpl, {}, tool_call_message, tools);
+    test_template(tmpl, { "<｜end▁of▁sentence｜>" }, tool_call_message, tools);
   }
 }
 
