@@ -325,6 +325,7 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("hf_repo,hf_file,template_override", [
     ("lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     ("bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
