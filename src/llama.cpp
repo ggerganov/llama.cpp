@@ -6544,9 +6544,6 @@ struct llm_build_context {
                 struct ggml_tensor * q_pe_perm = ggml_permute(ctx0, q_pe, 0, 3, 2, 1);
                 cb(q_pe_perm, "q_pe_perm", il);
 
-                struct ggml_tensor * kr_cache_perm = ggml_permute(ctx0, kr_cache, 0, 2, 3, 1);
-                cb(kr_cache_perm, "kr_cache_perm", il);
-
                 struct ggml_tensor * kq_pe = ggml_mul_mat(ctx0, kr_cache, q_pe);
                 cb(kq_pe, "kq_pe", il);
 
