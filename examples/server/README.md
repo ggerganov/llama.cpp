@@ -1118,7 +1118,7 @@ curl http://localhost:8080/v1/chat/completions \
       {
         "type": "function",
         "function": {
-          "name": "ipython",
+          "name": "python",
           "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
           "parameters": {
             "type": "object",
@@ -1155,7 +1155,7 @@ curl http://localhost:8080/v1/chat/completions \
           "content": null,
           "tool_calls": [
             {
-              "name": "ipython",
+              "name": "python",
               "arguments": "{\"code\":\" \\nprint(\\\"Hello, World!\\\")\"}"
             }
           ],

@@ -52,6 +52,7 @@ TEST_TARGETS = \
 	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
+	tests/test-chat-handler \
 	tests/test-chat-template \
 	tests/test-double-float \
 	tests/test-grammar-integration \
@@ -64,7 +65,6 @@ TEST_TARGETS = \
 	tests/test-quantize-perf \
 	tests/test-rope \
 	tests/test-sampling \
-	tests/test-tool-call \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
@@ -984,8 +984,8 @@ OBJ_COMMON = \
 	$(DIR_COMMON)/ngram-cache.o \
 	$(DIR_COMMON)/sampling.o \
 	$(DIR_COMMON)/speculative.o \
+	$(DIR_COMMON)/chat-handler.o \
 	$(DIR_COMMON)/build-info.o \
-	$(DIR_COMMON)/tool-call.o \
 	$(DIR_COMMON)/json-schema-to-grammar.o
 
 OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON)
@@ -1475,7 +1475,7 @@ tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-tool-call: tests/test-tool-call.cpp \
+tests/test-chat-handler: tests/test-chat-handler.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

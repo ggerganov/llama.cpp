@@ -20,7 +20,7 @@ namespace minja {
 class chat_template {
   public:
 
-//   private:
+  private:
     bool supports_tools_ = true;
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
@@ -147,7 +147,7 @@ class chat_template {
                     static const auto python_tool = json::parse(R"({
                         "type": "function",
                         "function": {
-                            "name": "ipython",
+                            "name": "python",
                             "description": "Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
                             "parameters": {
                                 "type": "object",
@@ -284,9 +284,6 @@ class chat_template {
         } else {
             actual_messages = messages;
         }
-        // if (adjust_inputs) {
-        //     fprintf(stderr, "Messages: %s\n", actual_messages.dump(2).c_str());
-        // }
 
         auto context = minja::Context::make(json({
             {"messages", actual_messages},
