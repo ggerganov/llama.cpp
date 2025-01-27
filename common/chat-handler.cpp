@@ -100,7 +100,7 @@ static common_chat_msg parse_json_tool_calls(const json & tools, const std::stri
         if (!parse_json(it, end, arguments)) {
             if (allow_raw_python && name == "python" && std::regex_match("", close_regex)) {
                 std::string src(it, end);
-                result.tool_calls.push_back({name, src, /* id= */ ""});        
+                result.tool_calls.push_back({name, src, /* id= */ ""});
                 break;
             }
             throw std::runtime_error("Failed to parse json tool call arguments");
@@ -373,7 +373,7 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
     fprintf(stderr, "[%s]\n", __func__);
     auto builtin_tools = json {"wolfram_alpha", "brave_search"};
     common_chat_data data;
-    
+
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         std::vector<std::string> tool_rules;
 
