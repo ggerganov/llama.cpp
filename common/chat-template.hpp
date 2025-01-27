@@ -208,7 +208,6 @@ class chat_template {
                                         arguments = json::parse(arguments.get<std::string>());
                                     } catch (const std::exception & ecvt) {
                                         fprintf(stderr, "Failed to parse arguments: %s\n", ecvt.what());
-                                        arguments = arguments;
                                     }
                                 }
                             }

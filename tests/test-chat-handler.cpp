@@ -298,26 +298,33 @@ const json tools = {special_function_tool, python_tool};
 //       json::array({special_function_call}));
 // }
 
-// static void test_tool_call_style(const std::string & template_file, common_tool_call_style expected) {
-//     const common_chat_template tmpl(read_file(template_file), "<s>", "</s>");
-//     auto tool_call_style = common_tool_call_style_detect(tmpl);
-//     std::cout << "# Testing tool call style of: " << template_file << std::endl << std::flush;
-//     assert_equals(expected, tool_call_style);
-// }
+static void test_format_detection() {
+    common_chat_params no_tools_params;
+    no_tools_params.messages = {{{"role", "user"}, {"content", "Hey"}}};
 
-// static void test_tool_call_style_detection() {
-//     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3_1);
-//     test_tool_call_style("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", COMMON_TOOL_CALL_STYLE_FUNCTIONARY_V3_LLAMA_3);
-//     test_tool_call_style("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", COMMON_TOOL_CALL_STYLE_FIRE_FUNCTION_V2);
-//     test_tool_call_style("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_LLAMA_3_1);
-//     test_tool_call_style("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_LLAMA_3_2);
-//     test_tool_call_style("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
-//     test_tool_call_style("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
-//     test_tool_call_style("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja", COMMON_TOOL_CALL_STYLE_HERMES_2_PRO);
-//     test_tool_call_style("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja", COMMON_TOOL_CALL_STYLE_COMMAND_R_PLUS);
-//     test_tool_call_style("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", COMMON_TOOL_CALL_STYLE_MISTRAL_NEMO);
-//     test_tool_call_style("tests/chat/templates/google-gemma-7b-it.jinja", COMMON_TOOL_CALL_STYLE_GENERIC);
-// }
+    common_chat_params tools_params = no_tools_params;
+    tools_params.tools = json::array();
+
+    auto describe = [](const std::string & template_file, const common_chat_params & params) {
+      const common_chat_template tmpl(read_file(template_file), "<s>", "</s>");
+      auto data = common_chat_init(tmpl, params);
+      return data.format;
+    };
+
+    assert_equals(std::string("functionary v3.1 llama 3.1 tool calls"), describe("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja", tools_params));
+    assert_equals(std::string("functionary v3.2 tool calls"),           describe("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja", tools_params));
+    assert_equals(std::string("firefunction v2 tool calls"),            describe("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja", tools_params));
+    assert_equals(std::string("llama 3.1 tool calls"),                  describe("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja", tools_params));
+    assert_equals(std::string("llama 3.2 tool calls"),                  describe("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja", tools_params));
+    assert_equals(std::string("hermes 2 pro tool calls"),               describe("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja", tools_params));
+    assert_equals(std::string("hermes 2 pro tool calls"),               describe("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja", tools_params));
+    assert_equals(std::string("hermes 2 pro tool calls"),               describe("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja", tools_params));
+    assert_equals(std::string("mistral nemo tool calls"),               describe("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja", tools_params));
+    assert_equals(std::string("deepseek r1 tool calls"),                describe("tests/chat/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja", tools_params));
+    assert_equals(std::string("generic tool calls"),                    describe("tests/chat/templates/google-gemma-7b-it.jinja", tools_params));
+    assert_equals(std::string("content-only"),                          describe("tests/chat/templates/google-gemma-7b-it.jinja", no_tools_params));
+    // assert_equals(std::string("command_r_plus tool calls"),             describe("tests/chat/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja_, tools_params));
+}
 
 static std::string get_message_prompt_delta(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
   fprintf(stderr, "Template source: %s\n", tmpl.source().c_str());
@@ -498,7 +505,7 @@ static void test_grammars() {
 }
 
 int main() {
-    // test_tool_call_style_detection();
+    test_format_detection();
     // test_parsing();
     test_grammars();
 

@@ -41,6 +41,7 @@ struct common_chat_data {
     std::vector<common_grammar_trigger> grammar_triggers;
     std::vector<std::string> additional_stops;
     std::unique_ptr<class common_chat_parser> parser;
+    std::string format; // For debugging and testing.
 };
 
 struct common_chat_data common_chat_init(const common_chat_template & tmpl, const struct common_chat_params & params);
