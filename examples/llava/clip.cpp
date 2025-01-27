@@ -871,18 +871,26 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // post-layernorm
+    // TODO - correctly handle last layer with multiple vision feature layers
     if (ctx->has_post_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
         ggml_set_name(embeddings, "post_ln");
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.post_ln_w), model.post_ln_b);
     }
-    LOG_INF("Layer loop over - trying to llava project...\n");
-    // HACK - super hardcoded tensor concat to make sure things are working. Rewrite me
-    struct ggml_tensor * embeddingStack1 = ggml_concat(ctx0, embeddingStack.at(0), embeddingStack.at(1), 0);
-    struct ggml_tensor * embeddingStack2 = ggml_concat(ctx0, embeddingStack.at(2), embeddingStack.at(3), 0);
-    embeddings = ggml_concat(ctx0, embeddingStack1, embeddingStack2, 0);
 
+    LOG_INF("Stacking multiple vision feature layers\n");
+    // Clobber the output embeddings with the saved items in the embedding stack vector
+    if(embeddingStack.size() > 0) {
+        embeddings = embeddingStack.at(0);
+        for(int i=1; i < embeddingStack.size(); i++) {
+            embeddings = ggml_concat(ctx0, embeddings, embeddingStack.at(i), 0);
+        }
+
+    }
+
+
+    LOG_INF("Layer loop over - trying to llava project...\n");
     // llava projector
     if (ctx->has_llava_projector) {
         embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
