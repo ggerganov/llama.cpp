@@ -2190,7 +2190,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         // Accumulate results with scaling
         float scale0 = GGML_FP16_TO_FP32(x0->d) * GGML_FP16_TO_FP32(y0->d);
         float scale1 = GGML_FP16_TO_FP32(x1->d) * GGML_FP16_TO_FP32(y1->d);
-        
+
         sumv = wasm_f32x4_add(sumv, wasm_f32x4_mul(wasm_f32x4_convert_i32x4(dp0), wasm_f32x4_splat(scale0)));
         sumv = wasm_f32x4_add(sumv, wasm_f32x4_mul(wasm_f32x4_convert_i32x4(dp1), wasm_f32x4_splat(scale1)));
     }
@@ -4685,19 +4685,19 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         {
             v128_t sc_vec = wasm_v128_load(sc);
             v128_t sc_upper = wasm_u8x16_shr(sc_vec, 4);
-            
+
             v128_t sc_low = wasm_u16x8_extend_low_u8x16(sc_upper);
             v128_t sc_high = wasm_u16x8_extend_high_u8x16(sc_upper);
-            
+
             v128_t bsums1 = wasm_v128_load(&y[i].bsums[0]);
             v128_t bsums2 = wasm_v128_load(&y[i].bsums[8]);
-            
+
             summs_vec = wasm_i32x4_add(
                 wasm_i32x4_add(wasm_i32x4_dot_i16x8(sc_low, bsums1),
                                wasm_i32x4_dot_i16x8(sc_high, bsums2)),
                 summs_vec
             );
-            
+
             summs_vec = wasm_i32x4_add(summs_vec, wasm_i32x4_shuffle(summs_vec, summs_vec, 2, 3, 0, 1));
             summs_vec = wasm_i32x4_add(summs_vec, wasm_i32x4_shuffle(summs_vec, summs_vec, 1, 0, 3, 2));
         }
@@ -4707,11 +4707,11 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         int32_t isum = 0;
         const uint8_t * sc_ptr = sc;
         const int k_iters = QK_K/128;
-        
+
         for (int k = 0; k < k_iters; ++k) {
             v128_t isum_vec = wasm_i32x4_splat(0);
             int shift = 0;
-            
+
             for (int j = 0; j < 4; ++j) {
                 const int d0 = (sc_ptr[0] & 0xF);
                 const int d1 = (sc_ptr[1] & 0xF);
@@ -4722,7 +4722,7 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
                 v128_t q8_0 = wasm_v128_load(q8);
                 v128_t q2_shift_0 = wasm_u8x16_shr(q2_0, shift);
                 v128_t q2_bits_0 = wasm_v128_and(q2_shift_0, wasm_i8x16_splat(0x03));
-                
+
                 // Process next 16 elements
                 v128_t q2_1 = wasm_v128_load(q2 + 16);
                 v128_t q8_1 = wasm_v128_load(q8 + 16);
@@ -4752,7 +4752,7 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
                     wasm_i32x4_mul(wasm_i32x4_add(p0, p1), wasm_i32x4_splat(d0)),
                     wasm_i32x4_mul(wasm_i32x4_add(p2, p3), wasm_i32x4_splat(d1))
                 );
-                
+
                 isum_vec = wasm_i32x4_add(isum_vec, scaled);
                 q8 += 32;
                 shift += 2;
@@ -5464,7 +5464,7 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         const uint8_t * restrict q3 = x[i].qs;
         const uint8_t * restrict hm = x[i].hmask;
         const int8_t  * restrict q8 = y[i].qs;
-        
+
         // Process blocks with SIMD
         int8_t * a = aux8;
         uint8_t m = 1;
@@ -5475,11 +5475,11 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
                     v128_t v_q3 = wasm_v128_load(q3 + l);
                     v128_t v_shift = wasm_i8x16_shr(v_q3, shift);
                     v128_t v_low2 = wasm_v128_and(v_shift, wasm_i8x16_splat(0x03));
-                    
+
                     v128_t v_hm = wasm_v128_load(hm + l);
                     v128_t v_mask = wasm_v128_and(v_hm, v_m);
                     v_mask = wasm_i8x16_ne(v_mask, wasm_i8x16_splat(0));
-                    
+
                     v_low2 = wasm_i8x16_sub(v_low2, wasm_v128_and(wasm_i8x16_splat(4), wasm_v128_not(v_mask)));
                     wasm_v128_store(a + l, v_low2);
                 }
@@ -5509,13 +5509,13 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             for (int k = 0; k < 2; ++k) {
                 const v128_t v_q8 = wasm_i16x8_load8x8(q8);
                 const v128_t v_a = wasm_i16x8_load8x8(a);
-                
+
                 v128_t v_prod = wasm_i16x8_mul(v_q8, v_a);
                 v_prod = wasm_i16x8_mul(v_prod, v_scale);
-                
+
                 v_acc0 = wasm_i32x4_add(v_acc0, wasm_i32x4_extend_low_i16x8(v_prod));
                 v_acc1 = wasm_i32x4_add(v_acc1, wasm_i32x4_extend_high_i16x8(v_prod));
-                
+
                 q8 += 8;
                 a += 8;
             }
@@ -5528,7 +5528,7 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             wasm_f32x4_mul(wasm_f32x4_convert_i32x4(v_acc0), v_d),
             wasm_f32x4_mul(wasm_f32x4_convert_i32x4(v_acc1), v_d)
         );
-        
+
         // Accumulate into sums vector
         wasm_v128_store(sums, wasm_f32x4_add(wasm_v128_load(sums), v_sum));
     }
