@@ -129,6 +129,7 @@ class chat_template {
     bool supports_tools() const { return supports_tools_; }
     bool supports_tool_calls() const { return supports_tool_calls_; }
     bool supports_parallel_tool_calls() const { return supports_parallel_tool_calls_; }
+    bool requires_object_arguments() const { return requires_object_arguments_; }
 
     std::string apply(
         const nlohmann::ordered_json & messages,
@@ -201,12 +202,14 @@ class chat_template {
                         for (auto & tool_call : message.at("tool_calls")) {
                             if (tool_call["type"] == "function") {
                                 auto & function = tool_call.at("function");
-                                std::string arguments = function.at("arguments");
-                                try {
-                                    function["arguments"] = json::parse(arguments);
-                                } catch (const std::exception & ecvt) {
-                                    fprintf(stderr, "Failed to parse arguments: %s\n", ecvt.what());
-                                    function["arguments"] = arguments;
+                                auto & arguments = function.at("arguments");
+                                if (arguments.is_string()) {
+                                    try {
+                                        arguments = json::parse(arguments.get<std::string>());
+                                    } catch (const std::exception & ecvt) {
+                                        fprintf(stderr, "Failed to parse arguments: %s\n", ecvt.what());
+                                        arguments = arguments;
+                                    }
                                 }
                             }
                         }

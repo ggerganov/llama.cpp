@@ -72,32 +72,17 @@ static std::string dump(const json & j) {
   return minja::Value(j).dump(-1, /* to_json= */ true);
 }
 
-static void assert_msg_equals(const common_chat_msg & result, const std::string & expected_content, const json & expected_tool_calls) {
-    assert_equals(expected_content, result.content);
-    auto tool_calls = json::array();
-    for (const auto & tc : result.tool_calls) {
-      auto arguments = tc.arguments;
-      try {
-        arguments = dump(json::parse(arguments));
-      } catch (const std::exception & e) {
-        // ignore
-      }
-      auto tool_call = json {
-        {"type", "function"},
-        {"function", {
-          {"arguments", arguments},
-          {"name", tc.name},
-        }},
-      };
-      if (!tc.id.empty()) {
-        tool_call["id"] = tc.id;
-      }
-      tool_calls.push_back(tool_call);
+static void assert_msg_equals(const common_chat_msg & expected, const common_chat_msg & actual) {
+    assert_equals(expected.role, actual.role);
+    assert_equals(expected.content, actual.content);
+    assert_equals(expected.tool_calls.size(), actual.tool_calls.size());
+    for (size_t i = 0; i < expected.tool_calls.size(); i++) {
+        const auto & expected_tool_call = expected.tool_calls[i];
+        const auto & actual_tool_call = actual.tool_calls[i];
+        assert_equals(expected_tool_call.name, actual_tool_call.name);
+        assert_equals(dump(json::parse(expected_tool_call.arguments)), dump(json::parse(actual_tool_call.arguments)));
+        assert_equals(expected_tool_call.id, actual_tool_call.id);
     }
-    // Reparse / dump w/ non-ordered JSON variant.
-    auto expected = nlohmann::json::parse(expected_tool_calls.dump()).dump();
-    auto actual = nlohmann::json::parse(tool_calls.dump()).dump();
-    assert_equals(expected, actual);
 }
 
 const auto special_function_tool = json::parse(R"({
@@ -373,7 +358,19 @@ static std::string get_message_prompt_delta(const common_chat_template & tmpl, c
 
 static void test_template(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & tool_calling_message, const json & tools, bool skip_grammar_test = false) {
   // auto tool_call_style = common_tool_call_style_detect(tmpl);
-  auto & tool_calls = tool_calling_message.at("tool_calls");
+  common_chat_msg expected_msg {
+    "assistant",
+    "",
+    {},
+  };
+  for (const auto & tc : tool_calling_message.at("tool_calls")) {
+    const auto & arguments = tc.at("function").at("arguments");
+    expected_msg.tool_calls.push_back({
+      tc.at("function").at("name").get<std::string>(),
+      arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
+      tc.contains("id") ? tc.at("id").get<std::string>() : "",
+    });
+  }
 
   // Format the message: apply the template to 1 user message w/ add_generation_prompt=true, then w/ the extra message w/ add_generation_prompt=false,
   // get the diff and try and parse it w/ the grammar.
@@ -398,12 +395,12 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
     std::cout << "Full delta:\n```\n" << full_delta << "\n```" << std::endl;
 
     const auto msg = chat_data.parser->parse_final(full_delta);
-    assert_msg_equals(msg, "", tool_calls);
+    assert_msg_equals(expected_msg, msg);
 
     auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {
       {"role", "assistant"},
       {"content", {}},
-      {"tool_calls", tool_calls}
+      {"tool_calls", tool_calling_message.at("tool_calls")}
     }, tools);
     if (!match_string(content_less_delta, grammar.get())) {
       throw std::runtime_error("Failed to match content-less delta against grammar:\n\nContent-less delta: " + content_less_delta + "\n\nGrammar: " + chat_data.grammar);
@@ -433,7 +430,9 @@ static void test_grammars() {
       {"type", "function"},
       {"function", {
         {"name", "python"},
-        {"arguments", "print('hey')"}
+        {"arguments", {
+          {"code", "print('hey')"},
+        }},
       }},
     }}}
   };
@@ -442,12 +441,12 @@ static void test_grammars() {
     const common_chat_template tmpl(read_file("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja"), "<s>", "</s>");
     test_template(tmpl, { "</s>" }, tool_call_message_with_id, tools, /* skip_grammar_test= */ true);
   }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>");
-  //   // assert_equals(tmpl.requires_object_arguments_, true);
-  //   test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
-  //   test_template(tmpl, { "<|im_end|>" }, python_tool_call_message, tools);
-  // }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>");
+    // assert_equals(tmpl.requires_object_arguments_, true);
+    test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
+    test_template(tmpl, { "<|im_end|>" }, python_tool_call_message, tools);
+  }
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");
     test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
@@ -456,22 +455,22 @@ static void test_grammars() {
     const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>");
     test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
   }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
-  // }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, python_tool_call_message, tools);
-  // }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
+  }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, python_tool_call_message, tools);
+  }
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
     test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
   }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.3-70B-Instruct.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
-  // }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.3-70B-Instruct.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
+  }
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja"), "<s>", "</s>");
     test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);

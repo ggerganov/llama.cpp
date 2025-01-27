@@ -363,6 +363,7 @@ static common_chat_data common_chat_init_mistral_nemo_tool_call(const common_cha
 
 static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const common_chat_template & tmpl, const struct common_chat_params & params) {
     fprintf(stderr, "[%s]\n", __func__);
+    // TODO: get from request body.
     auto builtin_tools = json {"wolfram_alpha", "brave_search"};
     common_chat_data data;
 
@@ -377,10 +378,16 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
             tool_rules.push_back(
                 builder.add_rule(
                     name + "-call",
-                    "\"<|python_tag|>\" \"{\" ( \"\\\"type\\\": \\\"function\\\", \" | space ) \"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                    "\"{\" "
+                    // " ( \"\\\"type\\\": \\\"function\\\", \" | space ) "
+                    "\"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                         builder.add_schema(name + "-args", parameters) +
                     " \"}\""));
+            if (params.tool_choice != "required") {
+                data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
+            }
         });
+        tool_rules.push_back(builder.add_rule("builtin-tool-call", "\"<|python_tag|>\" .*"));
         if (params.tool_choice != "required") {
             data.grammar_triggers.push_back({"<|python_tag|>", /* .at_start = */ false});
         }
@@ -391,11 +398,27 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
         {"builtin_tools", builtin_tools},
     });
     data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) -> common_chat_msg {
-        static std::regex function_regex("<\\|python_tag\\|>\\{(?:\"type\": \"function\", |[\\s\\n\\r]*)\"name\": \"([^\"]+)\", \"parameters\": ");
+        static std::regex function_regex("\\{(?:\"type\": \"function\", |[\\s\\n\\r]*)\"name\": \"([^\"]+)\", \"parameters\": ");
         static std::regex close_regex("\\}");
+        static std::regex builtin_call_regex("<\\|python_tag\\|>([^.(]+)\((.*)\)");
+
+        std::smatch match;
+        if (std::regex_match(input, match, builtin_call_regex)) {
+            auto arguments = json::parse("[" + match[2].str() + "]");
+            return {
+                /* .role = */ "assistant",
+                /* .content = */ match.prefix().str(),
+                /* .tool_calls = */ {
+                    {
+                        /* .name = */ match[1],
+                        /* .arguments = */ arguments.dump(),
+                        /* .id = */ "",
+                    },
+                },
+            };
+        }
         return parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
     });
-    fprintf(stderr, "Grammar: %s\n", data.grammar.c_str());
     return data;
 }
 
@@ -435,7 +458,6 @@ static common_chat_data common_chat_init_llama_3_2_tool_calls(const common_chat_
         auto res = parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
         return res;
     });
-    fprintf(stderr, "Grammar: %s\n", data.grammar.c_str());
     return data;
 }
 
@@ -590,9 +612,8 @@ static common_chat_data common_chat_init_functionary_v3_llama_3_1_tool_call(cons
                 } else if (type != "string") {
                     throw std::runtime_error("Invalid type in python tool: " + type.dump());
                 }
-            } else {
-                tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
             }
+            tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
         });
         if (has_raw_python) {
             tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
