@@ -1198,6 +1198,7 @@ extern "C" {
             const struct llama_vocab * vocab,
                           const char * grammar_str,
                           const char * grammar_root,
+                                  bool lazy,
                          const char ** trigger_words,
                                 size_t num_trigger_words,
                    const llama_token * trigger_tokens,

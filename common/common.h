@@ -160,8 +160,9 @@ struct common_params_sampling {
     };
 
     std::string                         grammar; // optional BNF-like grammar to constrain sampling
-    std::vector<common_grammar_trigger> grammar_trigger_words;  // optional trigger words to enable grammar
-    std::vector<llama_token>            grammar_trigger_tokens; // optional trigger tokens to enable grammar
+    bool                                grammar_lazy;
+    std::vector<common_grammar_trigger> grammar_trigger_words;  // optional trigger words to trigger lazy grammar
+    std::vector<llama_token>            grammar_trigger_tokens; // optional trigger tokens to trigger lazy grammar and print trigger special tokens.
 
     std::vector<llama_logit_bias> logit_bias; // logit biases to apply
 

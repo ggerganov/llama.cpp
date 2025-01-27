@@ -3816,6 +3816,7 @@ int main(int argc, char ** argv) {
                 task.params.oaicompat                 = oaicompat;
                 task.params.oaicompat_cmpl_id         = completion_id;
                 task.params.sampling.grammar          = chat_data.grammar;
+                task.params.sampling.grammar_lazy     = chat_data.grammar_lazy;
                 for (const auto & trigger : chat_data.grammar_triggers) {
                     auto ids = common_tokenize(ctx_server.vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
@@ -3829,6 +3830,9 @@ int main(int argc, char ** argv) {
                 task.params.antiprompt                = chat_data.additional_stops;
                 if (chat_data.parser) {
                     task.params.chat_parser           = i == tokenized_prompts.size() ? std::move(chat_data.parser) : std::move(chat_data.parser->clone());
+                }
+                if (task.params.sampling.grammar_lazy) {
+                    GGML_ASSERT(task.params.sampling.grammar_trigger_tokens.size() > 0 || task.params.sampling.grammar_trigger_words.size() > 0);
                 }
                 // oaicompat_model is already populated by params_from_json_cmpl
 

@@ -42,6 +42,7 @@ struct common_chat_data {
     std::vector<std::string> additional_stops;
     std::unique_ptr<class common_chat_parser> parser;
     std::string format; // For debugging and testing.
+    bool grammar_lazy = false;
 };
 
 struct common_chat_data common_chat_init(const common_chat_template & tmpl, const struct common_chat_params & params);

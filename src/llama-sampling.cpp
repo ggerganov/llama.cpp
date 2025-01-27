@@ -1444,7 +1444,7 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
         trigger_words.push_back(word.c_str());
     }
     auto * grammar_new = llama_grammar_init_impl(ctx->grammar->vocab, ctx->grammar_str.c_str(), ctx->grammar_root.c_str(),
-                                                 trigger_words.data(), trigger_words.size(),
+                                                 ctx->grammar->lazy, trigger_words.data(), trigger_words.size(),
                                                  ctx->grammar->trigger_tokens.data(), ctx->grammar->trigger_tokens.size());
 
     llama_grammar_free_impl(ctx->grammar);
@@ -1454,7 +1454,7 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
 static struct llama_sampler * llama_sampler_grammar_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_grammar *) smpl->ctx;
 
-    auto * result = llama_sampler_init_grammar(ctx->vocab, nullptr, nullptr, nullptr, 0, nullptr, 0);
+    auto * result = llama_sampler_init_grammar(ctx->vocab, nullptr, nullptr, false, nullptr, 0, nullptr, 0);
 
     // copy the state
     {
@@ -1495,6 +1495,7 @@ struct llama_sampler * llama_sampler_init_grammar(
         const struct llama_vocab * vocab,
                       const char * grammar_str,
                       const char * grammar_root,
+                              bool lazy,
                      const char ** trigger_words,
                             size_t num_trigger_words,
                const llama_token * trigger_tokens,
@@ -1506,7 +1507,7 @@ struct llama_sampler * llama_sampler_init_grammar(
             /* .vocab        = */ vocab,
             /* .grammar_str  = */ grammar_str,
             /* .grammar_root = */ grammar_root,
-            /* .grammar      = */ llama_grammar_init_impl(vocab, grammar_str, grammar_root, trigger_words, num_trigger_words, trigger_tokens, num_trigger_tokens),
+            /* .grammar      = */ llama_grammar_init_impl(vocab, grammar_str, grammar_root, lazy, trigger_words, num_trigger_words, trigger_tokens, num_trigger_tokens),
         };
     } else {
         *ctx = {

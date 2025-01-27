@@ -39,7 +39,7 @@ static std::string read_file(const std::string &path) {
 }
 
 static std::unique_ptr<llama_grammar> build_grammar(const std::string & grammar_str) {
-    return std::unique_ptr<llama_grammar>(llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root", nullptr, 0, nullptr, 0));
+    return std::unique_ptr<llama_grammar>(llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root", false, nullptr, 0, nullptr, 0));
 }
 
 // TODO: extract to common helper (copied from test-grammar-integration.cpp)
