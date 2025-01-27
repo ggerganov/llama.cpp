@@ -1116,6 +1116,10 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
 void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_data_array * cur_p) {
     GGML_ASSERT(grammar.vocab != nullptr);
 
+    if (grammar.awaiting_trigger) {
+        return;
+    }
+
     bool allow_eog = false;
     for (const auto & stack : grammar.stacks) {
         if (stack.empty()) {

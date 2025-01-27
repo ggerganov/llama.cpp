@@ -89,7 +89,8 @@ static common_chat_msg parse_json_tool_calls(const json & tools, const std::stri
         if (check_names && std::find(tool_names.begin(), tool_names.end(), name) == tool_names.end()) {
             fprintf(stderr, "Skipping unknown tool name: %s (known tools: %s)\n", name.c_str(), string_join(tool_names, ", ").c_str());
             result.content += std::string(it, rit->suffix().first);
-            break;
+            it = rit->suffix().first;
+            continue;
         }
 
         result.content += std::string(it, rit->prefix().second);
