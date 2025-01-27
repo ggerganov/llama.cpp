@@ -22,6 +22,7 @@ class chat_template {
 
   private:
     bool supports_tools_ = true;
+    bool supports_tool_calls_ = true;
     // Meta-Llama-3.1-8B-Instruct's template expects arguments to be an object.
     // Most other templates (and OpenAI's API) expect the arguments object to be stringified.
     bool requires_object_arguments_ = false;
@@ -59,7 +60,13 @@ class chat_template {
             /* .lstrip_blocks = */ true,
             /* .keep_trailing_newline = */ false,
         });
-        supports_tools_ = source.find("tools") != std::string::npos;
+        supports_tool_calls_ = source.find("tool_calls") != std::string::npos;
+        supports_tools_ =
+            try_raw_render({
+                {{"role", "user"}, {"content", "Hey"}},
+            }, {
+                {{"name", "some_tool"}, {"parameters", {{"type", "string"}}}},
+            }, false).find("some_tool") != std::string::npos;
 
         requires_object_arguments_ =
             try_raw_render({
@@ -120,6 +127,7 @@ class chat_template {
     const std::string & bos_token() const { return bos_token_; }
     const std::string & eos_token() const { return eos_token_; }
     bool supports_tools() const { return supports_tools_; }
+    bool supports_tool_calls() const { return supports_tool_calls_; }
     bool supports_parallel_tool_calls() const { return supports_parallel_tool_calls_; }
 
     std::string apply(
@@ -152,7 +160,7 @@ class chat_template {
             actual_tools = tools;
         }
 
-        if (adjust_inputs && (requires_object_arguments_ || !supports_system_role_ || !supports_tools_ || requires_typed_content_)) {
+        if (adjust_inputs && (requires_object_arguments_ || !supports_system_role_ || !supports_tools_ || !supports_tool_calls_ || requires_typed_content_)) {
             actual_messages = json::array();
 
             auto add_message = [&](const json & msg) {
@@ -179,7 +187,9 @@ class chat_template {
                     pending_system.clear();
                 }
             };
-            for (const auto & message_ : messages) {
+            auto needs_tools_in_system = !tools.is_null() && tools.size() > 0 && !supports_tools_;
+
+            for (const auto & message_ : needs_tools_in_system ? add_system(messages, "Available tools: " + tools.dump(2)) : messages) {
                 auto message = message_;
                 if (!message.contains("role") || !message.contains("content")) {
                     throw std::runtime_error("message must have 'role' and 'content' fields: " + message.dump());
@@ -187,7 +197,7 @@ class chat_template {
                 std::string role = message.at("role");
 
                 if (message.contains("tool_calls")) {
-                    if (requires_object_arguments_ || !supports_tools_) {
+                    if (requires_object_arguments_ || !supports_tool_calls_) {
                         for (auto & tool_call : message.at("tool_calls")) {
                             if (tool_call["type"] == "function") {
                                 auto & function = tool_call.at("function");
@@ -201,7 +211,7 @@ class chat_template {
                             }
                         }
                     }
-                    if (!supports_tools_) {
+                    if (!supports_tool_calls_) {
                         auto content = message.at("content");
                         auto tool_calls = json::array();
                         for (const auto & tool_call : message.at("tool_calls")) {
@@ -262,7 +272,9 @@ class chat_template {
                 }
                 add_message(message);
             }
-            flush_sys();
+            if (!supports_system_role_) {
+                flush_sys();
+            }
         } else {
             actual_messages = messages;
         }
@@ -286,6 +298,24 @@ class chat_template {
         }
 
         return template_root_->render(context);
+    }
+
+    static nlohmann::ordered_json add_system(const nlohmann::ordered_json & messages, const std::string & system_prompt) {
+        json messages_with_system = messages;
+
+        if (messages_with_system.size() > 0 && messages_with_system[0].at("role") == "system") {
+            std::string existing_system = messages_with_system.at(0).at("content");
+            messages_with_system[0] = json {
+                {"role", "system"},
+                {"content", existing_system + "\n" + system_prompt},
+            };
+        } else {
+            messages_with_system.insert(messages_with_system.begin(), json {
+                {"role", "system"},
+                {"content", system_prompt},
+            });
+        }
+        return messages_with_system;
     }
 };
 

@@ -134,10 +134,7 @@ const auto python_tool = json::parse(R"({
     }
   }
 })");
-const auto code_interpreter_tool = json::parse(R"({
-  "type": "code_interpreter"
-})");
-const json tools = {special_function_tool, code_interpreter_tool};
+const json tools = {special_function_tool, python_tool};
 
 // static void test_parsing() {
 //     json request = {
@@ -348,6 +345,7 @@ static std::string get_message_prompt_delta(const common_chat_template & tmpl, c
   params.tools = tools;
   std::string prefix = common_chat_init(tmpl, params).prompt;
   params.messages.push_back(delta_message);
+  params.add_generation_prompt = false;
   std::string full = common_chat_init(tmpl, params).prompt;
 
   // Check full starts with prefix
@@ -412,7 +410,7 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
 static void test_grammars() {
   auto tool_call_message = json {
     {"role", "assistant"},
-    {"content", ""},
+    {"content", {}},
     {"tool_calls", json {{
       {"type", "function"},
       {"function", {
@@ -426,7 +424,7 @@ static void test_grammars() {
 
   auto python_tool_call_message = json {
     {"role", "assistant"},
-    {"content", ""},
+    {"content", {}},
     {"tool_calls", json {{
       {"type", "function"},
       {"function", {
@@ -442,18 +440,18 @@ static void test_grammars() {
   }
   // {
   //   const common_chat_template tmpl(read_file("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>");
-  //   assert_equals(tmpl.requires_object_arguments_, true);
+  //   // assert_equals(tmpl.requires_object_arguments_, true);
   //   test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
   //   test_template(tmpl, { "<|im_end|>" }, python_tool_call_message, tools);
   // }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
-  // }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
-  // }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
+  }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|im_end|>" }, tool_call_message, tools);
+  }
   // {
   //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
   //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
@@ -462,10 +460,10 @@ static void test_grammars() {
   //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
   //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, python_tool_call_message, tools);
   // }
-  // {
-  //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
-  //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
-  // }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
+    test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
+  }
   // {
   //   const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.3-70B-Instruct.jinja"), "<s>", "</s>");
   //   test_template(tmpl, { "<|eom_id|>", "<|eot_id|>" }, tool_call_message, tools);
@@ -489,6 +487,10 @@ static void test_grammars() {
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/microsoft-Phi-3.5-mini-instruct.jinja"), "<s>", "</s>");
     test_template(tmpl, { "<|end|>" }, tool_call_message_with_id, tools);
+  }
+  {
+    const common_chat_template tmpl(read_file("tests/chat/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja"), "<s>", "</s>");
+    test_template(tmpl, {}, tool_call_message, tools);
   }
 }
 

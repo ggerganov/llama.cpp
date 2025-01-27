@@ -23,6 +23,7 @@ struct common_chat_params {
     bool parallel_tool_calls;
     bool stream;
     std::string grammar;
+    bool add_generation_prompt = true;
 };
 
 class common_chat_parser {
