@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
@@ -124,10 +125,20 @@ static ggml_cuda_device_info ggml_cuda_init() {
     // Workaround for a rocBLAS bug when using multiple graphics cards:
     // https://github.com/ROCmSoftwarePlatform/rocBLAS/issues/1346
     {
-        char version_string[64];
-        version_string[0] = '\0';
-        const rocblas_status status = rocblas_get_version_string(version_string, sizeof(version_string));
-        if (status != rocblas_status_success || version_string[0] < '4') {
+        int major_version = 0;
+        size_t version_length = 0;
+        if (rocblas_get_version_string_size(&version_length) == rocblas_status_success) {
+            std::string version(version_length, '\0');
+            if (rocblas_get_version_string(version.data(), version.size()) == rocblas_status_success) {
+                version.resize(::strlen(version.c_str()));
+                int parsed_value = 0;
+                if (std::from_chars(version.c_str(), version.c_str() + version.length(), parsed_value).ec == std::errc()) {
+                    major_version = parsed_value;
+                }
+            }
+        }
+        if (major_version < 4) {
+            GGML_LOG_DEBUG(GGML_CUDA_NAME " calling rocblas_initialize as a workaround for a rocBLAS bug\n");
             rocblas_initialize();
             CUDA_CHECK(cudaDeviceSynchronize());
         }
