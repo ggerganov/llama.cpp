@@ -586,8 +586,15 @@ static json oaicompat_completion_params_parse(
     json llama_params;
 
     auto tools = json_value(body, "tools", json());
-    if (tools.is_array() && !tools.empty() && !use_jinja) {
-        throw std::runtime_error("tools param requires --jinja flag");
+    auto stream = json_value(body, "stream", false);
+
+    if (tools.is_array() && !tools.empty()) {
+        if (stream) {
+            throw std::runtime_error("Cannot use tools with stream");
+        }
+        if (!use_jinja) {
+            throw std::runtime_error("tools param requires --jinja flag");
+        }
     }
 
     // Handle "stop" field
