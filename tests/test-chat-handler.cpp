@@ -535,7 +535,7 @@ static void test_grammars() {
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
-    
+
     assert_equals(std::string("llama 3.2 tool calls"), describe(tmpl, tools_params));
     test_template(tmpl, end_tokens, text_message, tools);
     test_template(tmpl, end_tokens, tool_call_message, tools);
