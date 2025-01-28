@@ -397,7 +397,7 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
         auto full_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, test_message, tools);
         std::cout << "Full delta:\n```\n" << full_delta << "\n```" << std::endl;
 
-        const auto msg = chat_data.parser->parse_final(full_delta);
+        const auto msg = chat_data.parser(full_delta);
         assert_msg_equals(expected_msg, msg);
 
         auto content_less_delta = get_message_prompt_delta(tmpl, end_tokens, user_message, {

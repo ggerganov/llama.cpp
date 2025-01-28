@@ -152,50 +152,6 @@ static common_chat_msg parse_prefixed_json_tool_call_array(const std::string& in
     return result;
 }
 
-class text_chat_parser : public common_chat_parser {
-public:
-    std::optional<common_chat_msg> parse_partial(const std::string & input) override {
-        return parse_final(input);
-    }
-
-    common_chat_msg parse_final(const std::string & input) override {
-        return {
-            /* .role = */ "assistant",
-            /* .content = */ input,
-            /* .tool_calls = */ {},
-        };
-    }
-
-    std::unique_ptr<common_chat_parser> clone() const override {
-        return std::make_unique<text_chat_parser>();
-    }
-};
-
-class monolithic_chat_parser : public common_chat_parser {
-
-    std::string input_buffer_;
-    std::function<common_chat_msg(const std::string & input)> parse_final_;
-
-public:
-    monolithic_chat_parser(const std::function<common_chat_msg(const std::string & input)> & parse_final) : parse_final_(parse_final) {}
-
-    std::optional<common_chat_msg> parse_partial(const std::string & input) override {
-        input_buffer_ += input;
-        return std::nullopt;
-    }
-
-    common_chat_msg parse_final(const std::string & input) override {
-        input_buffer_ += input;
-        auto out = parse_final_(input_buffer_);
-        input_buffer_.clear();
-        return out;
-    }
-
-    std::unique_ptr<common_chat_parser> clone() const override {
-        return std::make_unique<monolithic_chat_parser>(parse_final_);
-    }
-};
-
 static void foreach_function(const json & tools, const std::function<void(const json &)> & fn) {
     for (const auto & tool : tools) {
         if (!tool.contains("type") || tool["type"] != "function" || !tool.contains("function")) {
@@ -289,7 +245,7 @@ static common_chat_data common_chat_init_generic_tool_call(const common_chat_tem
 
     data.prompt = tmpl.apply(tweaked_messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "generic tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([&](const std::string & input) {
+    data.parser = [&](const std::string & input) {
         json data = json::parse(input);
         common_chat_msg result;
         result.role = "assistant";
@@ -312,7 +268,7 @@ static common_chat_data common_chat_init_generic_tool_call(const common_chat_tem
             result.content = response.is_string() ? response.get<std::string>() : response.dump(2);
         }
         return result;
-    });
+    };
     return data;
 }
 
@@ -355,9 +311,9 @@ static common_chat_data common_chat_init_mistral_nemo_tool_call(const common_cha
     data.grammar_triggers.push_back({"[TOOL_CALLS]", /* .at_start = */ true});
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "mistral nemo tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([](const std::string & input) {
+    data.parser = [](const std::string & input) {
         return parse_prefixed_json_tool_call_array(input, "[TOOL_CALLS]");
-    });
+    };
     return data;
 }
 
@@ -441,7 +397,7 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
         {"builtin_tools", builtin_tools.empty() ? json() : builtin_tools},
     });
     data.format = "llama 3.1 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) -> common_chat_msg {
+    data.parser = [params](const std::string & input) -> common_chat_msg {
         static std::regex function_regex("\\{\"name\": \"([^\"]+)\", \"parameters\": ");
         static std::regex close_regex("\\}");
         static std::regex builtin_call_regex("<\\|python_tag\\|>([^.(]+)\\.call\\((.*)\\)");
@@ -472,7 +428,7 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
             };
         }
         return parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
-    });
+    };
     return data;
 }
 
@@ -505,12 +461,12 @@ static common_chat_data common_chat_init_llama_3_2_tool_calls(const common_chat_
     data.additional_stops.push_back("<|eom_id|>");
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt, {});
     data.format = "llama 3.2 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) {
+    data.parser = [params](const std::string & input) {
         static std::regex function_regex("\\{[\\s\\n\\r]*(?:\"type\"[\\s\\n\\r]*:[\\s\\n\\r]*\"function\"[\\s\\n\\r]*,[\\s\\n\\r]*|[\\s\\n\\r]*)\"name\"[\\s\\n\\r]*:[\\s\\n\\r]*\"([^\"]+)\"[\\s\\n\\r]*,[\\s\\n\\r]*\"parameters\": ");
         static std::regex close_regex("\\}");
         auto res = parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
         return res;
-    });
+    };
     return data;
 }
 
@@ -532,12 +488,12 @@ static common_chat_data common_chat_init_deepseek_r1_tool_call(const common_chat
     }, grammar_options);
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "deepseek r1 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) {
+    data.parser = [params](const std::string & input) {
         static std::regex trigger_regex("<｜tool▁calls▁begin｜>");
         static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
         static std::regex close_regex("```<｜tool▁call▁end｜>");
         return parse_json_tool_calls(params.tools, input, trigger_regex, function_regex, close_regex, /* check_names= */ true);
-    });
+    };
     return data;
 }
 
@@ -573,9 +529,9 @@ static common_chat_data common_chat_init_firefunction_v2_tool_call(const common_
     data.grammar_triggers.push_back({" functools[", /* .at_start = */ false});
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "firefunction v2 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([](const std::string & input) {
+    data.parser = [](const std::string & input) {
         return parse_prefixed_json_tool_call_array(input, " functools[", /* rstrip_prefix= */ 1);
-    });
+    };
     return data;
 }
 
@@ -610,7 +566,7 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
 
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "functionary v3.2 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) {
+    data.parser = [params](const std::string & input) {
         static std::regex function_regex(R"((?:>>>)?(\w+)\n)");
         static std::regex close_regex(R"($|(?=>>>))");
 
@@ -619,7 +575,7 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
             res.content = res.content.substr(4);
         }
         return res;
-    });
+    };
     return data;
 }
 
@@ -674,7 +630,7 @@ static common_chat_data common_chat_init_functionary_v3_1_llama_3_1_tool_call(co
 
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "functionary v3.1 llama 3.1 tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([params, has_raw_python, python_code_argument_name](const std::string & input) -> common_chat_msg {
+    data.parser = [params, has_raw_python, python_code_argument_name](const std::string & input) -> common_chat_msg {
         // This version of Functionary still supports the llama 3.1 tool call format for the python tool.
         static std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
         std::smatch match;
@@ -695,7 +651,7 @@ static common_chat_data common_chat_init_functionary_v3_1_llama_3_1_tool_call(co
         static std::regex function_regex(R"(<function=(\w+)>)");
         static std::regex close_regex(R"(</function>)");
         return parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ false, has_raw_python);
-    });
+    };
     return data;
 }
 
@@ -726,7 +682,7 @@ static common_chat_data common_chat_init_hermes_2_pro_tool_call(const common_cha
 
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "hermes 2 pro tool calls";
-    data.parser = std::make_unique<monolithic_chat_parser>([&](const std::string & input) -> common_chat_msg {
+    data.parser = [&](const std::string & input) -> common_chat_msg {
         try {
             std::regex start_pattern(R"([\n\s]*<tool_call>)");
             std::regex middle_pattern(R"([\n\s]*</tool_call>[\n\s]*<tool_call>)");
@@ -779,7 +735,7 @@ static common_chat_data common_chat_init_hermes_2_pro_tool_call(const common_cha
                 /* .tool_calls = */ {},
             };
         }
-    });
+    };
     return data;
 }
 
@@ -787,7 +743,13 @@ static common_chat_data common_chat_init_without_tools(const common_chat_templat
     common_chat_data data;
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "content-only";
-    data.parser = std::make_unique<text_chat_parser>();
+    data.parser = [](const std::string & input) -> common_chat_msg {
+        return {
+            /* .role = */ "assistant",
+            /* .content = */ input,
+            /* .tool_calls = */ {},
+        };
+    };
     data.grammar_lazy = false;
     if (!params.json_schema.is_null()) {
         if (!params.grammar.empty()) {

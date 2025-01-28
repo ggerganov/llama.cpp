@@ -27,21 +27,14 @@ struct common_chat_params {
     bool add_generation_prompt = true;
 };
 
-class common_chat_parser {
-public:
-    virtual ~common_chat_parser() = default;
-
-    virtual std::optional<common_chat_msg> parse_partial(const std::string & input) = 0;
-    virtual common_chat_msg parse_final(const std::string & input) = 0;
-    virtual std::unique_ptr<common_chat_parser> clone() const = 0;
-};
+typedef std::function<common_chat_msg(const std::string & input)> common_chat_parser;
 
 struct common_chat_data {
     json prompt;
     std::string grammar;
     std::vector<common_grammar_trigger> grammar_triggers;
-    std::vector<std::string> additional_stops;
-    std::unique_ptr<class common_chat_parser> parser;
+    std::vector<std::string> additional_stops;// std::unique_ptr<class common_chat_parser> parser;
+    common_chat_parser parser;
     std::string format; // For debugging and testing.
     bool grammar_lazy = false;
 };

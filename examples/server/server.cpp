@@ -117,7 +117,7 @@ struct slot_params {
     oaicompat_type        oaicompat                 = OAICOMPAT_TYPE_NONE;
     std::string           oaicompat_model;
     std::string           oaicompat_cmpl_id;
-    std::shared_ptr<common_chat_parser> chat_parser;
+    common_chat_parser    chat_parser;
 
     json to_json() const {
         std::vector<std::string> samplers;
@@ -768,7 +768,6 @@ struct server_task_result_cmpl_partial : server_task_result {
     oaicompat_type oaicompat = OAICOMPAT_TYPE_NONE;
     std::string    oaicompat_model;
     std::string    oaicompat_cmpl_id;
-    common_chat_msg oaicompat_chat_msg;
     std::shared_ptr<common_chat_parser> chat_parser;
 
     virtual int get_index() override {
@@ -2220,16 +2219,6 @@ struct server_context {
     }
 
     void send_partial_response(server_slot & slot, const completion_token_output & tkn) {
-        common_chat_msg msg;
-        if (slot.params.chat_parser) {
-            if (auto opt_msg = slot.params.chat_parser->parse_partial(tkn.text_to_send)) {
-                msg = *opt_msg;
-            } else {
-                return;
-            }
-        } else {
-            msg.content = tkn.text_to_send;
-        }
         auto res = std::make_unique<server_task_result_cmpl_partial>();
 
         res->id      = slot.id_task;
@@ -2245,7 +2234,6 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        res->oaicompat_chat_msg = msg;
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -2286,18 +2274,14 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        if (!slot.params.chat_parser) {
+        if (slot.params.chat_parser) {
+            res->oaicompat_chat_msg = slot.params.chat_parser(slot.generated_text);
+        } else {
             res->oaicompat_chat_msg = {
                 /* .role = */ "assistant",
                 /* .content = */ slot.generated_text,
                 /* .tool_calls = */ {}
             };
-        } else if (slot.stop == STOP_TYPE_LIMIT) {
-            if (auto opt_msg = slot.params.chat_parser->parse_partial(slot.generated_text)) {
-                res->oaicompat_chat_msg = *opt_msg;
-            }
-        } else {
-            res->oaicompat_chat_msg = slot.params.chat_parser->parse_final(slot.generated_text);
         }
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -3835,9 +3819,7 @@ int main(int argc, char ** argv) {
                     task.params.sampling.grammar_trigger_words.push_back(trigger);
                 }
                 task.params.antiprompt                = chat_data.additional_stops;
-                if (chat_data.parser) {
-                    task.params.chat_parser           = i == tokenized_prompts.size() ? std::move(chat_data.parser) : std::move(chat_data.parser->clone());
-                }
+                task.params.chat_parser               = chat_data.parser;
                 if (task.params.sampling.grammar_lazy) {
                     GGML_ASSERT(task.params.sampling.grammar_trigger_tokens.size() > 0 || task.params.sampling.grammar_trigger_words.size() > 0);
                 }
