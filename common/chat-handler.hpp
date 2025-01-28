@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include <json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
