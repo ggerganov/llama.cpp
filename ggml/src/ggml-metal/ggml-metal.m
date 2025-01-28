@@ -64,7 +64,9 @@ static id<MTLDevice> ggml_backend_metal_device_acq(struct ggml_backend_metal_dev
 
     if (ctx->mtl_device == nil) {
         ctx->mtl_device = MTLCreateSystemDefaultDevice();
+    }
 
+    if (ctx->mtl_device) {
         ctx->has_simdgroup_reduction  = [ctx->mtl_device supportsFamily:MTLGPUFamilyApple7];
         ctx->has_simdgroup_reduction |= [ctx->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
 
@@ -99,8 +101,10 @@ static void ggml_backend_metal_device_rel(struct ggml_backend_metal_device_conte
     ctx->mtl_device_ref_count--;
 
     if (ctx->mtl_device_ref_count == 0) {
-        [ctx->mtl_device release];
-        ctx->mtl_device = nil;
+        if (ctx->mtl_device) {
+            [ctx->mtl_device release];
+            ctx->mtl_device = nil;
+        }
     }
 }
 
