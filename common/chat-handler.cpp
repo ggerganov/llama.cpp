@@ -425,9 +425,7 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
             tool_rules.push_back(
                 builder.add_rule(
                     name + "-call",
-                    "\"{\" "
-                    // " ( \"\\\"type\\\": \\\"function\\\", \" | space ) "
-                    "\"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                    "\"{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                         builder.add_schema(name + "-args", parameters) +
                     " \"}\""));
             data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
@@ -444,7 +442,7 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
     });
     data.format = "llama 3.1 tool calls";
     data.parser = std::make_unique<monolithic_chat_parser>([params](const std::string & input) -> common_chat_msg {
-        static std::regex function_regex("\\{(?:\"type\": \"function\", |[\\s\\n\\r]*)\"name\": \"([^\"]+)\", \"parameters\": ");
+        static std::regex function_regex("\\{\"name\": \"([^\"]+)\", \"parameters\": ");
         static std::regex close_regex("\\}");
         static std::regex builtin_call_regex("<\\|python_tag\\|>([^.(]+)\\.call\\((.*)\\)");
 
