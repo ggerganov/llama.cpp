@@ -623,7 +623,7 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
     return data;
 }
 
-static common_chat_data common_chat_init_functionary_v3_llama_3_1_tool_call(const common_chat_template & tmpl, const struct common_chat_params & params) {
+static common_chat_data common_chat_init_functionary_v3_1_llama_3_1_tool_call(const common_chat_template & tmpl, const struct common_chat_params & params) {
     // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
     // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
     common_chat_data data;
@@ -818,7 +818,7 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
     }
     if (src.find("<|start_header_id|>") != std::string::npos
         && src.find("<function=") != std::string::npos) {
-        return common_chat_init_functionary_v3_llama_3_1_tool_call(tmpl, params);
+        return common_chat_init_functionary_v3_1_llama_3_1_tool_call(tmpl, params);
     }
     if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
         auto uses_python_tag = src.find("<|python_tag|>") != std::string::npos;
