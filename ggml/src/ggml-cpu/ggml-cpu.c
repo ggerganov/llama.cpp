@@ -1287,8 +1287,8 @@ typedef pthread_mutex_t    ggml_mutex_t;
 
 // Threadpool def
 struct ggml_threadpool {
-    ggml_mutex_t mutex;       // mutex for cond.var
     ggml_cond_t  cond;        // cond.var for waiting for new work
+    ggml_mutex_t mutex;       // mutex for cond.var
 
     struct ggml_cgraph * cgraph;
     struct ggml_cplan  * cplan;
@@ -1299,19 +1299,19 @@ struct ggml_threadpool {
     atomic_int GGML_CACHE_ALIGN n_barrier_passed;
     atomic_int current_chunk; // currently processing chunk during Mat_Mul, shared between all the threads.
 
-    // these are atomic as an annotation for thread-sanitizer
-    atomic_bool stop;         // Used for stopping the threadpool altogether
-    atomic_bool pause;        // Used for pausing the threadpool or individual threads
-    atomic_bool abort;        // Used for aborting processing of a graph
-
     struct ggml_compute_state * workers;   // per thread state
-    int          n_threads_max; // number of threads in the pool
     atomic_int   n_threads_cur; // number of threads used in the current graph
+    int          n_threads_max; // number of threads in the pool
 
     int32_t      prio;        // Scheduling priority
     uint32_t     poll;        // Polling level (0 - no polling)
 
     enum ggml_status ec;
+
+    // these are atomic as an annotation for thread-sanitizer
+    atomic_bool stop;         // Used for stopping the threadpool altogether
+    atomic_bool pause;        // Used for pausing the threadpool or individual threads
+    atomic_bool abort;        // Used for aborting processing of a graph
 };
 
 // Per-thread state
