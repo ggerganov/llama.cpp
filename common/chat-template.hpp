@@ -65,7 +65,13 @@ class chat_template {
             try_raw_render({
                 {{"role", "user"}, {"content", "Hey"}},
             }, {
-                {{"name", "some_tool"}, {"parameters", {{"type", "string"}}}},
+                {
+                    {"type", "function"},
+                    {"function", {
+                        {"name", "some_tool"},
+                        {"parameters", {{"type", "string"}}},
+                    }},
+                },
             }, false).find("some_tool") != std::string::npos;
 
         requires_object_arguments_ =

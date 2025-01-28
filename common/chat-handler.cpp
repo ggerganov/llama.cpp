@@ -541,31 +541,35 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
     common_chat_data data;
 
     data.grammar_lazy = params.tool_choice != "required";
-    data.grammar = build_grammar([&](const common_grammar_builder & builder) {
-        std::vector<std::string> first_tool_rules;
-        std::vector<std::string> subsequent_tool_rules;
-        foreach_function(params.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            std::string name = function["name"];
-            auto parameters = function["parameters"];
-            auto args_rule = builder.add_schema(name + "-args", parameters);
-            first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
-            subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
-            data.grammar_triggers.push_back({name, /* .at_start = */ true});
-            data.grammar_triggers.push_back({">>>" + name, /* .at_start = */ false});
-        });
-        auto first_rule = first_tool_rules.empty() ? "" : builder.add_rule("first_tool_call", string_join(first_tool_rules, " | ")) + " space";
-        if (params.parallel_tool_calls) {
-            auto subsequent_rule = builder.add_rule("subsequent_tool_call", string_join(subsequent_tool_rules, " | ")) + " space";
-            builder.add_rule("root", first_rule + " (" + subsequent_rule + ")*");
-        } else {
-            builder.add_rule("root", first_rule);
-        }
+    if (!params.tools.is_null() && !params.tools.empty()) {
+        data.grammar = build_grammar([&](const common_grammar_builder & builder) {
+            std::vector<std::string> first_tool_rules;
+            std::vector<std::string> subsequent_tool_rules;
+            foreach_function(params.tools, [&](const json & tool) {
+                const auto & function = tool["function"];
+                std::string name = function["name"];
+                auto parameters = function["parameters"];
+                auto args_rule = builder.add_schema(name + "-args", parameters);
+                first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
+                subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
+                data.grammar_triggers.push_back({name, /* .at_start = */ true});
+                data.grammar_triggers.push_back({">>>" + name, /* .at_start = */ false});
+            });
+            auto first_rule = first_tool_rules.empty() ? "" : builder.add_rule("first_tool_call", string_join(first_tool_rules, " | ")) + " space";
+            if (params.parallel_tool_calls) {
+                auto subsequent_rule = builder.add_rule("subsequent_tool_call", string_join(subsequent_tool_rules, " | ")) + " space";
+                builder.add_rule("root", first_rule + " (" + subsequent_rule + ")*");
+            } else {
+                builder.add_rule("root", first_rule);
+            }
 
-    }, grammar_options);
+        }, grammar_options);
+        data.format = "functionary v3.2 tool calls";
+    } else {
+        data.format = "functionary v3.2 content-only";
+    }
 
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
-    data.format = "functionary v3.2 tool calls";
     data.parser = [params](const std::string & input) {
         static std::regex function_regex(R"((?:>>>)?(\w+)\n)");
         static std::regex close_regex(R"($|(?=>>>))");
@@ -763,20 +767,23 @@ static common_chat_data common_chat_init_without_tools(const common_chat_templat
 }
 
 common_chat_data common_chat_init(const common_chat_template & tmpl, const struct common_chat_params & params) {
-    if (params.tools.is_null() || params.tool_choice == "none") {
-        return common_chat_init_without_tools(tmpl, params);
-    }
-
-    if (!params.grammar.empty()) {
+    auto has_tools = params.tools.is_null() || params.tool_choice == "none";
+    if (has_tools && !params.grammar.empty()) {
         throw std::runtime_error("Cannot specify grammar with tools");
     }
 
     const auto & src = tmpl.source();
+    if (src.find(">>>all") != std::string::npos) {
+        // Functionary prepends "all\n" to plain content outputs, so we use the parser no matter when
+        return common_chat_init_functionary_v3_2_tool_call(tmpl, params);
+    }
+    
+    if (has_tools) {
+        return common_chat_init_without_tools(tmpl, params);
+    }
+
     if (src.find("<tool_call>") != std::string::npos) {
         return common_chat_init_hermes_2_pro_tool_call(tmpl, params);
-    }
-    if (src.find(">>>all") != std::string::npos) {
-        return common_chat_init_functionary_v3_2_tool_call(tmpl, params);
     }
     if (src.find("<|start_header_id|>") != std::string::npos
         && src.find("<function=") != std::string::npos) {
