@@ -93,6 +93,7 @@ if (NOT WIN32)
     llama_target_and_test(test-grammar-parser.cpp)
     llama_target_and_test(test-grammar-integration.cpp)
     llama_target_and_test(test-llama-grammar.cpp)
+    llama_target_and_test(test-chat-handler.cpp)
     # TODO: disabled on loongarch64 because the ggml-ci node lacks Python 3.8
     if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
         llama_target_and_test(test-json-schema-to-grammar.cpp   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -133,8 +134,6 @@ llama_target_and_test(test-chat-template.cpp)
 # llama_target_and_test(test-opt.cpp) # SLOW
 llama_target_and_test(test-gguf.cpp)
 llama_target_and_test(test-backend-ops.cpp)
-llama_target_and_test(test-chat-handler.cpp)
-target_link_libraries(test-chat-handler PRIVATE llama)
 
 llama_target_and_test(test-model-load-cancel.cpp  LABEL "model")
 llama_target_and_test(test-autorelease.cpp        LABEL "model")
