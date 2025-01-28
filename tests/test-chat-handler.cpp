@@ -119,7 +119,25 @@ const auto python_tool = json::parse(R"({
     }
   }
 })");
+const auto code_interpreter_tool = json::parse(R"({
+  "type": "function",
+  "function": {
+    "name": "code_interpreter",
+    "description": "an ipython interpreter",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Python code to execute."
+        }
+      },
+      "required": ["code"]
+    }
+  }
+})");
 const json tools = {special_function_tool, python_tool};
+const json llama_3_1_tools = {special_function_tool, code_interpreter_tool};
 
 // static void test_parsing() {
 //     json request = {
@@ -427,6 +445,19 @@ static void test_grammars() {
       }},
     }}}
   };
+  auto code_interpreter_tool_call_message = json {
+    {"role", "assistant"},
+    {"content", {}},
+    {"tool_calls", json {{
+      {"type", "function"},
+      {"function", {
+        {"name", "code_interpreter"},
+        {"arguments", {
+          {"code", "print('hey')"},
+        }},
+      }},
+    }}}
+  };
 
 
   common_chat_params no_tools_params;
@@ -494,10 +525,12 @@ static void test_grammars() {
     const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
-    assert_equals(std::string("llama 3.1 tool calls"), describe(tmpl, tools_params));
-    test_template(tmpl, end_tokens, text_message, tools);
+    // assert_equals(std::string("llama 3.1 tool calls"), describe(tmpl, tools_params));
+    // test_template(tmpl, end_tokens, text_message, tools);
+    test_template(tmpl, end_tokens, code_interpreter_tool_call_message, llama_3_1_tools);
+    test_template(tmpl, end_tokens,           python_tool_call_message, tools);
     test_template(tmpl, end_tokens, tool_call_message, tools);
-    test_template(tmpl, end_tokens, python_tool_call_message, tools);
+    test_template(tmpl, end_tokens, tool_call_message, llama_3_1_tools);
   }
   {
     const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");

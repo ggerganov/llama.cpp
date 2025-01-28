@@ -63,6 +63,8 @@ WEATHER_TOOL = {
 
 
 @pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
     ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
@@ -78,8 +80,6 @@ WEATHER_TOOL = {
     ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success"),
     ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code"),
     # TODO: fix these
-    # ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
-    # ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
 ])
 def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
     n_predict = 512
@@ -118,6 +118,8 @@ def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argu
 
 @pytest.mark.slow
 @pytest.mark.parametrize("tool,argument_key,hf_repo,hf_file,template_override", [
+    (TEST_TOOL,    "success",  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,  "code",     "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     (TEST_TOOL,    "success",  "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     (PYTHON_TOOL,  "code",     "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     (TEST_TOOL,    "success",  "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
@@ -139,8 +141,6 @@ def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argu
     # TODO: fix these
     # (TEST_TOOL,    "success",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
     # (PYTHON_TOOL,  "code",     "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
-    # (TEST_TOOL,    "success",  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    # (PYTHON_TOOL,  "code",     "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
 ])
 def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     n_predict = 512
@@ -218,6 +218,7 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,hf_file,template_override", [
+    ("lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     ("bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
     ("bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
@@ -229,7 +230,6 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
     ("bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
     # TODO: fix these
     # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
-    # ("lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
 ])
 def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
@@ -267,6 +267,7 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
 
 @pytest.mark.slow
 @pytest.mark.parametrize("expected_arguments,hf_repo,hf_file,template_override", [
+    ('{"code":"print("}',  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     (None,                 "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
     (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
     ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
@@ -277,7 +278,6 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
     (None,                 "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
     (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
     # TODO: fix these
-    # ('{"code":"print("}',  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
 ])
 def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
