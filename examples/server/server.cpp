@@ -2286,12 +2286,19 @@ struct server_context {
         res->oaicompat         = slot.params.oaicompat;
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
-        res->oaicompat_chat_msg = slot.params.chat_parser ? slot.params.chat_parser->parse_final(slot.generated_text) : common_chat_msg {
-            /* .role = */ "assistant",
-            /* .content = */ slot.generated_text,
-            /* .tool_calls = */ {}
-        };
-
+        if (!slot.params.chat_parser) {
+            res->oaicompat_chat_msg = {
+                /* .role = */ "assistant",
+                /* .content = */ slot.generated_text,
+                /* .tool_calls = */ {}
+            };
+        } else if (slot.stop == STOP_TYPE_LIMIT) {
+            if (auto opt_msg = slot.params.chat_parser->parse_partial(slot.generated_text)) {
+                res->oaicompat_chat_msg = *opt_msg;
+            }
+        } else {
+            res->oaicompat_chat_msg = slot.params.chat_parser->parse_final(slot.generated_text);
+        }
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
             if (!slot.params.stream && slot.stop == STOP_TYPE_WORD) {
