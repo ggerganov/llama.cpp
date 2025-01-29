@@ -344,7 +344,7 @@ static void expect_tool_parameters(const std::string & name, const json & parame
     }
 }
 
-static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const common_chat_template & tmpl, const struct common_chat_params & params) {
+static common_chat_data common_chat_init_llama_3_1_tool_calls(const common_chat_template & tmpl, const struct common_chat_params & params, bool allow_python_tag_builtin_tools) {
     auto builtin_tools = json::array();
     common_chat_data data;
     data.grammar_lazy = params.tool_choice != "required";
@@ -379,24 +379,31 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
             return true;
         };
 
+        auto has_function = false;
         foreach_function(params.tools, [&](const json & tool) {
             const auto & function = tool["function"];
             std::string name = function["name"];
             auto parameters = function["parameters"];
 
             // https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/remote/tool_runtime
-            if (handle_builtin_tool(name, parameters)) {
+            if (allow_python_tag_builtin_tools && handle_builtin_tool(name, parameters)) {
                 return;
             }
             builder.resolve_refs(parameters);
             tool_rules.push_back(
                 builder.add_rule(
                     name + "-call",
-                    "\"{\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
+                    "\"{\" ( \"\\\"type\\\": \\\"function\\\", \" | space ) "
+                    "\"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                         builder.add_schema(name + "-args", parameters) +
                     " \"}\""));
             data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
+            has_function = true;
         });
+        if (has_function) {
+            data.grammar_triggers.push_back({"{\"name\":", /* .at_start = */ true});
+            data.grammar_triggers.push_back({"{\"type\": \"function\"", /* .at_start = */ true});
+        }
         if (!builtin_tools.empty()) {
             data.grammar_triggers.push_back({"<|python_tag|>", /* .at_start = */ false});
         }
@@ -407,75 +414,40 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
         {"tools_in_user_message", false},
         {"builtin_tools", builtin_tools.empty() ? json() : builtin_tools},
     });
-    data.format = "llama 3.1 tool calls";
-    data.parser = [params](const std::string & input) -> common_chat_msg {
-        static std::regex function_regex("\\{\"name\": \"([^\"]+)\", \"parameters\": ");
+    data.format = std::string("llama 3.x tool calls") + (allow_python_tag_builtin_tools ? " (w/ builtin tools)" : "");
+    data.parser = [params, builtin_tools, allow_python_tag_builtin_tools](const std::string & input) -> common_chat_msg {
+        static std::regex function_regex("\\{[\\s\\n\\r]*(?:\"type\"[\\s\\n\\r]*:[\\s\\n\\r]*\"function\"[\\s\\n\\r]*,[\\s\\n\\r]*|[\\s\\n\\r]*)\"name\"[\\s\\n\\r]*:[\\s\\n\\r]*\"([^\"]+)\"[\\s\\n\\r]*,[\\s\\n\\r]*\"parameters\": ");
         static std::regex close_regex("\\}");
         static std::regex builtin_call_regex("<\\|python_tag\\|>([^.(]+)\\.call\\((.*)\\)");
 
-        std::smatch match;
-        if (std::regex_match(input, match, builtin_call_regex)) {
-            auto name = match[1].str();
-            auto raw_args = match[2].str();
+        if (allow_python_tag_builtin_tools && !builtin_tools.empty()) {
+            std::smatch match;
+            if (std::regex_match(input, match, builtin_call_regex)) {
+                auto name = match[1].str();
+                auto raw_args = match[2].str();
 
-            // TODO: if/when builtin tools start accepting more than 1 argument, use parse_json for real parsing.
-            auto it_eq = raw_args.find('=');
-            auto arg_name = raw_args.substr(0, it_eq);
-            auto arg_value_str = raw_args.substr(it_eq + 1);
-            auto arg_value = json::parse(arg_value_str);
+                // TODO: if/when builtin tools start accepting more than 1 argument, use parse_json for real parsing.
+                auto it_eq = raw_args.find('=');
+                auto arg_name = raw_args.substr(0, it_eq);
+                auto arg_value_str = raw_args.substr(it_eq + 1);
+                auto arg_value = json::parse(arg_value_str);
 
-            return {
-                /* .role = */ "assistant",
-                /* .content = */ match.prefix().str(),
-                /* .tool_calls = */ {
-                    {
-                        /* .name = */ match[1],
-                        /* .arguments = */ (json {
-                            {arg_name, arg_value},
-                        }).dump(),
-                        /* .id = */ "",
+                return {
+                    /* .role = */ "assistant",
+                    /* .content = */ match.prefix().str(),
+                    /* .tool_calls = */ {
+                        {
+                            /* .name = */ match[1],
+                            /* .arguments = */ (json {
+                                {arg_name, arg_value},
+                            }).dump(),
+                            /* .id = */ "",
+                        },
                     },
-                },
-            };
+                };
+            }
         }
         return parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
-    };
-    return data;
-}
-
-static common_chat_data common_chat_init_llama_3_2_tool_calls(const common_chat_template & tmpl, const struct common_chat_params & params) {
-    common_chat_data data;
-
-    data.grammar_lazy = params.tool_choice != "required";
-    data.grammar = build_grammar([&](const common_grammar_builder & builder) {
-        std::vector<std::string> tool_rules;
-
-        foreach_function(params.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            std::string name = function["name"];
-            auto parameters = function["parameters"];
-            builder.resolve_refs(parameters);
-            tool_rules.push_back(
-                builder.add_rule(
-                    name + "-call",
-                    "\"{\" "
-                    // " ( \"\\\"type\\\": \\\"function\\\", \" | space ) "
-                    "\"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
-                        builder.add_schema(name + "-args", parameters) +
-                    " \"}\""));
-            data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
-        });
-
-        builder.add_rule("root", string_join(tool_rules, " | "));
-    }, grammar_options);
-    data.additional_stops.push_back("<|eom_id|>");
-    data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt, {});
-    data.format = "llama 3.2 tool calls";
-    data.parser = [params](const std::string & input) {
-        static std::regex function_regex("\\{[\\s\\n\\r]*(?:\"type\"[\\s\\n\\r]*:[\\s\\n\\r]*\"function\"[\\s\\n\\r]*,[\\s\\n\\r]*|[\\s\\n\\r]*)\"name\"[\\s\\n\\r]*:[\\s\\n\\r]*\"([^\"]+)\"[\\s\\n\\r]*,[\\s\\n\\r]*\"parameters\": ");
-        static std::regex close_regex("\\}");
-        auto res = parse_json_tool_calls(params.tools, input, std::nullopt, function_regex, close_regex, /* check_names= */ true);
-        return res;
     };
     return data;
 }
@@ -559,8 +531,8 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
     // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
     common_chat_data data;
 
-    data.grammar_lazy = params.tool_choice != "required";
     if (!params.tools.is_null() && !params.tools.empty()) {
+        data.grammar_lazy = params.tool_choice != "required";
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             std::vector<std::string> first_tool_rules;
             std::vector<std::string> subsequent_tool_rules;
@@ -806,13 +778,8 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
         return common_chat_init_functionary_v3_1_llama_3_1_tool_call(tmpl, params);
     }
     if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
-        auto uses_python_tag = src.find("<|python_tag|>") != std::string::npos;
-
-        if (uses_python_tag) {
-            return common_chat_init_llama_3_1_python_tag_tool_calls(tmpl, params);
-        } else {
-            return common_chat_init_llama_3_2_tool_calls(tmpl, params);
-        }
+        auto allow_python_tag_builtin_tools = src.find("<|python_tag|>") != std::string::npos;
+        return common_chat_init_llama_3_1_tool_calls(tmpl, params, allow_python_tag_builtin_tools);
     }
     if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos) {
         return common_chat_init_deepseek_r1_tool_call(tmpl, params);

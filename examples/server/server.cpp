@@ -3800,6 +3800,8 @@ int main(int argc, char ** argv) {
                     /* .grammar = */ json_value(data, "grammar", std::string("")),
                 });
                 LOG_INF("Chat format: %s\n", chat_data.format.c_str());
+                LOG_DBG("Prompt: %s\n", chat_data.prompt.get<std::string>().c_str());
+                LOG_DBG("Grammar: %s\n", chat_data.grammar.c_str());
                 if (data.contains("grammar")) {
                     if (!chat_data.grammar.empty()) {
                         throw std::runtime_error("Cannot provide grammar and tools");
@@ -3841,11 +3843,11 @@ int main(int argc, char ** argv) {
                 for (const auto & trigger : chat_data.grammar_triggers) {
                     auto ids = common_tokenize(ctx_server.vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
-                        LOG_INF("Grammar trigger token: %s (%d)\n", trigger.word.c_str(), ids[0]);
+                        LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
                         task.params.sampling.grammar_trigger_tokens.push_back(ids[0]);
                         continue;
                     }
-                    LOG_INF("Grammar trigger word: %s\n", trigger.word.c_str());
+                    LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
                     task.params.sampling.grammar_trigger_words.push_back(trigger);
                 }
                 task.params.antiprompt                = chat_data.additional_stops;
@@ -4021,6 +4023,7 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_chat_completions = [&ctx_server, &params, &res_error, &handle_completions_impl](const httplib::Request & req, httplib::Response & res) {
+        LOG_DBG("request: %s\n", req.body.c_str());
         if (ctx_server.params_base.embedding) {
             res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;

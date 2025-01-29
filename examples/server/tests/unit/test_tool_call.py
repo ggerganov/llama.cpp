@@ -58,7 +58,7 @@ WEATHER_TOOL = {
       "required":["location"]
     }
   }
-}# TODO: fix this crash
+}
 
 
 def do_test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
@@ -132,8 +132,8 @@ def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict,
 
 @pytest.mark.slow
 @pytest.mark.parametrize("tool,argument_key,hf_repo,hf_file,template_override", [
-    (TEST_TOOL,    "success",  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (TEST_TOOL,    "success",  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     (TEST_TOOL,    "success",  "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     (PYTHON_TOOL,  "code",     "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     (TEST_TOOL,    "success",  "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
@@ -231,7 +231,7 @@ def test_completion_without_tool_call_fast(template_name: str, n_predict: int, t
 @pytest.mark.slow
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
     # TODO: fix this crash
-    # ("meetkai-functionary-medium-v3.2",               256, [],            None),
+    ("meetkai-functionary-medium-v3.2",               256, [],            None),
     ("meetkai-functionary-medium-v3.2",               256, [TEST_TOOL],   None),
     ("meetkai-functionary-medium-v3.2",               256, [PYTHON_TOOL], 'none'),
     ("meetkai-functionary-medium-v3.1",               256, [],            None),
@@ -247,9 +247,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,hf_file,template_override", [
-    # TODO: fix these
-    # ("lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
     ("bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
     ("bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
@@ -259,6 +257,8 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
     ("bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai/functionary-medium-v3.2", None)),
     ("bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
     ("bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # TODO: fix this (times out)
+    # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
 ])
 def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
@@ -276,7 +276,6 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,
         "messages": [
-            # {"role": "system", "content": "Use tools as appropriate."},
             {"role": "user", "content": "What is the weather in Istanbul?"},
         ],
         "tools": [WEATHER_TOOL],
@@ -295,21 +294,21 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("expected_arguments,hf_repo,hf_file,template_override", [
-    # TODO: fix these
-    # ('{"code":"print("}',  "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    # (None,                 "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
-    (None,                 "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
-    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+@pytest.mark.parametrize("expected_arguments_override,hf_repo,hf_file,template_override", [
     (None,                 "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
+    (None,                 "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
+    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
+    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
     (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
+    (None,                 "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
     (None,                 "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
     (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
+    # TODO: fix this (times out)
+    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
 ])
-def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
@@ -319,7 +318,7 @@ def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_
     server.model_hf_file = hf_file
     if template_override:
         (template_hf_repo, template_variant) = template_override
-        server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '') + ('-' + template_variant if template_variant else '')}.jinja"
+        server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
     server.start(timeout_seconds=15*60)
     res = server.make_request("POST", "/chat/completions", data={
@@ -327,7 +326,6 @@ def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_
         "messages": [
             {"role": "system", "content": "You are a coding assistant."},
             {"role": "user", "content": "say hello world with python"},
-            # {"role": "user", "content": "Print a hello world message with python"},
         ],
         "tools": [PYTHON_TOOL],
         # Note: without these greedy params, Functionary v3.2 writes `def hello_world():\n    print("Hello, World!")\nhello_world()` which is correct but a pain to test.
@@ -342,8 +340,8 @@ def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_
     tool_call = tool_calls[0]
     assert tool_call["function"]["name"] == PYTHON_TOOL["function"]["name"]
     actual_arguments = tool_call["function"]["arguments"]
-    if expected_arguments is not None:
-        assert actual_arguments == expected_arguments
+    if expected_arguments_override is not None:
+        assert actual_arguments == expected_arguments_override
     else:
         actual_arguments = json.loads(actual_arguments)
         assert 'code' in actual_arguments, f"code not found in {json.dumps(actual_arguments)}"

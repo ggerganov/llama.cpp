@@ -1170,6 +1170,7 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
             grammar.awaiting_trigger = false;
             grammar.trigger_buffer.clear();
             llama_grammar_accept_str(grammar, piece);
+            LLAMA_LOG_DEBUG("Grammar triggered on token %u (`%s`)", token, piece.c_str());
             return;
         } else {
             // TODO: consider a smarter incremental substring search algorithm (store last position to search from).
@@ -1181,9 +1182,11 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
                     auto constrained_str = grammar.trigger_buffer.substr(pos);
                     grammar.trigger_buffer.clear();
                     llama_grammar_accept_str(grammar, constrained_str);
+                    LLAMA_LOG_DEBUG("Grammar triggered on word `%s`", word.c_str());
                     return;
                 }
             }
+            LLAMA_LOG_DEBUG("Grammar still awaiting trigger after token %d (`%s`) (buffer: `%s`)\n", token, piece.c_str(), grammar.trigger_buffer.c_str());
             return;
         }
     }
