@@ -1,13 +1,13 @@
+#include "common.h"
+#include "sampling.h"
+#include "log.h"
+#include "llama.h"
+
+#include <cmath>
+
 #ifdef LLAMA_USE_LLGUIDANCE
 
-#    include "common.h"
-#    include "sampling.h"
-#    include "log.h"
-#    include "llama.h"
-
 #    include "llguidance.h"
-
-#    include <cmath>
 
 struct llama_sampler_llg {
     const llama_vocab * vocab;
@@ -261,6 +261,13 @@ llama_sampler * llama_sampler_init_llg(const llama_vocab * vocab, const char * g
         /* .iface = */ &llama_sampler_llg_i,
         /* .ctx   = */ ctx,
     };
+}
+
+#else
+
+llama_sampler * llama_sampler_init_llg(const llama_vocab *, const char *, const char *) {
+    LOG_WRN("llguidance (cmake -DLLAMA_LLGUIDANCE=ON) is not enabled");
+    return nullptr;
 }
 
 #endif  // LLAMA_USE_LLGUIDANCE
