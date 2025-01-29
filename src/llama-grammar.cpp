@@ -560,7 +560,7 @@ bool llama_grammar_parser::parse(const char * src) {
             }
         }
     } catch (const std::exception & err) {
-        fprintf(stderr, "\n%s: error parsing grammar: %s\n\n%s\n", __func__, err.what(), src);
+        fprintf(stderr, "%s: error parsing grammar: %s\n\n%s\n", __func__, err.what(), src);
         rules.clear();
         return false;
     }

@@ -596,6 +596,11 @@ static json oaicompat_completion_params_parse(
             throw std::runtime_error("tools param requires --jinja flag");
         }
     }
+    if (!use_jinja) {
+        if (body.contains("tool_choice") && !body.at("tool_choice").is_null()) {
+            throw std::runtime_error("Unsupported param: tool_choice");
+        }
+    }
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
@@ -605,7 +610,6 @@ static json oaicompat_completion_params_parse(
     }
 
     // Handle "response_format" field
-    auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
     if (body.contains("response_format")) {
         json response_format      = json_value(body, "response_format", json::object());
         std::string response_type = json_value(response_format, "type", std::string());
@@ -647,16 +651,6 @@ static json oaicompat_completion_params_parse(
         llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
     } else if (body.contains("top_logprobs") && !body.at("top_logprobs").is_null()) {
         throw std::runtime_error("top_logprobs requires logprobs to be set to true");
-    }
-
-    // Params supported by OAI but unsupported by llama.cpp
-    if (!use_jinja) {
-        static const std::vector<std::string> unsupported_params { "tool_choice" };
-        for (const auto & param : unsupported_params) {
-            if (body.contains(param)) {
-                throw std::runtime_error("Unsupported param: " + param);
-            }
-        }
     }
 
     // Copy remaining properties to llama_params
