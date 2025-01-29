@@ -126,7 +126,6 @@ def test_apply_chat_template():
     server.chat_template = "command-r"
     server.start()
     res = server.make_request("POST", "/apply-template", data={
-        "max_tokens": 8,
         "messages": [
             {"role": "system", "content": "You are a test."},
             {"role": "user", "content":"Hi there"},
