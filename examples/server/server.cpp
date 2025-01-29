@@ -4124,6 +4124,14 @@ int main(int argc, char ** argv) {
         res_ok(res, root);
     };
 
+    const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        auto body = json::parse(req.body);
+        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
+        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
+
+        res_ok(res, {{ "prompt", data.at("prompt") }});
+    };
+
     const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {
         handle_embeddings_impl(req, res, OAICOMPAT_TYPE_NONE);
     };
@@ -4300,6 +4308,7 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/reranking",        handle_rerank);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    svr->Post("/apply-template",      handle_apply_template);
     // LoRA adapters hotswap
     svr->Get ("/lora-adapters",       handle_lora_adapters_list);
     svr->Post("/lora-adapters",       handle_lora_adapters_apply);

@@ -576,6 +576,14 @@ With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
 
 `tokens`: Set the tokens to detokenize.
 
+### POST `/apply-template`: Apply chat template to a conversation
+
+Uses the server's prompt template formatting functionality to convert chat messages to a single string expected by a chat model as input, but does not perform inference. Instead, the prompt string is returned in the `prompt` field of the JSON response. The prompt can then be modified as desired (for example, to insert "Sure!" at the beginning of the model's response) before sending to `/completion` to generate the chat response.
+
+*Options:*
+
+`messages`: (Required) Chat turns in the same format as `/v1/chat/completions`.
+
 ### POST `/embedding`: Generate embedding of a given text
 
 > [!IMPORTANT]
