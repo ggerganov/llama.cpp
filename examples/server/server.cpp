@@ -14,9 +14,7 @@
 // mime type for sending response
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
-// auto generated files
-// $ npm run build --prefix examples/server/webui (updates examples/server/public/index.html.gz)
-// $ cmake --build build --target llama-server    (generates build/examples/server/index.html.gz.hpp)
+// auto generated files (see README.md for details)
 #include "index.html.gz.hpp"
 #include "loading.html.hpp"
 
