@@ -902,6 +902,40 @@ class Model:
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
+    def _set_vocab_rwkv_world(self):
+        assert (self.dir_model / "rwkv_vocab_v20230424.txt").is_file()
+        vocab_size = self.hparams.get("vocab_size", 65536)
+
+        tokens: list[bytes] = ['<s>'.encode("utf-8")]
+        toktypes: list[int] = [gguf.TokenType.CONTROL]
+
+        with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            for line in lines:
+                parts = line.split(' ')
+                assert len(parts) >= 3
+                token, token_len = ast.literal_eval(' '.join(parts[1:-1])), int(parts[-1])
+                token = token.encode("utf-8") if isinstance(token, str) else token
+                assert isinstance(token, bytes)
+                assert len(token) == token_len
+                token_text: str = repr(token)[2:-1]  # "b'\xff'" -> "\xff"
+                tokens.append(token_text.encode("utf-8"))
+                toktypes.append(gguf.TokenType.NORMAL)
+        remainder = vocab_size - len(tokens)
+        assert remainder >= 0
+        for i in range(len(tokens), vocab_size):
+            tokens.append(f"[PAD{i}]".encode("utf-8"))
+            toktypes.append(gguf.TokenType.UNUSED)
+
+        self.gguf_writer.add_tokenizer_model("rwkv")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
+        special_vocab.chat_template = "rwkv-world"
+        # hack: Add '\n\n' as the EOT token to make it chat normally
+        special_vocab._set_special_token("eot", 261)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def _set_vocab_builtin(self, model_name: Literal["gpt-neox", "llama-spm"], vocab_size: int):
         tokenizer_path = Path(sys.path[0]) / "models" / f"ggml-vocab-{model_name}.gguf"
         logger.warning(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
@@ -3327,38 +3361,7 @@ class Rwkv6Model(Model):
     model_arch = gguf.MODEL_ARCH.RWKV6
 
     def set_vocab(self):
-        assert (self.dir_model / "rwkv_vocab_v20230424.txt").is_file()
-        vocab_size = self.hparams.get("vocab_size", 65536)
-
-        tokens: list[bytes] = ['<s>'.encode("utf-8")]
-        toktypes: list[int] = [gguf.TokenType.CONTROL]
-
-        with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            for line in lines:
-                parts = line.split(' ')
-                assert len(parts) >= 3
-                token, token_len = ast.literal_eval(' '.join(parts[1:-1])), int(parts[-1])
-                token = token.encode("utf-8") if isinstance(token, str) else token
-                assert isinstance(token, bytes)
-                assert len(token) == token_len
-                token_text: str = repr(token)[2:-1]  # "b'\xff'" -> "\xff"
-                tokens.append(token_text.encode("utf-8"))
-                toktypes.append(gguf.TokenType.NORMAL)
-        remainder = vocab_size - len(tokens)
-        assert remainder >= 0
-        for i in range(len(tokens), vocab_size):
-            tokens.append(f"[PAD{i}]".encode("utf-8"))
-            toktypes.append(gguf.TokenType.UNUSED)
-
-        self.gguf_writer.add_tokenizer_model("rwkv")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
-        special_vocab.chat_template = "rwkv-world"
-        # hack: Add '\n\n' as the EOT token to make it chat normally
-        special_vocab._set_special_token("eot", 261)
-        special_vocab.add_to_gguf(self.gguf_writer)
+        self._set_vocab_rwkv_world()
 
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
@@ -3481,8 +3484,11 @@ class RWKV6Qwen2Model(Rwkv6Model):
 
 
 @Model.register("Rwkv7ForCausalLM", "RWKV7ForCausalLM")
-class Rwkv7Model(Rwkv6Model):
+class Rwkv7Model(Model):
     model_arch = gguf.MODEL_ARCH.RWKV7
+
+    def set_vocab(self):
+        self._set_vocab_rwkv_world()
 
     def calc_lora_rank(self, hidden_size, exponent, multiplier):
         return max(1, round(hidden_size ** exponent * multiplier / 32)) * 32
