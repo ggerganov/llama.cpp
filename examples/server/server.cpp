@@ -1824,16 +1824,16 @@ struct server_context {
 
         if (use_jinja) {
             auto templates = common_chat_templates_from_model(model, "");
-            common_chat_params params;
+            common_chat_inputs params;
             params.messages = json::array({{
                 {"role", "user"},
                 {"content", "test"},
             }});
             GGML_ASSERT(templates.template_default);
             try {
-                common_chat_init(*templates.template_default, params);
+                common_chat_params_init(*templates.template_default, params);
                 if (templates.template_tool_use) {
-                    common_chat_init(*templates.template_tool_use, params);
+                    common_chat_params_init(*templates.template_tool_use, params);
                 }
                 return true;
             } catch (const std::exception & e) {
@@ -3787,10 +3787,10 @@ int main(int argc, char ** argv) {
         std::vector<server_task> tasks;
 
         try {
-            common_chat_data chat_data;
+            common_chat_params chat_data;
             bool add_special = false;
             if (tmpl && ctx_server.params_base.use_jinja) {
-                chat_data = common_chat_init(*tmpl, {
+                chat_data = common_chat_params_init(*tmpl, {
                     /* .messages = */ json_value(data, "messages", json::array()),
                     /* .tools = */   json_value(data, "tools", json()),
                     /* .tool_choice = */ json_value(data, "tool_choice", std::string("auto")),

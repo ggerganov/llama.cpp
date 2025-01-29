@@ -17,7 +17,7 @@
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 #include "minja.hpp"
-#include "chat-handler.hpp"
+#include "chat.hpp"
 #include "chat-template.hpp"
 
 #include <random>

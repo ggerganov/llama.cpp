@@ -1,4 +1,4 @@
-#include "chat-handler.hpp"
+#include "chat.hpp"
 #include "chat-template.hpp"
 #include "llama-grammar.h"
 #include "unicode.h"
@@ -169,15 +169,15 @@ struct delta_data {
 };
 
 static delta_data init_delta(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
-  common_chat_params params;
+  common_chat_inputs params;
   params.parallel_tool_calls = true;
   params.messages = json::array();
   params.messages.push_back(user_message);
   params.tools = tools;
-  auto prefix_data = common_chat_init(tmpl, params);
+  auto prefix_data = common_chat_params_init(tmpl, params);
   params.messages.push_back(delta_message);
   params.add_generation_prompt = false;
-  auto full_data = common_chat_init(tmpl, params);
+  auto full_data = common_chat_params_init(tmpl, params);
 
   std::string prefix = prefix_data.prompt;
   std::string full = full_data.prompt;
@@ -220,7 +220,7 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
   };
 
   for (const auto & tool_choice : json({"auto", "required"})) {
-    common_chat_params params;
+    common_chat_inputs params;
     params.tool_choice = tool_choice;
     params.parallel_tool_calls = true;
     params.messages = json {user_message, test_message};
@@ -301,15 +301,15 @@ static void test_template_output_parsers() {
   };
 
 
-  common_chat_params no_tools_params;
+  common_chat_inputs no_tools_params;
   no_tools_params.messages = {{{"role", "user"}, {"content", "Hey"}}};
 
-  common_chat_params tools_params = no_tools_params;
+  common_chat_inputs tools_params = no_tools_params;
   tools_params.tools = json::array();
   tools_params.tools.push_back(special_function_tool);
 
-  auto describe = [](const common_chat_template & tmpl, const common_chat_params & params) {
-    auto data = common_chat_init(tmpl, params);
+  auto describe = [](const common_chat_template & tmpl, const common_chat_inputs & params) {
+    auto data = common_chat_params_init(tmpl, params);
     return data.format;
   };
 
@@ -322,7 +322,7 @@ static void test_template_output_parsers() {
     assert_equals(std::string("generic tool calls"), describe(common_chat_template(read_file("models/templates/microsoft-Phi-3.5-mini-instruct.jinja"), "<s>", "</s>"), tools_params));
 
     // Generic tool calls doesn't generate / parse content-only messages symmetrically.
-    assert_msg_equals(msg_from_json(text_message), common_chat_init(tmpl, tools_params).parser(
+    assert_msg_equals(msg_from_json(text_message), common_chat_params_init(tmpl, tools_params).parser(
         "{\n"
         "  \"response\": \"Hello, world!\"\n"
         "}"));

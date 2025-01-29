@@ -1,11 +1,5 @@
-/*
-    Copyright 2024 Google LLC
+// Chat support (incl. tool call grammar constraining & output parsing) w/ generic & custom template handlers.
 
-    Use of this source code is governed by an MIT-style
-    license that can be found in the LICENSE file or at
-    https://opensource.org/licenses/MIT.
-*/
-// SPDX-License-Identifier: MIT
 #pragma once
 
 #include "common.h"
@@ -16,7 +10,7 @@
 
 using json = nlohmann::ordered_json;
 
-struct common_chat_params {
+struct common_chat_inputs {
     json messages;
     json tools;
     json tool_choice;
@@ -29,7 +23,7 @@ struct common_chat_params {
 
 typedef std::function<common_chat_msg(const std::string & input)> common_chat_parser;
 
-struct common_chat_data {
+struct common_chat_params {
     json prompt;
     std::string grammar;
     std::vector<common_grammar_trigger> grammar_triggers;
@@ -39,4 +33,4 @@ struct common_chat_data {
     bool grammar_lazy = false;
 };
 
-struct common_chat_data common_chat_init(const common_chat_template & tmpl, const struct common_chat_params & params);
+struct common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & params);
