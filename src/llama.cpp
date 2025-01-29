@@ -7215,7 +7215,7 @@ struct llm_build_context {
                 struct ggml_tensor * Qcur = nullptr;
                 struct ggml_tensor * Kcur = nullptr;
                 struct ggml_tensor * Vcur = nullptr;
-                if(model.type == LLM_TYPE_1_5B|| model.type == LLM_TYPE_4B || model.type == LLM_TYPE_9B){
+                if(model.type == LLM_TYPE_1_5B|| model.type == LLM_TYPE_4B || model.type == LLM_TYPE_9B) {
                     Qcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wq, cur);
                     cb(Qcur, "Qcur", il);
                     if (model.layers[il].bq) {
