@@ -3,8 +3,7 @@
 //  Also acts as a CLI to generate a Markdown summary of the formats of Jinja templates,
 //  e.g. given Minja (http://github.com/google/minja) checked out in parent dir:
 //
-//    cmake -B build && cmake --build build --parallel && \
-//      ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+//    cmake -B build && cmake --build build --parallel && ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
 //
 #include "chat.hpp"
 #include "chat-template.hpp"
