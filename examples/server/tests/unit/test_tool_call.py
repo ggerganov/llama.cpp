@@ -154,7 +154,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../tests/chat/templates/{template_hf_repo.replace('/', '') + ('-' + template_variant if template_variant else '')}.jinja"
-        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_hf_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
     server.start()
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
@@ -243,7 +243,7 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../tests/chat/templates/{template_hf_repo.replace('/', '') + ('-' + template_variant if template_variant else '')}.jinja"
-        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_hf_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
     server.start(timeout_seconds=15*60)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,
@@ -292,7 +292,7 @@ def test_hello_world_tool_call(expected_arguments: str | None, hf_repo: str, hf_
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../tests/chat/templates/{template_hf_repo.replace('/', '') + ('-' + template_variant if template_variant else '')}.jinja"
-        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_hf_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
     server.start(timeout_seconds=15*60)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,

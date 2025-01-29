@@ -118,8 +118,8 @@ struct llama_grammar {
     // lazy grammars wait for trigger words or tokens before constraining the sampling.
     // we still ahve trigger_tokens for non-lazy grammars to force printing of special trigger tokens.
     // (useful e.g. for tool_choice=required)
-    bool                     lazy;             // Useful when resetting
-    bool                     awaiting_trigger; // Initialized to lazy
+    bool                     lazy;
+    bool                     awaiting_trigger; // Initialized to true for lazy grammars only
     std::string              trigger_buffer;   // Output buffered by lazy grammar. Will be cleared once trigger is found.
     std::vector<llama_token> trigger_tokens;   // Tokens that trigger a lazy grammar, or tokens to force printing of (even if special).
     std::vector<std::string> trigger_words;

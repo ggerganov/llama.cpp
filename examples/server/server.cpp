@@ -768,7 +768,6 @@ struct server_task_result_cmpl_partial : server_task_result {
     oaicompat_type oaicompat = OAICOMPAT_TYPE_NONE;
     std::string    oaicompat_model;
     std::string    oaicompat_cmpl_id;
-    std::shared_ptr<common_chat_parser> chat_parser;
 
     virtual int get_index() override {
         return index;
@@ -1191,7 +1190,6 @@ struct server_slot {
 
     std::string stopping_word;
 
-    std::shared_ptr<common_chat_parser> chat_parser;
 
     // sampling
     json json_schema;
@@ -1199,6 +1197,8 @@ struct server_slot {
     struct common_sampler * smpl = nullptr;
 
     llama_token sampled;
+
+    common_chat_parser chat_parser;
 
     // stats
     size_t n_sent_text        = 0; // number of sent text character
@@ -3998,8 +3998,6 @@ int main(int argc, char ** argv) {
 
         auto body = json::parse(req.body);
         const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
-        LOG_INF("Request: %s\n", body.dump(2).c_str());
-
         json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
 
         return handle_completions_impl(

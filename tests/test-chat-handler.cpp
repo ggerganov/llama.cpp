@@ -169,9 +169,6 @@ struct delta_data {
 };
 
 static delta_data init_delta(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & user_message, const json & delta_message, const json & tools) {
-  fprintf(stderr, "Template source: %s\n", tmpl.source().c_str());
-  fprintf(stderr, "Delta message: %s\n", delta_message.dump(2).c_str());
-
   common_chat_params params;
   params.parallel_tool_calls = true;
   params.messages = json::array();
@@ -209,12 +206,14 @@ static delta_data init_delta(const common_chat_template & tmpl, const std::vecto
   return {delta, full_data.grammar, full_data.parser};
 }
 
+/*
+  Applies the template to 1 user message w/ add_generation_prompt=true, then w/ the test message w/ add_generation_prompt=false,
+  gets the diff, removes any end tokens and parses the result w/ the grammar, checking that
+  the parsed message is the same as the test_message
+*/
 static void test_template(const common_chat_template & tmpl, const std::vector<std::string> & end_tokens, const json & test_message, const json & tools = {}, const std::string & expected_delta = "", bool skip_grammar_test = false, bool skip_parser_test = false) {
-  // auto tool_call_style = common_tool_call_style_detect(tmpl);
   common_chat_msg expected_msg = msg_from_json(test_message);
 
-  // Format the message: apply the template to 1 user message w/ add_generation_prompt=true, then w/ the extra message w/ add_generation_prompt=false,
-  // get the diff and try and parse it w/ the grammar.
   auto user_message = json {
       {"role", "user"},
       {"content", "Hello, world!"}
@@ -228,7 +227,6 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
     params.tools = tools;
 
     auto data = init_delta(tmpl, end_tokens, user_message, test_message, tools);
-    std::cout << "Full delta:\n```\n" << data.delta << "\n```" << std::endl;
     if (!expected_delta.empty()) {
       assert_equals(expected_delta, data.delta);
     }
@@ -495,7 +493,6 @@ static void test_template_output_parsers() {
 }
 
 int main() {
-    // test_parsing();
     test_template_output_parsers();
 
     std::cout << "\n[tool-call] All tests passed!" << std::endl;
