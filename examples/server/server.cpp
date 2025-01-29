@@ -1794,17 +1794,16 @@ struct server_context {
 
         if (use_jinja) {
             auto templates = common_chat_templates_from_model(model, "");
+            common_chat_params params;
+            params.messages = json::array({{
+                {"role", "user"},
+                {"content", "test"},
+            }});
             GGML_ASSERT(templates.template_default);
             try {
-                templates.template_default->apply({{
-                    {"role", "user"},
-                    {"content", "test"},
-                }}, json(), true);
+                common_chat_init(*templates.template_default, params);
                 if (templates.template_tool_use) {
-                    templates.template_tool_use->apply({{
-                        {"role", "user"},
-                        {"content", "test"},
-                    }}, json(), true);
+                    common_chat_init(*templates.template_tool_use, params);
                 }
                 return true;
             } catch (const std::exception & e) {
@@ -3770,6 +3769,7 @@ int main(int argc, char ** argv) {
                     /* .stream = */ json_value(data, "stream", false),
                     /* .grammar = */ json_value(data, "grammar", std::string("")),
                 });
+                LOG_INF("Chat format: %s\n", chat_data.format.c_str());
                 if (data.contains("grammar")) {
                     if (!chat_data.grammar.empty()) {
                         throw std::runtime_error("Cannot provide grammar and tools");

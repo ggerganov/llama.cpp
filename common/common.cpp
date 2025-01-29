@@ -12,6 +12,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat-handler.hpp"
 #include "chat-template.hpp"
 
 #include <algorithm>
@@ -1774,11 +1775,13 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {
-            auto chat_template = minja::chat_template(tmpl, "<s>", "</s>");
-            chat_template.apply({{
+            auto chat_template = common_chat_template(tmpl, "<s>", "</s>");
+            common_chat_params params;
+            params.messages = json::array({{
                 {"role", "user"},
                 {"content", "test"},
-            }}, json(), true);
+            }});
+            common_chat_init(chat_template, params);
             return true;
         } catch (const std::exception & e) {
             LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
@@ -1800,7 +1803,11 @@ std::string common_chat_apply_template(
         for (const auto & msg : msgs) {
             messages.push_back({{"role", msg.role}, {"content", msg.content}});
         }
-        return tmpl.apply(messages, /* tools= */ json(), add_ass);
+        common_chat_params params;
+        params.messages = messages;
+        params.add_generation_prompt = add_ass;
+        auto data = common_chat_init(tmpl, params);
+        return data.prompt;
     }
 
     int alloc_size = 0;

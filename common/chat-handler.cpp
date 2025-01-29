@@ -162,6 +162,14 @@ static void foreach_function(const json & tools, const std::function<void(const 
     }
 }
 
+static common_chat_msg no_op_text_parser(const std::string & input) {
+    return {
+        /* .role = */ "assistant",
+        /* .content = */ input,
+        /* .tool_calls = */ {},
+    };
+}
+
 static common_chat_data common_chat_init_generic_tool_call(const common_chat_template & tmpl, const struct common_chat_params & params) {
     common_chat_data data;
 
@@ -498,40 +506,49 @@ static common_chat_data common_chat_init_deepseek_r1_tool_call(const common_chat
 }
 
 static common_chat_data common_chat_init_firefunction_v2_tool_call(const common_chat_template & tmpl, const struct common_chat_params & params) {
+    fprintf(stderr, "%s\n", __func__);
     common_chat_data data;
-    data.grammar_lazy = params.tool_choice != "required";
-    data.grammar = build_grammar([&](const common_grammar_builder & builder) {
-        auto schemas = json::array();
-        foreach_function(params.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            schemas.push_back({
-                {"type", "object"},
-                {"properties", {
-                    {"name", {
-                        {"type", "string"},
-                        {"const", function["name"]},
+    if (!params.tools.is_null() && !params.tools.empty()) {
+        data.grammar_lazy = params.tool_choice != "required";
+        data.grammar = build_grammar([&](const common_grammar_builder & builder) {
+            auto schemas = json::array();
+            foreach_function(params.tools, [&](const json & tool) {
+                const auto & function = tool["function"];
+                schemas.push_back({
+                    {"type", "object"},
+                    {"properties", {
+                        {"name", {
+                            {"type", "string"},
+                            {"const", function["name"]},
+                        }},
+                        {"arguments", function["parameters"]},
                     }},
-                    {"arguments", function["parameters"]},
-                }},
-                {"required", json::array({"name", "arguments", "id"})},
+                    {"required", json::array({"name", "arguments", "id"})},
+                });
             });
-        });
-        auto schema = json {
-            {"type", "array"},
-            {"items", schemas.size() == 1 ? schemas[0] : json {{"anyOf", schemas}}},
-            {"minItems", 1},
+            auto schema = json {
+                {"type", "array"},
+                {"items", schemas.size() == 1 ? schemas[0] : json {{"anyOf", schemas}}},
+                {"minItems", 1},
+            };
+            if (!params.parallel_tool_calls) {
+                schema["maxItems"] = 1;
+            }
+            builder.add_rule("root", "\" functools\"? " + builder.add_schema("tool_calls", schema));
+        }, grammar_options);
+        data.grammar_triggers.push_back({" functools[", /* .at_start = */ false});
+        data.parser = [](const std::string & input) {
+            return parse_prefixed_json_tool_call_array(input, " functools[", /* rstrip_prefix= */ 1);
         };
-        if (!params.parallel_tool_calls) {
-            schema["maxItems"] = 1;
-        }
-        builder.add_rule("root", "\" functools\"? " + builder.add_schema("tool_calls", schema));
-    }, grammar_options);
-    data.grammar_triggers.push_back({" functools[", /* .at_start = */ false});
-    data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
-    data.format = "firefunction v2 tool calls";
-    data.parser = [](const std::string & input) {
-        return parse_prefixed_json_tool_call_array(input, " functools[", /* rstrip_prefix= */ 1);
-    };
+        data.format = "firefunction v2 tool calls";
+    } else {
+        data.parser = no_op_text_parser;
+        data.format = "firefunction v2 text-only";
+    }
+    data.prompt = tmpl.apply(params.messages, /* tools= */ nullptr, params.add_generation_prompt, {
+        {"datetime", "Jan 29 2025 13:00:00 GMT"},
+        {"functions", json(params.tools.empty() ? "" : params.tools.dump(2))},
+    }, /* adjust_inputs= */ false);
     return data;
 }
 
@@ -747,13 +764,7 @@ static common_chat_data common_chat_init_without_tools(const common_chat_templat
     common_chat_data data;
     data.prompt = tmpl.apply(params.messages, params.tools.empty() ? json() : params.tools, params.add_generation_prompt);
     data.format = "content-only";
-    data.parser = [](const std::string & input) -> common_chat_msg {
-        return {
-            /* .role = */ "assistant",
-            /* .content = */ input,
-            /* .tool_calls = */ {},
-        };
-    };
+    data.parser = no_op_text_parser;
     data.grammar_lazy = false;
     if (!params.json_schema.is_null()) {
         if (!params.grammar.empty()) {
@@ -776,6 +787,10 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
     if (src.find(">>>all") != std::string::npos) {
         // Functionary prepends "all\n" to plain content outputs, so we use the parser no matter when
         return common_chat_init_functionary_v3_2_tool_call(tmpl, params);
+    }
+    if (src.find(" functools[") != std::string::npos) {
+        // Firefunction v2 requires datetime and functions in the context
+        return common_chat_init_firefunction_v2_tool_call(tmpl, params);
     }
     
     if (has_tools) {
@@ -806,9 +821,6 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
     // }
     if (src.find("[TOOL_CALLS]") != std::string::npos) {
         return common_chat_init_mistral_nemo_tool_call(tmpl, params);
-    }
-    if (src.find(" functools[") != std::string::npos) {
-        return common_chat_init_firefunction_v2_tool_call(tmpl, params);
     }
     return common_chat_init_generic_tool_call(tmpl, params);
 }
