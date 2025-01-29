@@ -496,6 +496,14 @@ void process_shaders() {
 
     string_to_spv("rwkv_wkv6_f32", "wkv6.comp", merge_maps(base_dict, {{"A_TYPE", "float"}}));
 
+    string_to_spv("simpler_mul_mat_mat_f32", "simpler_mul_mat_mat_f32.comp", {});
+    string_to_spv("simpler_mul_mat_f16", "simpler_mul_mat_f16.comp", {});
+    string_to_spv("simpler_mul_mat_q4_0", "simpler_mul_mat_q4_0.comp", {});
+    string_to_spv("simpler_mul_mat_q4_1", "simpler_mul_mat_q4_1.comp", {});
+    string_to_spv("simpler_mul_mat_q4_k", "simpler_mul_mat_q4_k.comp", {});
+    string_to_spv("simpler_mul_mat_q6_k", "simpler_mul_mat_q6_k.comp", {});
+    string_to_spv("simpler_mul_mat_q8_0", "simpler_mul_mat_q8_0.comp", {});
+
     for (auto &c : compiles) {
         c.wait();
     }
