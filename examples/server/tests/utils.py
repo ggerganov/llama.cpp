@@ -191,7 +191,7 @@ class ServerProcess:
             creationflags=flags,
             stdout=sys.stdout,
             stderr=sys.stdout,
-            env={**os.environ, "LLAMA_CACHE": "tmp"},
+            # env={**os.environ, "LLAMA_CACHE": "tmp"},
         )
         server_instances.add(self)
 
