@@ -96,7 +96,11 @@ if (GGML_CCACHE)
 
     if (GGML_CCACHE_FOUND)
         # TODO: should not be set globally
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        if (GGML_SYCL AND WIN32)
+            set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "ccache compiler_type=icl")
+        else ()
+            set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        endif ()
         set(ENV{CCACHE_SLOPPINESS} time_macros)
         message(STATUS "ccache found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
     else()
