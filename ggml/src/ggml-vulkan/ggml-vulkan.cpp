@@ -274,6 +274,10 @@ struct vk_device_struct {
 
     ggml_backend_buffer_type buffer_type;
 
+    VkMemoryType memory_type[VK_MAX_MEMORY_TYPES] {};
+    VkMemoryHeap memory_heap[VK_MAX_MEMORY_HEAPS] {};
+    std::atomic<VkDeviceSize> memory_usage[VK_MAX_MEMORY_TYPES];
+
 #ifdef GGML_VULKAN_MEMORY_DEBUG
     std::unique_ptr<vk_memory_logger> memory_logger;
 #endif
@@ -311,6 +315,7 @@ struct vk_buffer_struct {
     vk::Buffer buffer = VK_NULL_HANDLE;
     vk::DeviceMemory device_memory = VK_NULL_HANDLE;
     vk::MemoryPropertyFlags memory_property_flags;
+    uint32_t memory_type_index {};
     void * ptr;
     size_t size = 0;
 
@@ -322,6 +327,7 @@ struct vk_buffer_struct {
         }
         VK_LOG_DEBUG("~vk_buffer_struct(" << buffer << ", " << size << ")");
 
+        device->memory_usage[memory_type_index] -= size;
         device->device.freeMemory(device_memory);
         device->device.destroyBuffer(buffer);
     }
@@ -1229,6 +1235,18 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
     uint32_t memory_type_index = UINT32_MAX;
 
     memory_type_index = find_properties(&mem_props, &mem_req, req_flags);
+
+    // Avoid allocating "too much" host visible vidmem. Large HVV allocations may be contiguous
+    // and can fall back to sysmem due to fragmentation.
+    if (!device->uma &&
+        req_flags == (vk::MemoryPropertyFlagBits::eDeviceLocal | vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)) {
+        uint32_t heap_index = device->memory_type[memory_type_index].heapIndex;
+        if (device->memory_usage[memory_type_index] + size*2 >= device->memory_heap[heap_index].size) {
+            req_flags = fallback_flags;
+            memory_type_index = find_properties(&mem_props, &mem_req, req_flags);
+        }
+    }
+
     buf->memory_property_flags = req_flags;
 
     if (memory_type_index == UINT32_MAX && fallback_flags) {
@@ -1262,6 +1280,9 @@ static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, vk::Memor
             throw e;
         }
     }
+    device->memory_usage[memory_type_index] += mem_req.size;
+
+    buf->memory_type_index = memory_type_index;
     buf->ptr = nullptr;
 
     if (buf->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
@@ -2186,6 +2207,16 @@ static vk_device ggml_vk_get_device(size_t idx) {
         }
 
         device->physical_device = physical_devices[dev_num];
+
+        vk::PhysicalDeviceMemoryProperties memprops = device->physical_device.getMemoryProperties();
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+            device->memory_heap[i] = memprops.memoryHeaps[i];
+        }
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
+            device->memory_type[i] = memprops.memoryTypes[i];
+            device->memory_usage[i] = 0;
+        }
+
         const std::vector<vk::ExtensionProperties> ext_props = device->physical_device.enumerateDeviceExtensionProperties();
 
         bool fp16_storage = false;
@@ -3231,6 +3262,7 @@ static void * ggml_vk_host_malloc(vk_device& device, size_t size) {
     if(!(buf->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible)) {
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory\n",
             size/1024.0/1024.0);
+        device->memory_usage[buf->memory_type_index] -= buf->size;
         device->device.freeMemory(buf->device_memory);
         device->device.destroyBuffer(buf->buffer);
         return nullptr;
