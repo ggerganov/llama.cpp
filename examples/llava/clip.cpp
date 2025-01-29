@@ -2553,7 +2553,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     if (ctx->has_minicpmv_projector) {
         GGML_ASSERT(batch_size == 1);
     }
-    if(ctx->has_glm_projector){
+    if(ctx->has_glm_projector) {
         GGML_ASSERT(batch_size == 1);
         ggml_tensor * boi = ctx->vision_model.boi_w;
         ggml_backend_tensor_get(boi,vec,0,ggml_nbytes(boi));
