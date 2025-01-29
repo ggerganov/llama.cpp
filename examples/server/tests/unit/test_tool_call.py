@@ -61,28 +61,7 @@ WEATHER_TOOL = {
 }
 
 
-@pytest.mark.parametrize("template_name,tool,argument_key", [
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
-    ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
-    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
-    ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
-    ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code"),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success"),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code"),
-    ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success"),
-    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code"),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success"),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code"),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success"),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code"),
-    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success"),
-    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code"),
-    ("fireworks-ai-llama-3-firefunction-v2",          TEST_TOOL,            "success"),
-    ("fireworks-ai-llama-3-firefunction-v2",          PYTHON_TOOL,          "code"),
-    # TODO: fix these
-])
-def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
+def do_test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
     n_predict = 512
     global server
     # server = ServerPreset.stories15m_moe()
@@ -115,6 +94,40 @@ def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argu
     if argument_key is not None:
         actual_arguments = json.loads(actual_arguments)
         assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
+
+
+@pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("google-gemma-2-2b-it",                          TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code"),
+])
+def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict, argument_key: str | None):
+    do_test_completion_with_required_tool_tiny(template_name, tool, argument_key)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
+    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
+    ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
+    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
+    ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
+    ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code"),
+    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success"),
+    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code"),
+    ("fireworks-ai-llama-3-firefunction-v2",          TEST_TOOL,            "success"),
+    ("fireworks-ai-llama-3-firefunction-v2",          PYTHON_TOOL,          "code"),
+])
+def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict, argument_key: str | None):
+    do_test_completion_with_required_tool_tiny(template_name, tool, argument_key)
 
 
 @pytest.mark.slow
@@ -183,18 +196,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
         assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
 
 
-@pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
-    ("meetkai-functionary-medium-v3.1",               128, [],            None),
-    ("meetkai-functionary-medium-v3.1",               128, [TEST_TOOL],   None),
-    ("meetkai-functionary-medium-v3.1",               128, [PYTHON_TOOL], 'none'),
-    ("meetkai-functionary-medium-v3.2",               128, [],            None),
-    ("meetkai-functionary-medium-v3.2",               128, [TEST_TOOL],   None),
-    ("meetkai-functionary-medium-v3.2",               128, [PYTHON_TOOL], 'none'),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [],            None),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [TEST_TOOL],   None),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         128, [PYTHON_TOOL], 'none'),
-])
-def test_completion_without_tool_call(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
+def do_test_completion_without_tool_call(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
     global server
     server.jinja = True
     server.n_predict = n_predict
@@ -215,6 +217,31 @@ def test_completion_without_tool_call(template_name: str, n_predict: int, tools:
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     assert choice["message"].get("tool_calls") is None, f'Expected no tool call in {choice["message"]}'
+
+
+@pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
+    ("meta-llama-Llama-3.3-70B-Instruct",         128, [],            None),
+    ("meta-llama-Llama-3.3-70B-Instruct",         128, [TEST_TOOL],   None),
+    ("meta-llama-Llama-3.3-70B-Instruct",         128, [PYTHON_TOOL], 'none'),
+])
+def test_completion_without_tool_call_fast(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
+    do_test_completion_without_tool_call(template_name, n_predict, tools, tool_choice)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
+    ("meetkai-functionary-medium-v3.1",               128, [],            None),
+    ("meetkai-functionary-medium-v3.1",               128, [TEST_TOOL],   None),
+    ("meetkai-functionary-medium-v3.1",               128, [PYTHON_TOOL], 'none'),
+    ("meetkai-functionary-medium-v3.2",               128, [],            None),
+    ("meetkai-functionary-medium-v3.2",               128, [TEST_TOOL],   None),
+    ("meetkai-functionary-medium-v3.2",               128, [PYTHON_TOOL], 'none'),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, [],            None),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, [TEST_TOOL],   None),
+    ("meta-llama-Llama-3.2-3B-Instruct",              128, [PYTHON_TOOL], 'none'),
+])
+def test_completion_without_tool_call_slow(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
+    do_test_completion_without_tool_call(template_name, n_predict, tools, tool_choice)
 
 
 @pytest.mark.slow
