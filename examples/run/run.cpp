@@ -674,35 +674,26 @@ class LlamaData {
     }
 
     int github_dl(const std::string & model, const std::string & bn) {
-        std::string repository = model;
-        std::string branch     = "main";
-        size_t      at_pos     = model.find('@');
+        std::string  repository = model;
+        std::string  branch     = "main";
+        const size_t at_pos     = model.find('@');
         if (at_pos != std::string::npos) {
             repository = model.substr(0, at_pos);
             branch     = model.substr(at_pos + 1);
         }
 
-        std::vector<std::string> repo_parts;
-        size_t                   start = 0;
-        for (size_t end = 0; (end = repository.find('/', start)) != std::string::npos; start = end + 1) {
-            repo_parts.push_back(repository.substr(start, end - start));
-        }
-
-        repo_parts.push_back(repository.substr(start));
+        const std::vector<std::string> repo_parts = string_split(repository, "/");
         if (repo_parts.size() < 3) {
             printe("Invalid GitHub repository format\n");
             return 1;
         }
 
-        const std::string org          = repo_parts[0];
-        const std::string project      = repo_parts[1];
-        std::string       project_path = repo_parts[2];
-        for (size_t i = 3; i < repo_parts.size(); ++i) {
-            project_path += "/" + repo_parts[i];
+        const std::string & org          = repo_parts[0];
+        const std::string & project      = repo_parts[1];
+        std::string         url          = "https://raw.githubusercontent.com/" + org + "/" + project + "/" + branch;
+        for (size_t i = 2; i < repo_parts.size(); ++i) {
+            url += "/" + repo_parts[i];
         }
-
-        const std::string url =
-            "https://raw.githubusercontent.com/" + org + "/" + project + "/" + branch + "/" + project_path;
 
         return download(url, bn, true);
     }
@@ -735,19 +726,20 @@ class LlamaData {
         }
 
         const std::string bn = basename(model_);
-        if (string_starts_with(model_, "hf://") || string_starts_with(model_, "huggingface://")) {
+        if (string_starts_with(model_, "hf://") || string_starts_with(model_, "huggingface://") ||
+            string_starts_with(model_, "hf.co/")) {
+            rm_until_substring(model_, "hf.co/");
             rm_until_substring(model_, "://");
             ret = huggingface_dl(model_, bn);
-        } else if (string_starts_with(model_, "hf.co/")) {
-            rm_until_substring(model_, "hf.co/");
-            ret = huggingface_dl(model_, bn);
-        } else if (string_starts_with(model_, "https://") || string_starts_with(model_, "http://")) {
+        } else if ((string_starts_with(model_, "https://") || string_starts_with(model_, "http://")) &&
+                   !string_starts_with(model_, "https://ollama.com/library/")) {
             ret = download(model_, bn, true);
         } else if (string_starts_with(model_, "github:") || string_starts_with(model_, "github://")) {
-            rm_until_substring(model_, "github://");
             rm_until_substring(model_, "github:");
+            rm_until_substring(model_, "://");
             ret = github_dl(model_, bn);
         } else {  // ollama:// or nothing
+            rm_until_substring(model_, "ollama.com/library/");
             rm_until_substring(model_, "://");
             ret = ollama_dl(model_, bn);
         }
