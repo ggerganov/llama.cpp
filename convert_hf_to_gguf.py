@@ -3480,7 +3480,7 @@ class RWKV6Qwen2Model(Rwkv6Model):
             yield (new_name, data)
 
 
-@Model.register("Rwkv7ForCausalLM")
+@Model.register("Rwkv7ForCausalLM", "RWKV7ForCausalLM")
 class Rwkv7Model(Rwkv6Model):
     model_arch = gguf.MODEL_ARCH.RWKV7
 
@@ -3489,16 +3489,26 @@ class Rwkv7Model(Rwkv6Model):
 
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
-        head_size = self.hparams["head_size"]
+        try:
+            head_size = self.hparams["head_size"]
+            layer_norm_eps = self.hparams["layer_norm_epsilon"]
+        except KeyError:
+            head_size = self.hparams["head_dim"]
+            layer_norm_eps = self.hparams["norm_eps"]
         hidden_size = self.hparams["hidden_size"]
-        layer_norm_eps = self.hparams["layer_norm_epsilon"]
         intermediate_size = self.hparams["intermediate_size"] if self.hparams["intermediate_size"] is not None else (hidden_size * 4)
 
         # ICLR: In-Context-Learning-Rate
-        lora_rank_decay = self.hparams["lora_rank_decay"] if self.hparams["lora_rank_decay"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
-        lora_rank_iclr = self.hparams["lora_rank_iclr"] if self.hparams["lora_rank_iclr"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
-        lora_rank_value_residual_mix = self.hparams["lora_rank_value_residual_mix"] if self.hparams["lora_rank_value_residual_mix"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.3)
-        lora_rank_gate = self.hparams["lora_rank_gate"] if self.hparams["lora_rank_gate"] is not None else self.calc_lora_rank(hidden_size, 0.8, 0.6)
+        try:
+            lora_rank_decay = self.hparams["lora_rank_decay"] if self.hparams["lora_rank_decay"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+            lora_rank_iclr = self.hparams["lora_rank_iclr"] if self.hparams["lora_rank_iclr"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+            lora_rank_value_residual_mix = self.hparams["lora_rank_value_residual_mix"] if self.hparams["lora_rank_value_residual_mix"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.3)
+            lora_rank_gate = self.hparams["lora_rank_gate"] if self.hparams["lora_rank_gate"] is not None else self.calc_lora_rank(hidden_size, 0.8, 0.6)
+        except KeyError:
+            lora_rank_decay = self.hparams["decay_low_rank_dim"] if self.hparams["decay_low_rank_dim"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+            lora_rank_iclr = self.hparams["a_low_rank_dim"] if self.hparams["a_low_rank_dim"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.8)
+            lora_rank_value_residual_mix = self.hparams["v_low_rank_dim"] if self.hparams["v_low_rank_dim"] is not None else self.calc_lora_rank(hidden_size, 0.5, 1.3)
+            lora_rank_gate = self.hparams["gate_low_rank_dim"] if self.hparams["gate_low_rank_dim"] is not None else self.calc_lora_rank(hidden_size, 0.8, 0.6)
 
         # RWKV isn't context limited
         self.gguf_writer.add_context_length(1048576)
@@ -3517,17 +3527,43 @@ class Rwkv7Model(Rwkv6Model):
         self.gguf_writer.add_head_count(0)
 
     lerp_weights: dict[int, dict[str, Tensor]] = {}
+    lora_needs_transpose: bool = True
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # unify tensor names here to make life easier
+        name = name.replace("blocks", "layers").replace("ffn", "feed_forward")
+        name = name.replace("self_attn", "attention").replace("attn", "attention")
+        name = name.replace("time_mixer.", "")
+        # lora layer names in fla-hub's impl
+        if "_lora.lora" in name:
+            self.lora_needs_transpose = False
+        name = name.replace("_lora.lora.0.weight", "1.weight")
+        name = name.replace("_lora.lora.2.weight", "2.weight")
+        name = name.replace("_lora.lora.2.bias", "0.weight")
+
+        name = name.replace("feed_forward_norm", "ln2")
+        name = name.replace("g_norm", "ln_x")
+
+        if "attention.v" in name and "value" not in self.map_tensor_name(name) and bid == 0:
+            # some models have dummy v0/v1/v2 on first layer while others don't
+            # ignore them all since they are not used
+            return
+
         if bid is not None and "attention.x_" in name:
-            try:
-                self.lerp_weights[bid][name] = data_torch
-            except KeyError:
-                self.lerp_weights[bid] = {name: data_torch}
-            if all(f"model.blocks.{bid}.attention.x_{i}" in self.lerp_weights[bid].keys() for i in ["r", "w", "k", "v", "a", "g"]):
+            if "attention.x_x" in name:
+                # already concatenated
                 new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
-                data = torch.stack([self.lerp_weights[bid][f"model.blocks.{bid}.attention.x_{i}"].squeeze(0) for i in ["r", "w", "k", "v", "a", "g"]], dim=0)
+                data = data_torch.reshape(6, 1, -1)
                 yield (new_name, data)
+            else:
+                try:
+                    self.lerp_weights[bid][name] = data_torch
+                except KeyError:
+                    self.lerp_weights[bid] = {name: data_torch}
+                if all(f"model.layers.{bid}.attention.x_{i}" in self.lerp_weights[bid].keys() for i in ["r", "w", "k", "v", "a", "g"]):
+                    new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
+                    data = torch.stack([self.lerp_weights[bid][f"model.layers.{bid}.attention.x_{i}"].squeeze(0) for i in ["r", "w", "k", "v", "a", "g"]], dim=0)
+                    yield (new_name, data)
             return
         else:
             data_torch = data_torch.squeeze()
@@ -3536,7 +3572,7 @@ class Rwkv7Model(Rwkv6Model):
             if not (new_name.endswith(".weight") or new_name.endswith(".bias")):
                 new_name += ".weight"
 
-            if any(
+            if self.lora_needs_transpose and any(
                 new_name.endswith(t) for t in [
                     "time_mix_w1.weight", "time_mix_w2.weight",
                     "time_mix_a1.weight", "time_mix_a2.weight",
@@ -3558,7 +3594,7 @@ class Rwkv7Model(Rwkv6Model):
 
 
 @Model.register("RwkvHybridForCausalLM")
-class ARwkv7Model(Model):
+class ARwkv7Model(Rwkv7Model):
     model_arch = gguf.MODEL_ARCH.ARWKV7
 
     def set_vocab(self):
@@ -3598,41 +3634,6 @@ class ARwkv7Model(Model):
 
         # required by llama.cpp, unused
         self.gguf_writer.add_head_count(0)
-
-    lerp_weights: dict[int, dict[str, Tensor]] = {}
-
-    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        if bid is not None and "self_attn.time_mixer.x_" in name:
-            try:
-                self.lerp_weights[bid][name] = data_torch
-            except KeyError:
-                self.lerp_weights[bid] = {name: data_torch}
-            if all(f"model.layers.{bid}.self_attn.time_mixer.x_{i}" in self.lerp_weights[bid].keys() for i in ["r", "w", "k", "v", "a", "g"]):
-                new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
-                data = torch.stack([self.lerp_weights[bid][f"model.layers.{bid}.self_attn.time_mixer.x_{i}"].squeeze(0) for i in ["r", "w", "k", "v", "a", "g"]], dim=0)
-                yield (new_name, data)
-            return
-        else:
-            data_torch = data_torch.squeeze()
-            new_name = self.map_tensor_name(name)
-
-            if not (new_name.endswith(".weight") or new_name.endswith(".bias")):
-                new_name += ".weight"
-
-            if any(
-                new_name.endswith(t) for t in [
-                    "time_mix_w1.weight", "time_mix_w2.weight",
-                    "time_mix_a1.weight", "time_mix_a2.weight",
-                    "time_mix_v1.weight", "time_mix_v2.weight",
-                    "time_mix_g1.weight", "time_mix_g2.weight",
-                ]
-            ):
-                data_torch = data_torch.transpose(0, 1)
-
-            if 'r_k' in new_name:
-                data_torch = data_torch.flatten()
-
-            yield (new_name, data_torch)
 
 
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")
