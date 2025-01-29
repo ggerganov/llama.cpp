@@ -357,7 +357,7 @@ static void test_template_output_parsers() {
     assert_equals(std::string("hermes 2 pro tool calls"), describe(tmpl, tools_params));
     assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>"), tools_params));
     assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>"), tools_params));
-    
+
     test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* skip_grammar_test= */ true);
     test_template(tmpl, end_tokens, tool_call_message, tools,
         "<tool_call>\n"
@@ -435,7 +435,7 @@ static void test_template_output_parsers() {
     std::vector<std::string> end_tokens { "<｜end▁of▁sentence｜>" };
 
     assert_equals(std::string("deepseek r1 tool calls"), describe(tmpl, tools_params));
-    
+
     test_template(tmpl, end_tokens, text_message, tools,
         "Hello, world!", /* skip_grammar_test= */ true);
     test_template(tmpl, end_tokens, tool_call_message, tools,
