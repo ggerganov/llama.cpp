@@ -1270,11 +1270,11 @@ public:
           }
 
           auto r = right->evaluate(context);
-          if (op != Op::Eq && op != Op::Ne) {
-            if (r.is_null() || (l.is_null() && (op != Op::In && op != Op::NotIn))) {
-              throw std::runtime_error("unsupported operand type(s)");
-            }
-          }
+          // if (op != Op::Eq && op != Op::Ne) {
+          //   if (r.is_null() || (l.is_null() && (op != Op::In && op != Op::NotIn))) {
+          //     throw std::runtime_error("unsupported operand type(s): " + l.type() + " and " + r.type());
+          //   }
+          // }
           switch (op) {
               case Op::StrConcat: return l.to_str() + r.to_str();
               case Op::Add:       return l + r;
