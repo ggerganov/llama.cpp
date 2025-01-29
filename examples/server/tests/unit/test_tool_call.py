@@ -107,8 +107,8 @@ def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict,
 
 @pytest.mark.slow
 @pytest.mark.parametrize("template_name,tool,argument_key", [
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
-    ("meta-llama-Meta-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
+    ("meta-llama-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
     ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),

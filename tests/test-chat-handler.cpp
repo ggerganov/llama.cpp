@@ -369,7 +369,7 @@ static void test_template_output_parsers() {
         "</tool_call>");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Meta-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
     assert_equals(std::string("llama 3.1 tool calls"), describe(tmpl, tools_params));
