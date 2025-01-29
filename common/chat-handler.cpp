@@ -450,7 +450,6 @@ static common_chat_data common_chat_init_llama_3_2_tool_calls(const common_chat_
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         std::vector<std::string> tool_rules;
 
-        // auto add_tool = [&](const json & tool) {
         foreach_function(params.tools, [&](const json & tool) {
             const auto & function = tool["function"];
             std::string name = function["name"];
@@ -604,7 +603,6 @@ static common_chat_data common_chat_init_functionary_v3_2_tool_call(const common
 }
 
 static common_chat_data common_chat_init_functionary_v3_1_llama_3_1_tool_call(const common_chat_template & tmpl, const struct common_chat_params & params) {
-    // ./tests/chat/templates/meetkai-functionary-medium-v3.1.jinja
     // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
     common_chat_data data;
     json tools = params.tools.is_null() ? params.tools : json::array();

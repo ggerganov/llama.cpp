@@ -314,12 +314,12 @@ static void test_template_output_parsers() {
   };
 
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/google-gemma-2-2b-it.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/google-gemma-2-2b-it.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<end_of_turn>" };
 
     assert_equals(std::string("content-only"),       describe(tmpl, no_tools_params));
     assert_equals(std::string("generic tool calls"), describe(tmpl, tools_params));
-    assert_equals(std::string("generic tool calls"), describe(common_chat_template(read_file("tests/chat/templates/microsoft-Phi-3.5-mini-instruct.jinja"), "<s>", "</s>"), tools_params));
+    assert_equals(std::string("generic tool calls"), describe(common_chat_template(read_file("models/templates/microsoft-Phi-3.5-mini-instruct.jinja"), "<s>", "</s>"), tools_params));
 
     // Generic tool calls doesn't generate / parse content-only messages symmetrically.
     assert_msg_equals(msg_from_json(text_message), common_chat_init(tmpl, tools_params).parser(
@@ -340,7 +340,7 @@ static void test_template_output_parsers() {
         "}");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "</s>" };
 
     assert_equals(std::string("mistral nemo tool calls"), describe(tmpl, tools_params));
@@ -351,12 +351,12 @@ static void test_template_output_parsers() {
         /* skip_grammar_test= */ true);
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|im_end|>" };
 
     assert_equals(std::string("hermes 2 pro tool calls"), describe(tmpl, tools_params));
-    assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("tests/chat/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>"), tools_params));
-    assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("tests/chat/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>"), tools_params));
+    assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("models/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja"), "<s>", "</s>"), tools_params));
+    assert_equals(std::string("hermes 2 pro tool calls"), describe(common_chat_template(read_file("models/templates/Qwen-Qwen2.5-7B-Instruct.jinja"), "<s>", "</s>"), tools_params));
 
     test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* skip_grammar_test= */ true);
     test_template(tmpl, end_tokens, tool_call_message, tools,
@@ -369,11 +369,11 @@ static void test_template_output_parsers() {
         "</tool_call>");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/meta-llama-Llama-3.1-8B-Instruct.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
     assert_equals(std::string("llama 3.1 tool calls"), describe(tmpl, tools_params));
-    assert_equals(std::string("llama 3.1 tool calls"), describe(common_chat_template(read_file("tests/chat/templates/meta-llama-Llama-3.3-70B-Instruct.jinja"), "<s>", "</s>"), tools_params));
+    assert_equals(std::string("llama 3.1 tool calls"), describe(common_chat_template(read_file("models/templates/meta-llama-Llama-3.3-70B-Instruct.jinja"), "<s>", "</s>"), tools_params));
 
     // test_template(tmpl, end_tokens, text_message, tools, R"(?)", /* skip_grammar_test= */ true);
     test_template(tmpl, end_tokens, code_interpreter_tool_call_message, llama_3_1_tools,
@@ -384,7 +384,7 @@ static void test_template_output_parsers() {
         "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/meetkai-functionary-medium-v3.1.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/meetkai-functionary-medium-v3.1.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
     assert_equals(std::string("functionary v3.1 llama 3.1 tool calls"), describe(tmpl, tools_params));
@@ -395,7 +395,7 @@ static void test_template_output_parsers() {
         "<function=special_function>{\"arg1\": 1}</function>");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/meta-llama-Llama-3.2-3B-Instruct.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
     assert_equals(std::string("llama 3.2 tool calls"), describe(tmpl, tools_params));
@@ -406,7 +406,7 @@ static void test_template_output_parsers() {
         "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/meetkai-functionary-medium-v3.2.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/meetkai-functionary-medium-v3.2.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eom_id|>", "<|eot_id|>" };
 
     assert_equals(std::string("functionary v3.2 content-only"), describe(tmpl, no_tools_params));
@@ -420,7 +420,7 @@ static void test_template_output_parsers() {
         "{\"arg1\": 1}");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/fireworks-ai-llama-3-firefunction-v2.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/fireworks-ai-llama-3-firefunction-v2.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<|eot_id|>" };
 
     assert_equals(std::string("firefunction v2 tool calls"), describe(tmpl, tools_params));
@@ -431,7 +431,7 @@ static void test_template_output_parsers() {
         " functools[{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}]");
   }
   {
-    const common_chat_template tmpl(read_file("tests/chat/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja"), "<s>", "</s>");
+    const common_chat_template tmpl(read_file("models/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja"), "<s>", "</s>");
     std::vector<std::string> end_tokens { "<｜end▁of▁sentence｜>" };
 
     assert_equals(std::string("deepseek r1 tool calls"), describe(tmpl, tools_params));
