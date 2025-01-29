@@ -4127,8 +4127,10 @@ int main(int argc, char ** argv) {
     const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
         auto body = json::parse(req.body);
         const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
-        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
 
+        // format and return only the "prompt" field
+        json data = json::object();
+        data["prompt"] = oaicompat_completion_params_parse(body, chat_template, params.use_jinja)["prompt"];
         res_ok(res, data);
     };
 
