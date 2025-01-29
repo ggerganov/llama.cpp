@@ -14,7 +14,7 @@
 // mime type for sending response
 #define MIMETYPE_JSON "application/json; charset=utf-8"
 
-// auto generated files (update with ./deps.sh)
+// auto generated files (see README.md for details)
 #include "index.html.gz.hpp"
 #include "loading.html.hpp"
 
