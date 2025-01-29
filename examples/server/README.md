@@ -584,6 +584,10 @@ Uses the server's prompt template formatting functionality to convert chat messa
 
 `messages`: (Required) Chat turns in the same format as `/v1/chat/completions`.
 
+**Response format**
+
+Returns a JSON object with a field `prompt` containing a string of the input messages formatted according to the model's chat template format.
+
 ### POST `/embedding`: Generate embedding of a given text
 
 > [!IMPORTANT]
