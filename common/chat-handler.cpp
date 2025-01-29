@@ -352,11 +352,14 @@ static common_chat_data common_chat_init_llama_3_1_python_tag_tool_calls(const c
         std::vector<std::string> tool_rules;
 
         auto handle_builtin_tool = [&](const std::string & name, const json & parameters) {
-            if (name == "wolfram_alpha") { // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/wolfram_alpha/wolfram_alpha.py
+            if (name == "wolfram_alpha") {
+                // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/wolfram_alpha/wolfram_alpha.py
                 expect_tool_parameters(name, parameters, {"query"});
-            } else if (name == "web_search" || name == "brave_search") { // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/brave_search/brave_search.py
+            } else if (name == "web_search" || name == "brave_search") {
+                // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/brave_search/brave_search.py
                 expect_tool_parameters(name, parameters, {"query"});
-            } else if (name == "python" || name == "code_interpreter") { // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/inline/tool_runtime/code_interpreter/code_interpreter.py
+            } else if (name == "python" || name == "code_interpreter") {
+                // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/inline/tool_runtime/code_interpreter/code_interpreter.py
                 expect_tool_parameters(name, parameters, {"code"});
             } else {
                 return false;
@@ -792,7 +795,7 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
         // Firefunction v2 requires datetime and functions in the context
         return common_chat_init_firefunction_v2_tool_call(tmpl, params);
     }
-    
+
     if (has_tools) {
         return common_chat_init_without_tools(tmpl, params);
     }
@@ -816,11 +819,9 @@ common_chat_data common_chat_init(const common_chat_template & tmpl, const struc
     if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos) {
         return common_chat_init_deepseek_r1_tool_call(tmpl, params);
     }
-    // if (src.find("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>") != std::string::npos) {
-    //     TODO: Command-R-Plus
-    // }
     if (src.find("[TOOL_CALLS]") != std::string::npos) {
         return common_chat_init_mistral_nemo_tool_call(tmpl, params);
     }
     return common_chat_init_generic_tool_call(tmpl, params);
 }
+
