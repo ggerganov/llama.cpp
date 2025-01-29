@@ -2,7 +2,7 @@
 
 [LLGuidance](https://github.com/guidance-ai/llguidance) is a library for constrained decoding (also called constrained sampling or structured outputs) for Large Language Models (LLMs). Initially developed as the backend for the [Guidance](https://github.com/guidance-ai/guidance) library, it can also be used independently.
 
-LLGuidance supports JSON Schemas and arbitrary context-free grammars (CFGs) written in a [variant](https://github.com/guidance-ai/llguidance/blob/main/parser/src/lark/README.md) of Lark syntax. It is [very fast](https://github.com/guidance-ai/jsonschemabench/tree/main/maskbench) and has [excellent](https://github.com/guidance-ai/llguidance/blob/main/parser/src/json/README.md) JSON Schema coverage but requires the Rust compiler, which complicates the llama.cpp build process.
+LLGuidance supports JSON Schemas and arbitrary context-free grammars (CFGs) written in a [variant](https://github.com/guidance-ai/llguidance/blob/main/docs/syntax.md) of Lark syntax. It is [very fast](https://github.com/guidance-ai/jsonschemabench/tree/main/maskbench) and has [excellent](https://github.com/guidance-ai/llguidance/blob/main/docs/json_schema.md) JSON Schema coverage but requires the Rust compiler, which complicates the llama.cpp build process.
 
 ## Building
 
@@ -18,6 +18,8 @@ This requires the Rust compiler and the `cargo` tool to be [installed](https://w
 ## Interface
 
 There are no new command-line arguments or modifications to `common_params`. When enabled, grammars starting with `%llguidance` are passed to LLGuidance instead of the [current](../grammars/README.md) llama.cpp grammars. Additionally, JSON Schema requests (e.g., using the `-j` argument in `llama-cli`) are also passed to LLGuidance.
+
+For your existing GBNF grammars, you can use [gbnf_to_lark.py script](https://github.com/guidance-ai/llguidance/blob/main/scripts/gbnf_to_lark.py) to convert them to LLGuidance Lark-like format.
 
 ## Performance
 
@@ -38,53 +40,11 @@ Unsupported schemas result in an error message—no keywords are silently ignore
 GBNF lacks the concept of a lexer.
 
 Most programming languages, including JSON, use a two-step process: a lexer (built with regular expressions) converts a byte stream into lexemes, which are then processed by a CFG parser. This approach is faster because lexers are cheaper to evaluate, and there is ~10x fewer lexemes than bytes.
-
 LLM tokens often align with lexemes, so the parser is engaged in under 0.5% of tokens, with the lexer handling the rest.
 
 However, the user has to provide the distinction between lexemes and CFG symbols. In [Lark](https://github.com/lark-parser/lark), lexeme names are uppercase, while CFG symbols are lowercase.
-
-For example, a simplified C grammar in Lark:
-
-```lark
-%llguidance {}
-
-start: program
-
-program: (function_definition | declaration)*
-
-function_definition: type ID "(" parameter_list? ")" "{" statement* "}"
-parameter_list: parameter ("," parameter)*
-parameter: type ID
-
-declaration: type variable_list ";"
-variable_list: ID ("," ID)*
-
-type: "int" | "float" | "char" | "void"
-
-statement: declaration
-         | assignment ";"
-         | "return" expr ";"
-         | if_statement
-         | while_statement
-         | expr ";"
-
-assignment: ID "=" expr
-expr: term (("+" | "-") term)*
-term: factor (("*" | "/") factor)*
-factor: ID | NUMBER | "(" expr ")"
-
-if_statement: "if" "(" expr ")" "{" statement* "}" ("else" "{" statement* "}")?
-while_statement: "while" "(" expr ")" "{" statement* "}"
-
-ID: /[a-zA-Z_][a-zA-Z0-9_]*/
-NUMBER: /[0-9]+/
-
-%ignore /[ \t\f\r\n]+/
-```
-
-In GBNF, lexemes like `ID` and `NUMBER` are typically lowercase and converted to CFG rules instead of remaining regular expressions. Ignoring whitespace would need to be explicitly specified everywhere.
-
-Writing grammars without lexemes would be slower and might result in "single-byte lexeme" errors in LLGuidance, fixable by renaming symbols to uppercase.
+The [gbnf_to_lark.py script](https://github.com/guidance-ai/llguidance/blob/main/scripts/gbnf_to_lark.py) can often take care of this automatically.
+See [LLGuidance syntax docs](https://github.com/guidance-ai/llguidance/blob/main/docs/syntax.md#terminals-vs-rules) for more details.
 
 ## Error Handling
 
