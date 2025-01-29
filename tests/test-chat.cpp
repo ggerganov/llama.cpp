@@ -1,13 +1,11 @@
-/*
-  Tests chat handling, including grammar generation and parsing for tool calling, for various templates.
-
-  Also acts as a CLI to generate a Markdown summary of the formats of Jinja templates,
-  e.g. given Minja (http://github.com/google/minja) checked out in parent dir:
-
-    cmake -B build && cmake --build build --parallel && \
-      ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
-
-*/
+//  Tests chat handling, including grammar generation and parsing for tool calling, for various templates.
+//
+//  Also acts as a CLI to generate a Markdown summary of the formats of Jinja templates,
+//  e.g. given Minja (http://github.com/google/minja) checked out in parent dir:
+//
+//    cmake -B build && cmake --build build --parallel && \
+//      ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+//
 #include "chat.hpp"
 #include "chat-template.hpp"
 #include "llama-grammar.h"
