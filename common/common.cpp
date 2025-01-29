@@ -1776,12 +1776,12 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {
             auto chat_template = common_chat_template(tmpl, "<s>", "</s>");
-            common_chat_inputs params;
-            params.messages = json::array({{
+            common_chat_inputs inputs;
+            inputs.messages = json::array({{
                 {"role", "user"},
                 {"content", "test"},
             }});
-            common_chat_params_init(chat_template, params);
+            common_chat_params_init(chat_template, inputs);
             return true;
         } catch (const std::exception & e) {
             LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
@@ -1803,11 +1803,10 @@ std::string common_chat_apply_template(
         for (const auto & msg : msgs) {
             messages.push_back({{"role", msg.role}, {"content", msg.content}});
         }
-        common_chat_inputs params;
-        params.messages = messages;
-        params.add_generation_prompt = add_ass;
-        auto data = common_chat_params_init(tmpl, params);
-        return data.prompt;
+        common_chat_inputs inputs;
+        inputs.messages = messages;
+        inputs.add_generation_prompt = add_ass;
+        return common_chat_params_init(tmpl, inputs).prompt;
     }
 
     int alloc_size = 0;

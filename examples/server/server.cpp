@@ -1824,16 +1824,16 @@ struct server_context {
 
         if (use_jinja) {
             auto templates = common_chat_templates_from_model(model, "");
-            common_chat_inputs params;
-            params.messages = json::array({{
+            common_chat_inputs inputs;
+            inputs.messages = json::array({{
                 {"role", "user"},
                 {"content", "test"},
             }});
             GGML_ASSERT(templates.template_default);
             try {
-                common_chat_params_init(*templates.template_default, params);
+                common_chat_params_init(*templates.template_default, inputs);
                 if (templates.template_tool_use) {
-                    common_chat_params_init(*templates.template_tool_use, params);
+                    common_chat_params_init(*templates.template_tool_use, inputs);
                 }
                 return true;
             } catch (const std::exception & e) {
@@ -3787,10 +3787,10 @@ int main(int argc, char ** argv) {
         std::vector<server_task> tasks;
 
         try {
-            common_chat_params chat_data;
+            common_chat_params chat_params;
             bool add_special = false;
             if (tmpl && ctx_server.params_base.use_jinja) {
-                chat_data = common_chat_params_init(*tmpl, {
+                chat_params = common_chat_params_init(*tmpl, {
                     /* .messages = */ json_value(data, "messages", json::array()),
                     /* .tools = */   json_value(data, "tools", json()),
                     /* .tool_choice = */ json_value(data, "tool_choice", std::string("auto")),
@@ -3799,28 +3799,28 @@ int main(int argc, char ** argv) {
                     /* .stream = */ json_value(data, "stream", false),
                     /* .grammar = */ json_value(data, "grammar", std::string("")),
                 });
-                LOG_INF("Chat format: %s\n", chat_data.format.c_str());
-                LOG_DBG("Prompt: %s\n", chat_data.prompt.get<std::string>().c_str());
-                LOG_DBG("Grammar: %s\n", chat_data.grammar.c_str());
+                LOG_INF("Chat format: %s\n", chat_params.format.c_str());
+                LOG_DBG("Prompt: %s\n", chat_params.prompt.get<std::string>().c_str());
+                LOG_DBG("Grammar: %s\n", chat_params.grammar.c_str());
                 if (data.contains("grammar")) {
-                    if (!chat_data.grammar.empty()) {
+                    if (!chat_params.grammar.empty()) {
                         throw std::runtime_error("Cannot provide grammar and tools");
                     }
-                    chat_data.grammar = data.at("grammar");
+                    chat_params.grammar = data.at("grammar");
                 }
                 // TODO: move inside minja:chat_template?
                 add_special = tmpl->source().find("eos_token") == std::string::npos &&
                     tmpl->source().find("bos_token") == std::string::npos;
             } else {
                 add_special = true;
-                chat_data.prompt = data.at("prompt");
+                chat_params.prompt = data.at("prompt");
                 if (data.contains("grammar")) {
-                    chat_data.grammar = data.at("grammar");
+                    chat_params.grammar = data.at("grammar");
                 } else if (data.contains("json_schema")) {
-                    chat_data.grammar = json_schema_to_grammar(data.at("json_schema"));
+                    chat_params.grammar = json_schema_to_grammar(data.at("json_schema"));
                 }
             }
-            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, chat_data.prompt, add_special, true);
+            std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, chat_params.prompt, add_special, true);
             tasks.reserve(tokenized_prompts.size());
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
                 server_task task = server_task(type);
@@ -3838,9 +3838,9 @@ int main(int argc, char ** argv) {
                 // OAI-compat
                 task.params.oaicompat                 = oaicompat;
                 task.params.oaicompat_cmpl_id         = completion_id;
-                task.params.sampling.grammar          = chat_data.grammar;
-                task.params.sampling.grammar_lazy     = chat_data.grammar_lazy;
-                for (const auto & trigger : chat_data.grammar_triggers) {
+                task.params.sampling.grammar          = chat_params.grammar;
+                task.params.sampling.grammar_lazy     = chat_params.grammar_lazy;
+                for (const auto & trigger : chat_params.grammar_triggers) {
                     auto ids = common_tokenize(ctx_server.vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
                         LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
@@ -3850,8 +3850,8 @@ int main(int argc, char ** argv) {
                     LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
                     task.params.sampling.grammar_trigger_words.push_back(trigger);
                 }
-                task.params.antiprompt                = chat_data.additional_stops;
-                task.params.chat_parser               = chat_data.parser;
+                task.params.antiprompt                = chat_params.additional_stops;
+                task.params.chat_parser               = chat_params.parser;
                 if (task.params.sampling.grammar_lazy) {
                     GGML_ASSERT(task.params.sampling.grammar_trigger_tokens.size() > 0 || task.params.sampling.grammar_trigger_words.size() > 0);
                 }
