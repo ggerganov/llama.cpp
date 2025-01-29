@@ -1245,8 +1245,13 @@ struct llama_vocab::impl {
 
     std::vector<llama_token> cache_special_tokens;
     std::vector<std::string> cache_token_to_piece; // llama_token_to_piece(special = true);
-
-    std::map<std::pair<std::string, std::string>, int> bpe_ranks;
+    struct pair_hash {
+        size_t operator()(const std::pair<std::string, std::string> & p) const {
+            return std::hash<std::string>{}(p.first) ^  //create some hash for pair
+                   (std::hash<std::string>{}(p.second) << 1);
+        }
+    };
+    std::unordered_map<std::pair<std::string, std::string>, int, pair_hash> bpe_ranks;
 
     // set of all tokens that cause "end of generation"
     std::set<llama_token> special_eog_ids;
