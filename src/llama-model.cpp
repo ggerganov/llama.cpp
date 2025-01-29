@@ -26,6 +26,7 @@ const char * llm_type_name(llm_type type) {
         case LLM_TYPE_109M:          return "109M";
         case LLM_TYPE_137M:          return "137M";
         case LLM_TYPE_160M:          return "160M";
+        case LLM_TYPE_190M:          return "190M";
         case LLM_TYPE_220M:          return "220M";
         case LLM_TYPE_250M:          return "250M";
         case LLM_TYPE_270M:          return "270M";
@@ -1223,7 +1224,15 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                 ml.get_key(LLM_KV_TOKEN_SHIFT_COUNT,                      hparams.token_shift_count, false);
 
                 switch (hparams.n_layer) {
-                    case 28: type = LLM_TYPE_7B; break; // ARWKV7
+                    case 12: type = LLM_TYPE_190M; break;
+                    case 24:
+                        switch (hparams.n_embd) {
+                            case 1024: type = LLM_TYPE_450M; break;
+                            case 2048: type = LLM_TYPE_1_5B; break;
+                            default: type = LLM_TYPE_UNKNOWN;
+                        } break;
+                    break;
+                    case 28: type = LLM_TYPE_7B;   break; // ARWKV7
                     default: type = LLM_TYPE_UNKNOWN;
                 }
             } break;
