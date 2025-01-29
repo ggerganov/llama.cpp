@@ -40,6 +40,10 @@ find_package(hip     REQUIRED)
 find_package(hipblas REQUIRED)
 find_package(rocblas REQUIRED)
 
+if (${hip_VERSION} VERSION_LESS 5.5)
+    message(FATAL_ERROR "At least ROCM/HIP V5.5 is required")
+endif()
+
 message(STATUS "HIP and hipBLAS found")
 
 file(GLOB   GGML_HEADERS_ROCM "../ggml-cuda/*.cuh")
