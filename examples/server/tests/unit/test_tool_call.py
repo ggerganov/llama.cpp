@@ -78,6 +78,8 @@ WEATHER_TOOL = {
     ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code"),
     ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success"),
     ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code"),
+    ("fireworks-ai-llama-3-firefunction-v2",          TEST_TOOL,            "success"),
+    ("fireworks-ai-llama-3-firefunction-v2",          PYTHON_TOOL,          "code"),
     # TODO: fix these
 ])
 def test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
