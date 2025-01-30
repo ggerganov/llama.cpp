@@ -47,6 +47,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: macOS-latest-cmake-arm64
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -117,6 +118,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: macOS-latest-cmake-x64
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -186,6 +188,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-cpu-cmake
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -268,6 +271,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-latest-cmake-sanitizer-${{ matrix.sanitizer }}
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -320,6 +324,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-latest-cmake-rpc
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -354,6 +359,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-22-cmake-vulkan
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -392,6 +398,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-22-cmake-hip
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -429,6 +436,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-22-cmake-musa
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -479,6 +487,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-22-cmake-sycl
+          evict-old-files: job
 
       - name: Build
         id: cmake_build
@@ -528,6 +537,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: ubuntu-22-cmake-sycl-fp16
+          evict-old-files: job
 
       - name: Build
         id: cmake_build
@@ -554,6 +564,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: macOS-latest-cmake-ios
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -590,6 +601,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: macOS-latest-cmake-tvos
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -630,6 +642,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: macOS-latest-swift
+          evict-old-files: job
 
       - name: Dependencies
         id: depends
@@ -676,6 +689,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: windows-msys2
+          evict-old-files: job
 
       - name: Setup ${{ matrix.sys }}
         uses: msys2/setup-msys2@v2
@@ -749,6 +763,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: windows-latest-cmake-${{ matrix.build }}
+          evict-old-files: job
 
       - name: Clone Kompute submodule
         id: clone_kompute
@@ -895,6 +910,7 @@ jobs:
           uses: hendrikmuhs/ccache-action@v1.2.11
           with:
             key: ubuntu-latest-cmake-cuda
+            evict-old-files: job
 
         - name: Install dependencies
           env:
@@ -928,6 +944,12 @@ jobs:
         uses: actions/checkout@v4
         with:
             fetch-depth: 0
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          key: windows-2019-cmake-cuda-${{ matrix.cuda }}
+          evict-old-files: job
 
       - name: Install Cuda Toolkit 11.7
         if: ${{ matrix.cuda == '11.7' }}
@@ -1069,6 +1091,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          key: windows-latest-cmake-sycl
+          evict-old-files: job
+
       - name: Install
         run:  |
           scripts/install-oneapi.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
@@ -1132,6 +1160,12 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          key: windows-latest-cmake-hip
+          evict-old-files: job
+
       - name: Install
         id: depends
         run: |
@@ -1179,6 +1213,12 @@ jobs:
         uses: actions/checkout@v4
         with:
             fetch-depth: 0
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          key: windows-latest-cmake-hip-release
+          evict-old-files: job
 
       - name: Install
         id: depends
@@ -1277,6 +1317,12 @@ jobs:
       - name: Clone
         uses: actions/checkout@v4
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          key: android-build
+          evict-old-files: job
+
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
@@ -1318,6 +1364,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.11
         with:
           key: release
+          evict-old-files: job
 
       - name: Determine tag name
         id: tag
