@@ -6533,10 +6533,10 @@ struct llm_build_context {
                 struct ggml_tensor * wk_b = ggml_view_3d(ctx0, model.layers[il].wk_b, n_embd_head_qk_nope, kv_lora_rank, n_head, ggml_row_size(model.layers[il].wk_b->type, n_embd_head_qk_nope), ggml_row_size(model.layers[il].wk_b->type, kv_lora_rank * n_embd_head_qk_nope), 0);
                 cb(wk_b, "wk_b", il);
 
-                struct ggml_tensor * q_nope_perm = ggml_permute(ctx0, q_nope, 0, 2, 1, 3);
-                cb(q_nope_perm, "q_nope_perm", il);
+                q_nope = ggml_permute(ctx0, q_nope, 0, 2, 1, 3);
+                cb(q_nope, "q_nope_perm", il);
 
-                struct ggml_tensor * q_nope2 = ggml_mul_mat(ctx0, wk_b, q_nope_perm);
+                struct ggml_tensor * q_nope2 = ggml_mul_mat(ctx0, wk_b, q_nope);
                 cb(q_nope2, "q_nope2", il);
 
                 if (!pp_opt) {
@@ -6547,6 +6547,11 @@ struct llm_build_context {
                 struct ggml_tensor * kq_nope = ggml_mul_mat(ctx0, kv_cache, q_nope2);
                 cb(kq_nope, "kq_nope", il);
 
+                if (!pp_opt) {
+                    kq_nope = ggml_permute(ctx0, kq_nope, 0, 2, 1, 3);
+                    cb(kq_nope, "kq_nope_perm", il);
+                }
+
                 if (pp_opt) {
                     q_pe = ggml_permute(ctx0, q_pe, 0, 2, 1, 3);
                     cb(q_pe, "q_pe_perm", il);
@@ -6555,13 +6560,13 @@ struct llm_build_context {
                 struct ggml_tensor * kq_pe = ggml_mul_mat(ctx0, kr_cache, q_pe);
                 cb(kq_pe, "kq_pe", il);
 
+                if (!pp_opt) {
+                    kq_pe = ggml_permute(ctx0, kq_pe, 0, 2, 1, 3);
+                    cb(kq_pe, "kq_pe_perm", il);
+                }
+
                 struct ggml_tensor * kq = ggml_add(ctx0, kq_nope, kq_pe);
                 cb(kq, "kq", il);
-
-                if (!pp_opt) {
-                    kq = ggml_cont(ctx0, ggml_permute(ctx0, kq, 0, 2, 1, 3));
-                    cb(kq, "kq_perm", il);
-                }
 
                 kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                 cb(kq, "kq_soft_max_ext", il);
@@ -6575,7 +6580,7 @@ struct llm_build_context {
                 cb(kqv_compressed, "kqv_compressed", il);
 
                 if (!pp_opt) {
-                    kqv_compressed = ggml_permute(ctx0, kqv_compressed, 0, 2, 1, 3);
+                    kqv_compressed = ggml_permute(ctx0, kqv_compressed, 0, 2, 3, 1);
                     cb(kqv_compressed, "kqv_compressed_perm", il);
                 }
 
@@ -6585,8 +6590,10 @@ struct llm_build_context {
                 struct ggml_tensor * kqv = ggml_mul_mat(ctx0, wv_b, kqv_compressed);
                 cb(kqv, "kqv", il);
 
-                kqv = ggml_cont(ctx0, ggml_permute(ctx0, kqv, 0, 2, 1, 3));
-                cb(kqv, "kqv_perm", il);
+                if (pp_opt) {
+                    kqv = ggml_cont(ctx0, ggml_permute(ctx0, kqv, 0, 2, 1, 3));
+                    cb(kqv, "kqv_perm", il);
+                }
 
                 cur = ggml_view_2d(ctx0, kqv, n_embd_head_v*n_head, n_tokens, ggml_row_size(kqv->type, n_embd_head_v*n_head), 0);
                 cb(cur, "kqv_2d", il);
