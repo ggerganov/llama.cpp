@@ -625,7 +625,6 @@ static json oaicompat_completion_params_parse(
 
     // Apply chat template to the list of messages
     if (use_jinja) {
-        llama_params["tools"] = tools;
         auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
         if (tool_choice != "none" && tool_choice != "auto" && tool_choice != "required") {
             throw std::runtime_error("Invalid tool_choice: " + tool_choice);
