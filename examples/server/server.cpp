@@ -2302,6 +2302,7 @@ struct server_context {
         res->oaicompat_model   = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id = slot.params.oaicompat_cmpl_id;
         if (slot.params.chat_parser) {
+            LOG_DBG("Raw chat output: %s\n", slot.generated_text.c_str());
             res->message = slot.params.chat_parser(slot.generated_text);
         } else {
             res->message = {
