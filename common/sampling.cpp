@@ -151,9 +151,18 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     lparams.no_perf = params.no_perf;
 
+    std::vector<const char *> trigger_words;
+    trigger_words.reserve(params.grammar_trigger_words.size());
+    for (const auto & str : params.grammar_trigger_words) {
+        trigger_words.push_back(str.word.c_str());
+    }
     auto * result = new common_sampler {
         /* .params = */ params,
-        /* .grmr   = */ llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root"),
+        /* .grmr   = */ params.grammar_lazy
+            ? llama_sampler_init_grammar_lazy(vocab, params.grammar.c_str(), "root",
+                                              trigger_words.data(), trigger_words.size(),
+                                              params.grammar_trigger_tokens.data(), params.grammar_trigger_tokens.size())
+            :      llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root"),
         /* .chain  = */ llama_sampler_chain_init(lparams),
         /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
