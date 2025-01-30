@@ -772,6 +772,8 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
 
 common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     auto has_tools = !inputs.tools.is_null() && inputs.tool_choice != "none";
+    LOG_DBG("[%s] has_tools=%d\n", __func__, has_tools ? "true" : "false");
+
     if (has_tools && !inputs.grammar.empty()) {
         throw std::runtime_error("Cannot specify grammar with tools");
     }
