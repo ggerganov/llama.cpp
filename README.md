@@ -422,7 +422,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
-[^1]: [examples/perplexity/README.md](examples/perplexity/README.md)
+[^1]: [examples/perplexity/README.md](./examples/perplexity/README.md)
 [^2]: [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity)
 
 ## [`llama-bench`](examples/llama-bench)
