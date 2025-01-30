@@ -44,7 +44,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: macOS-latest-cmake-arm64
           evict-old-files: job
@@ -115,7 +115,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: macOS-latest-cmake-x64
           evict-old-files: job
@@ -185,7 +185,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-cpu-cmake
           evict-old-files: job
@@ -268,7 +268,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-latest-cmake-sanitizer-${{ matrix.sanitizer }}
           evict-old-files: job
@@ -321,7 +321,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-latest-cmake-rpc
           evict-old-files: job
@@ -356,7 +356,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-22-cmake-vulkan
           evict-old-files: job
@@ -395,7 +395,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-22-cmake-hip
           evict-old-files: job
@@ -433,7 +433,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-22-cmake-musa
           evict-old-files: job
@@ -484,7 +484,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-22-cmake-sycl
           evict-old-files: job
@@ -534,7 +534,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ubuntu-22-cmake-sycl-fp16
           evict-old-files: job
@@ -561,7 +561,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: macOS-latest-cmake-ios
           evict-old-files: job
@@ -598,7 +598,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: macOS-latest-cmake-tvos
           evict-old-files: job
@@ -639,7 +639,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: macOS-latest-swift
           evict-old-files: job
@@ -686,7 +686,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-msys2
           evict-old-files: job
@@ -760,7 +760,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-${{ matrix.build }}
           evict-old-files: job
@@ -907,7 +907,7 @@ jobs:
             fetch-depth: 0
 
         - name: ccache
-          uses: hendrikmuhs/ccache-action@v1.2.11
+          uses: hendrikmuhs/ccache-action@v1.2.16
           with:
             key: ubuntu-latest-cmake-cuda
             evict-old-files: job
@@ -946,7 +946,7 @@ jobs:
             fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-2019-cmake-cuda-${{ matrix.cuda }}
           evict-old-files: job
@@ -1092,7 +1092,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-sycl
           evict-old-files: job
@@ -1161,7 +1161,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-hip
           evict-old-files: job
@@ -1215,7 +1215,7 @@ jobs:
             fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-hip-release
           evict-old-files: job
@@ -1318,7 +1318,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: android-build
           evict-old-files: job
@@ -1361,7 +1361,7 @@ jobs:
           fetch-depth: 0
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.11
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: release
           evict-old-files: job
