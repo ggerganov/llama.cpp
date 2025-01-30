@@ -691,6 +691,8 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
         auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " \"</tool_call>\" space";
         builder.add_rule("root", inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
         data.grammar_triggers.push_back({"<tool_call>", /* .at_start = */ false});
+        // Not really a trigger but need to print this special token to get a successful parse.
+        data.grammar_triggers.push_back({"</tool_call>", /* .at_start = */ false});
     }, grammar_options);
 
     data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
