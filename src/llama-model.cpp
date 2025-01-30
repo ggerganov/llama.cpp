@@ -1093,20 +1093,20 @@ void llama_model::load_hparams(llama_model_loader & ml) {
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 28:{
-                        if(hparams.n_head(0)==16){
+                    case 28: {
+                        if (hparams.n_head(0)==16) {
                             type = LLM_TYPE_1_5B;
-                        }else{
+                        } else {
                             type = LLM_TYPE_6B;
                         }
                     } break;
                     case 40: {
                         if(hparams.n_head(0)==24){
                             type = LLM_TYPE_4B;
-                        }else{
+                        } else {
                             type = LLM_TYPE_9B;
                         }
-                    }break;
+                    } break;
                     default: type = LLM_TYPE_UNKNOWN;
                 }
             } break;

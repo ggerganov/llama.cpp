@@ -2177,7 +2177,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         return true;
     }
 
-    if(ctx->has_glm_projector){
+    if (ctx->has_glm_projector) {
         res_imgs->size = 1;
         res_imgs->data = new clip_image_f32[res_imgs->size];
         clip_image_u8 resized_image;
@@ -2376,9 +2376,8 @@ void clip_free(clip_ctx * ctx) {
 }
 
 size_t clip_embd_nbytes(const struct clip_ctx * ctx) {
-    if(ctx->has_glm_projector)
-        return (clip_n_patches(ctx)+2) * clip_n_mmproj_embd(ctx) * sizeof(float);
-    return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx) * sizeof(float);
+    int extra_tokens = ctx->has_glm_projector ? 2 : 0;
+    return (clip_n_patches(ctx) + extra_tokens) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }
 
 size_t clip_embd_nbytes_by_img(const struct clip_ctx * ctx, int img_h, int img_w) {
@@ -2553,11 +2552,11 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     if (ctx->has_minicpmv_projector) {
         GGML_ASSERT(batch_size == 1);
     }
-    if(ctx->has_glm_projector) {
+    if (ctx->has_glm_projector) {
         GGML_ASSERT(batch_size == 1);
         ggml_tensor * boi = ctx->vision_model.boi_w;
         ggml_backend_tensor_get(boi,vec,0,ggml_nbytes(boi));
-        vec=(float*)(vec+ggml_nelements(boi)); //offset for boi
+        vec = (float*)(vec+ggml_nelements(boi)); //offset for boi
     }
 
     // build the inference graph
@@ -2711,7 +2710,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
             free(positions_data);
 
-            if (!ctx->has_glm_projector){
+            if (!ctx->has_glm_projector) {
                 struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
                 int* patches_data = (int*)malloc(ggml_nbytes(patches));
                 for (int i = 0; i < num_patches; i++) {
@@ -2735,11 +2734,11 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     // copy the embeddings to the location passed by the user
     ggml_backend_tensor_get(embeddings, vec, 0, ggml_nbytes(embeddings));
 
-    if(ctx->has_glm_projector){
+    if (ctx->has_glm_projector) {
         //eoi
         ggml_tensor * eoi = ctx->vision_model.eoi_w;
         int offset = ggml_nelements(embeddings);
-        ggml_backend_tensor_get(eoi,vec+offset,0,ggml_nbytes(eoi));
+        ggml_backend_tensor_get(eoi, vec+offset, 0, ggml_nbytes(eoi));
     }
 
     return true;
