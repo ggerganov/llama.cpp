@@ -677,8 +677,17 @@ inline void ggml_sycl_op_bin_bcast(ggml_backend_sycl_context & ctx, const ggml_t
 
 bool gpu_has_xmx(sycl::device &dev);
 
-void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
-                                 const ggml_tensor *src1, ggml_tensor *dst,
-                                 const ggml_sycl_op_flatten_t op);
+// Some backend specific macros
+#define GGML_SYCL_TENSOR_BINARY_OP_LOCALS                                                       \
+    GGML_TENSOR_LOCALS(int64_t, ne0, dst->src[0], ne)                                             \
+    GGML_TENSOR_LOCALS(size_t, nb0, dst->src[0], nb) GGML_TENSOR_LOCALS(int64_t, ne1, dst->src[1], ne)   \
+        GGML_TENSOR_LOCALS(size_t, nb1, dst->src[1], nb) GGML_TENSOR_LOCALS(int64_t, ne, dst, ne) \
+            GGML_TENSOR_LOCALS(size_t, nb, dst, nb)
+
+#define GGML_SYCL_TENSOR_BINARY_OP_CP_LOCALS                                                   \
+    GGML_TENSOR_LOCALS(int64_t, ne0, src0, ne)                                           \
+    GGML_TENSOR_LOCALS(size_t, nb0, src0, nb) GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne) \
+        GGML_TENSOR_LOCALS(size_t, nb1, src1, nb)
+
 
 #endif // GGML_SYCL_COMMON_HPP
