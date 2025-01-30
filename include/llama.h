@@ -1194,7 +1194,13 @@ extern "C" {
                                float   tau,
                                float   eta);
 
-    LLAMA_API struct llama_sampler * llama_sampler_init_grammar(
+    DEPRECATED(LLAMA_API struct llama_sampler * llama_sampler_init_grammar(
+            const struct llama_vocab * vocab,
+                          const char * grammar_str,
+                          const char * grammar_root),
+            "use llama_sampler_grammar_init instead");
+
+    LLAMA_API struct llama_sampler * llama_sampler_grammar_init(
             const struct llama_vocab * vocab,
                           const char * grammar_str,
                           const char * grammar_root,

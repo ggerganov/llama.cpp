@@ -158,7 +158,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
     }
     auto * result = new common_sampler {
         /* .params = */ params,
-        /* .grmr   = */ llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root",
+        /* .grmr   = */ llama_sampler_grammar_init(vocab, params.grammar.c_str(), "root",
                                                    params.grammar_lazy,
                                                    trigger_words.data(), trigger_words.size(),
                                                    params.grammar_trigger_tokens.data(), params.grammar_trigger_tokens.size()),

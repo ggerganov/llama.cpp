@@ -1454,7 +1454,7 @@ static void llama_sampler_grammar_reset(struct llama_sampler * smpl) {
 static struct llama_sampler * llama_sampler_grammar_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_grammar *) smpl->ctx;
 
-    auto * result = llama_sampler_init_grammar(ctx->vocab, nullptr, nullptr, false, nullptr, 0, nullptr, 0);
+    auto * result = llama_sampler_grammar_init(ctx->vocab, nullptr, nullptr, false, nullptr, 0, nullptr, 0);
 
     // copy the state
     {
@@ -1492,6 +1492,13 @@ static struct llama_sampler_i llama_sampler_grammar_i = {
 
 
 struct llama_sampler * llama_sampler_init_grammar(
+        const struct llama_vocab * vocab,
+                      const char * grammar_str,
+                      const char * grammar_root) {
+    return llama_sampler_grammar_init(vocab, grammar_str, grammar_root, false, nullptr, 0, nullptr, 0);
+}
+
+struct llama_sampler * llama_sampler_grammar_init(
         const struct llama_vocab * vocab,
                       const char * grammar_str,
                       const char * grammar_root,
