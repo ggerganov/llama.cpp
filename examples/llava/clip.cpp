@@ -1114,14 +1114,14 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         }
     }
     // glm projector
-    else if(ctx->has_glm_projector){
+    else if (ctx->has_glm_projector) {
         if (ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE){
             size_t gridsz = (size_t)sqrt(embeddings->ne[1]);
             embeddings = ggml_cont(ctx0, ggml_permute(ctx0,embeddings,1,0,2,3));
-            embeddings = ggml_reshape_3d(ctx0,embeddings,gridsz,gridsz,embeddings->ne[1]);
+            embeddings = ggml_reshape_3d(ctx0, embeddings, gridsz, gridsz, embeddings->ne[1]);
             embeddings = ggml_conv_2d(ctx0, model.mm_model_adapter_conv_w, embeddings, 2, 2, 0, 0, 1, 1);
             embeddings = ggml_reshape_3d(ctx0, embeddings,embeddings->ne[0]*embeddings->ne[1] , embeddings->ne[2], batch_size);
-            embeddings = ggml_cont(ctx0, ggml_permute(ctx0,embeddings,1,0,2,3));
+            embeddings = ggml_cont(ctx0, ggml_permute(ctx0,embeddings, 1, 0, 2, 3));
             embeddings = ggml_add(ctx0, embeddings, model.mm_model_adapter_conv_b);
             //GLU
             {
@@ -1131,15 +1131,15 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 embeddings = ggml_gelu_inplace(ctx0, embeddings);
                 struct ggml_tensor * x = embeddings;
                 embeddings = ggml_mul_mat(ctx0, model.mm_model_mlp_2_w, embeddings);
-                x = ggml_mul_mat(ctx0,model.mm_model_mlp_1_w,x);
-                embeddings = ggml_silu_inplace(ctx0,embeddings);
-                embeddings = ggml_mul(ctx0,embeddings,x);
-                embeddings = ggml_mul_mat(ctx0,model.mm_model_mlp_3_w,embeddings);
+                x = ggml_mul_mat(ctx0, model.mm_model_mlp_1_w,x);
+                embeddings = ggml_silu_inplace(ctx0, embeddings);
+                embeddings = ggml_mul(ctx0, embeddings,x);
+                embeddings = ggml_mul_mat(ctx0, model.mm_model_mlp_3_w, embeddings);
             }
-        }else{
+        } else {
             GGML_ABORT("fatel error");
         }
-    }else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
+    } else if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
         embeddings = ggml_reshape_3d(ctx0, embeddings, hidden_size * 4, num_positions / 4, batch_size);
 
         embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
@@ -1625,7 +1625,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_ln_post_w = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "weight"));
             vision_model.mm_model_ln_post_b = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "bias"));
         }
-        else if(new_clip->proj_type == PROJECTOR_TYPE_GLM_EDGE){
+        else if (new_clip->proj_type == PROJECTOR_TYPE_GLM_EDGE) {
             vision_model.mm_model_adapter_conv_w = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPER_CONV, "weight"));
             vision_model.mm_model_adapter_conv_b = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPER_CONV, "bias"));
             vision_model.mm_model_mlp_0_w = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPTER_LINEAR,"weight"));
