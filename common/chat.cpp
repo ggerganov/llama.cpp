@@ -249,7 +249,7 @@ static common_chat_params common_chat_params_init_generic_tool_call(const common
 
     auto tweaked_messages = common_chat_template::add_system(
         inputs.messages,
-        "Respond in JSON format, either with a request to call tools or with a response to the user's request. Here is the schema for all responses:\n\n```json\n" + schema.dump(2) + "\n```");
+        "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request");
 
     data.prompt = tmpl.apply(tweaked_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = "generic tool calls";
