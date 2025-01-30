@@ -1115,7 +1115,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
     // glm projector
     else if (ctx->has_glm_projector) {
-        if (ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE){
+        if (ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE) {
             size_t gridsz = (size_t)sqrt(embeddings->ne[1]);
             embeddings = ggml_cont(ctx0, ggml_permute(ctx0,embeddings,1,0,2,3));
             embeddings = ggml_reshape_3d(ctx0, embeddings, gridsz, gridsz, embeddings->ne[1]);
