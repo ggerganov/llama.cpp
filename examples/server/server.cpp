@@ -4387,11 +4387,13 @@ int main(int argc, char ** argv) {
         ctx_server.chat_templates.template_default->source().c_str(),
         common_chat_format_example(*ctx_server.chat_templates.template_default, ctx_server.params_base.use_jinja).c_str());
 
-    ctx_server.queue_tasks.on_new_task(std::bind(
-                &server_context::process_single_task, &ctx_server, std::placeholders::_1));
+    ctx_server.queue_tasks.on_new_task([&ctx_server](const server_task & task) {
+        ctx_server.process_single_task(task);
+    });
 
-    ctx_server.queue_tasks.on_update_slots(std::bind(
-                &server_context::update_slots, &ctx_server));
+    ctx_server.queue_tasks.on_update_slots([&ctx_server]() {
+        ctx_server.update_slots();
+    });
 
     shutdown_handler = [&](int) {
         ctx_server.queue_tasks.terminate();
