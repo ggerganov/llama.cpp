@@ -328,13 +328,17 @@ struct server_task {
         if (data.contains("json_schema") && !data.contains("grammar")) {
             try {
                 auto schema                  = json_value(data, "json_schema", json::object());
-                params.sampling.grammar = json_schema_to_grammar(schema);
+                LOG_DBG("JSON schema: %s\n", schema.dump(2).c_str());
+                params.sampling.grammar      = json_schema_to_grammar(schema);
+                LOG_DBG("Converted grammar: %s\n", params.sampling.grammar.c_str());
             } catch (const std::exception & e) {
                 throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
             }
         } else {
             params.sampling.grammar      = json_value(data, "grammar", defaults.sampling.grammar);
+            LOG_DBG("Grammar: %s\n", params.sampling.grammar.c_str());
             params.sampling.grammar_lazy = json_value(data, "grammar_lazy", defaults.sampling.grammar_lazy);
+            LOG_DBG("Grammar lazy: %s\n", params.sampling.grammar_lazy ? "true" : "false");
         }
 
         {
@@ -344,6 +348,7 @@ struct server_task {
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }
+            LOG_DBG("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
         }
 
         {
