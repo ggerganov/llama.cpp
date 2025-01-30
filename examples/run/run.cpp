@@ -147,7 +147,8 @@ class Opt {
                 if (handle_option_with_value(argc, argv, i, context_size) == 1) {
                     return 1;
                 }
-            } else if (options_parsing && (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--ngl") == 0)) {
+            } else if (options_parsing &&
+                       (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "-ngl") == 0 || strcmp(argv[i], "--ngl") == 0)) {
                 if (handle_option_with_value(argc, argv, i, ngl) == 1) {
                     return 1;
                 }
@@ -180,6 +181,10 @@ class Opt {
             }
         }
 
+        if (model_.empty()){
+            return 1;
+        }
+
         return 0;
     }
 
@@ -194,7 +199,7 @@ class Opt {
             "Options:\n"
             "  -c, --context-size <value>\n"
             "      Context size (default: %d)\n"
-            "  -n, --ngl <value>\n"
+            "  -n, -ngl, --ngl <value>\n"
             "      Number of GPU layers (default: %d)\n"
             "  --temp <value>\n"
             "      Temperature (default: %.1f)\n"
@@ -318,6 +323,10 @@ class HttpClient {
   public:
     int init(const std::string & url, const std::vector<std::string> & headers, const std::string & output_file,
              const bool progress, std::string * response_str = nullptr) {
+        if (std::filesystem::exists(output_file)) {
+            return 0;
+        }
+
         std::string output_file_partial;
         curl = curl_easy_init();
         if (!curl) {
@@ -345,7 +354,11 @@ class HttpClient {
         data.file_size = set_resume_point(output_file_partial);
         set_progress_options(progress, data);
         set_headers(headers);
-        perform(url);
+        CURLcode res = perform(url);
+        if (res != CURLE_OK){
+            printe("Fetching resource '%s' failed: %s\n", url.c_str(), curl_easy_strerror(res));
+            return 1;
+        }
         if (!output_file.empty()) {
             std::filesystem::rename(output_file_partial, output_file);
         }
@@ -410,16 +423,12 @@ class HttpClient {
         }
     }
 
-    void perform(const std::string & url) {
-        CURLcode res;
+    CURLcode perform(const std::string & url) {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-        res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            printe("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        }
+        return curl_easy_perform(curl);
     }
 
     static std::string human_readable_time(double seconds) {
@@ -557,13 +566,14 @@ class LlamaData {
         }
 
         sampler = initialize_sampler(opt);
+
         return 0;
     }
 
   private:
 #ifdef LLAMA_USE_CURL
-    int download(const std::string & url, const std::vector<std::string> & headers, const std::string & output_file,
-                 const bool progress, std::string * response_str = nullptr) {
+    int download(const std::string & url, const std::string & output_file, const bool progress,
+                 const std::vector<std::string> & headers = {}, std::string * response_str = nullptr) {
         HttpClient http;
         if (http.init(url, headers, output_file, progress, response_str)) {
             return 1;
@@ -572,48 +582,85 @@ class LlamaData {
         return 0;
     }
 #else
-    int download(const std::string &, const std::vector<std::string> &, const std::string &, const bool,
+    int download(const std::string &, const std::string &, const bool, const std::vector<std::string> & = {},
                  std::string * = nullptr) {
         printe("%s: llama.cpp built without libcurl, downloading from an url not supported.\n", __func__);
+
         return 1;
     }
 #endif
 
-    int huggingface_dl(const std::string & model, const std::vector<std::string> headers, const std::string & bn) {
-        // Find the second occurrence of '/' after protocol string
-        size_t pos = model.find('/');
-        pos        = model.find('/', pos + 1);
-        if (pos == std::string::npos) {
-            return 1;
-        }
-
-        const std::string hfr = model.substr(0, pos);
-        const std::string hff = model.substr(pos + 1);
-        const std::string url = "https://huggingface.co/" + hfr + "/resolve/main/" + hff;
-        return download(url, headers, bn, true);
-    }
-
-    int ollama_dl(std::string & model, const std::vector<std::string> headers, const std::string & bn) {
-        if (model.find('/') == std::string::npos) {
-            model = "library/" + model;
-        }
-
-        std::string model_tag = "latest";
-        size_t      colon_pos = model.find(':');
+    // Helper function to handle model tag extraction and URL construction
+    std::pair<std::string, std::string> extract_model_and_tag(std::string & model, const std::string & base_url) {
+        std::string  model_tag = "latest";
+        const size_t colon_pos = model.find(':');
         if (colon_pos != std::string::npos) {
             model_tag = model.substr(colon_pos + 1);
             model     = model.substr(0, colon_pos);
         }
 
-        std::string manifest_url = "https://registry.ollama.ai/v2/" + model + "/manifests/" + model_tag;
+        std::string url = base_url + model + "/manifests/" + model_tag;
+
+        return { model, url };
+    }
+
+    // Helper function to download and parse the manifest
+    int download_and_parse_manifest(const std::string & url, const std::vector<std::string> & headers,
+                                    nlohmann::json & manifest) {
         std::string manifest_str;
-        const int   ret = download(manifest_url, headers, "", false, &manifest_str);
+        int         ret = download(url, "", false, headers, &manifest_str);
         if (ret) {
             return ret;
         }
 
-        nlohmann::json manifest = nlohmann::json::parse(manifest_str);
-        std::string    layer;
+        manifest = nlohmann::json::parse(manifest_str);
+
+        return 0;
+    }
+
+    int huggingface_dl(std::string & model, const std::string & bn) {
+        // Find the second occurrence of '/' after protocol string
+        size_t pos = model.find('/');
+        pos        = model.find('/', pos + 1);
+        std::string              hfr, hff;
+        std::vector<std::string> headers = { "User-Agent: llama-cpp", "Accept: application/json" };
+        std::string              url;
+
+        if (pos == std::string::npos) {
+            auto [model_name, manifest_url] = extract_model_and_tag(model, "https://huggingface.co/v2/");
+            hfr                             = model_name;
+
+            nlohmann::json manifest;
+            int            ret = download_and_parse_manifest(manifest_url, headers, manifest);
+            if (ret) {
+                return ret;
+            }
+
+            hff = manifest["ggufFile"]["rfilename"];
+        } else {
+            hfr = model.substr(0, pos);
+            hff = model.substr(pos + 1);
+        }
+
+        url = "https://huggingface.co/" + hfr + "/resolve/main/" + hff;
+
+        return download(url, bn, true, headers);
+    }
+
+    int ollama_dl(std::string & model, const std::string & bn) {
+        const std::vector<std::string> headers = { "Accept: application/vnd.docker.distribution.manifest.v2+json" };
+        if (model.find('/') == std::string::npos) {
+            model = "library/" + model;
+        }
+
+        auto [model_name, manifest_url] = extract_model_and_tag(model, "https://registry.ollama.ai/v2/");
+        nlohmann::json manifest;
+        int            ret = download_and_parse_manifest(manifest_url, {}, manifest);
+        if (ret) {
+            return ret;
+        }
+
+        std::string layer;
         for (const auto & l : manifest["layers"]) {
             if (l["mediaType"] == "application/vnd.ollama.image.model") {
                 layer = l["digest"];
@@ -621,8 +668,34 @@ class LlamaData {
             }
         }
 
-        std::string blob_url = "https://registry.ollama.ai/v2/" + model + "/blobs/" + layer;
-        return download(blob_url, headers, bn, true);
+        std::string blob_url = "https://registry.ollama.ai/v2/" + model_name + "/blobs/" + layer;
+
+        return download(blob_url, bn, true, headers);
+    }
+
+    int github_dl(const std::string & model, const std::string & bn) {
+        std::string  repository = model;
+        std::string  branch     = "main";
+        const size_t at_pos     = model.find('@');
+        if (at_pos != std::string::npos) {
+            repository = model.substr(0, at_pos);
+            branch     = model.substr(at_pos + 1);
+        }
+
+        const std::vector<std::string> repo_parts = string_split(repository, "/");
+        if (repo_parts.size() < 3) {
+            printe("Invalid GitHub repository format\n");
+            return 1;
+        }
+
+        const std::string & org          = repo_parts[0];
+        const std::string & project      = repo_parts[1];
+        std::string         url          = "https://raw.githubusercontent.com/" + org + "/" + project + "/" + branch;
+        for (size_t i = 2; i < repo_parts.size(); ++i) {
+            url += "/" + repo_parts[i];
+        }
+
+        return download(url, bn, true);
     }
 
     std::string basename(const std::string & path) {
@@ -634,37 +707,41 @@ class LlamaData {
         return path.substr(pos + 1);
     }
 
-    int remove_proto(std::string & model_) {
-        const std::string::size_type pos = model_.find("://");
+    int rm_until_substring(std::string & model_, const std::string & substring) {
+        const std::string::size_type pos = model_.find(substring);
         if (pos == std::string::npos) {
             return 1;
         }
 
-        model_ = model_.substr(pos + 3);  // Skip past "://"
+        model_ = model_.substr(pos + substring.size());  // Skip past the substring
         return 0;
     }
 
     int resolve_model(std::string & model_) {
         int                            ret     = 0;
         if (string_starts_with(model_, "file://") || std::filesystem::exists(model_)) {
-            remove_proto(model_);
+            rm_until_substring(model_, "://");
 
             return ret;
         }
 
-        const std::string              bn      = basename(model_);
-        const std::vector<std::string> headers = { "--header",
-                                                   "Accept: application/vnd.docker.distribution.manifest.v2+json" };
-        if (string_starts_with(model_, "hf://") || string_starts_with(model_, "huggingface://")) {
-            remove_proto(model_);
-            ret = huggingface_dl(model_, headers, bn);
-        } else if (string_starts_with(model_, "ollama://")) {
-            remove_proto(model_);
-            ret = ollama_dl(model_, headers, bn);
-        } else if (string_starts_with(model_, "https://")) {
-            download(model_, headers, bn, true);
-        } else {
-            ret = ollama_dl(model_, headers, bn);
+        const std::string bn = basename(model_);
+        if (string_starts_with(model_, "hf://") || string_starts_with(model_, "huggingface://") ||
+            string_starts_with(model_, "hf.co/")) {
+            rm_until_substring(model_, "hf.co/");
+            rm_until_substring(model_, "://");
+            ret = huggingface_dl(model_, bn);
+        } else if ((string_starts_with(model_, "https://") || string_starts_with(model_, "http://")) &&
+                   !string_starts_with(model_, "https://ollama.com/library/")) {
+            ret = download(model_, bn, true);
+        } else if (string_starts_with(model_, "github:") || string_starts_with(model_, "github://")) {
+            rm_until_substring(model_, "github:");
+            rm_until_substring(model_, "://");
+            ret = github_dl(model_, bn);
+        } else {  // ollama:// or nothing
+            rm_until_substring(model_, "ollama.com/library/");
+            rm_until_substring(model_, "://");
+            ret = ollama_dl(model_, bn);
         }
 
         model_ = bn;

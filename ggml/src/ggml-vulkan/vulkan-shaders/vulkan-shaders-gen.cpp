@@ -17,13 +17,13 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
+#include <algorithm>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #ifdef _WIN32
     #include <windows.h>
     #include <direct.h> // For _mkdir on Windows
-    #include <algorithm> // For std::replace on w64devkit
 #else
     #include <unistd.h>
     #include <sys/wait.h>
@@ -55,6 +55,11 @@ const std::vector<std::string> type_names = {
     "q4_k",
     "q5_k",
     "q6_k",
+    "iq2_xxs",
+    "iq2_xs",
+    "iq2_s",
+    "iq3_xxs",
+    "iq3_s",
     "iq4_nl"
 };
 
@@ -502,6 +507,7 @@ void write_output_files() {
     fprintf(hdr, "#include <cstdint>\n\n");
     fprintf(src, "#include \"%s\"\n\n", basename(target_hpp).c_str());
 
+    std::sort(shader_fnames.begin(), shader_fnames.end());
     for (const auto& pair : shader_fnames) {
         const std::string& name = pair.first;
         #ifdef _WIN32

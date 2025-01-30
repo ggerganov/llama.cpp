@@ -16,7 +16,10 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ## Hot topics
 
-- **Introducing GGUF-my-LoRA** https://github.com/ggerganov/llama.cpp/discussions/10123
+- **How to use [MTLResidencySet](https://developer.apple.com/documentation/metal/mtlresidencyset?language=objc) to keep the GPU memory active?** https://github.com/ggerganov/llama.cpp/pull/11427
+- **VS Code extension for FIM completions:** https://github.com/ggml-org/llama.vscode
+- Vim/Neovim plugin for FIM completions: https://github.com/ggml-org/llama.vim
+- Introducing GGUF-my-LoRA https://github.com/ggerganov/llama.cpp/discussions/10123
 - Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggerganov/llama.cpp/discussions/9669
 - Hugging Face GGUF editor: [discussion](https://github.com/ggerganov/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
 
@@ -419,7 +422,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
-[^1]: [examples/perplexity/README.md](examples/perplexity/README.md)
+[^1]: [examples/perplexity/README.md](./examples/perplexity/README.md)
 [^2]: [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity)
 
 ## [`llama-bench`](examples/llama-bench)
