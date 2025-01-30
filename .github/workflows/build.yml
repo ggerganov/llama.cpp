@@ -900,8 +900,8 @@ jobs:
           env:
             DEBIAN_FRONTEND: noninteractive
           run: |
-            apt update
-            apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
+              apt update
+              apt install -y cmake build-essential ninja-build libgomp1 git
 
         - name: Build with CMake
           run: |
