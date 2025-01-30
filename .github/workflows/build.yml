@@ -394,17 +394,17 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.16
-        with:
-          key: ubuntu-22-cmake-hip
-          evict-old-files: 1d
-
       - name: Dependencies
         id: depends
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git cmake rocblas-dev hipblas-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.16
+        with:
+          key: ubuntu-22-cmake-hip
+          evict-old-files: 1d
 
       - name: Build with native CMake HIP support
         id: cmake_build
@@ -432,17 +432,17 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.16
-        with:
-          key: ubuntu-22-cmake-musa
-          evict-old-files: 1d
-
       - name: Dependencies
         id: depends
         run: |
           apt-get update
           apt-get install -y build-essential git cmake libcurl4-openssl-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.16
+        with:
+          key: ubuntu-22-cmake-musa
+          evict-old-files: 1d
 
       - name: Build with native CMake MUSA support
         id: cmake_build
@@ -906,18 +906,18 @@ jobs:
           with:
             fetch-depth: 0
 
-        - name: ccache
-          uses: hendrikmuhs/ccache-action@v1.2.16
-          with:
-            key: ubuntu-latest-cmake-cuda
-            evict-old-files: 1d
-
         - name: Install dependencies
           env:
             DEBIAN_FRONTEND: noninteractive
           run: |
               apt update
               apt install -y cmake build-essential ninja-build libgomp1 git
+
+        - name: ccache
+          uses: hendrikmuhs/ccache-action@v1.2.16
+          with:
+            key: ubuntu-latest-cmake-cuda
+            evict-old-files: 1d
 
         - name: Build with CMake
           run: |
@@ -945,10 +945,10 @@ jobs:
         with:
             fetch-depth: 0
 
-      - name: ccache
+      - name: Install ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-2019-cmake-cuda-${{ matrix.cuda }}
+          key: ${{ github.job }}-${{ matrix.cuda }}-${{ matrix.build }}
           evict-old-files: 1d
 
       - name: Install Cuda Toolkit 11.7
@@ -1006,11 +1006,6 @@ jobs:
           echo "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\libnvvp" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           echo "CUDA_PATH_V12_4=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Install ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ github.job }}-${{ matrix.cuda }}-${{ matrix.build }}
 
       - name: Install Ninja
         id: install_ninja
@@ -1160,12 +1155,6 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.16
-        with:
-          key: windows-latest-cmake-hip
-          evict-old-files: 1d
-
       - name: Install
         id: depends
         run: |
@@ -1182,9 +1171,10 @@ jobs:
           & 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' --version
 
       - name: Install ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ${{ github.job }}
+          evict-old-files: 1d
 
       - name: Build
         id: cmake_build
