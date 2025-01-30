@@ -177,7 +177,7 @@ enum projector_type {
     PROJECTOR_TYPE_LDP,
     PROJECTOR_TYPE_LDPV2,
     PROJECTOR_TYPE_RESAMPLER,
-    PROJECTOR_TYPE_ADAPTER,
+    PROJECTOR_TYPE_GLM_EDGE,
     PROJECTOR_TYPE_MERGER,
     PROJECTOR_TYPE_UNKNOWN,
 };
@@ -187,7 +187,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_LDP, "ldp" },
     { PROJECTOR_TYPE_LDPV2, "ldpv2"},
     { PROJECTOR_TYPE_RESAMPLER, "resampler"},
-    { PROJECTOR_TYPE_ADAPTER, "adapter"},
+    { PROJECTOR_TYPE_GLM_EDGE, "adapter"},
     { PROJECTOR_TYPE_MERGER, "qwen2vl_merger"},
 };
 
@@ -1115,7 +1115,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
     // glm projector
     else if(ctx->has_glm_projector){
-        if (ctx->proj_type == PROJECTOR_TYPE_ADAPTER){
+        if (ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE){
             size_t gridsz = (size_t)sqrt(embeddings->ne[1]);
             embeddings = ggml_cont(ctx0, ggml_permute(ctx0,embeddings,1,0,2,3));
             embeddings = ggml_reshape_3d(ctx0,embeddings,gridsz,gridsz,embeddings->ne[1]);
@@ -1625,7 +1625,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_ln_post_w = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "weight"));
             vision_model.mm_model_ln_post_b = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "bias"));
         }
-        else if(new_clip->proj_type == PROJECTOR_TYPE_ADAPTER){
+        else if(new_clip->proj_type == PROJECTOR_TYPE_GLM_EDGE){
             vision_model.mm_model_adapter_conv_w = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPER_CONV, "weight"));
             vision_model.mm_model_adapter_conv_b = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPER_CONV, "bias"));
             vision_model.mm_model_mlp_0_w = get_tensor(new_clip->ctx_data, format(TN_GLM_ADAPTER_LINEAR,"weight"));
@@ -2420,7 +2420,7 @@ int clip_n_patches_by_img(const struct clip_ctx * ctx, struct clip_image_f32 * i
 
     int n_patches = (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 
-    if (ctx->proj_type == PROJECTOR_TYPE_LDP || ctx->proj_type == PROJECTOR_TYPE_LDPV2 || ctx->proj_type == PROJECTOR_TYPE_ADAPTER) {
+    if (ctx->proj_type == PROJECTOR_TYPE_LDP || ctx->proj_type == PROJECTOR_TYPE_LDPV2 || ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE) {
         n_patches /= 4;
     } else if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
         if (ctx->minicpmv_version == 2) {
@@ -2738,7 +2738,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     if(ctx->has_glm_projector){
         //eoi
         ggml_tensor * eoi = ctx->vision_model.eoi_w;
-        int offset=ggml_nelements(eoi)*clip_n_patches(ctx);
+        int offset = ggml_nelements(embeddings);
         ggml_backend_tensor_get(eoi,vec+offset,0,ggml_nbytes(eoi));
     }
 
@@ -2903,7 +2903,7 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return 3584;
         }
     }
-    if (ctx->proj_type == PROJECTOR_TYPE_ADAPTER){
+    if (ctx->proj_type == PROJECTOR_TYPE_GLM_EDGE){
         return ctx->vision_model.mm_model_mlp_3_w->ne[1];
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {

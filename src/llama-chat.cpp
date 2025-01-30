@@ -115,8 +115,8 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         }
     } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>")) {
         return LLM_CHAT_TEMPLATE_PHI_3;
-    } else if (tmpl_contains("\n<|assistant|>") && tmpl_contains("<|user|>")) {
-        return LLM_CHAT_TEMPLATE_FALCON_3;
+    } else if (tmpl_contains("<|assistant|>") && tmpl_contains("<|user|>")) {
+        return tmpl_contains("</s>") ? LLM_CHAT_TEMPLATE_FALCON_3 : LLM_CHAT_TEMPLATE_GLMEDGE;
     } else if (tmpl_contains("<|user|>") && tmpl_contains("<|endoftext|>")) {
         return LLM_CHAT_TEMPLATE_ZEPHYR;
     } else if (tmpl_contains("bos_token + message['role']")) {
@@ -148,8 +148,6 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         return LLM_CHAT_TEMPLATE_CHATGML_3;
     } else if (tmpl_contains("[gMASK]<sop>")) {
         return LLM_CHAT_TEMPLATE_CHATGML_4;
-    } else if (tmpl_contains("<|user|>") && tmpl_contains("<|assistant|>") && !tmpl_contains("<|end|>") && !tmpl_contains("</s>")) {
-        return LLM_CHAT_TEMPLATE_GLMEDGE;
     } else if (tmpl_contains(LU8("<用户>"))) {
         // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
         return LLM_CHAT_TEMPLATE_MINICPM;
