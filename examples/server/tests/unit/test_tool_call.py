@@ -10,6 +10,8 @@ TIMEOUT_HTTP_REQUEST = 60
 def create_server():
     global server
     server = ServerPreset.tinyllama2()
+    server.model_alias = "tinyllama-2-tool-call"
+    server.server_port = 8081
 
 
 TEST_TOOL = {
