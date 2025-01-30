@@ -6,3 +6,5 @@ models/**
 .vscode/**
 
 **/__pycache__/**
+
+**/build-info.cpp

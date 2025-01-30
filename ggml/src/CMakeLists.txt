@@ -1,17 +1,19 @@
 include(CheckCXXCompilerFlag)
 
-# Set default value for QK4_0
-set(QK4_0 "32" CACHE STRING "Quantization block size for Q4_0 (32, 64, 128, 256)")
-
-# Only check the value if it was explicitly set by the user
-if (DEFINED QK4_0 AND NOT QK4_0 STREQUAL "32") 
+# Only process QK4_0 if it is explicitly set
+if (DEFINED QK4_0)
+    # Ensure QK4_0 is an integer and within the allowed values
     if (NOT QK4_0 MATCHES "^(32|64|128|256)$")
         message(FATAL_ERROR "Invalid QK4_0 value: Must be one of {32, 64, 128, 256}")
     endif()
-    add_compile_definitions(QK4_0=${QK4_0})
-endif()
 
-message(STATUS "QK4_0 is set to: ${QK4_0}")
+    # Define the macro for compilation
+    add_compile_definitions(QK4_0=${QK4_0})
+
+    message(STATUS "QK4_0 is set to: ${QK4_0}")
+else()
+    message(STATUS "QK4_0 is not set. Using default behavior.")
+endif()
 
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
