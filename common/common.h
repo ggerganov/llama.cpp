@@ -160,7 +160,7 @@ struct common_params_sampling {
     };
 
     std::string                         grammar; // optional BNF-like grammar to constrain sampling
-    bool                                grammar_lazy;
+    bool                                grammar_lazy = false;
     std::vector<common_grammar_trigger> grammar_trigger_words;  // optional trigger words to trigger lazy grammar
     std::vector<llama_token>            grammar_trigger_tokens; // optional trigger tokens to trigger lazy grammar and print trigger special tokens.
 

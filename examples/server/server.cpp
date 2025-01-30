@@ -117,7 +117,7 @@ struct slot_params {
     oaicompat_type        oaicompat                 = OAICOMPAT_TYPE_NONE;
     std::string           oaicompat_model;
     std::string           oaicompat_cmpl_id;
-    common_chat_format    oaicompat_chat_format;
+    common_chat_format    oaicompat_chat_format     = COMMON_CHAT_FORMAT_CONTENT_ONLY;
 
     json to_json() const {
         std::vector<std::string> samplers;
@@ -345,10 +345,10 @@ struct server_task {
             auto it = data.find("chat_format");
             if (it != data.end()) {
                 params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
+                LOG_DBG("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }
-            LOG_DBG("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
         }
 
         {
