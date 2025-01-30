@@ -4016,8 +4016,7 @@ int main(int argc, char ** argv) {
         }
 
         auto body = json::parse(req.body);
-        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
-        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
@@ -4025,6 +4024,13 @@ int main(int argc, char ** argv) {
             req.is_connection_closed,
             res,
             OAICOMPAT_TYPE_CHAT);
+    };
+
+    // same with handle_chat_completions, but without inference part
+    const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
+        auto body = json::parse(req.body);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
+        res_ok(res, {{ "prompt", std::move(data.at("prompt")) }});
     };
 
     const auto handle_models = [&params, &ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
@@ -4183,14 +4189,6 @@ int main(int argc, char ** argv) {
             ? format_embeddings_response_oaicompat(body, responses, use_base64)
             : json(responses);
         res_ok(res, root);
-    };
-
-    const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
-        auto body = json::parse(req.body);
-        const auto & chat_template = body.contains("tools") && ctx_server.chat_templates.template_tool_use ? *ctx_server.chat_templates.template_tool_use : *ctx_server.chat_templates.template_default;
-        json data = oaicompat_completion_params_parse(body, chat_template, params.use_jinja);
-
-        res_ok(res, {{ "prompt", data.at("prompt") }});
     };
 
     const auto handle_embeddings = [&handle_embeddings_impl](const httplib::Request & req, httplib::Response & res) {

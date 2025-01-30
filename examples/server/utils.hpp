@@ -580,10 +580,13 @@ static json oaicompat_completion_params_parse(const json & body) {
 
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
-    const common_chat_template & tmpl,
-    bool use_jinja)
+    bool use_jinja,
+    const common_chat_templates & chat_templates)
 {
     json llama_params;
+    const auto & tmpl = body.contains("tools") && chat_templates.template_tool_use
+        ? *chat_templates.template_tool_use
+        : *chat_templates.template_default;
 
     auto tools = json_value(body, "tools", json());
     auto stream = json_value(body, "stream", false);

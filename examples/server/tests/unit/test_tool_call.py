@@ -71,7 +71,7 @@ def do_test_completion_with_required_tool_tiny(template_name: str, tool: dict, a
     server.jinja = True
     server.n_predict = n_predict
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
-    server.start()
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
