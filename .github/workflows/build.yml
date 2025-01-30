@@ -346,7 +346,8 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          # This is using llvmpipe and runs slower than other backends
+          ctest -L main --verbose --timeout 1800
 
   ubuntu-22-cmake-hip:
     runs-on: ubuntu-22.04
@@ -613,6 +614,7 @@ jobs:
           msystem: ${{matrix.sys}}
           install: >-
             base-devel
+            git
             mingw-w64-${{matrix.env}}-toolchain
             mingw-w64-${{matrix.env}}-cmake
             mingw-w64-${{matrix.env}}-openblas
