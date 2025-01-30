@@ -16,7 +16,7 @@ import logging
 import os
 from typing import Generator
 from pydantic import BaseModel
-from typing import *
+from typing import Optional
 import subprocess
 
 
