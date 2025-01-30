@@ -121,6 +121,21 @@ def test_chat_template():
     assert res.body["__verbose"]["prompt"] == "<s> <|start_header_id|>system<|end_header_id|>\n\nBook<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is the best book<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
 
+def test_apply_chat_template():
+    global server
+    server.chat_template = "command-r"
+    server.start()
+    res = server.make_request("POST", "/apply-template", data={
+        "messages": [
+            {"role": "system", "content": "You are a test."},
+            {"role": "user", "content":"Hi there"},
+        ]
+    })
+    assert res.status_code == 200
+    assert "prompt" in res.body
+    assert res.body["prompt"] == "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>You are a test.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>Hi there<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+
+
 @pytest.mark.parametrize("response_format,n_predicted,re_content", [
     ({"type": "json_object", "schema": {"const": "42"}}, 6, "\"42\""),
     ({"type": "json_object", "schema": {"items": [{"type": "integer"}]}}, 10, "[ -3000 ]"),
