@@ -3,6 +3,9 @@ from utils import *
 
 server: ServerProcess
 
+TIMEOUT_SERVER_START = 15*60
+TIMEOUT_HTTP_REQUEST = 60
+
 @pytest.fixture(autouse=True)
 def create_server():
     global server
@@ -107,8 +110,8 @@ def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict,
 
 @pytest.mark.slow
 @pytest.mark.parametrize("template_name,tool,argument_key", [
-    ("meta-llama-Llama-3.1-8B-Instruct",         TEST_TOOL,            "success"),
-    ("meta-llama-Llama-3.1-8B-Instruct",         PYTHON_TOOL,          "code"),
+    ("meta-llama-Llama-3.1-8B-Instruct",              TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.1-8B-Instruct",              PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
     ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
     ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
@@ -131,44 +134,43 @@ def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict,
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("tool,argument_key,hf_repo,hf_file,template_override", [
-    (TEST_TOOL,    "success",  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (TEST_TOOL,    "success",  "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (TEST_TOOL,    "success",  "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (TEST_TOOL,    "success",  "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (TEST_TOOL,    "success",  "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (PYTHON_TOOL,  "code",     "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (TEST_TOOL,    "success",  "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    (PYTHON_TOOL,  "code",     "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    (TEST_TOOL,    "success",  "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
-    (PYTHON_TOOL,  "code",     "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
-    (TEST_TOOL,    "success",  "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai/functionary-medium-v3.2", None)),
-    (PYTHON_TOOL,  "code",     "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai/functionary-medium-v3.2", None)),
-    (TEST_TOOL,    "success",  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    (TEST_TOOL,    "success",  "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
+@pytest.mark.parametrize("tool,argument_key,hf_repo,template_override", [
+    (TEST_TOOL,    "success",  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (TEST_TOOL,    "success",  "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (PYTHON_TOOL,  "code",     "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (TEST_TOOL,    "success",  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (PYTHON_TOOL,  "code",     "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (TEST_TOOL,    "success",  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (PYTHON_TOOL,  "code",     "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (TEST_TOOL,    "success",  "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (PYTHON_TOOL,  "code",     "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (TEST_TOOL,    "success",  "NousResearch/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (PYTHON_TOOL,  "code",     "NousResearch/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (TEST_TOOL,    "success",  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (PYTHON_TOOL,  "code",     "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (TEST_TOOL,    "success",  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    (TEST_TOOL,    "success",  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (TEST_TOOL,    "success",  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
     # TODO: fix these
-    # (TEST_TOOL,    "success",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
-    # (PYTHON_TOOL,  "code",     "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
+    # (TEST_TOOL,    "success",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    # (PYTHON_TOOL,  "code",     "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
+def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
     n_predict = 512
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
     server.n_predict = n_predict
     server.model_hf_repo = hf_repo
-    server.model_hf_file = hf_file
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
-    server.start()
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
@@ -181,7 +183,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
         "temperature": 0.0,
         "top_k": 1,
         "top_p": 1.0,
-    })
+    }, timeout=TIMEOUT_HTTP_REQUEST)
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
@@ -201,7 +203,7 @@ def do_test_completion_without_tool_call(template_name: str, n_predict: int, too
     server.jinja = True
     server.n_predict = n_predict
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
-    server.start()
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
@@ -213,7 +215,7 @@ def do_test_completion_without_tool_call(template_name: str, n_predict: int, too
         "temperature": 0.0,
         "top_k": 1,
         "top_p": 1.0,
-    })
+    }, timeout=TIMEOUT_HTTP_REQUEST)
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     assert choice["message"].get("tool_calls") is None, f'Expected no tool call in {choice["message"]}'
@@ -245,39 +247,38 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("hf_repo,hf_file,template_override", [
-    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    ("bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    ("bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    ("bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    ("NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    ("NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
-    ("bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai/functionary-medium-v3.2", None)),
-    ("bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    # ("bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
+@pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    ("NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    ("NousResearch/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
+def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
     server.n_predict = 512
     server.model_hf_repo = hf_repo
-    server.model_hf_file = hf_file
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
-    server.start(timeout_seconds=15*60)
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,
         "messages": [
             {"role": "user", "content": "What is the weather in Istanbul?"},
         ],
         "tools": [WEATHER_TOOL],
-    })
+    }, timeout=TIMEOUT_HTTP_REQUEST)
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
@@ -292,32 +293,31 @@ def test_weather_tool_call(hf_repo: str, hf_file: str, template_override: Tuple[
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("expected_arguments_override,hf_repo,hf_file,template_override", [
-    (None,                 "bartowski/gemma-2-2b-it-GGUF", "gemma-2-2b-it-Q4_K_M.gguf", None),
-    (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF", "Phi-3.5-mini-instruct-Q4_K_M.gguf", None),
-    (None,                 "bartowski/functionary-small-v3.2-GGUF", "functionary-small-v3.2-Q8_0.gguf", ("meetkai-functionary-medium-v3.2", None)),
-    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", None),
-    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf", None),
-    (None,                 "NousResearch/Hermes-2-Pro-Llama-3-8B-GGUF", "Hermes-2-Pro-Llama-3-8B-Q4_K_M.gguf", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (None,                 "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", None),
-    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", None),
+@pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
+    (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
+    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (None,                 "NousResearch/Hermes-2-Pro-Llama-3-8B:Q4_K_M",      ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (None,                 "NousResearch/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, hf_file: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
     server.n_predict = 128
     server.model_hf_repo = hf_repo
-    server.model_hf_file = hf_file
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
-    server.start(timeout_seconds=15*60)
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,
         "messages": [
@@ -329,7 +329,7 @@ def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo:
         "temperature": 0.0,
         "top_k": 1,
         "top_p": 1.0,
-    })
+    }, timeout=TIMEOUT_HTTP_REQUEST)
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
