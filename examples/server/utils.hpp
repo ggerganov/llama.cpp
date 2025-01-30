@@ -643,7 +643,7 @@ static json oaicompat_completion_params_parse(
         inputs.json_schema = json_value(llama_params, "json_schema", json::object());
         auto chat_params = common_chat_params_init(tmpl, inputs);
 
-        llama_params["chat_format"] = static_cast<u_int32_t>(chat_params.format);
+        llama_params["chat_format"] = static_cast<int>(chat_params.format);
         llama_params["prompt"] = chat_params.prompt;
         llama_params["grammar"] = chat_params.grammar;
         llama_params["grammar_lazy"] = chat_params.grammar_lazy;

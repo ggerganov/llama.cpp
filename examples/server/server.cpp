@@ -340,7 +340,7 @@ struct server_task {
         {
             auto it = data.find("chat_format");
             if (it != data.end()) {
-                params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<u_int32_t>());
+                params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }

@@ -32,7 +32,7 @@ enum common_chat_format {
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2,
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
     COMMON_CHAT_FORMAT_HERMES_2_PRO,
-    
+
     COMMON_CHAT_FORMAT_COUNT, // Not a format, just the # formats
 };
 
