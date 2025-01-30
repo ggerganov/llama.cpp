@@ -384,12 +384,12 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
             const auto & function = tool["function"];
             std::string name = function["name"];
             auto parameters = function["parameters"];
+            builder.resolve_refs(parameters);
 
             // https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/remote/tool_runtime
-            if (allow_python_tag_builtin_tools && handle_builtin_tool(name, parameters)) {
-                return;
+            if (allow_python_tag_builtin_tools) {
+                handle_builtin_tool(name, parameters);
             }
-            builder.resolve_refs(parameters);
             tool_rules.push_back(
                 builder.add_rule(
                     name + "-call",
@@ -398,12 +398,9 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
                         builder.add_schema(name + "-args", parameters) +
                     " \"}\""));
             data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
-            has_function = true;
         });
-        if (has_function) {
-            data.grammar_triggers.push_back({"{\"name\":", /* .at_start = */ true});
-            data.grammar_triggers.push_back({"{\"type\": \"function\"", /* .at_start = */ true});
-        }
+        data.grammar_triggers.push_back({"{\"name\":", /* .at_start = */ true});
+        data.grammar_triggers.push_back({"{\"type\": \"function\"", /* .at_start = */ true});
         if (!builtin_tools.empty()) {
             data.grammar_triggers.push_back({"<|python_tag|>", /* .at_start = */ false});
         }
