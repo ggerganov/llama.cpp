@@ -16,12 +16,13 @@ import logging
 import os
 from typing import Generator
 from pydantic import BaseModel
+from typing import *
 import subprocess
 
 
 class HuggingFaceModel(BaseModel):
     hf_repo: str
-    hf_file: str
+    hf_file: Optional[str] = None
 
     class Config:
         frozen = True
@@ -40,7 +41,7 @@ def collect_hf_model_test_parameters(test_file) -> Generator[HuggingFaceModel, N
             for dec in node.decorator_list:
                 if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr == 'parametrize':
                     param_names = ast.literal_eval(dec.args[0]).split(",")
-                    if "hf_repo" not in param_names or "hf_file" not in param_names:
+                    if "hf_repo" not in param_names:
                         continue
 
                     raw_param_values = dec.args[1]
@@ -49,7 +50,7 @@ def collect_hf_model_test_parameters(test_file) -> Generator[HuggingFaceModel, N
                         continue
 
                     hf_repo_idx = param_names.index("hf_repo")
-                    hf_file_idx = param_names.index("hf_file")
+                    hf_file_idx = param_names.index("hf_file") if "hf_file" in param_names else None
 
                     for t in raw_param_values.elts:
                         if not isinstance(t, ast.Tuple):
@@ -57,7 +58,7 @@ def collect_hf_model_test_parameters(test_file) -> Generator[HuggingFaceModel, N
                             continue
                         yield HuggingFaceModel(
                             hf_repo=ast.literal_eval(t.elts[hf_repo_idx]),
-                            hf_file=ast.literal_eval(t.elts[hf_file_idx]))
+                            hf_file=ast.literal_eval(t.elts[hf_file_idx]) if hf_file_idx is not None else None)
 
 
 if __name__ == '__main__':
@@ -80,14 +81,22 @@ if __name__ == '__main__':
             '../build/bin/Release/llama-cli.exe' if os.name == 'nt' else '../build/bin/llama-cli'))
 
     for m in models:
-        if '<' in m.hf_repo or '<' in m.hf_file:
+        if '<' in m.hf_repo or (m.hf_file is not None and '<' in m.hf_file):
             continue
-        if '-of-' in m.hf_file:
+        if m.hf_file is not None and '-of-' in m.hf_file:
             logging.warning(f'Skipping model at {m.hf_repo} / {m.hf_file} because it is a split file')
             continue
         logging.info(f'Using llama-cli to ensure model {m.hf_repo}/{m.hf_file} was fetched')
-        cmd = [cli_path, '-hfr', m.hf_repo, '-hff', m.hf_file, '-n', '1', '-p', 'Hey', '--no-warmup', '--log-disable', '-no-cnv']
-        if m.hf_file != 'tinyllamas/stories260K.gguf' and not m.hf_file.startswith('Mistral-Nemo'):
+        cmd = [
+            cli_path,
+            '-hfr', m.hf_repo,
+            *([] if m.hf_file is None else ['-hff', m.hf_file]),
+            '-n', '1',
+            '-p', 'Hey',
+            '--no-warmup',
+            '--log-disable',
+            '-no-cnv']
+        if m.hf_file != 'tinyllamas/stories260K.gguf' and 'Mistral-Nemo' not in m.hf_repo:
             cmd.append('-fa')
         try:
             subprocess.check_call(cmd)
