@@ -55,6 +55,8 @@ const std::vector<std::string> type_names = {
     "q4_k",
     "q5_k",
     "q6_k",
+    "iq1_s",
+    "iq1_m",
     "iq2_xxs",
     "iq2_xs",
     "iq2_s",
