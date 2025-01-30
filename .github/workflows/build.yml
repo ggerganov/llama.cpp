@@ -46,8 +46,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: macOS-latest-cmake-arm64
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -117,8 +116,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: macOS-latest-cmake-x64
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -187,8 +185,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-cpu-cmake
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -270,8 +267,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-latest-cmake-sanitizer-${{ matrix.sanitizer }}
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -323,8 +319,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-latest-cmake-rpc
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -358,8 +353,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-22-cmake-vulkan
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -397,8 +391,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-22-cmake-hip
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -435,8 +428,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-22-cmake-musa
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -486,8 +478,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-22-cmake-sycl
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Build
         id: cmake_build
@@ -536,8 +527,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: ubuntu-22-cmake-sycl-fp16
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Build
         id: cmake_build
@@ -563,8 +553,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: macOS-latest-cmake-ios
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -600,8 +589,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: macOS-latest-cmake-tvos
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -641,8 +629,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: macOS-latest-swift
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Dependencies
         id: depends
@@ -688,8 +675,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-msys2
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Setup ${{ matrix.sys }}
         uses: msys2/setup-msys2@v2
@@ -762,8 +748,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-latest-cmake-${{ matrix.build }}
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Clone Kompute submodule
         id: clone_kompute
@@ -909,8 +894,7 @@ jobs:
         - name: ccache
           uses: hendrikmuhs/ccache-action@v1.2.16
           with:
-            key: ubuntu-latest-cmake-cuda
-            evict-old-files: job
+            evict-old-files: 1d
 
         - name: Install dependencies
           env:
@@ -948,8 +932,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-2019-cmake-cuda-${{ matrix.cuda }}
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Install Cuda Toolkit 11.7
         if: ${{ matrix.cuda == '11.7' }}
@@ -1094,8 +1077,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-latest-cmake-sycl
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Install
         run:  |
@@ -1163,8 +1145,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-latest-cmake-hip
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Install
         id: depends
@@ -1217,8 +1198,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: windows-latest-cmake-hip-release
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Install
         id: depends
@@ -1320,8 +1300,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: android-build
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -1363,8 +1342,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
-          key: release
-          evict-old-files: job
+          evict-old-files: 1d
 
       - name: Determine tag name
         id: tag
