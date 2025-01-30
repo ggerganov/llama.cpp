@@ -642,7 +642,7 @@ static json oaicompat_completion_params_parse(
         inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
         inputs.stream = stream;
         // TODO: support mixing schema w/ tools beyond generic format.
-        inputs.json_schema = json_value(llama_params, "json_schema", json::object());
+        inputs.json_schema = json_value(llama_params, "json_schema", json());
         auto chat_params = common_chat_params_init(tmpl, inputs);
 
         llama_params["chat_format"] = static_cast<int>(chat_params.format);
