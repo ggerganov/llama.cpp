@@ -41,7 +41,7 @@ class ServerProcess:
     server_port: int = 8080
     server_host: str = "127.0.0.1"
     model_hf_repo: str = "ggml-org/models"
-    model_hf_file: str = "tinyllamas/stories260K.gguf"
+    model_hf_file: str | None = "tinyllamas/stories260K.gguf"
     model_alias: str = "tinyllama-2"
     temperature: float = 0.8
     seed: int = 42

@@ -166,6 +166,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
     server.n_ctx = 8192
     server.n_predict = n_predict
     server.model_hf_repo = hf_repo
+    server.model_hf_file = None
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
@@ -267,6 +268,7 @@ def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | Non
     server.n_ctx = 8192
     server.n_predict = 512
     server.model_hf_repo = hf_repo
+    server.model_hf_file = None
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
@@ -313,6 +315,7 @@ def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo:
     server.n_ctx = 8192
     server.n_predict = 128
     server.model_hf_repo = hf_repo
+    server.model_hf_file = None
     if template_override:
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
