@@ -1,13 +1,10 @@
-#include "common.h"
 #include "sampling.h"
 #include "log.h"
-#include "llama.h"
-
-#include <cmath>
 
 #ifdef LLAMA_USE_LLGUIDANCE
 
 #    include "llguidance.h"
+#    include <cmath>
 
 struct llama_sampler_llg {
     const llama_vocab * vocab;
