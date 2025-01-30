@@ -713,7 +713,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
 
     block_q8_0 * restrict y = vy;
 
-#if defined(CUSTOM_QK4_0) && (CUSTOM_QK4_0 != 32)
+#if (QK8_0 != 32)
     GGML_UNUSED(nb);
     // scalar
     quantize_row_q8_0_ref(x, y, k);
@@ -1832,8 +1832,8 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     float sumf = 0;
 
 
-#if defined(CUSTOM_QK4_0) && (CUSTOM_QK4_0 != 32)
-    // Use only the basic implementation when CUSTOM_QK4_0 is defined and not 32
+#if (QK4_0 != 32)
+    // Use only the basic implementation when QK4_0 is defined and not 32
     for (; ib < nb; ++ib) {
         int sumi0 = 0;
         int sumi1 = 0;
@@ -2317,7 +2317,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     }
 
     sumf = hsum_float_4x4(acc_0, acc_1, acc_2, acc_3);
-#else
+#endif
     for (; ib < nb; ++ib) {
         int sumi0 = 0;
         int sumi1 = 0;
@@ -2333,7 +2333,6 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         int sumi = sumi0 + sumi1;
         sumf += sumi*GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d);
     }
-#endif
 #endif
     *s = sumf;
 }

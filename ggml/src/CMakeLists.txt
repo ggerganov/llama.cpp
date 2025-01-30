@@ -1,12 +1,17 @@
 include(CheckCXXCompilerFlag)
 
-option(CUSTOM_QK4_0 "Quantization block size for Q4_0 (32, 64, 128, 256)" 32)
+# Set default value for QK4_0
+set(QK4_0 "32" CACHE STRING "Quantization block size for Q4_0 (32, 64, 128, 256)")
 
-if (NOT CUSTOM_QK4_0 MATCHES "^(32|64|128|256)$")
-    message(FATAL_ERROR "Invalid CUSTOM_QK4_0 value: Must be one of {32, 64, 128, 256}")
+# Only check the value if it was explicitly set by the user
+if (DEFINED QK4_0 AND NOT QK4_0 STREQUAL "32") 
+    if (NOT QK4_0 MATCHES "^(32|64|128|256)$")
+        message(FATAL_ERROR "Invalid QK4_0 value: Must be one of {32, 64, 128, 256}")
+    endif()
+    add_compile_definitions(QK4_0=${QK4_0})
 endif()
 
-add_compile_definitions(CUSTOM_QK4_0=${CUSTOM_QK4_0})
+message(STATUS "QK4_0 is set to: ${QK4_0}")
 
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
