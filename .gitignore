@@ -1,2 +1,8 @@
 build/**
 .build/**
+
+models/**
+
+.vscode/**
+
+**/__pycache__/**

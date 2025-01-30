@@ -141,7 +141,16 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 
-#define QK4_0 32
+#ifdef CUSTOM_QK4_0
+    #define QK4_0 CUSTOM_QK4_0
+#else
+    #define QK4_0 32 // Default value for QK4_0
+#endif
+
+#if (QK4_0 != 32 && QK4_0 != 64 && QK4_0 != 128 && QK4_0 != 256)
+    #error "Invalid QK4_0 value: QK4_0 must be one of {32, 64, 128, 256}"
+#endif
+
 typedef struct {
     ggml_half d;           // delta
     uint8_t qs[QK4_0 / 2]; // nibbles / quants
@@ -183,7 +192,16 @@ typedef struct {
 } block_q5_1;
 static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_half) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
 
-#define QK8_0 32
+#ifdef CUSTOM_QK8_0
+    #define QK8_0 CUSTOM_QK4_0
+#else
+    #define QK8_0 32
+#endif
+
+#if (QK8_0 != 32 && QK8_0 != 64 && QK8_0 != 128 && QK8_0 != 256)
+    #error "Invalid QK8_0 value: QK8_0 must be one of {32, 64, 128, 256}"
+#endif
+
 typedef struct {
     ggml_half d;       // delta
     int8_t  qs[QK8_0]; // quants
@@ -403,7 +421,7 @@ typedef union {
 } iq1m_scale_t;
 
 // Non-linear quants
-#define QK4_NL 32
+#define QK4_NL 128
 typedef struct {
     ggml_half d;
     uint8_t qs[QK4_NL/2];

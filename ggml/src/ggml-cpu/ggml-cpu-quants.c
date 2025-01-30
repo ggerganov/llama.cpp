@@ -707,12 +707,17 @@ void quantize_row_q5_1(const float * restrict x, void * restrict y, int64_t k) {
 }
 
 void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) {
-    assert(QK8_0 == 32);
+    assert(QK8_0 == 32 || QK8_0 == 64 || QK8_0 == 128 || QK8_0 == 256);
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
 
     block_q8_0 * restrict y = vy;
 
+#if defined(CUSTOM_QK4_0) && (CUSTOM_QK4_0 != 32)
+    GGML_UNUSED(nb);
+    // scalar
+    quantize_row_q8_0_ref(x, y, k);
+#else
 #if defined(__ARM_NEON)
     for (int i = 0; i < nb; i++) {
         float32x4_t srcv [8];
@@ -988,6 +993,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
     GGML_UNUSED(nb);
     // scalar
     quantize_row_q8_0_ref(x, y, k);
+#endif
 #endif
 }
 
@@ -1735,7 +1741,7 @@ static inline __m128i get_scale_shuffle(int i) {
 #endif
 
 void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
-    const int qk = QK8_0;
+    const int qk = 128;
     const int nb = n / qk;
 
     assert(n % qk == 0);
@@ -1825,6 +1831,26 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     int ib = 0;
     float sumf = 0;
 
+
+#if defined(CUSTOM_QK4_0) && (CUSTOM_QK4_0 != 32)
+    // Use only the basic implementation when CUSTOM_QK4_0 is defined and not 32
+    for (; ib < nb; ++ib) {
+        int sumi0 = 0;
+        int sumi1 = 0;
+
+        for (int j = 0; j < qk/2; ++j) {
+            const int v0 = (x[ib].qs[j] & 0x0F) - 8;
+            const int v1 = (x[ib].qs[j] >>   4) - 8;
+
+            sumi0 += (v0 * y[ib].qs[j]);
+            sumi1 += (v1 * y[ib].qs[j + qk/2]);
+        }
+
+        int sumi = sumi0 + sumi1;
+        sumf += sumi*GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d);
+    }
+#else
+    // All the SIMD implementations
 #if defined(__ARM_FEATURE_SVE)
     svfloat32_t sumv0 = svdup_n_f32(0.0f);
     svfloat32_t sumv1 = svdup_n_f32(0.0f);
@@ -2291,7 +2317,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     }
 
     sumf = hsum_float_4x4(acc_0, acc_1, acc_2, acc_3);
-#endif
+#else
     for (; ib < nb; ++ib) {
         int sumi0 = 0;
         int sumi1 = 0;
@@ -2307,7 +2333,8 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         int sumi = sumi0 + sumi1;
         sumf += sumi*GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d);
     }
-
+#endif
+#endif
     *s = sumf;
 }
 

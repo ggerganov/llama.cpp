@@ -1,5 +1,13 @@
 include(CheckCXXCompilerFlag)
 
+option(CUSTOM_QK4_0 "Quantization block size for Q4_0 (32, 64, 128, 256)" 32)
+
+if (NOT CUSTOM_QK4_0 MATCHES "^(32|64|128|256)$")
+    message(FATAL_ERROR "Invalid CUSTOM_QK4_0 value: Must be one of {32, 64, 128, 256}")
+endif()
+
+add_compile_definitions(CUSTOM_QK4_0=${CUSTOM_QK4_0})
+
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
 # enable libstdc++ assertions for debug builds
