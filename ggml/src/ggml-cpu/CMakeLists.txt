@@ -325,9 +325,9 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
 
         # Fetch KleidiAI sources:
         include(FetchContent)
-        set(KLEIDIAI_COMMIT_SHA "v1.2.0")
-        set(KLEIDIAI_DOWNLOAD_URL "https://gitlab.arm.com/kleidi/kleidiai/-/archive/${KLEIDIAI_COMMIT_SHA}/kleidiai-${KLEIDIAI_COMMIT_SHA}.tar.gz")
-        set(KLEIDIAI_ARCHIVE_MD5  "cebcb660079bf15626e7bdaecd18f49c")
+        set(KLEIDIAI_COMMIT_TAG "v1.2.0")
+        set(KLEIDIAI_DOWNLOAD_URL "https://github.com/ARM-software/kleidiai/archive/refs/tags/${KLEIDIAI_COMMIT_TAG}.tar.gz")
+        set(KLEIDIAI_ARCHIVE_MD5  "6634fefce7357ecfee9eace2068bc68b")
 
         if (POLICY CMP0135)
             cmake_policy(SET CMP0135 NEW)

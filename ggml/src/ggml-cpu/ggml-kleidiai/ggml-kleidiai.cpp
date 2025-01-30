@@ -34,25 +34,25 @@ struct ggml_kleidiai_context {
     ggml_kleidiai_kernels * kernels;
 } static ctx = { NULL };
 
-static void init_kleidiai_context(int n_threads) {
+static void init_kleidiai_context(void) {
     static bool initialized = false;
 
     if (!initialized) {
-        GGML_ASSERT(n_threads > 0);
-
         initialized = true;
+        const char *env_var = getenv("GGML_KLEIDIAI_SME");
+        int sme_enabled = 0;
 
         cpu_feature features  = (ggml_cpu_has_dotprod()     ? CPU_FEATURE_DOTPROD : CPU_FEATURE_NONE) |
                                 (ggml_cpu_has_matmul_int8() ? CPU_FEATURE_I8MM    : CPU_FEATURE_NONE) |
                                 (ggml_cpu_has_sve()         ? CPU_FEATURE_SVE     : CPU_FEATURE_NONE);
 
-#if defined(__APPLE__)
-        if (n_threads == 1) {
+        if (env_var) {
+            sme_enabled = atoi(env_var);
+        }
+
+        if (sme_enabled != 0) {
             features |= ggml_cpu_has_sme() ? CPU_FEATURE_SME : CPU_FEATURE_NONE;
         }
-#else
-        features |= ggml_cpu_has_sme() ? CPU_FEATURE_SME : CPU_FEATURE_NONE;
-#endif
         ctx.kernels = ggml_kleidiai_select_kernels(features);
     }
 }
@@ -162,6 +162,8 @@ public:
         ctx.kernels->rhs_info.pack_func(1, n, k, nr, kr, sr, k_q4_0_block_size, (const uint8_t *)data, NULL, tensor->data, 0, &params);
 
         return 0;
+
+        GGML_UNUSED(data_size);
     }
 };
 
@@ -223,7 +225,7 @@ class extra_buffer_type : ggml::cpu::extra_buffer_type {
                 op->src[0]->type == GGML_TYPE_Q4_0 &&
                 op->src[0]->buffer &&
                 (ggml_n_dims(op->src[0]) == 2) &&
-                op->src[0]->buffer->buft == ggml_backend_cpu_kleidiai_buffer_type(-1) && ctx.kernels
+                op->src[0]->buffer->buft == ggml_backend_cpu_kleidiai_buffer_type() && ctx.kernels
                 ) {
             if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
                 return false;
@@ -237,7 +239,7 @@ class extra_buffer_type : ggml::cpu::extra_buffer_type {
 
     ggml::cpu::tensor_traits * get_tensor_traits(const struct ggml_tensor * op) override {
         if (op->op == GGML_OP_MUL_MAT) {
-            if (op->src[0]->buffer && op->src[0]->buffer->buft == ggml_backend_cpu_kleidiai_buffer_type(-1)) {
+            if (op->src[0]->buffer && op->src[0]->buffer->buft == ggml_backend_cpu_kleidiai_buffer_type()) {
                 return (ggml::cpu::tensor_traits *) op->src[0]->extra;
             }
         }
@@ -246,7 +248,7 @@ class extra_buffer_type : ggml::cpu::extra_buffer_type {
 };
 }  // namespace ggml::cpu::kleidiai
 
-ggml_backend_buffer_type_t ggml_backend_cpu_kleidiai_buffer_type(int n_threads) {
+ggml_backend_buffer_type_t ggml_backend_cpu_kleidiai_buffer_type(void) {
     static ggml::cpu::kleidiai::extra_buffer_type ctx;
     static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type_kleidiai = {
         /* .iface    = */ {
@@ -261,7 +263,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_kleidiai_buffer_type(int n_threads) 
         /* .context = */ &ctx,
     };
 
-    init_kleidiai_context(n_threads);
+    init_kleidiai_context();
 
     return &ggml_backend_cpu_buffer_type_kleidiai;
 }

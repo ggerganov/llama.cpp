@@ -33,8 +33,8 @@
 
 // ggml-backend interface
 
-std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type(int n_threads) {
-    static std::vector<ggml_backend_buffer_type_t> bufts = [n_threads]() {
+std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type() {
+    static std::vector<ggml_backend_buffer_type_t> bufts = []() {
         std::vector<ggml_backend_buffer_type_t> bufts;
 
 #if defined(__AMX_INT8__) && defined(__AVX512VNNI__)
@@ -44,8 +44,8 @@ std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type
 #endif
 
 #ifdef GGML_USE_CPU_KLEIDIAI
-        if (ggml_backend_cpu_kleidiai_buffer_type(n_threads)) {
-            bufts.push_back(ggml_backend_cpu_kleidiai_buffer_type(n_threads));
+        if (ggml_backend_cpu_kleidiai_buffer_type()) {
+            bufts.push_back(ggml_backend_cpu_kleidiai_buffer_type());
         }
 #endif
 
@@ -58,21 +58,19 @@ std::vector<ggml_backend_buffer_type_t>& ggml_backend_cpu_get_extra_buffers_type
         bufts.push_back(NULL);
 
         return bufts;
-
-        GGML_UNUSED(n_threads);
     }();
 
     return bufts;
 }
 
-static ggml_backend_buffer_type_t * ggml_backend_cpu_device_get_extra_buffers_type(ggml_backend_dev_t device, int n_threads) {
-    return ggml_backend_cpu_get_extra_buffers_type(n_threads).data();
+static ggml_backend_buffer_type_t * ggml_backend_cpu_device_get_extra_buffers_type(ggml_backend_dev_t device) {
+    return ggml_backend_cpu_get_extra_buffers_type().data();
 
     GGML_UNUSED(device);
 }
 
 static bool ggml_backend_cpu_is_extra_buffer_type(ggml_backend_buffer_type_t buft) {
-    for (auto extra : ggml_backend_cpu_get_extra_buffers_type(-1)) {
+    for (auto extra : ggml_backend_cpu_get_extra_buffers_type()) {
         if (extra && extra == buft) return true;
     }
     return false;
@@ -387,7 +385,7 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
     }
 
     // extra_buffer_op?
-    for (auto extra : ggml_backend_cpu_get_extra_buffers_type(-1)) {
+    for (auto extra : ggml_backend_cpu_get_extra_buffers_type()) {
         if (extra) {
             auto buf_extra = (ggml::cpu::extra_buffer_type*) extra->context;
             if (buf_extra && buf_extra->supports_op(dev, op)) {
@@ -577,7 +575,7 @@ static ggml_backend_feature * ggml_backend_cpu_get_features(ggml_backend_reg_t r
         features.push_back({ "OPENMP", "1" });
     #endif
     #ifdef GGML_USE_CPU_KLEIDIAI
-        features.push_back({ "KLEIDIAI_REPACK", "1" });
+        features.push_back({ "KLEIDIAI", "1" });
     #endif
     #ifdef GGML_USE_CPU_AARCH64
         features.push_back({ "AARCH64_REPACK", "1" });
