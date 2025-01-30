@@ -630,10 +630,33 @@ static json oaicompat_completion_params_parse(
         if (tool_choice != "none" && tool_choice != "auto" && tool_choice != "required") {
             throw std::runtime_error("Invalid tool_choice: " + tool_choice);
         }
-        llama_params["tool_choice"] = tool_choice;
-        llama_params["parallel_tool_calls"] = json_value(body, "parallel_tool_calls", false);
         if (tool_choice != "none" && llama_params.contains("grammar")) {
             throw std::runtime_error("Cannot use custom grammar constraints with tools.");
+        }
+        common_chat_inputs inputs;
+        inputs.messages = body.at("messages");
+        inputs.tools = tools;
+        inputs.tool_choice = tool_choice;
+        inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
+        inputs.stream = stream;
+        // TODO: support mixing schema w/ tools beyond generic format.
+        inputs.json_schema = json_value(llama_params, "json_schema", json::object());
+        auto chat_params = common_chat_params_init(tmpl, inputs);
+
+        llama_params["chat_format"] = static_cast<u_int32_t>(chat_params.format);
+        llama_params["prompt"] = chat_params.prompt;
+        llama_params["grammar"] = chat_params.grammar;
+        llama_params["grammar_lazy"] = chat_params.grammar_lazy;
+        auto grammar_triggers = json::array();
+        for (const auto & trigger : chat_params.grammar_triggers) {
+            grammar_triggers.push_back({
+                {"word", trigger.word},
+                {"at_start", trigger.at_start},
+            });
+        }
+        llama_params["grammar_triggers"] = grammar_triggers;
+        for (const auto & stop : chat_params.additional_stops) {
+            llama_params["stop"].push_back(stop);
         }
     } else {
         llama_params["prompt"] = format_chat(tmpl, body.at("messages"));
