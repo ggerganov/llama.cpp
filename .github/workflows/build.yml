@@ -945,9 +945,11 @@ jobs:
     name: ubuntu-22-cuda (${{ matrix.cuda.version }} cap ${{ matrix.cuda.cap }}, e.g. ${{ matrix.cuda.example }})
 
     steps:
-        - name: Clone
-          id: checkout
-          uses: actions/checkout@v4
+        - uses: actions/checkout@v4
+          if: ${{ matrix.cuda.package }}
+
+        - uses: actions/checkout@v4
+          if: ${{ !matrix.cuda.package }}
           with:
             fetch-depth: 0
 
