@@ -1858,7 +1858,12 @@ struct server_context {
             llama_init_dft.context.reset();
         }
 
-        chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        if (params_base.chat_template.empty() && !validate_builtin_chat_template(params.use_jinja)) {
+            LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
+            chat_templates = common_chat_templates_from_model(model, "chatml");
+        } else {
+            chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        }
         GGML_ASSERT(chat_templates.template_default.get() != nullptr);
 
         return true;
@@ -4434,14 +4439,6 @@ int main(int argc, char ** argv) {
     state.store(SERVER_STATE_READY);
 
     LOG_INF("%s: model loaded\n", __func__);
-
-    // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
-    if (params.chat_template.empty()) {
-        if (!ctx_server.validate_builtin_chat_template(params.use_jinja)) {
-            LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
-            params.chat_template = "chatml";
-        }
-    }
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
