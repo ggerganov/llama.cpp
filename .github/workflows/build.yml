@@ -895,7 +895,7 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}.zip
           name: llama-bin-win-${{ matrix.build }}.zip
 
-  ubuntu-cpu-cmake-cuda:
+  ubuntu-latest-cmake-cuda:
     runs-on: ubuntu-latest
 
     strategy:
@@ -956,8 +956,8 @@ jobs:
           env:
             DEBIAN_FRONTEND: noninteractive
           run: |
-            apt-get update
-            apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
+              apt-get update
+              apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
 
         - name: ccache
           uses: hendrikmuhs/ccache-action@v1.2.16
