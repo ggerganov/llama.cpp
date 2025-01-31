@@ -2534,12 +2534,11 @@ static void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx,  ggml_tensor 
 
 
 static void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
-    // TODO: remove duplicate variables
-    const float * src0_d = static_cast<float *>(dst->src[0]->data);
-    float * dst_d  = static_cast<float *>(dst->data);
+    const void * src0_d = static_cast<void *>(dst->src[0]->data);
+    void * dst_d  = static_cast<void *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
 
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(ctx, dst, dst->src[0], dst, nullptr, src0_d, dst_d, main_stream);
+    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(dst, dst->src[0], dst, nullptr, src0_d, dst_d, main_stream);
 }
 
 

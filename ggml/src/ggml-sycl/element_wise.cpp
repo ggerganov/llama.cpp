@@ -756,43 +756,39 @@ inline void ggml_sycl_op_acc(ggml_backend_sycl_context & ctx,
 
 inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx,
                              ggml_tensor *dst) {
-    // TODO: remove duplicate variables
-    const float * src0_dd  = static_cast<float *>(dst->src[0]->data);
-    const float * src1_dd  = static_cast<float *>(dst->src[1]->data);
-    float * dst_dd   = static_cast<float *>(dst->data);
+    const void * src0_dd  = static_cast<void *>(dst->src[0]->data);
+    const void * src1_dd  = static_cast<void *>(dst->src[1]->data);
+    void * dst_dd   = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
 
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_add>>(ctx, dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
+    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_add>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
 inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
-    // TODO: remove duplicate variables
-    const float * src0_dd  = static_cast<float *>(dst->src[0]->data);
-    const float * src1_dd  = static_cast<float *>(dst->src[1]->data);
-    float * dst_dd   = static_cast<float *>(dst->data);
+    const void * src0_dd  = static_cast<void *>(dst->src[0]->data);
+    const void * src1_dd  = static_cast<void *>(dst->src[1]->data);
+    void * dst_dd   = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
 
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_sub>>(ctx, dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
+    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_sub>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
 inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
-    // TODO: remove duplicate variables
-    const float * src0_dd = static_cast<float *>(dst->src[0]->data);
-    const float * src1_dd = static_cast<float *>(dst->src[1]->data);
-    float * dst_dd  = static_cast<float *>(dst->data);
+    const void * src0_dd = static_cast<void *>(dst->src[0]->data);
+    const void * src1_dd = static_cast<void *>(dst->src[1]->data);
+    void * dst_dd  = static_cast<void *>(dst->data);
     const dpct::queue_ptr  main_stream = ctx.stream();
 
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_mul>>(ctx, dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
+    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_mul>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
 inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
-    // TODO: remove duplicate variables
-    const float * src0_dd = static_cast<float *>(dst->src[0]->data);
-    const float * src1_dd = static_cast<float *>(dst->src[1]->data);
-    float * dst_dd  = static_cast<float *>(dst->data);
+    const void * src0_dd = static_cast<void *>(dst->src[0]->data);
+    const void * src1_dd = static_cast<void *>(dst->src[1]->data);
+    void * dst_dd  = static_cast<void *>(dst->data);
     const dpct::queue_ptr  main_stream = ctx.stream();
 
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_div>>(ctx, dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
+    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_div>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
 
