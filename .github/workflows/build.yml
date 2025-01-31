@@ -1412,7 +1412,7 @@ jobs:
 
     needs:
       - ubuntu-cpu-cmake
-      - ubuntu-cpu-cmake-cuda
+      - ubuntu-latest-cmake-cuda
       - windows-latest-cmake
       - windows-2019-cmake-cuda
       - windows-latest-cmake-hip-release
