@@ -93,12 +93,14 @@ endif()
 
 if (GGML_CCACHE)
     find_program(GGML_CCACHE_FOUND ccache)
+    find_program(GGML_SCCACHE_FOUND sccache)
 
-    if (GGML_CCACHE_FOUND)
+    if (GGML_CCACHE_FOUND OR GGML_SCCACHE_FOUND)
+        set(GGML_CCACHE_VARIANT $<IF:$<BOOL:${GGML_CCACHE_FOUND}>,ccache,sccache>)
         # TODO: should not be set globally
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${GGML_CCACHE_VARIANT})
         set(ENV{CCACHE_SLOPPINESS} time_macros)
-        message(STATUS "ccache found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
+        message(STATUS "${GGML_CCACHE_VARIANT} found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
     else()
         message(STATUS "Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF")
     endif ()
