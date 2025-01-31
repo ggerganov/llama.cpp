@@ -688,6 +688,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: windows-msys2
           evict-old-files: 1d
 
@@ -762,6 +763,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: windows-latest-cmake-${{ matrix.build }}
           evict-old-files: 1d
 
@@ -948,6 +950,7 @@ jobs:
       - name: Install ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: ${{ github.job }}-${{ matrix.cuda }}-${{ matrix.build }}
           evict-old-files: 1d
 
@@ -1089,6 +1092,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: windows-latest-cmake-sycl
           evict-old-files: 1d
 
@@ -1173,6 +1177,7 @@ jobs:
       - name: Install ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: ${{ github.job }}
           evict-old-files: 1d
 
@@ -1207,6 +1212,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
+          variant: sccache
           key: windows-latest-cmake-hip-release
           evict-old-files: 1d
 
