@@ -756,6 +756,14 @@ struct block_iq2_s
     uint8_t scales[QUANT_K_IQ2_S/32];
 };
 
+struct block_iq2_s_packed16
+{
+    float16_t d;
+    uint16_t qs[QUANT_K_IQ2_S/8];
+    uint16_t qh[QUANT_K_IQ2_S/64];
+    uint16_t scales[QUANT_K_IQ2_S/64];
+};
+
 #if defined(DATA_A_IQ2_S)
 
 const uvec2 iq2s_grid_const[1024] = {
@@ -1032,6 +1040,7 @@ void init_iq_shmem(uvec3 wgsize)
 #define QUANT_K QUANT_K_IQ2_S
 #define QUANT_R QUANT_R_IQ2_S
 #define A_TYPE block_iq2_s
+#define A_TYPE_PACKED16 block_iq2_s_packed16
 #endif
 
 #define QUANT_K_IQ3_XXS 256
