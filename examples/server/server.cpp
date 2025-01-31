@@ -798,7 +798,7 @@ struct server_task_result_cmpl_final : server_task_result {
         return ret;
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_COMPLETION;
     }
 };
@@ -970,7 +970,7 @@ struct server_task_result_cmpl_partial : server_task_result {
         return std::vector<json>({ret});
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_NONE;
     }
 };
@@ -1009,7 +1009,7 @@ struct server_task_result_embd : server_task_result {
         };
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_EMBEDDING;
     }
 };
@@ -1032,7 +1032,7 @@ struct server_task_result_rerank : server_task_result {
         };
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_RERANK;
     }
 };
@@ -1091,7 +1091,7 @@ struct server_task_result_error : server_task_result {
         return format_error_response(err_msg, err_type);
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_NONE;
     }
 };
@@ -1151,7 +1151,7 @@ struct server_task_result_metrics : server_task_result {
         };
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_METRICS;
     }
 };
@@ -1188,7 +1188,7 @@ struct server_task_result_slot_save_load : server_task_result {
         }
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_SLOT_SAVE;
     }
 };
@@ -1203,7 +1203,7 @@ struct server_task_result_slot_erase : server_task_result {
         };
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_SLOT_ERASE;
     }
 };
@@ -1213,7 +1213,7 @@ struct server_task_result_apply_lora : server_task_result {
         return json {{ "success", true }};
     }
 
-    server_task_type get_server_task_type() {
+    server_task_type get_server_task_type() override {
         return SERVER_TASK_TYPE_NONE;
     }
 };
