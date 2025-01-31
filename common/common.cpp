@@ -1797,13 +1797,27 @@ std::string common_chat_apply_template(
         const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
-        bool use_jinja) {
+        bool use_jinja,
+        std::string tools_json_arr)
+{
     if (use_jinja) {
+        common_chat_inputs inputs;
+
         auto messages = json::array();
         for (const auto & msg : msgs) {
             messages.push_back({{"role", msg.role}, {"content", msg.content}});
         }
-        common_chat_inputs inputs;
+
+        if (! tools_json_arr.empty()) {
+            try {
+                inputs.tools = tools_json_arr;
+
+            } catch (const json::exception & err) {
+                LOG_WRN("Failed to parse tools JSON array \"%s\": \"%s\". Ignoring tools...\n",
+                        tools_json_arr.c_str(), err.what());
+            }
+        }
+
         inputs.messages = messages;
         inputs.add_generation_prompt = add_ass;
         return common_chat_params_init(tmpl, inputs).prompt;
@@ -1843,9 +1857,13 @@ std::string common_chat_format_single(
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
-        bool use_jinja) {
+        bool use_jinja,
+        std::string tools_json_arr)
+{
     std::ostringstream ss;
-    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(tmpl, past_msg, false, use_jinja);
+    auto fmt_past_msg = past_msg.empty() ? ""
+        : common_chat_apply_template(tmpl, past_msg, false, use_jinja, tools_json_arr);
+
     std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
@@ -2182,4 +2200,3 @@ common_control_vector_data common_control_vector_load(const std::vector<common_c
 
     return result;
 }
-

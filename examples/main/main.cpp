@@ -263,20 +263,27 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
-    auto chat_add_and_format = [&chat_msgs, &chat_templates](const std::string & role, const std::string & content) {
+    auto chat_add_and_format = [&chat_msgs, &chat_templates](const std::string & role,
+                                                             const std::string & content,
+                                                             const std::string & tools = std::string()) {
         common_chat_msg new_msg{role, content, {}};
-        auto formatted = common_chat_format_single(*chat_templates.template_default, chat_msgs, new_msg, role == "user", g_params->use_jinja);
+        auto formatted = common_chat_format_single(*chat_templates.template_default,
+                                                   chat_msgs, new_msg,
+                                                   role == "user",
+                                                   g_params->use_jinja, tools);
+
         chat_msgs.push_back({role, content, {}});
         LOG_DBG("formatted: '%s'\n", formatted.c_str());
         return formatted;
     };
 
     {
-        auto prompt = (params.conversation_mode && params.enable_chat_template)
-            // format the system prompt in conversation mode (fallback to default if empty)
-            ? chat_add_and_format("system", params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt)
-            // otherwise use the prompt as is
+        std::string system_prompt (params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt);
+        bool use_conversation_prompt (params.conversation_mode && params.enable_chat_template);
+        auto prompt = use_conversation_prompt ?
+            chat_add_and_format("system", system_prompt, params.jinja_tools)
             : params.prompt;
+
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
             LOG_DBG("tokenize the prompt\n");
             embd_inp = common_tokenize(ctx, prompt, true, true);

@@ -344,7 +344,7 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
-
+    std::string jinja_tools   = "";
     std::vector<std::string> api_keys;
 
     std::string ssl_file_key  = "";                                                                         // NOLINT
@@ -645,7 +645,8 @@ std::string common_chat_apply_template(
         const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
-        bool use_jinja);
+        bool use_jinja,
+        std::string tools_json_arr = std::string());
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
@@ -653,7 +654,8 @@ std::string common_chat_format_single(
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
-        bool use_jinja);
+        bool use_jinja,
+        std::string tools_json_arr = std::string());
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(
