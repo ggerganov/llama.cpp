@@ -2532,16 +2532,6 @@ static void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx,  ggml_tensor 
     }
 }
 
-
-static void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
-    const void * src0_d = static_cast<void *>(dst->src[0]->data);
-    void * dst_d  = static_cast<void *>(dst->data);
-    dpct::queue_ptr main_stream = ctx.stream();
-
-    ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(dst, dst->src[0], dst, nullptr, src0_d, dst_d, main_stream);
-}
-
-
 inline void ggml_sycl_op_mul_mat_sycl(
     ggml_backend_sycl_context & ctx,
     const ggml_tensor *src0, const ggml_tensor *src1, ggml_tensor *dst,
@@ -3877,7 +3867,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             ggml_sycl_op_conv_transpose_1d(ctx, dst); // already good
             break;
         case GGML_OP_REPEAT:
-            ggml_sycl_op_repeat(ctx, dst); // partially done
+            ggml_sycl_repeat(ctx, dst); // partially done
             break;
         case GGML_OP_GET_ROWS:
             ggml_sycl_op_get_rows(ctx, dst); // done

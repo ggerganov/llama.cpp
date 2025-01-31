@@ -29,6 +29,7 @@
 #include "wkv6.hpp"
 #include "outprod.hpp"
 #include "element_wise.hpp"
+#include "binbcast.hpp"
 #include "gla.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
