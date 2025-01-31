@@ -484,13 +484,14 @@ static bool ends_with(const std::string & str, const std::string & suffix) {
 
 static size_t find_partial_stop_string(const std::string &stop, const std::string &text) {
     if (!text.empty() && !stop.empty()) {
-        auto it = std::find(stop.rbegin(), stop.rend(), text.back());
-        while (it != stop.rend()) {
-            size_t length = std::distance(it, stop.rend());
-            if (text.length() >= length && 0 == text.compare(text.length() - length, length, stop)) {
-                return text.length() - length;
+        const char text_last_char = text.back();
+        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
+            if (stop[char_index] == text_last_char) {
+                const std::string current_partial = stop.substr(0, char_index + 1);
+                if (ends_with(text, current_partial)) {
+                    return text.size() - char_index - 1;
+                }
             }
-            it = std::find(std::next(it), stop.rend(), text.back());
         }
     }
 
