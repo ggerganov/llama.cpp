@@ -3665,7 +3665,7 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    const auto handle_slot_type = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req,
+    const auto handle_slot_impl = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req,
             httplib::Response & res, int id_slot, server_task_type type) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
@@ -3698,12 +3698,12 @@ int main(int argc, char ** argv) {
         res_ok(res, result->to_json());
     };
 
-    const auto handle_slots_save = [&handle_slot_type](const httplib::Request & req, httplib::Response & res, int id_slot) {
-        handle_slot_type(req, res, id_slot, SERVER_TASK_TYPE_SLOT_SAVE);
+    const auto handle_slots_save = [&handle_slot_impl](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        handle_slot_impl(req, res, id_slot, SERVER_TASK_TYPE_SLOT_SAVE);
     };
 
-    const auto handle_slots_restore = [&handle_slot_type](const httplib::Request & req, httplib::Response & res, int id_slot) {
-        handle_slot_type(req, res, id_slot, SERVER_TASK_TYPE_SLOT_RESTORE);
+    const auto handle_slots_restore = [&handle_slot_impl](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        handle_slot_impl(req, res, id_slot, SERVER_TASK_TYPE_SLOT_RESTORE);
     };
 
     const auto handle_slots_erase = [&ctx_server, &res_error, &res_ok](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
