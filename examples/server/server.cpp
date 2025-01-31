@@ -713,7 +713,7 @@ struct server_task_result_cmpl_final : server_task_result {
                         {"name", tc.name},
                         {"arguments", tc.arguments},
                     }},
-                    {"id", tc.id.empty() ? json() : json(tc.id)},
+                    {"id", tc.id},
                 });
             }
         }
