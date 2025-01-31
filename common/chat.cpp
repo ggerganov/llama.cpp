@@ -591,9 +591,17 @@ static common_chat_msg common_chat_parse_functionary_v3_2(const std::string & in
         }
     }
     // TODO: tighten & simplify.
-    auto res = parse_json_tool_calls(std::string(it, end), std::nullopt, function_regex, close_regex);
-    res.content = content;
-    return res;
+    try {
+        auto res = parse_json_tool_calls(std::string(it, end), std::nullopt, function_regex, close_regex);
+        res.content = content + res.content;
+        return res;
+    } catch (const std::exception & e) {
+        LOG_ERR("Failed to parse functionary v3.2 input: %s", e.what());
+        common_chat_msg res;
+        res.role = "assistant";
+        res.content = input;
+        return res;
+    }
 }
 
 static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
