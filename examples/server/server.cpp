@@ -3633,11 +3633,11 @@ int main(int argc, char ** argv) {
                     {"value",  (uint64_t) res_metrics->kv_cache_tokens_count}
             },{
                     {"name",  "requests_processing"},
-                    {"help",  "Number of request processing."},
+                    {"help",  "Number of requests processing."},
                     {"value",  (uint64_t) res_metrics->n_processing_slots}
             },{
                     {"name",  "requests_deferred"},
-                    {"help",  "Number of request deferred."},
+                    {"help",  "Number of requests deferred."},
                     {"value",  (uint64_t) res_metrics->n_tasks_deferred}
             }}}
         };
