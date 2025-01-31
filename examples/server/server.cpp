@@ -3667,19 +3667,21 @@ int main(int argc, char ** argv) {
 
     const auto handle_slot_impl = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req,
             httplib::Response & res, int id_slot, server_task_type type) {
-        json request_data = json::parse(req.body);
-        std::string filename = request_data.at("filename");
-        if (!fs_validate_filename(filename)) {
-            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
-            return;
-        }
-        std::string filepath = params.slot_save_path + filename;
-
         server_task task(type);
         task.id = ctx_server.queue_tasks.get_new_id();
         task.slot_action.slot_id  = id_slot;
-        task.slot_action.filename = filename;
-        task.slot_action.filepath = filepath;
+
+        if (type != SERVER_TASK_TYPE_SLOT_ERASE) {
+            json request_data = json::parse(req.body);
+            std::string filename = request_data.at("filename");
+            if (!fs_validate_filename(filename)) {
+                res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
+                return;
+            }
+            std::string filepath = params.slot_save_path + filename;
+            task.slot_action.filename = filename;
+            task.slot_action.filepath = filepath;
+        }
 
         ctx_server.queue_results.add_waiting_task_id(task.id);
         ctx_server.queue_tasks.post(task);
@@ -3694,6 +3696,8 @@ int main(int argc, char ** argv) {
 
         if (type == SERVER_TASK_TYPE_SLOT_SAVE) {
             GGML_ASSERT(dynamic_cast<server_task_result_slot_save_load*>(result.get()) != nullptr);
+        } else if (type == SERVER_TASK_TYPE_SLOT_ERASE) {
+            GGML_ASSERT(dynamic_cast<server_task_result_slot_erase*>(result.get()) != nullptr);
         }
         res_ok(res, result->to_json());
     };
@@ -3706,27 +3710,11 @@ int main(int argc, char ** argv) {
         handle_slot_impl(req, res, id_slot, SERVER_TASK_TYPE_SLOT_RESTORE);
     };
 
-    const auto handle_slots_erase = [&ctx_server, &res_error, &res_ok](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
-        server_task task(SERVER_TASK_TYPE_SLOT_ERASE);
-        task.id = ctx_server.queue_tasks.get_new_id();
-        task.slot_action.slot_id = id_slot;
-
-        ctx_server.queue_results.add_waiting_task_id(task.id);
-        ctx_server.queue_tasks.post(task);
-
-        server_task_result_ptr result = ctx_server.queue_results.recv(task.id);
-        ctx_server.queue_results.remove_waiting_task_id(task.id);
-
-        if (result->is_error()) {
-            res_error(res, result->to_json());
-            return;
-        }
-
-        GGML_ASSERT(dynamic_cast<server_task_result_slot_erase*>(result.get()) != nullptr);
-        res_ok(res, result->to_json());
+    const auto handle_slots_erase = [&handle_slot_impl](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        handle_slot_impl(req, res, id_slot, SERVER_TASK_TYPE_SLOT_ERASE);
     };
 
-    const auto handle_slots_action = [&params, &res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+ auto handle_slots_action = [&params, &res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
         if (params.slot_save_path.empty()) {
             res_error(res, format_error_response("This server does not support slots action. Start it with `--slot-save-path`", ERROR_TYPE_NOT_SUPPORTED));
             return;
