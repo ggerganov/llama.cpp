@@ -328,7 +328,7 @@ int main(void) {
     // test llama_chat_format_single for system message
     printf("\n\n=== llama_chat_format_single (system message) ===\n\n");
     std::vector<common_chat_msg> chat2;
-    common_chat_msg sys_msg{"system", "You are a helpful assistant"};
+    common_chat_msg sys_msg{"system", "You are a helpful assistant", {}};
 
     auto fmt_sys = [&](std::string tmpl_str) {
         minja::chat_template tmpl(tmpl_str, "", "");
@@ -352,10 +352,10 @@ int main(void) {
 
     // test llama_chat_format_single for user message
     printf("\n\n=== llama_chat_format_single (user message) ===\n\n");
-    chat2.push_back({"system", "You are a helpful assistant"});
-    chat2.push_back({"user", "Hello"});
-    chat2.push_back({"assistant", "I am assistant"});
-    common_chat_msg new_msg{"user", "How are you"};
+    chat2.push_back({"system", "You are a helpful assistant", {}});
+    chat2.push_back({"user", "Hello", {}});
+    chat2.push_back({"assistant", "I am assistant", {}});
+    common_chat_msg new_msg{"user", "How are you", {}};
 
     auto fmt_single = [&](std::string tmpl_str) {
         minja::chat_template tmpl(tmpl_str, "", "");

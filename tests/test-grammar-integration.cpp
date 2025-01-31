@@ -13,7 +13,7 @@
 using json = nlohmann::ordered_json;
 
 static llama_grammar * build_grammar(const std::string & grammar_str) {
-    return llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root");
+    return llama_grammar_init_impl(nullptr, grammar_str.c_str(), "root", false, nullptr, 0, nullptr, 0);
 }
 
 static bool test_build_grammar_fails(const std::string & grammar_str) {
