@@ -2794,7 +2794,7 @@ struct server_context {
                 {
                     // do nothing
                     GGML_ASSERT(false && "Invalid task.type (SERVER_TASK_TYPE_NONE)\n");
-                } break;
+                }
         }
     }
 
