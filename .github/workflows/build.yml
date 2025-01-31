@@ -68,7 +68,7 @@ jobs:
             -DGGML_METAL_USE_BF16=ON \
             -DGGML_METAL_EMBED_LIBRARY=ON \
             -DGGML_RPC=ON
-          cmake --parallel --build . --config Release -j $(sysctl -n hw.logicalcpu)
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: cmake_test
@@ -136,7 +136,7 @@ jobs:
             -DLLAMA_CURL=ON \
             -DGGML_METAL=OFF \
             -DGGML_RPC=ON
-          cmake --parallel --build build --config Release -j $(sysctl -n hw.logicalcpu)
+          cmake --build build --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: cmake_test
@@ -201,7 +201,7 @@ jobs:
             -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_CURL=ON \
             -DGGML_RPC=ON
-          cmake --parallel --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -283,7 +283,7 @@ jobs:
             -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --parallel --build . --config ${{ matrix.build_type }} -j $(nproc)
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Build (no OpenMP)
         id: cmake_build_no_openmp
@@ -296,7 +296,7 @@ jobs:
             -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DGGML_OPENMP=OFF
-          cmake --parallel --build . --config ${{ matrix.build_type }} -j $(nproc)
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -331,7 +331,7 @@ jobs:
           cd build
           cmake .. \
             -DGGML_RPC=ON
-          cmake --parallel --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -366,7 +366,7 @@ jobs:
           cd build
           cmake .. \
             -DGGML_VULKAN=ON
-          cmake --parallel --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -400,7 +400,7 @@ jobs:
           cmake -B build -S . \
             -DCMAKE_HIP_COMPILER="$(hipconfig -l)/clang" \
             -DGGML_HIP=ON
-          cmake --parallel --build build --config Release -j $(nproc)
+          cmake --build build --config Release -j $(nproc)
 
       - name: Build with legacy HIP support
         id: cmake_build_legacy_hip
@@ -409,7 +409,7 @@ jobs:
             -DCMAKE_C_COMPILER=hipcc \
             -DCMAKE_CXX_COMPILER=hipcc \
             -DGGML_HIP=ON
-          cmake --parallel --build build2 --config Release -j $(nproc)
+          cmake --build build2 --config Release -j $(nproc)
 
   ubuntu-22-cmake-musa:
     runs-on: ubuntu-22.04
@@ -437,7 +437,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_MUSA=ON
-          cmake --parallel --build build --config Release -j $(nproc)
+          cmake --build build --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl:
     runs-on: ubuntu-22.04
@@ -487,7 +487,7 @@ jobs:
             -DGGML_SYCL=ON \
             -DCMAKE_C_COMPILER=icx \
             -DCMAKE_CXX_COMPILER=icpx
-          cmake --parallel --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl-fp16:
     runs-on: ubuntu-22.04
@@ -538,7 +538,7 @@ jobs:
             -DCMAKE_C_COMPILER=icx \
             -DCMAKE_CXX_COMPILER=icpx \
             -DGGML_SYCL_F16=ON
-          cmake --parallel --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc)
 
   macOS-latest-cmake-ios:
     runs-on: macos-latest
@@ -575,7 +575,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
-          cmake --parallel --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
 
   macOS-latest-cmake-tvos:
     runs-on: macos-latest
@@ -612,7 +612,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=tvOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
-          cmake --parallel --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
 
   macOS-latest-swift:
     runs-on: macos-latest
@@ -651,7 +651,7 @@ jobs:
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
             -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-          cmake --parallel --build . --config Release -j $(sysctl -n hw.logicalcpu)
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
           sudo cmake --install . --config Release
 
       - name: xcodebuild for swift package
@@ -695,7 +695,7 @@ jobs:
         shell: msys2 {0}
         run: |
             cmake -B build
-            cmake --parallel --build build --config ${{ matrix.build }} -j $(nproc)
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
       - name: Clean after building using CMake
         shell: msys2 {0}
@@ -706,7 +706,7 @@ jobs:
         shell: msys2 {0}
         run: |
             cmake -B build -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS
-            cmake --parallel --build build --config ${{ matrix.build }} -j $(nproc)
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -798,7 +798,7 @@ jobs:
             -DOPENCL_HEADERS_BUILD_TESTING=OFF `
             -DOPENCL_HEADERS_BUILD_CXX_TESTS=OFF `
             -DCMAKE_INSTALL_PREFIX="$env:RUNNER_TEMP/opencl-arm64-release"
-          cmake --parallel --build . --target install
+          cmake --build . --target install -j
           git clone https://github.com/KhronosGroup/OpenCL-ICD-Loader
           cd OpenCL-ICD-Loader
           mkdir build-arm64-release && cd build-arm64-release
@@ -806,13 +806,13 @@ jobs:
             -A arm64 `
             -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/opencl-arm64-release" `
             -DCMAKE_INSTALL_PREFIX="$env:RUNNER_TEMP/opencl-arm64-release"
-          cmake --parallel --build . --target install --config release
+          cmake --build . --target install --config release -j
 
       - name: Build
         id: cmake_build
         run: |
           cmake -S . -B build ${{ matrix.defines }}
-          cmake --parallel --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add libopenblas.dll
         id: add_libopenblas_dll
@@ -914,7 +914,7 @@ jobs:
               -DLLAMA_FATAL_WARNINGS=ON \
               -DGGML_NATIVE=OFF \
               -DGGML_CUDA=ON
-            cmake --parallel --build build
+            cmake --build build
 
   windows-2019-cmake-cuda:
     runs-on: windows-2019
@@ -1009,8 +1009,8 @@ jobs:
             -DGGML_CUDA=ON ^
             -DGGML_RPC=ON
           set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
-          cmake --parallel --build build --config Release -j %NINJA_JOBS% -t ggml
-          cmake --parallel --build build --config Release
+          cmake --build build --config Release -j %NINJA_JOBS% -t ggml
+          cmake --build build --config Release
 
       - name: Determine tag name
         id: tag
@@ -1173,7 +1173,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DGGML_HIP=ON `
             -DGGML_RPC=ON
-          cmake --parallel --build build -j ${env:NUMBER_OF_PROCESSORS}
+          cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
 
   windows-latest-cmake-hip-release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -1223,7 +1223,7 @@ jobs:
             -DAMDGPU_TARGETS=${{ matrix.gpu_target }} `
             -DGGML_HIP=ON `
             -DGGML_RPC=ON
-          cmake --parallel --build build -j ${env:NUMBER_OF_PROCESSORS}
+          cmake --build build -j ${env:NUMBER_OF_PROCESSORS}
           md "build\bin\rocblas\library\"
           cp "${env:HIP_PATH}\bin\hipblas.dll" "build\bin\"
           cp "${env:HIP_PATH}\bin\rocblas.dll" "build\bin\"
@@ -1275,7 +1275,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=ggml
-          cmake --parallel --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu) -- CODE_SIGNING_ALLOWED=NO
           sudo cmake --install . --config Release
 
       - name: xcodebuild for swift package
@@ -1620,4 +1620,4 @@ jobs:
               -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
               -DGGML_CANN=on \
               -DSOC_TYPE=${{ matrix.device }}
-          cmake --parallel --build build -j $(nproc)
+          cmake --build build -j $(nproc)
