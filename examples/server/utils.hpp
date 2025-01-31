@@ -641,7 +641,7 @@ static json oaicompat_completion_params_parse(
         inputs.tool_choice = tool_choice;
         inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
         if (inputs.parallel_tool_calls && !tmpl.original_caps().supports_parallel_tool_calls) {
-            LOG_DBG("Disabling parallel_tool_calls because the template does not support it");
+            LOG_DBG("Disabling parallel_tool_calls because the template does not support it\n");
             inputs.parallel_tool_calls = false;
         }
         inputs.stream = stream;

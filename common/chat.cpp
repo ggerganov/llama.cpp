@@ -596,7 +596,7 @@ static common_chat_msg common_chat_parse_functionary_v3_2(const std::string & in
         res.content = content + res.content;
         return res;
     } catch (const std::exception & e) {
-        LOG_ERR("Failed to parse functionary v3.2 input: %s", e.what());
+        LOG_ERR("Failed to parse functionary v3.2 input: %s\n", e.what());
         common_chat_msg res;
         res.role = "assistant";
         res.content = input;
