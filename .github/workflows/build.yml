@@ -959,7 +959,7 @@ jobs:
             DEBIAN_FRONTEND: noninteractive
           run: |
               apt-get update
-              apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git
+              apt install -y cmake build-essential ninja-build libcurl4-openssl-dev libgomp1 git zip
 
         - name: ccache
           uses: hendrikmuhs/ccache-action@v1.2.16
