@@ -41,6 +41,7 @@
 #include "ggml-sycl/gemm.hpp"
 
 static bool g_sycl_loaded = false;
+int g_ggml_sycl_debug = 0;
 
 static ggml_sycl_device_info ggml_sycl_init() {
     ggml_sycl_device_info info = {};
@@ -158,8 +159,8 @@ static void ggml_check_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
-        GGML_SYCL_DEBUG("[SYCL] call ggml_check_sycl\n");
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
+        GGML_SYCL_DEBUG("[SYCL] call ggml_check_sycl\n");
         GGML_LOG_INFO("GGML_SYCL_DEBUG: %d\n", g_ggml_sycl_debug);
 #if defined(GGML_SYCL_FORCE_MMQ)
         GGML_LOG_INFO("GGML_SYCL_FORCE_MMQ:   yes\n");

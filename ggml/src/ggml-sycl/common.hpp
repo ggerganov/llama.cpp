@@ -36,7 +36,7 @@
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
 
-static int g_ggml_sycl_debug = 0;
+extern int g_ggml_sycl_debug;
 #define GGML_SYCL_DEBUG(...)        \
   do {                              \
     if (g_ggml_sycl_debug)          \
