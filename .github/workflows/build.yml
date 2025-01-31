@@ -667,6 +667,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-msys2
+          variant: sccache
           evict-old-files: 1d
 
       - name: Setup ${{ matrix.sys }}
@@ -741,6 +742,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-${{ matrix.build }}
+          variant: sccache
           evict-old-files: 1d
 
       - name: Clone Kompute submodule
@@ -925,6 +927,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ${{ github.job }}-${{ matrix.cuda }}-${{ matrix.build }}
+          variant: sccache
           evict-old-files: 1d
 
       - name: Install Cuda Toolkit 11.7
@@ -1066,6 +1069,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-sycl
+          variant: sccache
           evict-old-files: 1d
 
       - name: Install
@@ -1150,6 +1154,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ${{ github.job }}
+          variant: sccache
           evict-old-files: 1d
 
       - name: Build
@@ -1184,6 +1189,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-hip-release
+          variant: sccache
           evict-old-files: 1d
 
       - name: Install

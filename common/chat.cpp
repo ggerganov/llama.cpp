@@ -384,14 +384,19 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
             tool_rules.push_back(
                 builder.add_rule(
                     name + "-call",
-                    "\"{\" ( \"\\\"type\\\": \\\"function\\\", \" | space ) "
+                    "\"{\" space "
+                    "( \"\\\"type\\\":\" space \"\\\"function\\\",\" space )? "
                     "\"\\\"name\\\": \\\"" + name + "\\\", \\\"parameters\\\": \" " +
                         builder.add_schema(name + "-args", parameters) +
                     " \"}\""));
             data.grammar_triggers.push_back({"{\"name\": \"" + name + "\"", /* .at_start = */ true});
         });
         data.grammar_triggers.push_back({"{\"name\":", /* .at_start = */ true});
+        data.grammar_triggers.push_back({"{\n  \"name\":", /* .at_start = */ true});
+        data.grammar_triggers.push_back({"{\n    \"name\":", /* .at_start = */ true});
         data.grammar_triggers.push_back({"{\"type\": \"function\"", /* .at_start = */ true});
+        data.grammar_triggers.push_back({"{\n  \"type\": \"function\"", /* .at_start = */ true});
+        data.grammar_triggers.push_back({"{\n    \"type\": \"function\"", /* .at_start = */ true});
         if (!builtin_tools.empty()) {
             data.grammar_triggers.push_back({"<|python_tag|>", /* .at_start = */ false});
         }
@@ -586,9 +591,17 @@ static common_chat_msg common_chat_parse_functionary_v3_2(const std::string & in
         }
     }
     // TODO: tighten & simplify.
-    auto res = parse_json_tool_calls(std::string(it, end), std::nullopt, function_regex, close_regex);
-    res.content = content;
-    return res;
+    try {
+        auto res = parse_json_tool_calls(std::string(it, end), std::nullopt, function_regex, close_regex);
+        res.content = content + res.content;
+        return res;
+    } catch (const std::exception & e) {
+        LOG_ERR("Failed to parse functionary v3.2 input: %s\n", e.what());
+        common_chat_msg res;
+        res.role = "assistant";
+        res.content = input;
+        return res;
+    }
 }
 
 static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {

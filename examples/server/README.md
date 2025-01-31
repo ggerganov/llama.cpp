@@ -126,7 +126,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar GRAMMAR` | BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '') |
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
-| `--jinja` | Enable experimental Jinja templating engine (needed for tool use) |
+| `--jinja` | Enable experimental Jinja templating engine (required for tool use) |
 
 **Example-specific params**
 
@@ -1069,7 +1069,7 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 
 *Options:*
 
-See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). llama.cpp `/completion`-specific features such as `mirostat` are also supported.
 
 The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
 
@@ -1117,17 +1117,111 @@ curl http://localhost:8080/v1/chat/completions \
 }'
 ```
 
-... and even tool usage (needs `--jinja` flag):
+*Tool call support*
+
+[Function calling](https://platform.openai.com/docs/guides/function-calling) is supported for all models (see https://github.com/ggerganov/llama.cpp/pull/9639):
+
+- Requires `--jinja` flag
+- Native tool call formats supported:
+  - Llama 3.1 / 3.3 (including builtin tools support - tool names for `wolfram_alpha`, `web_search` / `brave_search`, `code_interpreter`), Llama 3.2
+  - Functionary v3.1 / v3.2
+  - Hermes 2/3, Qwen 2.5
+  - Mistral Nemo
+  - Firefunction v2
+  - DeepSeek R1 (WIP / seems reluctant to call any tools?)
+
+  <details>
+  <summary>Show some common templates and which format handler they use</summary>
+
+  | Template | Format |
+  |----------|--------|
+  | CohereForAI-c4ai-command-r-plus-default.jinja | generic tool calls |
+  | CohereForAI-c4ai-command-r-plus-rag.jinja | generic tool calls |
+  | CohereForAI-c4ai-command-r-plus-tool_use.jinja | generic tool calls |
+  | MiniMaxAI-MiniMax-Text-01.jinja | generic tool calls |
+  | NexaAIDev-Octopus-v2.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja | hermes 2 pro tool calls |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-tool_use.jinja | hermes 2 pro tool calls |
+  | NousResearch-Hermes-3-Llama-3.1-70B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-3-Llama-3.1-70B-tool_use.jinja | hermes 2 pro tool calls |
+  | OrionStarAI-Orion-14B-Chat.jinja | generic tool calls |
+  | Qwen-QwQ-32B-Preview.jinja | hermes 2 pro tool calls |
+  | Qwen-Qwen2-7B-Instruct.jinja | generic tool calls |
+  | Qwen-Qwen2-VL-7B-Instruct.jinja | generic tool calls |
+  | Qwen-Qwen2.5-7B-Instruct.jinja | hermes 2 pro tool calls |
+  | Qwen-Qwen2.5-Math-7B-Instruct.jinja | hermes 2 pro tool calls |
+  | TheBloke-FusionNet_34Bx2_MoE-AWQ.jinja | generic tool calls |
+  | abacusai-Fewshot-Metamath-OrcaVicuna-Mistral.jinja | generic tool calls |
+  | bofenghuang-vigogne-2-70b-chat.jinja | generic tool calls |
+  | databricks-dbrx-instruct.jinja | generic tool calls |
+  | deepseek-ai-DeepSeek-Coder-V2-Instruct.jinja | generic tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-7B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-V2.5.jinja | deepseek r1 tool calls |
+  | deepseek-ai-deepseek-coder-33b-instruct.jinja | generic tool calls |
+  | google-gemma-2-2b-it.jinja | generic tool calls |
+  | google-gemma-7b-it.jinja | generic tool calls |
+  | indischepartij-MiniCPM-3B-OpenHermes-2.5-v2.jinja | generic tool calls |
+  | mattshumer-Reflection-Llama-3.1-70B.jinja | generic tool calls |
+  | meetkai-functionary-medium-v3.2.jinja | functionary v3.2 tool calls |
+  | meta-llama-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | meta-llama-Llama-3.2-3B-Instruct.jinja | llama 3.x tool calls |
+  | meta-llama-Llama-3.3-70B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | meta-llama-Meta-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | microsoft-Phi-3-medium-4k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3-mini-4k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3-small-8k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3.5-mini-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3.5-vision-instruct.jinja | generic tool calls |
+  | mistralai-Mistral-7B-Instruct-v0.2.jinja | generic tool calls |
+  | mistralai-Mistral-Large-Instruct-2407.jinja | mistral nemo tool calls |
+  | mistralai-Mistral-Large-Instruct-2411.jinja | generic tool calls |
+  | mistralai-Mistral-Nemo-Instruct-2407.jinja | mistral nemo tool calls |
+  | mistralai-Mixtral-8x7B-Instruct-v0.1.jinja | generic tool calls |
+  | mlabonne-AlphaMonarch-7B.jinja | generic tool calls |
+  | nvidia-Llama-3.1-Nemotron-70B-Instruct-HF.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | openchat-openchat-3.5-0106.jinja | generic tool calls |
+  | teknium-OpenHermes-2.5-Mistral-7B.jinja | generic tool calls |
+
+  This table can be generated with:
+
+  ```bash
+  ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+
+  </details>
+
+- Generic tool call is supported when the template isn't recognized by native format handlers (you'll see `Chat format: Generic` in the logs).
+  - Use `--chat-template-file` to override the template when appropriate (see examples below)
+  - Generic support may consume more tokens and be less efficient than a model's native format.
+
+- Run with:
 
   ```shell
-  llama-server --jinja -hfr lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF -hff Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf -fa
+  # Native support:
+  llama-server --jinja -fa -hf bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/Llama-3.2-3B-Instruct-GGUF:Q6_K
+  llama-server --jinja -fa -hf bartowski/functionary-small-v3.2-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M \
+    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B )
 
-  # https://huggingface.co/meetkai/functionary-medium-v3.2
-  llama-server --jinja -hfr bartowski/functionary-medium-v3.2-GGUF -hff functionary-medium-v3.2-IQ4_XS.gguf -fa
+  # Native support requires the right template for these GGUFs:
+  llama-server --jinja -fa -hf bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M \
+    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
+  llama-server --jinja -fa -hf bartowski/firefunction-v2-GGUF -hff firefunction-v2-IQ1_M.gguf \
+    --chat-template-file <( python scripts/get_chat_template.py fireworks-ai/firellama-3-firefunction-v2 )
 
-  # https://huggingface.co/meetkai/functionary-medium-v3.1
-  llama-server --jinja -hfr meetkai/functionary-medium-v3.1-GGUF -hff functionary-medium-llama-3.1.Q4_0.gguf -fa
+  # Generic format support
+  llama-server --jinja -fa -hf bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/gemma-2-2b-it-GGUF:Q4_K_M
+  ```
 
+- Test in CLI:
+
+  ```bash
   curl http://localhost:8080/v1/chat/completions -d '{
     "model": "gpt-3.5-turbo",
     "tools": [

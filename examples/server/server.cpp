@@ -345,7 +345,7 @@ struct server_task {
             auto it = data.find("chat_format");
             if (it != data.end()) {
                 params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
-                LOG_DBG("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
+                LOG_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }
@@ -697,6 +697,7 @@ struct server_task_result_cmpl_final : server_task_result {
         std::string finish_reason = "length";
         common_chat_msg message;
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
+            LOG_DBG("Parsing chat message: %s\n", content.c_str());
             message = common_chat_parse(content, oaicompat_chat_format);
             finish_reason = message.tool_calls.empty() ? "stop" : "tool_calls";
         } else {
@@ -713,7 +714,7 @@ struct server_task_result_cmpl_final : server_task_result {
                         {"name", tc.name},
                         {"arguments", tc.arguments},
                     }},
-                    {"id", tc.id.empty() ? json() : json(tc.id)},
+                    {"id", tc.id},
                 });
             }
         }
