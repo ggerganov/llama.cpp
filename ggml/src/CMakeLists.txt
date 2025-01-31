@@ -100,6 +100,10 @@ if (GGML_CCACHE)
             set(GGML_CCACHE_VARIANT ccache)
         else()
             set(GGML_CCACHE_VARIANT sccache)
+            if(GGML_HIP)
+                # TODO: should not be set globally
+                set(GLOBAL CMAKE_HIP_COMPILER_LAUNCHER sccache)
+            endif()
         endif()
         # TODO: should not be set globally
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${GGML_CCACHE_VARIANT}")
