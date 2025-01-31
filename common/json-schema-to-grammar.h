@@ -7,10 +7,15 @@
 
 std::string json_schema_to_grammar(const nlohmann::ordered_json & schema);
 
-struct llama_grammar_builder {
+struct common_grammar_builder {
     std::function<std::string(const std::string &, const std::string &)> add_rule;
     std::function<std::string(const std::string &, const nlohmann::ordered_json &)> add_schema;
     std::function<void(nlohmann::ordered_json &)> resolve_refs;
 };
 
-std::string build_grammar(const std::function<void(const llama_grammar_builder &)> & cb);
+struct common_grammar_options {
+    bool dotall = false;
+    bool compact_spaces = false;
+};
+
+std::string build_grammar(const std::function<void(const common_grammar_builder &)> & cb, const common_grammar_options & options = {});
