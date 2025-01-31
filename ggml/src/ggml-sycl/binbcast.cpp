@@ -226,13 +226,13 @@ inline void ggml_sycl_op_bin_bcast(const ggml_tensor * src0, const ggml_tensor *
     } else if (src0->type == GGML_TYPE_I16 && dst->type == GGML_TYPE_I16) {
         op()(src0, src1, dst, (const int16_t *) src0_dd, (const int16_t *) src1_dd, (int16_t *) dst_dd, main_stream);
     } else {
-        fprintf(stderr, "%s: unsupported types: dst: %s, src0: %s, src1: %s\n", __func__, ggml_type_name(dst->type),
+        GGML_LOG_ERROR("%s: unsupported types: dst: %s, src0: %s, src1: %s\n", __func__, ggml_type_name(dst->type),
                 ggml_type_name(src0->type), ggml_type_name(src1->type));
         GGML_ABORT("fatal error");
     }
 }
 
-inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -240,9 +240,12 @@ inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_add>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -250,9 +253,12 @@ inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_sub>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -260,9 +266,12 @@ inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_mul>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -270,14 +279,20 @@ inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_div>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-inline void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+inline void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const void *    src0_d      = static_cast<void *>(dst->src[0]->data);
     void *          dst_d       = static_cast<void *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(dst, dst->src[0], dst, nullptr, src0_d, dst_d, main_stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
 void ggml_sycl_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
