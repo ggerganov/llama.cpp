@@ -1,4 +1,5 @@
 build/**
+build_*/**
 .build/**
 
 models/**
