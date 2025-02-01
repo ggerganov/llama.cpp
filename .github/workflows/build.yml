@@ -1178,7 +1178,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ${{ github.job }}
-          variant: sccache
           evict-old-files: 1d
 
       - name: Build
@@ -1186,7 +1185,6 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          $env:CMAKE_HIP_COMPILER_LAUNCHER=sccache
           cmake -G "Unix Makefiles" -B build -S . `
             -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" `
             -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" `
@@ -1214,7 +1212,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-hip-release
-          variant: sccache
           evict-old-files: 1d
 
       - name: Install
@@ -1237,7 +1234,6 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          $env:CMAKE_HIP_COMPILER_LAUNCHER=sccache
           cmake -G "Unix Makefiles" -B build -S . `
             -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" `
             -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" `
