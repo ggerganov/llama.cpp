@@ -2,7 +2,7 @@ import pytest
 from openai import OpenAI
 from utils import *
 
-server = ServerPreset.tinyllama2()
+server: ServerProcess
 
 @pytest.fixture(autouse=True)
 def create_server():
@@ -13,8 +13,8 @@ def create_server():
 @pytest.mark.parametrize(
     "model,system_prompt,user_prompt,max_tokens,re_content,n_prompt,n_predicted,finish_reason,jinja,chat_template",
     [
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", False, None),
-        (None, "Book", "What is the best book", 8, "(Suddenly)+", 77, 8, "length", True, None),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+|\\{ \" Sarax.", 77, 8, "length", False, None),
+        (None, "Book", "What is the best book", 8, "(Suddenly)+|\\{ \" Sarax.", 77, 8, "length", True, None),
         (None, "Book", "What is the best book", 8, "^ blue", 23, 8, "length", True, "This is not a chat template, it is"),
         ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", False, None),
         ("codellama70b", "You are a coding assistant.", "Write the fibonacci function in c++.", 128, "(Aside|she|felter|alonger)+", 104, 64, "length", True, None),
