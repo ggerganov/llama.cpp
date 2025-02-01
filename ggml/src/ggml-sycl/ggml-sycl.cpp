@@ -3665,138 +3665,138 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
 
     switch (dst->op) {
         case GGML_OP_ARGMAX:
-            ggml_sycl_op_argmax(ctx, dst); // done
+            ggml_sycl_argmax(ctx, dst);
             break;
         case GGML_OP_CONV_TRANSPOSE_1D:
-            ggml_sycl_op_conv_transpose_1d(ctx, dst); // already good
+            ggml_sycl_op_conv_transpose_1d(ctx, dst);
             break;
         case GGML_OP_REPEAT:
-            ggml_sycl_repeat(ctx, dst); // partially done
+            ggml_sycl_repeat(ctx, dst);
             break;
         case GGML_OP_GET_ROWS:
-            ggml_sycl_op_get_rows(ctx, dst); // done
+            ggml_sycl_op_get_rows(ctx, dst);
             break;
         case GGML_OP_DUP:
-            ggml_sycl_dup(ctx, dst); // done
+            ggml_sycl_dup(ctx, dst);
             break;
         case GGML_OP_ADD:
         case GGML_OP_ADD1: // TODO: more efficient implementation
-            ggml_sycl_add(ctx, dst); // partially done
+            ggml_sycl_add(ctx, dst);
             break;
         case GGML_OP_SUB:
-            ggml_sycl_sub(ctx, dst); // partially done
+            ggml_sycl_sub(ctx, dst);
             break;
         case GGML_OP_ACC:
-            ggml_sycl_acc(ctx, dst); // fully done
+            ggml_sycl_acc(ctx, dst);
             break;
         case GGML_OP_MUL:
-            ggml_sycl_mul(ctx, dst); // partially done
+            ggml_sycl_mul(ctx, dst);
             break;
         case GGML_OP_LOG:
-            ggml_sycl_log(ctx, dst); // fully done
+            ggml_sycl_log(ctx, dst);
             break;
         case GGML_OP_DIV:
-            ggml_sycl_div(ctx, dst); // partially done
+            ggml_sycl_div(ctx, dst);
             break;
         case GGML_OP_UNARY:
             switch (ggml_get_unary_op(dst)) {
                 case GGML_UNARY_OP_NEG:
-                    ggml_sycl_neg(ctx, dst); // done
+                    ggml_sycl_neg(ctx, dst);
                     break;
                 case GGML_UNARY_OP_STEP:
-                    ggml_sycl_step(ctx, dst); // done
+                    ggml_sycl_step(ctx, dst);
                     break;
                 case GGML_UNARY_OP_GELU:
-                    ggml_sycl_gelu(ctx, dst); // done
+                    ggml_sycl_gelu(ctx, dst);
                     break;
                 case GGML_UNARY_OP_SILU:
-                    ggml_sycl_silu(ctx, dst); // done
+                    ggml_sycl_silu(ctx, dst);
                     break;
                 case GGML_UNARY_OP_GELU_QUICK:
-                    ggml_sycl_gelu_quick(ctx, dst); // done
+                    ggml_sycl_gelu_quick(ctx, dst);
                     break;
                 case GGML_UNARY_OP_TANH:
-                    ggml_sycl_tanh(ctx, dst); // done
+                    ggml_sycl_tanh(ctx, dst);
                     break;
                 case GGML_UNARY_OP_RELU:
-                    ggml_sycl_relu(ctx, dst); // done
+                    ggml_sycl_relu(ctx, dst);
                     break;
                 case GGML_UNARY_OP_SIGMOID:
-                    ggml_sycl_sigmoid(ctx, dst); // done
+                    ggml_sycl_sigmoid(ctx, dst);
                     break;
                 case GGML_UNARY_OP_HARDSIGMOID:
-                    ggml_sycl_hardsigmoid(ctx, dst); // done
+                    ggml_sycl_hardsigmoid(ctx, dst);
                     break;
                 case GGML_UNARY_OP_HARDSWISH:
-                    ggml_sycl_hardswish(ctx, dst); // done
+                    ggml_sycl_hardswish(ctx, dst);
                     break;
                 case GGML_UNARY_OP_EXP:
-                    ggml_sycl_exp(ctx, dst); // done
+                    ggml_sycl_exp(ctx, dst);
                     break;
                 default:
                     return false;
             }
             break;
         case GGML_OP_NORM:
-            ggml_sycl_norm(ctx, dst); // done
+            ggml_sycl_norm(ctx, dst);
             break;
         case GGML_OP_GROUP_NORM:
-            ggml_sycl_group_norm(ctx, dst); // done
+            ggml_sycl_group_norm(ctx, dst);
             break;
         case GGML_OP_CONCAT:
-            ggml_sycl_op_concat(ctx, dst); // already good
+            ggml_sycl_op_concat(ctx, dst);
             break;
         case GGML_OP_UPSCALE:
-            ggml_sycl_upscale(ctx, dst); // done
+            ggml_sycl_upscale(ctx, dst);
             break;
         case GGML_OP_PAD:
-            ggml_sycl_pad(ctx, dst); // done
+            ggml_sycl_pad(ctx, dst);
             break;
         case GGML_OP_LEAKY_RELU:
-            ggml_sycl_leaky_relu(ctx, dst); // done
+            ggml_sycl_leaky_relu(ctx, dst);
             break;
         case GGML_OP_RMS_NORM:
-            ggml_sycl_rms_norm(ctx, dst); // done
+            ggml_sycl_rms_norm(ctx, dst);
             break;
         case GGML_OP_MUL_MAT:
             if (dst->src[0]->ne[3] != dst->src[1]->ne[3]) {
                 return false;
             }
             /* ggml_sycl_mul_mat_id is dependent on ggml_sycl_mul_mat */
-            ggml_sycl_mul_mat(ctx, dst->src[0], dst->src[1], dst); // good
+            ggml_sycl_mul_mat(ctx, dst->src[0], dst->src[1], dst);
             break;
         case GGML_OP_MUL_MAT_ID:
             if (dst->src[0]->ne[3] != dst->src[1]->ne[3]) {
                 return false;
             }
-            ggml_sycl_mul_mat_id(ctx, dst); // good
+            ggml_sycl_mul_mat_id(ctx, dst);
             break;
         case GGML_OP_OUT_PROD:
-            ggml_sycl_op_out_prod(ctx, dst); // good
+            ggml_sycl_op_out_prod(ctx, dst);
             break;
         case GGML_OP_SCALE:
-            ggml_sycl_scale(ctx, dst); // done
+            ggml_sycl_scale(ctx, dst);
             break;
         case GGML_OP_SQR:
-            ggml_sycl_sqr(ctx, dst); // done
+            ggml_sycl_sqr(ctx, dst);
             break;
         case GGML_OP_SQRT:
-            ggml_sycl_sqrt(ctx, dst); // done
+            ggml_sycl_sqrt(ctx, dst);
             break;
         case GGML_OP_SIN:
-            ggml_sycl_sin(ctx, dst); //done
+            ggml_sycl_sin(ctx, dst);
             break;
         case GGML_OP_COS:
-            ggml_sycl_cos(ctx, dst); // done
+            ggml_sycl_cos(ctx, dst);
             break;
         case GGML_OP_CLAMP:
-            ggml_sycl_clamp(ctx, dst); // done
+            ggml_sycl_clamp(ctx, dst);
             break;
         case GGML_OP_CPY:
-            ggml_sycl_cpy(ctx, dst->src[0], dst->src[1]); // okayish, need check
+            ggml_sycl_cpy(ctx, dst->src[0], dst->src[1]);
             break;
         case GGML_OP_CONT:
-            ggml_sycl_dup(ctx, dst); // done
+            ggml_sycl_dup(ctx, dst);
             break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
@@ -3806,34 +3806,34 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             GGML_SYCL_DEBUG("%s: Tensor NO-OP\n", __func__);
             break;
         case GGML_OP_DIAG_MASK_INF:
-            ggml_sycl_diag_mask_inf(ctx, dst); // done
+            ggml_sycl_diag_mask_inf(ctx, dst);
             break;
         case GGML_OP_SOFT_MAX:
-            ggml_sycl_op_soft_max(ctx, dst); // already good
+            ggml_sycl_op_soft_max(ctx, dst);
             break;
         case GGML_OP_ROPE:
-            ggml_sycl_rope(ctx, dst); // done
+            ggml_sycl_rope(ctx, dst);
             break;
         case GGML_OP_IM2COL:
-            ggml_sycl_im2col(ctx, dst); // done
+            ggml_sycl_im2col(ctx, dst);
             break;
         case GGML_OP_POOL_2D:
-            ggml_sycl_pool2d(ctx, dst); // done
+            ggml_sycl_pool2d(ctx, dst);
             break;
         case GGML_OP_SUM:
-            ggml_sycl_sum(ctx, dst); // done
+            ggml_sycl_sum(ctx, dst);
             break;
         case GGML_OP_SUM_ROWS:
-            ggml_sycl_sum_rows(ctx, dst); // done
+            ggml_sycl_sum_rows(ctx, dst);
             break;
         case GGML_OP_ARGSORT:
-            ggml_sycl_argsort(ctx, dst); // done
+            ggml_sycl_argsort(ctx, dst);
             break;
         case GGML_OP_TIMESTEP_EMBEDDING:
-            ggml_sycl_op_timestep_embedding(ctx, dst); // already pretty good
+            ggml_sycl_op_timestep_embedding(ctx, dst);
             break;
         case GGML_OP_RWKV_WKV6:
-            ggml_sycl_op_rwkv_wkv6(ctx, dst); // good
+            ggml_sycl_op_rwkv_wkv6(ctx, dst);
             break;
         case GGML_OP_GATED_LINEAR_ATTN:
             ggml_sycl_op_gated_linear_attn(ctx, dst);
