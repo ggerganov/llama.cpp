@@ -4,9 +4,7 @@ option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
-if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
-endif(MSVC)
+set(CMAKE_CXX_STANDARD 17)
 
 macro(get_WIN32_WINNT version)
     if (WIN32 AND CMAKE_SYSTEM_VERSION)
