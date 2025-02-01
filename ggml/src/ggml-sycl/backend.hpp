@@ -31,6 +31,7 @@
 #include "element_wise.hpp"
 #include "binbcast.hpp"
 #include "argmax.hpp"
+#include "argsort.hpp"
 #include "gla.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
