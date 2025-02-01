@@ -12,9 +12,6 @@
 
 #include "common.hpp"
 
-#include "ggml-backend-impl.h"
-#include "ggml-impl.h"
-
 int get_current_device_id() {
   return dpct::dev_mgr::instance().current_device_id();
 }

@@ -1,6 +1,4 @@
-#include "common.hpp"
 #include "element_wise.hpp"
-#include "ggml.h"
 
 void acc_f32(const float * x, const float * y, float * dst, const int ne,
     const int ne10, const int ne11, const int ne12,
