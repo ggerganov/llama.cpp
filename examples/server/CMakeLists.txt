@@ -4,10 +4,14 @@ option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+endif(MSVC)
+
 macro(get_WIN32_WINNT version)
     if (WIN32 AND CMAKE_SYSTEM_VERSION)
         set(ver ${CMAKE_SYSTEM_VERSION})
-		string(REGEX MATCH "^([0-9]+).([0-9])" ver ${ver})
+        string(REGEX MATCH "^([0-9]+).([0-9])" ver ${ver})
         string(REPLACE "." "" ver ${ver})
         string(REGEX REPLACE "([0-9])" "0\\1" ver ${ver})
         set(${version} "0x${ver}")
@@ -19,8 +23,8 @@ get_WIN32_WINNT(ver)
 if (MINGW)
     # fix: https://github.com/ggerganov/llama.cpp/actions/runs/9651004652/job/26617901362?pr=8006
     # add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER})
-	add_definitions(-D_WIN32_WINNT=${ver}) 
-	message(STATUS "MinGW detected, setting _WIN32_WINNT to ${ver}")    
+    add_definitions(-D_WIN32_WINNT=${ver}) 
+    message(STATUS "MinGW detected, setting _WIN32_WINNT to ${ver}")    
 endif()
 
 set(TARGET_SRCS
