@@ -7217,22 +7217,16 @@ struct llm_build_context {
                 struct ggml_tensor * Vcur = nullptr;
                 if (model.type == LLM_TYPE_1_5B || model.type == LLM_TYPE_4B || model.type == LLM_TYPE_9B) {
                     Qcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wq, cur);
-                    cb(Qcur, "Qcur", il);
                     if (model.layers[il].bq) {
                         Qcur = ggml_add(ctx0, Qcur, model.layers[il].bq);
-                        cb(Qcur, "Qcur", il);
                     }
                     Kcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wk, cur);
-                    cb(Kcur, "Kcur", il);
                     if (model.layers[il].bk) {
                         Kcur = ggml_add(ctx0, Kcur, model.layers[il].bk);
-                        cb(Kcur, "Kcur", il);
                     }
                     Vcur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wv, cur);
-                    cb(Vcur, "Vcur", il);
                     if (model.layers[il].bv) {
                         Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
-                        cb(Vcur, "Vcur", il);
                     }
                 } else {
                     cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wqkv, cur);
@@ -7244,10 +7238,10 @@ struct llm_build_context {
                     Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
                     Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
                     Vcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa)));
-                    cb(Qcur, "Qcur", il);
-                    cb(Kcur, "Kcur", il);
-                    cb(Vcur, "Vcur", il);
                 }
+                cb(Qcur, "Qcur", il);
+                cb(Kcur, "Kcur", il);
+                cb(Vcur, "Vcur", il);
                 //printf("freq_base: %f freq_scale: %f ext_factor: %f attn_factor: %f\n", freq_base, freq_scale, ext_factor, attn_factor);
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
