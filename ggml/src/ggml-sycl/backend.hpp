@@ -34,6 +34,7 @@
 #include "argsort.hpp"
 #include "cpy.hpp"
 #include "getrows.hpp"
+#include "diagmask.hpp"
 #include "gla.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
