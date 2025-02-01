@@ -1154,7 +1154,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: ${{ github.job }}
-          variant: sccache
           evict-old-files: 1d
 
       - name: Build
@@ -1189,7 +1188,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
           key: windows-latest-cmake-hip-release
-          variant: sccache
           evict-old-files: 1d
 
       - name: Install
