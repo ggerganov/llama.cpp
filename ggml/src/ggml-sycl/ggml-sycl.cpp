@@ -2232,14 +2232,6 @@ static void sum_rows_f32_sycl(const float *x, float *dst, const int ncols,
                              });
 }
 
-static int next_power_of_2(int x) {
-    int n = 1;
-    while (n < x) {
-        n *= 2;
-    }
-    return n;
-}
-
 static void diag_mask_inf_f32_sycl(const float *x, float *dst,
                                    const int ncols_x, const int nrows_x,
                                    const int rows_per_channel, const int n_past,

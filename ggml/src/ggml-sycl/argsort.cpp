@@ -1,5 +1,13 @@
 #include "argsort.hpp"
 
+static int next_power_of_2(int x) {
+    int n = 1;
+    while (n < x) {
+        n *= 2;
+    }
+    return n;
+}
+
 template <typename T>
 static inline void ggml_sycl_swap(T & a, T & b) {
     T tmp = a;

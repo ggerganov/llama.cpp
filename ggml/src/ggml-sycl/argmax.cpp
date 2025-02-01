@@ -47,7 +47,7 @@ static void argmax_f32_i32_sycl(const float * x, int * dst, const int ncols, con
     });
 }
 
-void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+static void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
