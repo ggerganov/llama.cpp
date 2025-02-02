@@ -1101,7 +1101,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                         }
                     } break;
                     case 40: {
-                        if(hparams.n_head(0) == 24){
+                        if (hparams.n_head(0) == 24) {
                             type = LLM_TYPE_4B;
                         } else {
                             type = LLM_TYPE_9B;
