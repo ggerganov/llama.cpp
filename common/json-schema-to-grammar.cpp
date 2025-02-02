@@ -991,7 +991,14 @@ public:
     }
 };
 
-std::string json_schema_to_grammar(const json & schema) {
+std::string json_schema_to_grammar(const json & schema, bool force_gbnf) {
+#ifdef LLAMA_USE_LLGUIDANCE
+    if (!force_gbnf) {
+        return "%llguidance {}\nstart: %json " + schema.dump();
+    }
+#else
+    (void)force_gbnf;
+#endif // LLAMA_USE_LLGUIDANCE
     return build_grammar([&](const common_grammar_builder & callbacks) {
         auto copy = schema;
         callbacks.resolve_refs(copy);
