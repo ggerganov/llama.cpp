@@ -37,6 +37,7 @@
 #include "diagmask.hpp"
 #include "scale.hpp"
 #include "clamp.hpp"
+#include "pool2d.hpp"
 #include "gla.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
