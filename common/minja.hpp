@@ -824,7 +824,7 @@ public:
     LoopControlType control_type;
     LoopControlException(const std::string & message, LoopControlType control_type) : std::runtime_error(message), control_type(control_type) {}
     LoopControlException(LoopControlType control_type)
-      : std::runtime_error((std::ostringstream() << (control_type == LoopControlType::Continue ? "continue" : "break") << " outside of a loop").str()),
+      : std::runtime_error((control_type == LoopControlType::Continue ? "continue" : "break") + std::string(" outside of a loop")),
         control_type(control_type) {}
 };
 
