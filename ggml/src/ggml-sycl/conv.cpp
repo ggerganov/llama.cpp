@@ -97,4 +97,3 @@ void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, ggml_tensor
         src1->ne[0], dst->ne[0],
         src0_d, src1_d, dst_d, stream);
 }
-

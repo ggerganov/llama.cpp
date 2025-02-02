@@ -973,6 +973,7 @@ void ggml_sycl_op_dequantize_mul_mat_vec(
     }
 #else
     const dfloat * src1_dfloat = (const dfloat *) src1_ddf_i; // dfloat == float, no conversion
+    GGML_UNUSED(ctx);
 #endif // GGML_SYCL_F16
 
     switch (src0->type) {
