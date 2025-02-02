@@ -40,6 +40,10 @@ find_package(hip     REQUIRED)
 find_package(hipblas REQUIRED)
 find_package(rocblas REQUIRED)
 
+if (${hip_VERSION} VERSION_LESS 5.5)
+    message(FATAL_ERROR "At least ROCM/HIP V5.5 is required")
+endif()
+
 message(STATUS "HIP and hipBLAS found")
 
 file(GLOB   GGML_HEADERS_ROCM "../ggml-cuda/*.cuh")
@@ -90,6 +94,14 @@ endif()
 
 if (GGML_CUDA_NO_PEER_COPY)
     add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+endif()
+
+if (GGML_HIP_GRAPHS)
+    add_compile_definitions(GGML_HIP_GRAPHS)
+endif()
+
+if (GGML_HIP_NO_VMM)
+    add_compile_definitions(GGML_HIP_NO_VMM)
 endif()
 
 if (CXX_IS_HIPCC)
