@@ -22,7 +22,6 @@ static common_chat_msg msg_from_json(const json & message) {
         "assistant",
         "",
         {},
-        /* .thoughts = */ "",
         /* .tool_plan = */ "",
     };
     if (message.contains("content") && !message.at("content").is_null()) {
