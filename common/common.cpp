@@ -57,6 +57,7 @@
 #if defined(LLAMA_USE_CURL)
 #include <curl/curl.h>
 #include <curl/easy.h>
+#include <thread>
 #include <future>
 #endif
 
