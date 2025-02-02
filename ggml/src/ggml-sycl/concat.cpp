@@ -158,7 +158,7 @@ static void concat_f32_sycl_non_cont(
       });
 }
 
-void ggml_sycl_op_concat(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
+static void ggml_sycl_op_concat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
   const ggml_tensor *src0 = dst->src[0];
   const ggml_tensor *src1 = dst->src[1];
   queue_ptr stream = ctx.stream();
@@ -194,4 +194,13 @@ void ggml_sycl_op_concat(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
         src1->ne[1], src1->ne[2], src1->ne[3], src1->nb[0], src1->nb[1],
         src1->nb[2], src1->nb[3], dst->ne[0], dst->ne[1], dst->ne[2],
         dst->ne[3], dst->nb[0], dst->nb[1], dst->nb[2], dst->nb[3], dim);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_concat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_concat(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }
