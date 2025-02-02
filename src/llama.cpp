@@ -8508,8 +8508,8 @@ struct llama_context * llama_init_from_model(
     try {
         // TODO: add logic which llama_context implementation to construct
         ctx = new llama_context(*model, params,
-                [](llama_context & lctx, const llama_ubatch & ubatch) {
-                    return llama_build_graph(lctx, ubatch, true);
+                [](llama_context & lctx, const llama_ubatch & ubatch, bool worst_case) {
+                    return llama_build_graph(lctx, ubatch, worst_case);
                 });
     } catch (const std::exception & e) {
         LLAMA_LOG_ERROR("%s: failed to initialize context: %s\n", __func__, e.what());

@@ -36,11 +36,13 @@ struct llama_batch_manager_i {
 // TODO: make implementation details private
 // TODO: become abstract base class, split the current implementation into different child classes
 struct llama_context {
-    // TODO: store the worst-case graph build function and reuse it later
+    // TODO: tmp until llama-model starts implementing the graph build function
+    typedef std::function<ggml_cgraph *(llama_context &, const llama_ubatch &, bool worst_case)> build_graph_callback;
+
     llama_context(
             const llama_model & model,
             const llama_context_params & params,
-            std::function<ggml_cgraph *(llama_context &, const llama_ubatch &)> fn_build_graph_worst);
+            build_graph_callback && cb_build_graph);
 
     const struct llama_model & model;
 
@@ -48,6 +50,8 @@ struct llama_context {
     llama_sbatch       sbatch;  // TODO: revisit if needed
     llama_adapter_cvec cvec;
     llama_loras        loras;
+
+    build_graph_callback cb_build_graph;
 
     std::vector<ggml_backend_ptr> backends;
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
