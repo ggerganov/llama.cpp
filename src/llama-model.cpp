@@ -11,6 +11,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 
@@ -1464,7 +1465,8 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             if (ml.tensor_buft_overrides) {
                 std::string tensor_name = tn.str();
                 for (const auto * overrides = ml.tensor_buft_overrides; overrides->pattern != nullptr; ++overrides) {
-                    if (tensor_name.find(overrides->pattern) != std::string::npos) {
+                    std::regex pattern(overrides->pattern);
+                    if (std::regex_search(tensor_name, pattern)) {
                         LLAMA_LOG_DEBUG("tensor %s buffer type overriden to %s\n", tensor_name.c_str(), ggml_backend_buft_name(overrides->buft));
                         buft = overrides->buft;
                         break;
