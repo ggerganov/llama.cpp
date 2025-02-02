@@ -2752,7 +2752,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             ggml_sycl_group_norm(ctx, dst);
             break;
         case GGML_OP_CONCAT:
-            ggml_sycl_op_concat(ctx, dst);
+            ggml_sycl_concat(ctx, dst);
             break;
         case GGML_OP_UPSCALE:
             ggml_sycl_upscale(ctx, dst);
@@ -2817,7 +2817,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             ggml_sycl_diag_mask_inf(ctx, dst);
             break;
         case GGML_OP_SOFT_MAX:
-            ggml_sycl_op_soft_max(ctx, dst);
+            ggml_sycl_softmax(ctx, dst);
             break;
         case GGML_OP_ROPE:
             ggml_sycl_rope(ctx, dst);

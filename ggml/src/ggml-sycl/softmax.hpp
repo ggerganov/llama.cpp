@@ -15,6 +15,6 @@
 
 #include "common.hpp"
 
-void ggml_sycl_op_soft_max(ggml_backend_sycl_context &ctx, ggml_tensor *dst);
+void ggml_sycl_softmax(ggml_backend_sycl_context & ctx, ggml_tensor * dst);
 
 #endif // GGML_SYCL_SOFTMAX_HPP

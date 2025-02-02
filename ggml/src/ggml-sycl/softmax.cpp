@@ -224,7 +224,7 @@ static void soft_max_f32_sycl(const float * x, const T * mask,
     }
 }
 
-void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
@@ -249,13 +249,26 @@ void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
 
     if (dst->src[1] && dst->src[1]->type == GGML_TYPE_F16) {
         const sycl::half * src1_dd = static_cast<sycl::half *>(dst->src[1]->data);
+        GGML_SYCL_DEBUG("%s: Mask precision: F16\n", __func__);
         soft_max_f32_sycl<sycl::half>(src0_dd, src1_dd, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias,
                           main_stream, ctx.device);
     } else if (dst->src[1] && dst->src[1]->type == GGML_TYPE_F32) {
         const float * src1_dd = static_cast<const float *>(dst->src[1]->data);
+        GGML_SYCL_DEBUG("%s: Mask precision: F32\n", __func__);
         soft_max_f32_sycl<float>(src0_dd, src1_dd, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias, main_stream, ctx.device);
     } else {
         /* mask unavailable */
-        soft_max_f32_sycl<float>(src0_dd, nullptr, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias, main_stream, ctx.device);
+        GGML_SYCL_DEBUG("%s: No mask supplied\n", __func__);
+        soft_max_f32_sycl<float>(src0_dd, nullptr, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias, main_stream,
+                                 ctx.device);
     }
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_softmax(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_soft_max(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }
