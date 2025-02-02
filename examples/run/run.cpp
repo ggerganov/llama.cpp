@@ -24,15 +24,16 @@
 #include <string>
 #include <vector>
 
+#include "chat-template.hpp"
 #include "common.h"
 #include "json.hpp"
 #include "linenoise.cpp/linenoise.h"
 #include "llama-cpp.h"
-#include "chat-template.hpp"
+#include "log.h"
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
 [[noreturn]] static void sigint_handler(int) {
-    printf("\n\033[0m");
+    printf("\n" LOG_COL_DEFAULT);
     exit(0);  // not ideal, but it's the only way to guarantee exit in all cases
 }
 #endif
@@ -890,7 +891,7 @@ static int check_context_size(const llama_context_ptr & ctx, const llama_batch &
     const int n_ctx      = llama_n_ctx(ctx.get());
     const int n_ctx_used = llama_get_kv_cache_used_cells(ctx.get());
     if (n_ctx_used + batch.n_tokens > n_ctx) {
-        printf("\033[0m\n");
+        printf(LOG_COL_DEFAULT "\n");
         printe("context size exceeded\n");
         return 1;
     }
@@ -953,7 +954,7 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
         batch = llama_batch_get_one(&new_token_id, 1);
     }
 
-    printf("\033[0m");
+    printf(LOG_COL_DEFAULT);
     return 0;
 }
 
@@ -962,7 +963,7 @@ static int read_user_input(std::string & user_input) {
 #ifdef WIN32
     printf(
         "\r%*s"
-        "\r\033[0m%s",
+        "\r" LOG_COL_DEFAULT "%s",
         get_terminal_width(), " ", prompt_prefix);
 
     std::getline(std::cin, user_input);
@@ -999,7 +1000,7 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
                              const bool stdout_a_terminal) {
     // Set response color
     if (stdout_a_terminal) {
-        printf("\033[33m");
+        printf(LOG_COL_YELLOW);
     }
 
     if (generate(llama_data, prompt, response)) {
@@ -1008,7 +1009,7 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
     }
 
     // End response with color reset and newline
-    printf("\n%s", stdout_a_terminal ? "\033[0m" : "");
+    printf("\n%s", stdout_a_terminal ? LOG_COL_DEFAULT : "");
     return 0;
 }
 
