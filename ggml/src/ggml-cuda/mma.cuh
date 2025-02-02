@@ -50,7 +50,7 @@ static __device__ __forceinline__ int ggml_cuda_movmatrix(const int x) {
     return ret_low | ret_high;
 }
 
-#endif // CUDART_VERSION >= 12000
+#endif // CUDART_VERSION >= 11800
 
 
 template <typename T>
