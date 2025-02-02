@@ -1660,33 +1660,22 @@ void quantize_row_q8_K(const float * restrict x, void * restrict y, int64_t k) {
 
     for (int i = 0; i < nb; i++) {
         const float * x_block = x + i * QK_K;
-        v128_t amax_vec = wasm_f32x4_splat(0.0f);
-        v128_t max_vec = wasm_f32x4_splat(0.0f);
 
-        // Vectorized max abs value search
-        for (int j = 0; j < QK_K; j += 4) {
+        v128_t min_vec = wasm_v128_load(x_block);
+        v128_t max_vec = min_vec;
+
+        for (int j = 4; j < QK_K; j += 4) {
             v128_t x_vec = wasm_v128_load(x_block + j);
-            v128_t abs_x = wasm_f32x4_abs(x_vec);
-            v128_t mask = wasm_f32x4_gt(abs_x, amax_vec);
-            amax_vec = wasm_v128_bitselect(abs_x, amax_vec, mask);
-            max_vec = wasm_v128_bitselect(x_vec, max_vec, mask);
+            max_vec = wasm_f32x4_pmax(max_vec, x_vec);
+            min_vec = wasm_f32x4_pmin(min_vec, x_vec);
         }
-
-        // Manual unroll for lane extraction
-        float amax = wasm_f32x4_extract_lane(amax_vec, 0);
-        float max_val = wasm_f32x4_extract_lane(max_vec, 0);
-        #define UPDATE_MAX(lane) \
-            { \
-                float a = wasm_f32x4_extract_lane(amax_vec, lane); \
-                if (a > amax) { \
-                    amax = a; \
-                    max_val = wasm_f32x4_extract_lane(max_vec, lane); \
-                } \
-            }
-        UPDATE_MAX(1)
-        UPDATE_MAX(2)
-        UPDATE_MAX(3)
-        #undef UPDATE_MAX
+        max_vec = wasm_f32x4_pmax(max_vec, wasm_i32x4_shuffle(max_vec, max_vec, 2, 3, 0, 1));
+        max_vec = wasm_f32x4_pmax(max_vec, wasm_i32x4_shuffle(max_vec, max_vec, 1, 0, 3, 2));
+        min_vec = wasm_f32x4_pmin(min_vec, wasm_i32x4_shuffle(min_vec, min_vec, 2, 3, 0, 1));
+        min_vec = wasm_f32x4_pmin(min_vec, wasm_i32x4_shuffle(min_vec, min_vec, 1, 0, 3, 2));
+        float max = wasm_f32x4_extract_lane(max_vec, 0);
+        float min = wasm_f32x4_extract_lane(min_vec, 0);
+        float amax = -min > max ? min : max;
 
         if (amax == 0.0f) {
             yc[i].d = 0.0f;
