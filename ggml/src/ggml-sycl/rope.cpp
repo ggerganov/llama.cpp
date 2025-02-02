@@ -192,7 +192,7 @@ static void rope_neox_sycl(
     }
 }
 
-void ggml_sycl_op_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32 || dst->src[0]->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->type == GGML_TYPE_F32 ||  dst->type == GGML_TYPE_F16);
@@ -272,4 +272,15 @@ void ggml_sycl_op_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
             GGML_ABORT("fatal error");
         }
     }
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_ASSERT(
+        ggml_is_contiguous(dst->src[0]));  // TODO: this restriction is temporary until non-cont support is implemented
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_rope(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }

@@ -2906,11 +2906,6 @@ static void ggml_sycl_dup(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     ggml_sycl_cpy(ctx, dst->src[0], dst);
 }
 
-static void ggml_sycl_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
-    GGML_ASSERT(ggml_is_contiguous(dst->src[0])); // TODO: this restriction is temporary until non-cont support is implemented
-    ggml_sycl_op_rope(ctx, dst);
-}
-
 static void ggml_sycl_pool2d(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     ggml_sycl_op_pool2d(ctx, dst);
 }
