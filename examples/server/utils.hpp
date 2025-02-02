@@ -662,6 +662,7 @@ static json oaicompat_completion_params_parse(
             });
         }
         llama_params["grammar_triggers"] = grammar_triggers;
+        llama_params["preserved_tokens"] = chat_params.preserved_tokens;
         for (const auto & stop : chat_params.additional_stops) {
             llama_params["stop"].push_back(stop);
         }

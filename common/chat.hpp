@@ -32,6 +32,7 @@ enum common_chat_format {
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2,
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
     COMMON_CHAT_FORMAT_HERMES_2_PRO,
+    COMMON_CHAT_FORMAT_COMMAND_R7B,
 
     COMMON_CHAT_FORMAT_COUNT, // Not a format, just the # formats
 };
@@ -42,6 +43,7 @@ struct common_chat_params {
     std::string                         grammar;
     bool                                grammar_lazy = false;
     std::vector<common_grammar_trigger> grammar_triggers;
+    std::vector<std::string>            preserved_tokens;
     std::vector<std::string>            additional_stops;
 };
 

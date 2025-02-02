@@ -1128,6 +1128,7 @@ curl http://localhost:8080/v1/chat/completions \
   - Hermes 2/3, Qwen 2.5
   - Mistral Nemo
   - Firefunction v2
+  - Command R7B
   - DeepSeek R1 (WIP / seems reluctant to call any tools?)
 
   <details>
@@ -1202,21 +1203,28 @@ curl http://localhost:8080/v1/chat/completions \
   ```shell
   # Native support:
   llama-server --jinja -fa -hf bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
-  llama-server --jinja -fa -hf bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M
-  llama-server --jinja -fa -hf bartowski/Llama-3.2-3B-Instruct-GGUF:Q6_K
+  llama-server --jinja -fa -hf bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q6_K_L
   llama-server --jinja -fa -hf bartowski/functionary-small-v3.2-GGUF:Q4_K_M
-  llama-server --jinja -fa -hf bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M \
-    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B )
+  llama-server --jinja -fa -hf bartowski/Llama-3.3-70B-Instruct-GGUF:Q4_K_M
 
   # Native support requires the right template for these GGUFs:
+
+  llama-server --jinja -fa -hf bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M \
+    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B tool_use )
+
   llama-server --jinja -fa -hf bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M \
     --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
+
   llama-server --jinja -fa -hf bartowski/firefunction-v2-GGUF -hff firefunction-v2-IQ1_M.gguf \
-    --chat-template-file <( python scripts/get_chat_template.py fireworks-ai/firellama-3-firefunction-v2 )
+    --chat-template-file <( python scripts/get_chat_template.py fireworks-ai/llama-3-firefunction-v2 tool_use )
+
+  llama-server --jinja -fa -hf bartowski/c4ai-command-r7b-12-2024-GGUF:Q6_K_L \
+    --chat-template-file <( python scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 tool_use )
 
   # Generic format support
-  llama-server --jinja -fa -hf bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M
-  llama-server --jinja -fa -hf bartowski/gemma-2-2b-it-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/phi-4-GGUF:Q4_0
+  llama-server --jinja -fa -hf bartowski/gemma-2-2b-it-GGUF:Q8_0
+  llama-server --jinja -fa -hf bartowski/c4ai-command-r-v01-GGUF:Q2_K
   ```
 
 - Test in CLI:
