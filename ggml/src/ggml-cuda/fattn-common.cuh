@@ -516,6 +516,12 @@ constexpr __device__ dequantize_1_f32_t get_dequantize_1_f32(ggml_type type_V) {
         nullptr;
 }
 
+// The HIP compiler for some reason complains that it can't unroll a loop because of the jt*ncols + j >= ne01 conditional.
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpass-failed"
+#endif // __clang__
+
 template<int D, int ncols, int KQ_stride> // D == head size
 #if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__))
 __launch_bounds__(D, 1)
@@ -613,6 +619,10 @@ static __global__ void flash_attn_stream_k_fixup(
         dst[j*ne02*D + threadIdx.x] = dst_val[j] / rowsum[j];
     }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif // __clang__
 
 template<int D, int parallel_blocks> // D == head size
 #if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__))
