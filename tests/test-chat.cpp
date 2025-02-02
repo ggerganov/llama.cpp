@@ -392,8 +392,9 @@ static void test_template_output_parsers() {
     inputs_tools_builtin.tools.push_back(python_tool);
 
     {
+        // Not supported yet
         const common_chat_template tmpl(read_file("models/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja"), "<s>", "</s>");
-        assert_equals(COMMON_CHAT_FORMAT_GENERIC, common_chat_params_init(tmpl, inputs_no_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_GENERIC, common_chat_params_init(tmpl, inputs_tools).format);
     }
     {
         const common_chat_template tmpl(read_file("models/templates/CohereForAI-c4ai-command-r7b-12-2024-tool_use.jinja"), "<s>", "</s>");
@@ -401,13 +402,6 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_params_init(tmpl, inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_COMMAND_R7B,    common_chat_params_init(tmpl, inputs_tools).format);
-        assert_equals(
-            COMMON_CHAT_FORMAT_COMMAND_R7B,
-            common_chat_params_init(
-                common_chat_template(read_file("models/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja"),
-                                     "<s>", "</s>"),
-                inputs_tools)
-                .format);
 
         test_template(tmpl, end_tokens, tool_call_plan_message_with_idx, tools,
                       "<|START_THINKING|>I'm not so sure<|END_THINKING|>"
