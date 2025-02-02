@@ -2805,10 +2805,6 @@ static void ggml_sycl_pool2d(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     ggml_sycl_op_pool2d(ctx, dst);
 }
 
-static void ggml_sycl_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
-    ggml_sycl_op_im2col(ctx, dst);
-}
-
 static void ggml_sycl_sum(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(dst->src[0]));
     ggml_sycl_op_sum(ctx, dst);

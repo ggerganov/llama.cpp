@@ -82,7 +82,7 @@ static void im2col_sycl(
     }
 }
 
-void ggml_sycl_op_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->src[1]->type == GGML_TYPE_F32);
@@ -122,4 +122,13 @@ void ggml_sycl_op_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
         float * dst_dd = static_cast<float *>(dst->data);
         im2col_sycl(src1_dd, dst_dd, IW, IH, OW, OH, KW, KH, IC, batch, batch_offset, delta_offset, s0, s1, p0, p1, d0, d1, main_stream);
     }
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_im2col(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }
