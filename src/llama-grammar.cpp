@@ -1213,5 +1213,7 @@ void llama_grammar_accept_str(struct llama_grammar & grammar, const std::string 
     }
 
     grammar.partial_utf8 = decoded.second;
-    GGML_ASSERT(!grammar.stacks.empty());
+    if (grammar.stacks.empty()) {
+        throw std::runtime_error("Unexpected empty grammar stack after accepting piece: " + piece);
+    }
 }
