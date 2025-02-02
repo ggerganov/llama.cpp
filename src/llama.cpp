@@ -589,12 +589,30 @@ static struct ggml_tensor * llm_build_kqv(
                     0);
         cb(v, "v", il);
 
-        cur = ggml_flash_attn_ext(ctx, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
+        struct ggml_tensor * padded_v = v;
+        int64_t n_embd_head_v_out = n_embd_head_v;
+        if (n_embd_head_v < n_embd_head_k) {
+            padded_v = ggml_pad(ctx, v, 0, k->ne[0] - v->ne[1], 0, 0);
+            cb(padded_v, "padded_v", il);
+            n_embd_head_v_out = n_embd_head_k;
+        }
+
+        cur = ggml_flash_attn_ext(ctx, q, k, padded_v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
                                   hparams.attn_soft_cap ? hparams.f_attn_logit_softcapping : 0.0f);
 
         ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
 
+        if (n_embd_head_v < n_embd_head_k) {
+            cur = ggml_reshape_3d(ctx, cur, n_embd_head_v_out, n_head, n_tokens);
+            cur = ggml_view_3d(ctx, cur, n_embd_head_v, n_head, n_tokens,
+                               ggml_element_size(cur) * n_embd_head_v_out,
+                               ggml_element_size(cur) * n_embd_head_v_out * n_head,
+                               0);
+            cur = ggml_cont(ctx, cur);
+        }
+
         cur = ggml_reshape_2d(ctx, cur, n_embd_head_v*n_head, n_tokens);
+
     } else {
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
         cb(kq, "kq", il);
@@ -9564,8 +9582,8 @@ struct llama_context * llama_init_from_model(
         params.flash_attn = false;
     }
 
-    if (params.flash_attn && model->hparams.n_embd_head_k != model->hparams.n_embd_head_v) {
-        LLAMA_LOG_WARN("%s: flash_attn requires n_embd_head_k == n_embd_head_v - forcing off\n", __func__);
+    if (params.flash_attn && model->hparams.n_embd_head_k < model->hparams.n_embd_head_v) {
+        LLAMA_LOG_WARN("%s: flash_attn requires n_embd_head_k >= n_embd_head_v - forcing off\n", __func__);
         params.flash_attn = false;
     }
 
