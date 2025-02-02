@@ -16,7 +16,9 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ## Hot topics
 
+- **How to use [MTLResidencySet](https://developer.apple.com/documentation/metal/mtlresidencyset?language=objc) to keep the GPU memory active?** https://github.com/ggerganov/llama.cpp/pull/11427
 - **VS Code extension for FIM completions:** https://github.com/ggml-org/llama.vscode
+- Universal tool call support in `llama-server`: https://github.com/ggerganov/llama.cpp/pull/9639
 - Vim/Neovim plugin for FIM completions: https://github.com/ggml-org/llama.vim
 - Introducing GGUF-my-LoRA https://github.com/ggerganov/llama.cpp/discussions/10123
 - Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggerganov/llama.cpp/discussions/9669
@@ -94,7 +96,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Bitnet b1.58 models](https://huggingface.co/1bitLLM)
 - [x] [Flan T5](https://huggingface.co/models?search=flan-t5)
 - [x] [Open Elm models](https://huggingface.co/collections/apple/openelm-instruct-models-6619ad295d7ae9f868b759ca)
-- [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b)
+- [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b) + [GLMEdge-1.5b](https://huggingface.co/THUDM/glm-edge-1.5b-chat) + [GLMEdge-4b](https://huggingface.co/THUDM/glm-edge-4b-chat)
 - [x] [SmolLM](https://huggingface.co/collections/HuggingFaceTB/smollm-6695016cad7167254ce15966)
 - [x] [EXAONE-3.0-7.8B-Instruct](https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct)
 - [x] [FalconMamba Models](https://huggingface.co/collections/tiiuae/falconmamba-7b-66b9a580324dd1598b0f6d4a)
@@ -115,6 +117,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
 - [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 - [x] [Bunny](https://github.com/BAAI-DCAI/Bunny)
+- [x] [GLM-EDGE](https://huggingface.co/models?search=glm-edge)
 - [x] [Qwen2-VL](https://huggingface.co/collections/Qwen/qwen2-vl-66cee7455501d7126940800d)
 
 </details>
@@ -421,7 +424,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 
     </details>
 
-[^1]: [examples/perplexity/README.md](examples/perplexity/README.md)
+[^1]: [examples/perplexity/README.md](./examples/perplexity/README.md)
 [^2]: [https://huggingface.co/docs/transformers/perplexity](https://huggingface.co/docs/transformers/perplexity)
 
 ## [`llama-bench`](examples/llama-bench)
