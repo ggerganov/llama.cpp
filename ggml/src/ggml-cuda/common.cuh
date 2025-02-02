@@ -155,6 +155,10 @@ typedef float2 dfloat2;
 #define FLASH_ATTN_AVAILABLE
 #endif // !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= GGML_CUDA_CC_QY1)
 
+#if !defined(GGML_CUDA_FA)
+#undef FLASH_ATTN_AVAILABLE
+#endif
+
 static constexpr bool fast_fp16_available(const int cc) {
     return cc >= GGML_CUDA_CC_PASCAL && cc != 610;
 }

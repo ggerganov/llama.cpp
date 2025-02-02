@@ -1,5 +1,12 @@
 #include "mmq.cuh"
 
+#ifdef GGML_CUDA_FORCE_CUBLAS
+void ggml_cuda_op_mul_mat_q(
+    ggml_backend_cuda_context &,
+    const ggml_tensor *, const ggml_tensor *, ggml_tensor *, const char *, const float *,
+    const char *, float *, const int64_t, const int64_t, const int64_t,
+    const int64_t, cudaStream_t) {}
+#else
 void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
@@ -94,6 +101,7 @@ void ggml_cuda_op_mul_mat_q(
     GGML_UNUSED(dst);
     GGML_UNUSED(src1_ddf_i);
 }
+#endif // GGML_CUDA_FORCE_CUBLAS
 
 bool ggml_cuda_should_use_mmq(enum ggml_type type, int cc, int64_t ne11) {
 #ifdef GGML_CUDA_FORCE_CUBLAS
