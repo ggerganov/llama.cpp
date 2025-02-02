@@ -383,6 +383,9 @@ struct server_task {
                     if (ids.size() == 1) {
                         LOG_DBG("Preserved token: %d\n", ids[0]);
                         params.sampling.preserved_tokens.insert(ids[0]);
+                    } else {
+                        // This may happen when using a tool call style meant for a model with special tokens to preserve on a model without said tokens.
+                        LOG_DBG("Not preserved because more than 1 token: %s\n", t.get<std::string>().c_str());
                     }
                 }
             }
