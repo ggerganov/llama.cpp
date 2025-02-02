@@ -11,7 +11,7 @@
 // The functions get_i, get_j, and get_k can be used to get the physical 32 bit index of the lth element of a thread within a tile.
 // All matrix tiles have ne physical 32 bit elements per warp.
 //
-// As desribted in the documentation, all pointers for load_ldmatrix must be to shared memory and aligned to 16 bytes.
+// As described in the documentation, all pointers for load_ldmatrix must be to shared memory and aligned to 16 bytes.
 
 #include "common.cuh"
 
