@@ -16,7 +16,7 @@
 #include "common.cuh"
 
 
-#if CUDART_VERSION >= 12000
+#if CUDART_VERSION >= 11800
 
 static __device__ __forceinline__ int ggml_cuda_movmatrix(const int x) {
     int ret = 0;
