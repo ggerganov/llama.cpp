@@ -2855,8 +2855,7 @@ struct server_context {
         server_slot * slot_batched = nullptr;
 
         auto accept_special_token = [&](server_slot & slot, llama_token token) {
-            const auto & preserved_tokens = slot.params.sampling.preserved_tokens;
-            return params_base.special || std::find(preserved_tokens.begin(), preserved_tokens.end(), token) != preserved_tokens.end();
+            return params_base.special || slot.params.sampling.preserved_tokens.find(token) != slot.params.sampling.preserved_tokens.end();
         };
 
         // frist, add sampled tokens from any ongoing sequences
