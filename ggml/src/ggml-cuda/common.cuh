@@ -172,7 +172,7 @@ static constexpr __device__ int ggml_cuda_get_physical_warp_size() {
     return __AMDGCN_WAVEFRONT_SIZE;
 #else
     return 32;
-#endif
+#endif // defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)
 }
 
 [[noreturn]]
