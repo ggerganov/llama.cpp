@@ -1,5 +1,7 @@
 #include "cpy.hpp"
 
+#include <float.h>
+
 static void cpy_1_f32_f32(const char * cxi, char * cdsti) {
     const float * xi   = (const float *) cxi;
     float *       dsti = (float *) cdsti;
@@ -350,6 +352,8 @@ void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, co
 
     char * src0_ddc = (char *) src0->data;
     char * src1_ddc = (char *) src1->data;
+    GGML_SYCL_DEBUG("%s: type combination supplied: %s to %s\n", __func__, ggml_type_name(src0->type),
+                    ggml_type_name(src1->type));
 
     if (src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32) {
         ggml_cpy_f32_f32_sycl(src0_ddc, src1_ddc, ne, ne00, ne01, ne02, nb00, nb01, nb02, nb03, ne10, ne11, ne12, nb10,
@@ -386,4 +390,11 @@ void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, co
 } catch (const sycl::exception & exc) {
     std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
     std::exit(1);
+}
+
+void ggml_sycl_dup(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    // TODO: why do we pass dst as src1 here?
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_cpy(ctx, dst->src[0], dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }

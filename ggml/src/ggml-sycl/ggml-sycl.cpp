@@ -2852,11 +2852,6 @@ static void ggml_sycl_clamp(ggml_backend_sycl_context & ctx, ggml_tensor * dst) 
     ggml_sycl_op_clamp(ctx, dst);
 }
 
-static void ggml_sycl_dup(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
-    // TODO: why do we pass dst as src1 here?
-    ggml_sycl_cpy(ctx, dst->src[0], dst);
-}
-
 static void ggml_sycl_pool2d(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     ggml_sycl_op_pool2d(ctx, dst);
 }
