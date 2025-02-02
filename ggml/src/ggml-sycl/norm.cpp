@@ -311,7 +311,7 @@ static void rms_norm_f32_sycl(const float* x, float* dst, const int ncols,
     }
 }
 
-void ggml_sycl_op_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
@@ -328,9 +328,12 @@ void ggml_sycl_op_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     dpct::queue_ptr main_stream = ctx.stream();
 
     norm_f32_sycl(src0_dd, dst_dd, ne00, nrows, eps, main_stream, ctx.device);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
+static void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, ggml_tensor* dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
@@ -346,9 +349,12 @@ void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
     group_norm_f32_sycl(src0_dd, dst_dd, num_groups, eps, group_size, dst->src[0]->ne[0] * dst->src[0]->ne[1] * dst->src[0]->ne[2], main_stream, ctx.device);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }
 
-void ggml_sycl_op_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
@@ -364,4 +370,25 @@ void ggml_sycl_op_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     dpct::queue_ptr main_stream = ctx.stream();
 
     rms_norm_f32_sycl(src0_dd, dst_dd, ne00, nrows, eps, main_stream, ctx.device);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_norm(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
+}
+
+void ggml_sycl_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_rms_norm(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
+}
+
+void ggml_sycl_group_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_group_norm(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }
