@@ -1,5 +1,4 @@
 #include "binbcast.hpp"
-#include "common.hpp"
 
 static __dpct_inline__ float op_repeat(const float a, const float b) {
     return b;
