@@ -188,6 +188,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [ramalama](https://github.com/containers/ramalama) (MIT)
 - [semperai/amica](https://github.com/semperai/amica) (MIT)
 - [withcatai/catai](https://github.com/withcatai/catai) (MIT)
+- [Playstore](https://play.google.com/store/apps/details?id=com.nervesparks.irisGPT) and [nerve-sparks/iris_android](https://github.com/nerve-sparks/iris_android) , (Apache-2.0)
 
 </details>
 
