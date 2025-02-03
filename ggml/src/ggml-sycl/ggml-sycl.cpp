@@ -2380,25 +2380,41 @@ static void ggml_sycl_mul_mat(ggml_backend_sycl_context & ctx, const ggml_tensor
         if (src0->ne[3] == 1 && src1->ne[3] == 1) {
             // KQ single-batch
             // mmv p021 was specific for these dimensions
+            GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_vec_p021\n", __func__);
             ggml_sycl_mul_mat_vec_p021(ctx, src0, src1, dst);
+            GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_vec_p021 done\n", __func__);
         } else {
             // The kernel from the if path is faster for that specific case, but does not support all mul mats.
+            GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_batched_sycl\n", __func__);
             ggml_sycl_mul_mat_batched_sycl(ctx, src0, src1, dst);
+            GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_batched_sycl done\n", __func__);
         }
     } else if (!split && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
         // KQV single-batch
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_vec_nc\n", __func__);
         ggml_sycl_mul_mat_vec_nc(ctx, src0, src1, dst);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_vec_nc done\n", __func__);
     } else if (!split && src0->type == GGML_TYPE_F16 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
         // KQ + KQV multi-batch
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_batched_sycl\n", __func__);
         ggml_sycl_mul_mat_batched_sycl(ctx, src0, src1, dst);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_mul_mat_batched_sycl done\n", __func__);
     } else if (use_dequantize_mul_mat_vec) {
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_dequantize_mul_mat_vec\n", __func__);
         ggml_sycl_op_mul_mat(ctx, src0, src1, dst, ggml_sycl_op_dequantize_mul_mat_vec, false);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_dequantize_mul_mat_vec done\n", __func__);
     } else if (use_mul_mat_vec_q) {
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_vec_q\n", __func__);
         ggml_sycl_op_mul_mat(ctx, src0, src1, dst, ggml_sycl_op_mul_mat_vec_q, true);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_vec_q done\n", __func__);
     } else if (use_mul_mat_q) {
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_q\n", __func__);
         ggml_sycl_op_mul_mat(ctx, src0, src1, dst, ggml_sycl_op_mul_mat_q, true);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_q done\n", __func__);
     } else {
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_sycl\n", __func__);
         ggml_sycl_op_mul_mat(ctx, src0, src1, dst, ggml_sycl_op_mul_mat_sycl, false);
+        GGML_SYCL_DEBUG("%s: call ggml_sycl_op_mul_mat_sycl done\n", __func__);
     }
 }
 
