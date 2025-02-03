@@ -3353,14 +3353,12 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
         return;
     }
 
-    try {
-        LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+    // reminder: this function is not covered by httplib's exception handler; if someone does more complicated stuff, think about wrapping it in try-catch
 
-        LOG_DBG("request:  %s\n", req.body.c_str());
-        LOG_DBG("response: %s\n", res.body.c_str());
-    } catch (const std::exception & e) {
-        LOG_ERR("failed to log request/response: %s\n", e.what());
-    }
+    LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+
+    LOG_DBG("request:  %s\n", req.body.c_str());
+    LOG_DBG("response: %s\n", res.body.c_str());
 }
 
 std::function<void(int)> shutdown_handler;
