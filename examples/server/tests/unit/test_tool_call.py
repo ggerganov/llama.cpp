@@ -251,6 +251,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
@@ -263,12 +264,13 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
     # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
+    n_predict = 512
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
-    server.n_predict = 512
+    server.n_predict = n_predict
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
     if template_override:
@@ -277,7 +279,7 @@ def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | Non
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
-        "max_tokens": 256,
+        "max_tokens": n_predict,
         "messages": [
             {"role": "user", "content": "What is the weather in Istanbul?"},
         ],
