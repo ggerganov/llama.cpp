@@ -154,7 +154,6 @@
             placeholder="Type a message (Shift+Enter to add a new line)"
             v-model="inputMsg"
             @keydown.enter.exact.prevent="sendMessage"
-            @keydown.enter.shift.exact.prevent="inputMsg += '\n'"
             :disabled="isGenerating"
             id="msg-input"
             dir="auto"
