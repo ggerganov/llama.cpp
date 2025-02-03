@@ -468,7 +468,10 @@ const mainApp = createApp({
       URL.revokeObjectURL(url);
     },
     async sendMessage() {
-      if (!this.inputMsg) return;
+      // prevent sending empty message
+      // also allow typing the message while generating, but does not allow sending it (to match UX/UI behavior of other chat apps)
+      if (!this.inputMsg || this.isGenerating) return;
+
       const currConvId = this.viewingConvId;
 
       StorageUtils.appendMsg(currConvId, {
