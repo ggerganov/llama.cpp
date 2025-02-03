@@ -469,6 +469,14 @@ const mainApp = createApp({
     },
     async sendMessage() {
       if (!this.inputMsg) return;
+
+      if (this.isGenerating) {
+        this.stopGeneration();
+        while (this.isGenerating) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+
       const currConvId = this.viewingConvId;
 
       StorageUtils.appendMsg(currConvId, {
