@@ -1879,7 +1879,6 @@ std::string common_chat_format_example(const common_chat_template & tmpl, bool u
 
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
-    auto vocab = llama_model_get_vocab(model);
     std::string default_template_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : chat_template_override;
     std::string template_tool_use_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : "";
     bool has_explicit_template = !chat_template_override.empty();
