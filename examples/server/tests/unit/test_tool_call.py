@@ -346,7 +346,7 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
     ('{"code":"print("}',  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
