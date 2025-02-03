@@ -1051,31 +1051,31 @@ static json format_error_response(const std::string & message, const enum error_
     switch (type) {
         case ERROR_TYPE_INVALID_REQUEST:
             type_str = "invalid_request_error";
-            code = httplib::StatusCode::BadRequest_400;
+            code = 400;
             break;
         case ERROR_TYPE_AUTHENTICATION:
             type_str = "authentication_error";
-            code = httplib::StatusCode::Unauthorized_401;
+            code = 401;
             break;
         case ERROR_TYPE_NOT_FOUND:
             type_str = "not_found_error";
-            code = httplib::StatusCode::NotFound_404;
+            code = 404;
             break;
         case ERROR_TYPE_SERVER:
             type_str = "server_error";
-            code = httplib::StatusCode::InternalServerError_500;
+            code = 500;
             break;
         case ERROR_TYPE_PERMISSION:
             type_str = "permission_error";
-            code = httplib::StatusCode::Forbidden_403;
+            code = 403;
             break;
         case ERROR_TYPE_NOT_SUPPORTED:
             type_str = "not_supported_error";
-            code = httplib::StatusCode::NotImplemented_501;
+            code = 501;
             break;
         case ERROR_TYPE_UNAVAILABLE:
             type_str = "unavailable_error";
-            code = httplib::StatusCode::ServiceUnavailable_503;
+            code = 503;
             break;
     }
     return json {
