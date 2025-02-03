@@ -1869,11 +1869,19 @@ std::string common_chat_format_example(const common_chat_template & tmpl, bool u
     return common_chat_apply_template(tmpl, msgs, true, use_jinja);
 }
 
+#define CHATML_TEMPLATE_SRC \
+    "{%- for message in messages -%}\n" \
+    "  {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n' -}}\n" \
+    "{%- endfor -%}\n" \
+    "{%- if add_generation_prompt -%}\n" \
+    "  {{- '<|im_start|>assistant\n' -}}\n" \
+    "{%- endif -%})"
+
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
     auto vocab = llama_model_get_vocab(model);
-    std::string default_template_src = chat_template_override;
-    std::string template_tool_use_src = chat_template_override;
+    std::string default_template_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : chat_template_override;
+    std::string template_tool_use_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : "";
     bool has_explicit_template = !chat_template_override.empty();
     if (chat_template_override.empty()) {
         auto str = llama_model_chat_template(model, /* name */ nullptr);
@@ -1891,14 +1899,7 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
         if (!template_tool_use_src.empty()) {
             default_template_src = template_tool_use_src;
         } else {
-            default_template_src = R"(
-                {%- for message in messages -%}
-                    {{- "<|im_start|>" + message.role + "\n" + message.content + "<|im_end|>\n" -}}
-                {%- endfor -%}
-                {%- if add_generation_prompt -%}
-                    {{- "<|im_start|>assistant\n" -}}
-                {%- endif -%}
-            )";
+            default_template_src = CHATML_TEMPLATE_SRC;
         }
     }
     const auto get_token = [&](llama_token token, const char * name, const char * jinja_variable_name) {
