@@ -1911,9 +1911,9 @@ struct server_context {
             }});
             GGML_ASSERT(templates.template_default);
             try {
-                common_chat_params_init(*templates.template_default, inputs, vocab);
+                common_chat_params_init(*templates.template_default, inputs);
                 if (templates.template_tool_use) {
-                    common_chat_params_init(*templates.template_tool_use, inputs, vocab);
+                    common_chat_params_init(*templates.template_tool_use, inputs);
                 }
                 return true;
             } catch (const std::exception & e) {
@@ -4052,7 +4052,7 @@ int main(int argc, char ** argv) {
         }
 
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates, llama_model_get_vocab(ctx_server.model));
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
@@ -4065,7 +4065,7 @@ int main(int argc, char ** argv) {
     // same with handle_chat_completions, but without inference part
     const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates, llama_model_get_vocab(ctx_server.model));
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
         res_ok(res, {{ "prompt", std::move(data.at("prompt")) }});
     };
 

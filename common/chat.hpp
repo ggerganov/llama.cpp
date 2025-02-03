@@ -47,6 +47,6 @@ struct common_chat_params {
     std::vector<std::string>            additional_stops;
 };
 
-struct common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & params, const llama_vocab * vocab = nullptr);
+struct common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & params);
 std::string               common_chat_format_name(common_chat_format format);
 common_chat_msg           common_chat_parse(      const std::string & input, common_chat_format format);

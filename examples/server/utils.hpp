@@ -582,8 +582,7 @@ static json oaicompat_completion_params_parse(const json & body) {
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
     bool use_jinja,
-    const common_chat_templates & chat_templates,
-    const llama_vocab * vocab)
+    const common_chat_templates & chat_templates)
 {
     json llama_params;
     const auto & tmpl = body.contains("tools") && chat_templates.template_tool_use
@@ -649,7 +648,7 @@ static json oaicompat_completion_params_parse(
         inputs.stream = stream;
         // TODO: support mixing schema w/ tools beyond generic format.
         inputs.json_schema = json_value(llama_params, "json_schema", json());
-        auto chat_params = common_chat_params_init(tmpl, inputs, vocab);
+        auto chat_params = common_chat_params_init(tmpl, inputs);
 
         llama_params["chat_format"] = static_cast<int>(chat_params.format);
         llama_params["prompt"] = chat_params.prompt;
