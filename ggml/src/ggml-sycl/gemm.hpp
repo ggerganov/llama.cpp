@@ -16,8 +16,6 @@
 #include <fstream>
 #include <iostream>
 
-#include "ggml-sycl.h"
-
 #if GGML_SYCL_DNNL
 
 #include "dnnl.hpp"
