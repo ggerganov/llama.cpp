@@ -84,6 +84,7 @@ static void get_rows_sycl(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
     float *         dst_dd  = static_cast<float *>(dst->data);
 
     dpct::queue_ptr stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     stream->parallel_for(sycl::nd_range<3>(block_nums * block_dims, block_dims), [=](sycl::nd_item<3> item_ct1) {
         k_get_rows<qk, qr, dq>(src0_dd, src1_dd, dst_dd, ne00, ne12, s1, s2, s3, nb01, nb02, nb03, s10, s11, s12,
@@ -113,6 +114,7 @@ template <typename src0_t> static void get_rows_sycl_float(ggml_backend_sycl_con
     float *         dst_dd  = static_cast<float *>(dst->data);
 
     dpct::queue_ptr stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     {
         dpct::has_capability_or_fail(stream->get_device(), { sycl::aspect::fp16 });

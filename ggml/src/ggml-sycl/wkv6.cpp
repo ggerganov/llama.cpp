@@ -115,6 +115,7 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(C / H == WKV_BLOCK_SIZE); // The current sycl kernel is designed for RWKV6, HEAD_SIZE == 64
 
     dpct::queue_ptr stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     // Calculate execution configuration
     const size_t shared_mem_size = WKV_BLOCK_SIZE * 4 * sizeof(float); // For k, r, tf, td

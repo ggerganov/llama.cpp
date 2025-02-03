@@ -236,6 +236,7 @@ static void ggml_sycl_op_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     rope_corr_dims corr_dims;
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims.v);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     // compute
     if (is_neox) {

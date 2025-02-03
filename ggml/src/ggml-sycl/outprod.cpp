@@ -17,6 +17,8 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
 
     // Get SYCL queue
     dpct::queue_ptr stream = ctx.stream();
+    // set device
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     // Dimension checks
     GGML_ASSERT(ne01 == ne11);  // Inner dimensions must match

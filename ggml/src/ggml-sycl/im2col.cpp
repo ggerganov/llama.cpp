@@ -112,6 +112,7 @@ static void ggml_sycl_op_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * d
     const int64_t batch = dst->src[1]->ne[3];
     const size_t batch_offset = dst->src[1]->nb[3] / 4; // nb is byte offset, src is type float32
     dpct::queue_ptr main_stream  = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     if (dst->type == GGML_TYPE_F16) {
         const float * src1_dd = static_cast<const float *>(dst->src[1]->data);

@@ -162,6 +162,7 @@ static void ggml_sycl_op_concat(ggml_backend_sycl_context & ctx, ggml_tensor * d
   const ggml_tensor *src0 = dst->src[0];
   const ggml_tensor *src1 = dst->src[1];
   queue_ptr stream = ctx.stream();
+  SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
   const int32_t dim = ((int32_t *)dst->op_params)[0];
 

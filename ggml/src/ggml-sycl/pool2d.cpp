@@ -93,6 +93,7 @@ static void ggml_sycl_op_pool2d(ggml_backend_sycl_context & ctx, ggml_tensor * d
     const int       parallel_elements = N * OC * OH * OW;
     const int       num_blocks        = (parallel_elements + SYCL_POOL2D_BLOCK_SIZE - 1) / SYCL_POOL2D_BLOCK_SIZE;
     dpct::queue_ptr main_stream       = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *   src0_dd           = static_cast<const float *>(dst->src[0]->data);
     float *         dst_dd            = static_cast<float *>(dst->data);
     sycl::range<3>  block_nums(1, 1, num_blocks);

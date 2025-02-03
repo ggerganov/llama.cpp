@@ -326,6 +326,7 @@ static void ggml_sycl_op_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     norm_f32_sycl(src0_dd, dst_dd, ne00, nrows, eps, main_stream, ctx.device);
 } catch (const sycl::exception & exc) {
@@ -348,6 +349,7 @@ static void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, ggml_tensor*
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     group_norm_f32_sycl(src0_dd, dst_dd, num_groups, eps, group_size, dst->src[0]->ne[0] * dst->src[0]->ne[1] * dst->src[0]->ne[2], main_stream, ctx.device);
 } catch (const sycl::exception & exc) {
     std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
@@ -368,6 +370,7 @@ static void ggml_sycl_op_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor *
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     rms_norm_f32_sycl(src0_dd, dst_dd, ne00, nrows, eps, main_stream, ctx.device);
 } catch (const sycl::exception & exc) {

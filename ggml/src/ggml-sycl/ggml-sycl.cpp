@@ -3081,7 +3081,7 @@ bool ggml_backend_is_sycl(ggml_backend_t backend) {
 }
 
 int ggml_backend_sycl_get_device_count() {
-    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count\n");
+    // GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count:\n");
     return ggml_sycl_info().device_count;
 }
 

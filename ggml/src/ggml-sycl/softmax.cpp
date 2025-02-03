@@ -244,7 +244,7 @@ static void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor *
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
-    ggml_sycl_set_device(ctx.device);
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     dpct::queue_ptr main_stream = ctx.stream();
 
     if (dst->src[1] && dst->src[1]->type == GGML_TYPE_F16) {

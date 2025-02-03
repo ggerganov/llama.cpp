@@ -237,6 +237,7 @@ inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_add>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
@@ -250,6 +251,7 @@ inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_sub>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
@@ -263,6 +265,7 @@ inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_mul>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
@@ -276,6 +279,7 @@ inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_div>>(dst->src[0], dst->src[1], dst, src0_dd, src1_dd, dst_dd,
                                                    main_stream);
@@ -288,6 +292,7 @@ inline void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor * d
     const void *    src0_d      = static_cast<void *>(dst->src[0]->data);
     void *          dst_d       = static_cast<void *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     ggml_sycl_op_bin_bcast<bin_bcast_sycl<op_repeat>>(dst, dst->src[0], dst, nullptr, src0_d, dst_d, main_stream);
 } catch (const sycl::exception & exc) {

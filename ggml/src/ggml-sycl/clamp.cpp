@@ -30,6 +30,7 @@ inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, ggml_tensor * ds
     memcpy(&min, dst->op_params, sizeof(float));
     memcpy(&max, (float *) dst->op_params + 1, sizeof(float));
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *         src0_dd     = static_cast<const float *>(dst->src[0]->data);
     float *               dst_dd      = static_cast<float *>(dst->data);
 

@@ -111,6 +111,7 @@ inline void ggml_sycl_op_argsort(ggml_backend_sycl_context & ctx, ggml_tensor * 
 
     enum ggml_sort_order order       = (enum ggml_sort_order) dst->op_params[0];
     dpct::queue_ptr      main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *        src0_dd     = static_cast<const float *>(dst->src[0]->data);
     int32_t *            dst_dd      = static_cast<int32_t *>(dst->data);
 

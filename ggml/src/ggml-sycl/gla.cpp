@@ -88,6 +88,7 @@ void ggml_sycl_op_gated_linear_attn(ggml_backend_sycl_context & ctx, ggml_tensor
     const int64_t H = dst->src[0]->ne[1];
 
     dpct::queue_ptr stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     GGML_ASSERT(dst->src[4]->type == GGML_TYPE_F32);
     GGML_ASSERT(C % H == 0);
     GGML_ASSERT(C / H == 64 || C / H == 128);

@@ -31,6 +31,7 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 
     const int64_t   ne          = ggml_nelements(dst->src[0]);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *   src0_dd     = static_cast<const float *>(dst->src[0]->data);
     float *         dst_dd      = static_cast<float *>(dst->data);
 
@@ -48,6 +49,7 @@ inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, ggml_tensor *
     const int64_t   ncols       = dst->src[0]->ne[0];
     const int64_t   nrows       = ggml_nrows(dst->src[0]);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *   src0_dd     = static_cast<const float *>(dst->src[0]->data);
     float *         dst_dd      = static_cast<float *>(dst->data);
 

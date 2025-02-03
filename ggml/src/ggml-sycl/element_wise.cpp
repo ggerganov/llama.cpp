@@ -514,6 +514,7 @@ inline void ggml_sycl_op_silu(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -526,6 +527,7 @@ inline void ggml_sycl_op_gelu(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -538,6 +540,7 @@ inline void ggml_sycl_op_gelu_quick(ggml_backend_sycl_context & ctx, ggml_tensor
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -551,6 +554,7 @@ inline void ggml_sycl_op_tanh(ggml_backend_sycl_context & ctx, ggml_tensor *dst)
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
 
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     tanh_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
@@ -562,6 +566,7 @@ inline void ggml_sycl_op_relu(ggml_backend_sycl_context & ctx, ggml_tensor *dst)
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     relu_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
@@ -573,6 +578,7 @@ inline void ggml_sycl_op_hardsigmoid(ggml_backend_sycl_context & ctx, ggml_tenso
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     hardsigmoid_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
@@ -585,6 +591,7 @@ inline void ggml_sycl_op_hardswish(ggml_backend_sycl_context & ctx, ggml_tensor 
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
 
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -597,6 +604,7 @@ inline void ggml_sycl_op_exp(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     exp_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
@@ -608,6 +616,7 @@ inline void ggml_sycl_op_log(ggml_backend_sycl_context & ctx, ggml_tensor *dst) 
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -620,6 +629,7 @@ inline void ggml_sycl_op_sigmoid(ggml_backend_sycl_context & ctx, ggml_tensor *d
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -632,6 +642,7 @@ inline void ggml_sycl_op_sqrt(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     sqrt_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
@@ -643,6 +654,7 @@ inline void ggml_sycl_op_sin(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -655,6 +667,7 @@ inline void ggml_sycl_op_cos(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
 
@@ -669,6 +682,7 @@ inline void ggml_sycl_op_step(ggml_backend_sycl_context & ctx, ggml_tensor *dst)
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     step_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
 }
@@ -681,6 +695,7 @@ inline void ggml_sycl_op_neg(ggml_backend_sycl_context & ctx, ggml_tensor *dst) 
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     neg_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
 }
@@ -697,6 +712,7 @@ inline void ggml_sycl_op_leaky_relu(ggml_backend_sycl_context & ctx, ggml_tensor
     float * dst_dd = static_cast<float *>(dst->data);
 
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     leaky_relu_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), negative_slope, main_stream);
 }
@@ -709,6 +725,7 @@ inline void ggml_sycl_op_sqr(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     sqr_f32_sycl(src0_dd, dst_dd, ggml_nelements(dst->src[0]), main_stream);
 }
@@ -727,6 +744,7 @@ inline void ggml_sycl_op_upscale(ggml_backend_sycl_context & ctx, ggml_tensor * 
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     upscale_f32_sycl(src0_dd, dst_dd, dst->src[0]->nb[0], dst->src[0]->nb[1], dst->src[0]->nb[2], dst->src[0]->nb[3],
                      dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], sf0, sf1, sf2, sf3,
@@ -743,6 +761,7 @@ inline void ggml_sycl_op_pad(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     float * dst_dd = static_cast<float *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
     pad_f32_sycl(src0_dd, dst_dd,
         dst->src[0]->ne[0], dst->src[0]->ne[1], dst->src[0]->ne[2],
@@ -760,6 +779,7 @@ inline void ggml_sycl_op_acc(ggml_backend_sycl_context & ctx,
     GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
 
     const dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float * src0_dd = static_cast<const float *>(dst->src[0]->data);
     const float * src1_dd = static_cast<const float *>(dst->src[1]->data);
     float * dst_dd = static_cast<float *>(dst->data);

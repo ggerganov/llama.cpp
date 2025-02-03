@@ -58,6 +58,7 @@ static void ggml_sycl_op_argmax(ggml_backend_sycl_context & ctx, ggml_tensor * d
     const int64_t nrows = ggml_nrows(dst->src[0]);
 
     dpct::queue_ptr main_stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     const float *   src0_dd     = static_cast<const float *>(dst->src[0]->data);
     int32_t *       dst_dd      = static_cast<int32_t *>(dst->data);
     argmax_f32_i32_sycl(src0_dd, dst_dd, ncols, nrows, main_stream);
