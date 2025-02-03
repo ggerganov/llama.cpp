@@ -3738,7 +3738,11 @@ int main(int argc, char ** argv) {
             return;
         }
         GGML_ASSERT(result.get() != nullptr);
-        GGML_ASSERT(result.get()->get_server_task_type() == type);
+        if (type == SERVER_TASK_TYPE_SLOT_RESTORE) {
+            GGML_ASSERT(result.get()->get_server_task_type() == SERVER_TASK_TYPE_SLOT_SAVE);
+        } else {
+            GGML_ASSERT(result.get()->get_server_task_type() == type);
+        }
         res_ok(res, result->to_json());
     };
 
