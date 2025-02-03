@@ -203,6 +203,9 @@ class chat_template {
             const json tools;
             auto prefix = apply(json::array({user_msg}), tools, /* add_generation_prompt= */ true);
             auto full = apply(json::array({user_msg, tool_call_msg}), tools, /* add_generation_prompt= */ false);
+            if (full.find(prefix) != 0 && prefix.length() > 0 && prefix[prefix.length() - 1] == '\n') {
+                prefix = prefix.substr(0, prefix.length() - 1);
+            }
             if (full.find(prefix) != 0) {
                 if (prefix.rfind(eos_token_) == prefix.size() - eos_token_.size()) {
                     prefix = prefix.substr(0, prefix.size() - eos_token_.size());
