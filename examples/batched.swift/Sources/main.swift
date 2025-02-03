@@ -207,7 +207,7 @@ private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
     let utf8Count = text.utf8.count
     let n_tokens = utf8Count + (add_bos ? 1 : 0)
     let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-    let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
+    let tokenCount = llama_tokenize(llama_model_get_vocab, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
     var swiftTokens: [llama_token] = []
     for i in 0 ..< tokenCount {
         swiftTokens.append(tokens[Int(i)])
@@ -218,12 +218,12 @@ private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
 
 private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String? {
     var result = [CChar](repeating: 0, count: 8)
-    let nTokens = llama_token_to_piece(model, token, &result, Int32(result.count), 0, false)
+    let nTokens = llama_token_to_piece(llama_model_get_vocab, token, &result, Int32(result.count), 0, false)
     if nTokens < 0 {
         let actualTokensCount = -Int(nTokens)
         result = .init(repeating: 0, count: actualTokensCount)
         let check = llama_token_to_piece(
-            model,
+            llama_model_get_vocab,
             token,
             &result,
             Int32(result.count),

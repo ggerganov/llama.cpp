@@ -151,7 +151,7 @@ actor LlamaContext {
 
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
 
-        if llama_vocab_is_eog(model, new_token_id) || n_cur == n_len {
+        if llama_vocab_is_eog(llama_model_get_vocab, new_token_id) || n_cur == n_len {
             print("\n")
             is_done = true
             let new_token_str = String(cString: temporary_invalid_cchars + [0])
@@ -297,7 +297,7 @@ actor LlamaContext {
         let utf8Count = text.utf8.count
         let n_tokens = utf8Count + (add_bos ? 1 : 0) + 1
         let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-        let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
+        let tokenCount = llama_tokenize(llama_model_get_vocab, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
 
         var swiftTokens: [llama_token] = []
         for i in 0..<tokenCount {
@@ -316,7 +316,7 @@ actor LlamaContext {
         defer {
             result.deallocate()
         }
-        let nTokens = llama_token_to_piece(model, token, result, 8, 0, false)
+        let nTokens = llama_token_to_piece(llama_model_get_vocab, token, result, 8, 0, false)
 
         if nTokens < 0 {
             let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
@@ -324,7 +324,7 @@ actor LlamaContext {
             defer {
                 newResult.deallocate()
             }
-            let nNewTokens = llama_token_to_piece(model, token, newResult, -nTokens, 0, false)
+            let nNewTokens = llama_token_to_piece(llama_model_get_vocab, token, newResult, -nTokens, 0, false)
             let bufferPointer = UnsafeBufferPointer(start: newResult, count: Int(nNewTokens))
             return Array(bufferPointer)
         } else {
