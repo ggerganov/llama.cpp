@@ -248,6 +248,33 @@ struct llama_context {
                      int   il,
                     bool   worst_case);
 
+    ggml_tensor * build_rwkv_token_shift_load(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case);
+
+    ggml_tensor * build_rwkv_token_shift_store(
+            ggml_context * ctx0,
+             ggml_tensor * token_shift,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case);
+
+    ggml_tensor * build_rwkv6_time_mix(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * cur,
+             ggml_tensor * x_prev,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case);
+
     struct ggml_tensor * inp_s_copy;        // I32 [kv_size]
     struct ggml_tensor * inp_s_mask;        // F32 [1, n_kv]
 
