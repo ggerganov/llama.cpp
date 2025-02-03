@@ -1206,6 +1206,8 @@ curl http://localhost:8080/v1/chat/completions \
   llama-server --jinja -fa -hf bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q6_K_L
   llama-server --jinja -fa -hf bartowski/functionary-small-v3.2-GGUF:Q4_K_M
   llama-server --jinja -fa -hf bartowski/Llama-3.3-70B-Instruct-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF:Q6_K_L
 
   # Native support requires the right template for these GGUFs:
 
