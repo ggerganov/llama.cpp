@@ -1047,35 +1047,35 @@ struct server_task_result_rerank : server_task_result {
 // this function maybe used outside of server_task_result_error
 static json format_error_response(const std::string & message, const enum error_type type) {
     std::string type_str;
-    int code = 500;
+    int code = httplib::StatusCode::InternalServerError_500;
     switch (type) {
         case ERROR_TYPE_INVALID_REQUEST:
             type_str = "invalid_request_error";
-            code = 400;
+            code = httplib::StatusCode::BadRequest_400;
             break;
         case ERROR_TYPE_AUTHENTICATION:
             type_str = "authentication_error";
-            code = 401;
+            code = httplib::StatusCode::Unauthorized_401;
             break;
         case ERROR_TYPE_NOT_FOUND:
             type_str = "not_found_error";
-            code = 404;
+            code = httplib::StatusCode::NotFound_404;
             break;
         case ERROR_TYPE_SERVER:
             type_str = "server_error";
-            code = 500;
+            code = httplib::StatusCode::InternalServerError_500;
             break;
         case ERROR_TYPE_PERMISSION:
             type_str = "permission_error";
-            code = 403;
+            code = httplib::StatusCode::Forbidden_403;
             break;
         case ERROR_TYPE_NOT_SUPPORTED:
             type_str = "not_supported_error";
-            code = 501;
+            code = httplib::StatusCode::NotImplemented_501;
             break;
         case ERROR_TYPE_UNAVAILABLE:
             type_str = "unavailable_error";
-            code = 503;
+            code = httplib::StatusCode::ServiceUnavailable_503;
             break;
     }
     return json {
@@ -3421,12 +3421,12 @@ int main(int argc, char ** argv) {
     auto res_error = [](httplib::Response & res, const json & error_data) {
         json final_response {{"error", error_data}};
         res.set_content(safe_json_to_str(final_response), MIMETYPE_JSON);
-        res.status = json_value(error_data, "code", 500);
+        res.status = json_value(error_data, "code", httplib::InternalServerError_500);
     };
 
     auto res_ok = [](httplib::Response & res, const json & data) {
         res.set_content(safe_json_to_str(data), MIMETYPE_JSON);
-        res.status = 200;
+        res.status = httplib::StatusCode::OK_200;
     };
 
     svr->set_exception_handler([&res_error](const httplib::Request &, httplib::Response & res, const std::exception_ptr & ep) {
@@ -3445,7 +3445,7 @@ int main(int argc, char ** argv) {
     });
 
     svr->set_error_handler([&res_error](const httplib::Request &, httplib::Response & res) {
-        if (res.status == 404) {
+        if (res.status == httplib::StatusCode::NotFound_404) {
             res_error(res, format_error_response("File Not Found", ERROR_TYPE_NOT_FOUND));
         }
         // for other error codes, we skip processing here because it's already done by res_error()
@@ -3516,7 +3516,7 @@ int main(int argc, char ** argv) {
             auto tmp = string_split<std::string>(req.path, '.');
             if (req.path == "/" || tmp.back() == "html") {
                 res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
-                res.status = 503;
+                res.status = res.status == httplib::StatusCode::ServiceUnavailable_503;
             } else {
                 res_error(res, format_error_response("Loading model", ERROR_TYPE_UNAVAILABLE));
             }
@@ -3692,7 +3692,7 @@ int main(int argc, char ** argv) {
         res.set_header("Process-Start-Time-Unix", std::to_string(res_metrics->t_start));
 
         res.set_content(prometheus.str(), "text/plain; version=0.0.4");
-        res.status = 200; // HTTP OK
+        res.status = httplib::StatusCode::OK_200; // HTTP OK
     };
 
     const auto handle_slots_save = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
@@ -4321,7 +4321,7 @@ int main(int argc, char ** argv) {
             });
         }
         res_ok(res, result);
-        res.status = 200; // HTTP OK
+        res.status = httplib::StatusCode::OK_200; // HTTP OK
     };
 
     const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
