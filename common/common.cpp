@@ -1904,10 +1904,6 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
             default_template_src = CHATML_TEMPLATE_SRC;
         }
     }
-    std::string token_bos;
-    std::string token_eos;
-    // TODO: update logic that adds BOS and EOS tokens to the tokenized prompt, in favour of the template.
-#if 0
     auto vocab = llama_model_get_vocab(model);
     const auto get_token = [&](llama_token token, const char * name, const char * jinja_variable_name) {
         if (token == LLAMA_TOKEN_NULL) {
@@ -1920,9 +1916,8 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
             return common_token_to_piece(vocab, token, true);
         }
     };
-    token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
-    token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
-#endif
+    auto token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
+    auto token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
     try {
         return {
             has_explicit_template,
