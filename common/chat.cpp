@@ -545,8 +545,17 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             auto parameters = function["parameters"];
             auto args_rule = builder.add_schema(name + "-args", parameters);
             tool_rules.push_back(builder.add_rule(name + "-call",
-                "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n```json\\n\" " + args_rule + " \"```<｜tool▁call▁end｜>\""));
+                "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n"
+                "```json\\n\" " + args_rule + " \"```"
+                "<｜tool▁call▁end｜>\""));
         });
+        // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
+        // so we accept common variants (then it's all constrained)
+        builder.add_rule("root",
+            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" ) "
+            "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
+            "\"<｜tool▁calls▁end｜>\""
+            " space");
         data.grammar_triggers.push_back({"<｜tool▁calls▁begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool_calls_begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool calls begin｜>", /* .at_start = */ false});
@@ -558,27 +567,14 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             "<｜tool▁call▁begin｜>",
             "<｜tool▁call▁end｜>",
         };
-        builder.add_rule("root",
-            // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
-            // so we accept common variants (then it's all constrained)
-            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" ) "
-            "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
-            "\"<｜tool▁calls▁end｜>\""
-            " space");
     }, grammar_options);
-    /*
-        Note: we do not feed the thoughts back to the template for a few reasons:
-        - the template doesn't use them explicitly
-        - if content isn't null, tool calls arent rendered
-        - not having the thoughts will locally reset the KV cache (losing the hot tokens of the tool calls) but will save up a lot long term.
-    */
     auto prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
-    std::string suffix = "<｜Assistant｜>";
-    if (vocab && !llama_vocab_get_add_eos(vocab) &&
-        inputs.add_generation_prompt &&
-        !string_ends_with(prompt, suffix))
-    {
+    // Hack to fix the official prompt, which leaves the chat dangling after tool results.
+    if (string_ends_with(prompt, "<｜tool▁outputs▁end｜>")) {
         prompt += "<｜end▁of▁sentence｜>";
+        if (inputs.add_generation_prompt) {
+            prompt += "<｜Assistant｜>";
+        }
     }
     data.prompt = prompt;
     data.format = COMMON_CHAT_FORMAT_DEEPSEEK_R1;
@@ -588,14 +584,14 @@ static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) 
     static std::regex trigger_regex("<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>");
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```<｜tool▁call▁end｜>");
-    static std::regex think_regex(R"(<think>([\s\S\n]*)</think>([\s\S\r\n]*))");
+    static std::regex think_regex(R"(<think>([\s\S\n]*)(</think>)?([\s\S\r\n]*))");
     auto msg = parse_json_tool_calls(input, trigger_regex, function_regex, close_regex);
     std::smatch match;
     if (std::regex_match(msg.content, match, think_regex)) {
         msg.thoughts = string_trim(match[1].str());
         msg.content = string_trim(match[2].str());
     }
-    if (msg.content == "<｜tool▁calls▁end｜>") {
+    if (string_trim(msg.content) == "<｜tool▁calls▁end｜>") {
         msg.content = "";
     }
     return msg;
