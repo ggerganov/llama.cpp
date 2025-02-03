@@ -377,8 +377,8 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
     return data;
 }
 static common_chat_msg common_chat_parse_command_r7b(const std::string & input) {
-    static std::regex response_regex("<\\|START_RESPONSE\\|>([\\s\\S\\n\\r]*?)<\\|END_RESPONSE\\|>");
-    static std::regex thought_action_regex("<\\|START_THINKING\\|>([\\s\\S\\n\\r]*)<\\|END_THINKING\\|><\\|START_ACTION\\|>([\\s\\S\\n\\r]*?)<\\|END_ACTION\\|>");
+    static std::regex response_regex("<\\|START_RESPONSE\\|>(.*?)<\\|END_RESPONSE\\|>");
+    static std::regex thought_action_regex("<\\|START_THINKING\\|>([\\s\\S\\n\\r]*?)<\\|END_THINKING\\|><\\|START_ACTION\\|>([\\s\\S\\n\\r]*?)<\\|END_ACTION\\|>");
     std::smatch match;
 
     common_chat_msg result;
@@ -576,7 +576,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
 }
 static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) {
     static std::regex trigger_regex("<｜tool▁calls▁begin｜>");
-    static std::regex function_regex(R"(<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n)");
+    static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```<｜tool▁call▁end｜>");
     static std::regex think_regex(R"(<think>([\s\S\n]*)</think>([\s\S\r\n]*))");
     auto msg = parse_json_tool_calls(input, trigger_regex, function_regex, close_regex);

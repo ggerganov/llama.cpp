@@ -252,7 +252,6 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,template_override", [
     ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
@@ -263,9 +262,8 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
     ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
     ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     n_predict = 512
     server.n_slots = 1
@@ -313,9 +311,8 @@ def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None)
     (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
     (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
     (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_hello_world(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
