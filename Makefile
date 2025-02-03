@@ -211,7 +211,7 @@ ifdef GGML_VULKAN
 	BUILD_TARGETS += vulkan-shaders-gen
 endif
 
-default: $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
+default: precompile_checks $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 test: $(TEST_TARGETS)
 	@failures=0; \
@@ -247,6 +247,10 @@ test: $(TEST_TARGETS)
 	@echo 'All tests passed.'
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS) $(LEGACY_TARGETS_BUILD)
+
+# Run the forbidden includes check before every build
+precompile_checks:
+	@bash ./scripts/precompile-checks.sh
 
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
