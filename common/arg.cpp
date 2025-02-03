@@ -1490,6 +1490,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
     add_opt(common_arg(
+        {"-nrl", "--rpc-layers", "--n-rpc-layers"}, "N",
+        "number of layers to store on remote RPC devices",
+        [](common_params & params, int value) {
+            params.n_rpc_layers = value;
+        }
+    ).set_env("LLAMA_ARG_N_RPC_LAYERS"));
+    add_opt(common_arg(
         {"-sm", "--split-mode"}, "{none,layer,row}",
         "how to split the model across multiple GPUs, one of:\n"
         "- none: use one GPU only\n"

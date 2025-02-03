@@ -1256,6 +1256,7 @@ void llama_model::load_vocab(llama_model_loader & ml) {
 bool llama_model::load_tensors(llama_model_loader & ml) {
     const auto & split_mode   = params.split_mode;
     const auto & n_gpu_layers = params.n_gpu_layers;
+    const auto & n_rpc_layers = params.n_rpc_layers;
     const auto & use_mlock    = params.use_mlock;
     const auto & tensor_split = params.tensor_split;
 
@@ -1263,9 +1264,14 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
 
     const bool use_mmap_buffer = true;
 
+    ggml_backend_dev_t rpc_dev = nullptr;
+
     // build a list of buffer types for the CPU and GPU devices
     pimpl->cpu_buft_list = make_cpu_buft_list(devices);
     for (auto * dev : devices) {
+        if (n_rpc_layers > 0 && rpc_dev == nullptr && std::string::npos != std::string(ggml_backend_dev_name(dev)).find("RPC[")) {
+            rpc_dev = dev;
+        }
         buft_list_t buft_list = make_gpu_buft_list(dev, split_mode, tensor_split);
         // add CPU buffer types as a fallback
         buft_list.insert(buft_list.end(), pimpl->cpu_buft_list.begin(), pimpl->cpu_buft_list.end());
@@ -1279,6 +1285,11 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         // default split, by free memory
         for (size_t i = 0; i < n_devices(); ++i) {
             ggml_backend_dev_t dev = devices[i];
+            if (dev == rpc_dev) {
+                // handled separately
+                splits[i] = 0;
+                continue;
+            }
             size_t total;
             size_t free;
             ggml_backend_dev_memory(dev, &free, &total);
@@ -1300,11 +1311,16 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
 
     ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     const int i_gpu_start = std::max((int) hparams.n_layer - n_gpu_layers, (int) 0);
+    const int i_rpc_start = std::max(i_gpu_start - n_rpc_layers, (int) 0);
     const int act_gpu_layers = devices.empty() ? 0 : std::min(n_gpu_layers, (int)n_layer + 1);
     auto get_layer_buft_list = [&](int il) -> llama_model::impl::layer_dev {
-        if (il < i_gpu_start || (il - i_gpu_start) >= act_gpu_layers) {
+        if (il < i_rpc_start || (il - i_gpu_start) >= act_gpu_layers) {
             LLAMA_LOG_DEBUG("load_tensors: layer %3d assigned to device %s\n", il, ggml_backend_dev_name(cpu_dev));
             return {cpu_dev, &pimpl->cpu_buft_list};
+        }
+        if (il < i_gpu_start) {
+            LLAMA_LOG_DEBUG("load_tensors: layer %3d assigned to device %s\n", il, ggml_backend_dev_name(rpc_dev));
+            return {rpc_dev, &pimpl->gpu_buft_list.at(rpc_dev)};
         }
         const int layer_gpu = std::upper_bound(splits.begin(), splits.begin() + n_devices(), float(il - i_gpu_start)/act_gpu_layers) - splits.begin();
         auto * dev = devices.at(layer_gpu);
@@ -3760,6 +3776,7 @@ struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
         /*.devices                     =*/ nullptr,
         /*.n_gpu_layers                =*/ 0,
+        /*.n_rpc_layers                =*/ 0,
         /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,

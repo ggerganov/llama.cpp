@@ -1086,6 +1086,9 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     if (params.n_gpu_layers != -1) {
         mparams.n_gpu_layers = params.n_gpu_layers;
     }
+    if (params.n_rpc_layers != -1) {
+        mparams.n_rpc_layers = params.n_rpc_layers;
+    }
     mparams.main_gpu        = params.main_gpu;
     mparams.split_mode      = params.split_mode;
     mparams.tensor_split    = params.tensor_split;
