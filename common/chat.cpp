@@ -552,9 +552,15 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             "<think>",
             "</think>",
             "<｜tool▁sep｜>",
+            "<｜tool▁calls▁end｜",
+            "<｜tool▁call▁begin｜>",
             "<｜tool▁call▁end｜>",
         };
-        builder.add_rule("root", "\"<｜tool▁calls▁begin｜>\" (" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " space");
+        builder.add_rule("root",
+            "\"<｜tool▁calls▁begin｜>\""
+            " (" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + 
+            "\"<｜tool▁calls▁end｜>\""
+            " space");
     }, grammar_options);
     /*
         Note: we do not feed the thoughts back to the template for a few reasons:
