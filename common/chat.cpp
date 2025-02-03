@@ -569,11 +569,25 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
         };
     }, grammar_options);
     auto prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
-    // Hack to fix the official prompt, which leaves the chat dangling after tool results.
-    if (string_ends_with(prompt, "<｜tool▁outputs▁end｜>")) {
-        prompt += "<｜end▁of▁sentence｜>";
-        if (inputs.add_generation_prompt) {
-            prompt += "<｜Assistant｜>";
+
+    // Hacks to fix the official (broken) prompt.
+    // It is advisable to use --chat-template-file models/templates/llama-cpp-deepseek-r1.jinja instead,
+    // until the official template is fixed.
+    if (tmpl.source().find("{% if ns.is_tool %}{{'<｜tool▁outputs▁end｜>'}}") != std::string::npos) {
+        // Don't leave the chat dangling after tool results
+        if (string_ends_with(prompt, "<｜tool▁outputs▁end｜>")) {
+            prompt += "<｜end▁of▁sentence｜>";
+            if (inputs.add_generation_prompt) {
+                prompt += "<｜Assistant｜>";
+            }
+        }
+        // Fix up tool call delta example added by Minja
+        std::string marker = "<｜tool▁call▁end｜>\n";
+        auto pos = prompt.rfind(marker);
+        if (pos != std::string::npos) {
+            prompt.insert(pos + marker.size() - 1, "<｜tool▁calls▁end｜>");
+        } else {
+            LOG_WRN("Failed to find expected broken tool call example marker in prompt\n");
         }
     }
     data.prompt = prompt;

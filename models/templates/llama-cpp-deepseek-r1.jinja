@@ -1,7 +1,7 @@
 {%- if not add_generation_prompt is defined -%}
     {%- set add_generation_prompt = false -%}
 {%- endif -%}
-{%- set ns = namespace(is_first=false, is_tool=false, is_output_first=true, system_prompt='') -%}
+{%- set ns = namespace(is_first=false, is_tool_outputs=false, is_output_first=true, system_prompt='') -%}
 {%- for message in messages -%}
     {%- if message['role'] == 'system' -%}
         {%- set ns.system_prompt = message['content'] -%}
@@ -25,9 +25,9 @@ Example function tool call syntax:
 {% endif -%}
 {{ns.system_prompt}}
 {%- macro flush_tool_outputs() -%}
-    {%- if ns.is_tool -%}
+    {%- if ns.is_tool_outputs -%}
         {{- '<｜tool▁outputs▁end｜><｜end▁of▁sentence｜>' -}}
-        {%- set ns.is_tool = false -%}
+        {%- set ns.is_tool_outputs = false -%}
     {%- endif -%}
 {%- endmacro -%}
 {{- flush_tool_outputs() -}}
@@ -62,7 +62,7 @@ Example function tool call syntax:
         {{- '<｜Assistant｜>' + content + '<｜end▁of▁sentence｜>'}}
     {%- endif -%}
     {%- if message['role'] == 'tool' -%}
-        {%- set ns.is_tool = true -%}
+        {%- set ns.is_tool_outputs = true -%}
         {%- if ns.is_output_first -%}
             {{- '<｜tool▁outputs▁begin｜>' -}}
             {%- set ns.is_output_first = false -%}
@@ -71,6 +71,6 @@ Example function tool call syntax:
     {%- endif -%}
 {%- endfor -%}
 {{- flush_tool_outputs() -}}
-{%- if add_generation_prompt and not ns.is_tool -%}
+{%- if add_generation_prompt and not ns.is_tool_outputs -%}
     {{- '<｜Assistant｜>' -}}
 {%- endif -%}
