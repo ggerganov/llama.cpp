@@ -1879,8 +1879,9 @@ std::string common_chat_format_example(const common_chat_template & tmpl, bool u
 
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
-    std::string default_template_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : chat_template_override;
-    std::string template_tool_use_src = chat_template_override == "chatml" ? CHATML_TEMPLATE_SRC : "";
+    std::string default_template_src;
+    std::string template_tool_use_src;
+
     bool has_explicit_template = !chat_template_override.empty();
     if (chat_template_override.empty()) {
         auto str = llama_model_chat_template(model, /* name */ nullptr);
@@ -1893,6 +1894,8 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
             template_tool_use_src = str;
             has_explicit_template = true;
         }
+    } else {
+        default_template_src = chat_template_override;
     }
     if (default_template_src.empty() || default_template_src == "chatml") {
         if (!template_tool_use_src.empty()) {
