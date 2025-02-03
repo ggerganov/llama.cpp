@@ -299,6 +299,7 @@ def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None)
 
 @pytest.mark.slow
 @pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
+    (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
@@ -316,7 +317,7 @@ def test_hello_world(expected_arguments_override: str | None, hf_repo: str, temp
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
-    server.n_predict = 128
+    server.n_predict = 512 # High because of DeepSeek R1
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
     if template_override:
