@@ -1875,7 +1875,7 @@ std::string common_chat_format_example(const common_chat_template & tmpl, bool u
     "{%- endfor -%}\n" \
     "{%- if add_generation_prompt -%}\n" \
     "  {{- '<|im_start|>assistant\n' -}}\n" \
-    "{%- endif -%})"
+    "{%- endif -%}"
 
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
 {
