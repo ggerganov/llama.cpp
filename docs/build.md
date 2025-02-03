@@ -197,6 +197,19 @@ You can download it from your Linux distro's package manager or from here: [ROCm
       && cmake --build build -- -j 16
   ```
 
+  If you get the following error during execution (kernel name might vary):
+  ```
+  Launch params (1024, 1, 1) are larger than launch bounds (256) for kernel _ZL12rms_norm_f32ILi1024EEvPKfPfif please add launch_bounds to kernel define or use --gpu-max-threads-per-block recompile program !
+  ```
+  this occurs because the compiler uses a smaller default launch bound value.
+  Try reconfigure with `HIPFLAGS="--gpu-max-threads-per-block=1024"` and rebuild, e.g.
+  ```bash
+  HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
+  HIPFLAGS="--gpu-max-threads-per-block=1024" \
+      cmake -S . -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx906 -DCMAKE_BUILD_TYPE=Release \
+      && cmake --build build -- -j 16
+  ```
+
 - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
   ```bash
   set PATH=%HIP_PATH%\bin;%PATH%
