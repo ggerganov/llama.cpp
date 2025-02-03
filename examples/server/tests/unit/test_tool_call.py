@@ -263,7 +263,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
     # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
@@ -310,7 +310,7 @@ def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | Non
     (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
     # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
