@@ -251,6 +251,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
