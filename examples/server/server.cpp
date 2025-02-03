@@ -173,6 +173,7 @@ struct slot_params {
             {"grammar_trigger_words",     grammar_trigger_words},
             {"grammar_trigger_tokens",    sampling.grammar_trigger_tokens},
             {"preserved_tokens",          sampling.preserved_tokens},
+            {"chat_format",               common_chat_format_name(oaicompat_chat_format)},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
