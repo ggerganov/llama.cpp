@@ -1920,13 +1920,22 @@ common_chat_templates common_chat_templates_from_model(const struct llama_model 
     token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
     token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
 #endif
-    return {
-        has_explicit_template,
-        std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
-        template_tool_use_src.empty()
-            ? nullptr
-            : std::make_unique<minja::chat_template>(template_tool_use_src, token_bos, token_eos)
-    };
+    try {
+        return {
+            has_explicit_template,
+            std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
+            template_tool_use_src.empty()
+                ? nullptr
+                : std::make_unique<minja::chat_template>(template_tool_use_src, token_bos, token_eos),
+        };
+    } catch (const std::exception & e) {
+        LOG_ERR("%s: failed to parse chat template: %s\n", __func__, e.what());
+        return {
+            has_explicit_template,
+            std::make_unique<minja::chat_template>(CHATML_TEMPLATE_SRC, token_bos, token_eos),
+            nullptr,
+        };
+    }
 }
 
 //
