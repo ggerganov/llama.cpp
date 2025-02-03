@@ -283,10 +283,12 @@ class chat_template {
                     message["role"] = "user";
                     auto obj = json {
                         {"tool_response", {
-                            {"tool", message.at("name")},
                             {"content", message.at("content")},
                         }},
                     };
+                    if (message.contains("name")) {
+                        obj["tool_response"]["name"] = message.at("name");
+                    }
                     if (message.contains("tool_call_id")) {
                         obj["tool_response"]["tool_call_id"] = message.at("tool_call_id");
                     }
