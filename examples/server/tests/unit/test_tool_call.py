@@ -341,6 +341,112 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+
+    # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
+    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+
+    # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
+])
+def test_calc_result(hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+    global server
+    n_predict = 512
+    server.n_slots = 1
+    server.jinja = True
+    server.n_ctx = 8192
+    server.n_predict = n_predict
+    server.model_hf_repo = hf_repo
+    server.model_hf_file = None
+    if isinstance(template_override, tuple):
+        (template_hf_repo, template_variant) = template_override
+        server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
+        assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+    elif isinstance(template_override, str):
+        server.chat_template = template_override
+    server.start(timeout_seconds=TIMEOUT_SERVER_START)
+    res = server.make_request("POST", "/chat/completions", data={
+        "max_tokens": n_predict,
+        "messages": [
+            {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things."},
+            {"role": "user", "content": "What's the y coordinate of a point on the unit sphere at angle 30 degrees?"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "function": {
+                            "name": "calculate",
+                            "arguments": "{\"expression\":\"sin(30 * pi / 180)\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool", 
+                "name": "calculate",
+                "content": "0.5"
+            }
+        ],
+        "tools": [
+            {
+                "type":"function",
+                "function":{
+                    "name":"calculate",
+                    "description":"A calculator function that computes values of arithmetic expressions in the Python syntax",
+                    "parameters":{
+                        "type":"object",
+                        "properties":{
+                            "expression":{
+                            "type":"string",
+                            "description":"An arithmetic expression to compute the value of (Python syntad, assuming all floats)"
+                            }
+                        },
+                        "required":["expression"]
+                    }
+                }
+            }
+        ]
+    }, timeout=TIMEOUT_HTTP_REQUEST)
+    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
+    choice = res.body["choices"][0]
+    tool_calls = choice["message"].get("tool_calls")
+    assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
+    tool_call = tool_calls[0]
+    assert tool_call["function"]["name"] == WEATHER_TOOL["function"]["name"]
+    actual_arguments = json.loads(tool_call["function"]["arguments"])
+    assert 'location' in actual_arguments, f"location not found in {json.dumps(actual_arguments)}"
+    location = actual_arguments["location"]
+    assert isinstance(location, str), f"Expected location to be a string, got {type(location)}: {json.dumps(location)}"
+    assert re.match('^Istanbul(, (TR|Turkey|Türkiye))?$', location), f'Expected Istanbul for location, got {location}'
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
     (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),

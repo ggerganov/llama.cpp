@@ -270,6 +270,28 @@ class chat_template {
     const std::string & eos_token() const { return eos_token_; }
     const chat_template_caps & original_caps() const { return caps_; }
 
+    // Deprecated, please use the form with chat_template_inputs and chat_template_options
+    std::string apply(
+        const nlohmann::ordered_json & messages,
+        const nlohmann::ordered_json & tools,
+        bool add_generation_prompt,
+        const nlohmann::ordered_json & extra_context = nlohmann::ordered_json(),
+        bool apply_polyfills = true)
+    {
+        fprintf(stderr, "[%s] Deprecated!\n", __func__);
+        chat_template_inputs inputs;
+        inputs.messages = messages;
+        inputs.tools = tools;
+        inputs.add_generation_prompt = add_generation_prompt;
+        inputs.extra_context = extra_context;
+        inputs.now = std::chrono::system_clock::now();
+
+        chat_template_options opts;
+        opts.apply_polyfills = apply_polyfills;
+
+        return apply(inputs, opts);
+    }
+
     std::string apply(
         const chat_template_inputs & inputs,
         const chat_template_options & opts = chat_template_options()) const
