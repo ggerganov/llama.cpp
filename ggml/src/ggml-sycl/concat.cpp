@@ -159,34 +159,34 @@ static void concat_f32_sycl_non_cont(
 }
 
 static void ggml_sycl_op_concat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
-  const ggml_tensor *src0 = dst->src[0];
-  const ggml_tensor *src1 = dst->src[1];
-  queue_ptr stream = ctx.stream();
-  SYCL_CHECK(ggml_sycl_set_device(ctx.device));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
+    const ggml_tensor * src0   = dst->src[0];
+    const ggml_tensor * src1   = dst->src[1];
+    queue_ptr           stream = ctx.stream();
+    SYCL_CHECK(ggml_sycl_set_device(ctx.device));
 
-  const int32_t dim = ((int32_t *)dst->op_params)[0];
+    const int32_t dim = ((int32_t *) dst->op_params)[0];
 
-  if (ggml_is_contiguous(src0) && ggml_is_contiguous(src1)) {
-    const float *src0_d = (const float *)src0->data;
-    const float *src1_d = (const float *)src1->data;
+    if (ggml_is_contiguous(src0) && ggml_is_contiguous(src1)) {
+        const float * src0_d = (const float *) src0->data;
+        const float * src1_d = (const float *) src1->data;
 
-    float *dst_d = (float *)dst->data;
+        float * dst_d = (float *) dst->data;
 
-    if (dim != 3) {
-      for (int i3 = 0; i3 < dst->ne[3]; i3++) {
-        concat_f32_sycl(
-            src0_d + i3 * (src0->nb[3] / 4), src1_d + i3 * (src1->nb[3] / 4),
-            dst_d + i3 * (dst->nb[3] / 4), src0->ne[0], src0->ne[1],
-            src0->ne[2], dst->ne[0], dst->ne[1], dst->ne[2], dim, stream);
-      }
-    } else {
-      const size_t size0 = ggml_nbytes(src0);
-      const size_t size1 = ggml_nbytes(src1);
+        if (dim != 3) {
+            for (int i3 = 0; i3 < dst->ne[3]; i3++) {
+                concat_f32_sycl(src0_d + i3 * (src0->nb[3] / 4), src1_d + i3 * (src1->nb[3] / 4),
+                                dst_d + i3 * (dst->nb[3] / 4), src0->ne[0], src0->ne[1], src0->ne[2], dst->ne[0],
+                                dst->ne[1], dst->ne[2], dim, stream);
+            }
+        } else {
+            const size_t size0 = ggml_nbytes(src0);
+            const size_t size1 = ggml_nbytes(src1);
 
-      SYCL_CHECK(CHECK_TRY_ERROR(stream->memcpy(dst_d, src0_d, size0).wait()));
-      SYCL_CHECK(CHECK_TRY_ERROR(
-          stream->memcpy(dst_d + size0 / 4, src1_d, size1).wait()));
-    }
+            SYCL_CHECK(CHECK_TRY_ERROR(stream->memcpy(dst_d, src0_d, size0).wait()));
+            SYCL_CHECK(CHECK_TRY_ERROR(stream->memcpy(dst_d + size0 / 4, src1_d, size1).wait()));
+        }
   } else
     concat_f32_sycl_non_cont(
         stream, (const char *)src0->data, (const char *)src1->data,

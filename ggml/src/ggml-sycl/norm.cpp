@@ -315,7 +315,7 @@ static void ggml_sycl_op_norm(ggml_backend_sycl_context & ctx, ggml_tensor * dst
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int64_t ne00 = dst->src[0]->ne[0];
     const int64_t nrows = ggml_nrows(dst->src[0]);
@@ -338,7 +338,7 @@ static void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, ggml_tensor*
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     int num_groups = dst->op_params[0];
 
@@ -360,7 +360,7 @@ static void ggml_sycl_op_rms_norm(ggml_backend_sycl_context & ctx, ggml_tensor *
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int64_t ne00 = dst->src[0]->ne[0];
     const int64_t nrows = ggml_nrows(dst->src[0]);

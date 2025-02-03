@@ -55,7 +55,7 @@ static void timestep_embedding_f32_sycl(
         });
 }
 
-void ggml_sycl_op_timestep_embedding(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+void ggml_sycl_op_timestep_embedding(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const ggml_tensor *src0 = dst->src[0];
     const float * src0_d = static_cast<const float *>(src0->data);
     float * dst_d = static_cast<float *>(dst->data);
@@ -66,6 +66,10 @@ void ggml_sycl_op_timestep_embedding(ggml_backend_sycl_context & ctx, ggml_tenso
 
     const int dim = dst->op_params[0];
     const int max_period = dst->op_params[1];
-
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     timestep_embedding_f32_sycl(src0_d, dst_d, src0->ne[0], dst->nb[1], dim, max_period, stream);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }

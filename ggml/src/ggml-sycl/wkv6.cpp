@@ -95,7 +95,7 @@ static void rwkv_wkv_f32_kernel(
     }
 }
 
-void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
+void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) try {
 
     const float* k_d = (const float*)dst->src[0]->data;
     const float* v_d = (const float*)dst->src[1]->data;
@@ -121,6 +121,7 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
     const size_t shared_mem_size = WKV_BLOCK_SIZE * 4 * sizeof(float); // For k, r, tf, td
     sycl::range<3> block_dims(1, 1, C / H);
     sycl::range<3> grid_dims(1, 1, B * H);
+    GGML_SYCL_DEBUG("call %s", __func__);
 
     // Submit kernel
     stream->submit([&](sycl::handler& cgh) {
@@ -135,5 +136,9 @@ void ggml_sycl_op_rwkv_wkv6(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
                 );
             });
     });
+    GGML_SYCL_DEBUG("call %s done", __func__);
 
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
 }

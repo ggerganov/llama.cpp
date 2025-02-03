@@ -52,6 +52,16 @@ bool gpu_has_xmx(sycl::device &dev) {
     return dev.has(sycl::aspect::ext_intel_matrix);
 }
 
+const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+    return GGML_SYCL_NAME "_Split";
+
+    GGML_UNUSED(buft);
+}
+
+bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
+    return buffer->buft->iface.get_name == ggml_backend_sycl_split_buffer_type_get_name;
+}
+
 int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size) {
   const int64_t max_range = std::numeric_limits<int>::max();
   int64_t sycl_down_blk_size = block_size;

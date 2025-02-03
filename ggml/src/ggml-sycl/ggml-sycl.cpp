@@ -911,17 +911,6 @@ static struct ggml_backend_buffer_i ggml_backend_sycl_split_buffer_interface = {
 };
 
 // sycl split buffer type
-
-static const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
-    return GGML_SYCL_NAME "_Split";
-
-    GGML_UNUSED(buft);
-}
-
-static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer) {
-   return buffer->buft->iface.get_name == ggml_backend_sycl_split_buffer_type_get_name;
-}
-
 static ggml_backend_buffer_t ggml_backend_sycl_split_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     // since we don't know the exact split after rounding, we cannot allocate the device buffers at this point
     // instead, we allocate them for each tensor separately in init_tensor
@@ -2686,13 +2675,13 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             ggml_sycl_argmax(ctx, dst);
             break;
         case GGML_OP_CONV_TRANSPOSE_1D:
-            ggml_sycl_op_conv_transpose_1d(ctx, dst);
+            ggml_sycl_conv_transpose_1d(ctx, dst);
             break;
         case GGML_OP_REPEAT:
             ggml_sycl_repeat(ctx, dst);
             break;
         case GGML_OP_GET_ROWS:
-            ggml_sycl_op_get_rows(ctx, dst);
+            ggml_sycl_get_rows(ctx, dst);
             break;
         case GGML_OP_DUP:
             ggml_sycl_dup(ctx, dst);
@@ -2854,7 +2843,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             ggml_sycl_op_rwkv_wkv6(ctx, dst);
             break;
         case GGML_OP_GATED_LINEAR_ATTN:
-            ggml_sycl_op_gated_linear_attn(ctx, dst);
+            ggml_sycl_gated_linear_attn(ctx, dst);
             break;
         default:
             return false;

@@ -233,6 +233,8 @@ inline void ggml_sycl_op_bin_bcast(const ggml_tensor * src0, const ggml_tensor *
 }
 
 inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -247,6 +249,8 @@ inline void ggml_sycl_op_add(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 }
 
 inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -261,6 +265,8 @@ inline void ggml_sycl_op_sub(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 }
 
 inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -275,6 +281,8 @@ inline void ggml_sycl_op_mul(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 }
 
 inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const void *          src0_dd     = static_cast<void *>(dst->src[0]->data);
     const void *          src1_dd     = static_cast<void *>(dst->src[1]->data);
     void *                dst_dd      = static_cast<void *>(dst->data);
@@ -289,6 +297,7 @@ inline void ggml_sycl_op_div(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 }
 
 inline void ggml_sycl_op_repeat(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const void *    src0_d      = static_cast<void *>(dst->src[0]->data);
     void *          dst_d       = static_cast<void *>(dst->data);
     dpct::queue_ptr main_stream = ctx.stream();

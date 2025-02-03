@@ -339,13 +339,14 @@ static void ggml_cpy_i32_i32_sycl(const char * cx, char * cdst, const int ne, co
 }
 
 void ggml_sycl_cpy(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src1->buffer));
     const int64_t ne = ggml_nelements(src0);
     GGML_ASSERT(ne == ggml_nelements(src1));
 
     GGML_ASSERT(ggml_nbytes(src0) <= INT_MAX);
     GGML_ASSERT(ggml_nbytes(src1) <= INT_MAX);
 
-    GGML_SYCL_TENSOR_BINARY_OP_CP_LOCALS;
+    GGML_SYCL_TENSOR_BINARY_OP_CP_LOCALS
 
     SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     queue_ptr main_stream = ctx.stream();

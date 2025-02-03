@@ -27,7 +27,7 @@ static void sum_rows_f32_sycl(const float * x, float * dst, const int ncols, con
 inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int64_t   ne          = ggml_nelements(dst->src[0]);
     dpct::queue_ptr main_stream = ctx.stream();
@@ -44,7 +44,7 @@ inline void ggml_sycl_op_sum(ggml_backend_sycl_context & ctx, ggml_tensor * dst)
 inline void ggml_sycl_op_sum_rows(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int64_t   ncols       = dst->src[0]->ne[0];
     const int64_t   nrows       = ggml_nrows(dst->src[0]);

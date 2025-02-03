@@ -197,8 +197,8 @@ static void ggml_sycl_op_rope(ggml_backend_sycl_context & ctx, ggml_tensor * dst
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32 || dst->src[0]->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->type == GGML_TYPE_F32 ||  dst->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->src[0]->type == dst->type);
-    GGML_ASSERT(strcmp(dst->src[1]->buffer->buft->iface.get_name(dst->src[1]->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int64_t ne00 = dst->src[0]->ne[0];
     const int64_t ne01 = dst->src[0]->ne[1];

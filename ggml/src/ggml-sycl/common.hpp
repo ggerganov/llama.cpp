@@ -436,6 +436,8 @@ typedef void (*ggml_sycl_op_flatten_t)(ggml_backend_sycl_context & ctx, const gg
                                        const queue_ptr &main_stream);
 
 bool gpu_has_xmx(sycl::device &dev);
+const char * ggml_backend_sycl_split_buffer_type_get_name(ggml_backend_buffer_type_t buft);
+bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer);
 
 // Some backend specific macros
 #define GGML_SYCL_TENSOR_BINARY_OP_LOCALS                                                       \

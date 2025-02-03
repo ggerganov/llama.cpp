@@ -86,7 +86,7 @@ static void ggml_sycl_op_im2col(ggml_backend_sycl_context & ctx, ggml_tensor * d
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->src[1]->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->src[1]->buffer->buft->iface.get_name(dst->src[1]->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     GGML_ASSERT(dst->type == GGML_TYPE_F16 || dst->type == GGML_TYPE_F32);
 
     const int32_t s0 = ((const int32_t*)(dst->op_params))[0];

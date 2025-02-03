@@ -71,7 +71,9 @@ static void conv_transpose_1d_f32_f32_sycl(
         });
 }
 
-void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, ggml_tensor *dst) {
+static void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
     const ggml_tensor *src0 = dst->src[0];
     const ggml_tensor *src1 = dst->src[1];
     const float * src0_d = (const float *)src0->data;
@@ -97,4 +99,13 @@ void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, ggml_tensor
         src0->ne[0], src0->ne[1], src0->ne[2],
         src1->ne[0], dst->ne[0],
         src0_d, src1_d, dst_d, stream);
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_conv_transpose_1d(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_conv_transpose_1d(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }

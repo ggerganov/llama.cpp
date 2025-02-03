@@ -23,7 +23,7 @@ static void clamp_f32_sycl(const float * x, float * dst, const float min, const 
 inline void ggml_sycl_op_clamp(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     float min;
     float max;

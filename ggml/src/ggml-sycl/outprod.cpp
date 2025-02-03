@@ -39,6 +39,7 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
     const oneapi::mkl::transpose src1_op =
         src1_T ? oneapi::mkl::transpose::nontrans : oneapi::mkl::transpose::trans;
     const int64_t ldb = (src1_T ? nb10 : nb11) / sizeof(float);
+    GGML_SYCL_DEBUG("call %s\n", __func__);
 
     try {
         // Perform matrix multiplication using oneMKL GEMM
@@ -55,4 +56,5 @@ void ggml_sycl_op_out_prod(ggml_backend_sycl_context& ctx, ggml_tensor* dst) {
         std::cerr << exc.what() << std::endl;
         GGML_ASSERT(false);
     }
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }

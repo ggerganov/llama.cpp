@@ -21,7 +21,7 @@ static void scale_f32_sycl(const float * x, float * dst, const float scale, cons
 inline void ggml_sycl_op_scale(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     float scale;
     memcpy(&scale, dst->op_params, sizeof(float));

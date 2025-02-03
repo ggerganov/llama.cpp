@@ -228,6 +228,7 @@ static void ggml_sycl_op_soft_max(ggml_backend_sycl_context & ctx, ggml_tensor *
 
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     GGML_ASSERT(!dst->src[1] || dst->src[1]->type == GGML_TYPE_F16 || dst->src[1]->type == GGML_TYPE_F32); // src1 contains mask and it is optional
 

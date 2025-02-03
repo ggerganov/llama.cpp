@@ -126,15 +126,15 @@ template <typename src0_t> static void get_rows_sycl_float(ggml_backend_sycl_con
     }
 }
 
-void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[1]->type == GGML_TYPE_I32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
     GGML_ASSERT(dst->src[0]->nb[0] == ggml_type_size(dst->src[0]->type));
     GGML_ASSERT(dst->src[1]->nb[0] == ggml_type_size(dst->src[1]->type));
     GGML_ASSERT(dst->nb[0] == ggml_type_size(dst->type));
-    GGML_ASSERT(strcmp(dst->src[1]->buffer->buft->iface.get_name(dst->src[1]->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->src[1]->buffer));
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     switch (dst->src[0]->type) {
         case GGML_TYPE_F16:
@@ -164,4 +164,13 @@ void ggml_sycl_op_get_rows(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
             GGML_ABORT("fatal error");
             break;
     }
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_get_rows(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_get_rows(ctx, dst);
+    GGML_SYCL_DEBUG("call %s\n", __func__);
 }

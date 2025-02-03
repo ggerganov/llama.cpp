@@ -75,7 +75,7 @@ static void gated_linear_attn_f32_kernel(const dpct::queue_ptr stream, u_int B, 
     });
 }
 
-void ggml_sycl_op_gated_linear_attn(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+static void ggml_sycl_op_gated_linear_attn(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     const float * k_d  = static_cast<const float *>(dst->src[0]->data);
     const float * v_d  = static_cast<const float *>(dst->src[1]->data);
     const float * r_d  = static_cast<const float *>(dst->src[2]->data);
@@ -103,4 +103,13 @@ void ggml_sycl_op_gated_linear_attn(ggml_backend_sycl_context & ctx, ggml_tensor
     } else {
         gated_linear_attn_f32_kernel<128>(stream, B, T, C, H, scale, k_d, v_d, r_d, td_d, s_d, dst_d);
     }
+} catch (const sycl::exception & exc) {
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__ << ", line:" << __LINE__ << std::endl;
+    std::exit(1);
+}
+
+void ggml_sycl_gated_linear_attn(ggml_backend_sycl_context & ctx, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
+    ggml_sycl_op_gated_linear_attn(ctx, dst);
+    GGML_SYCL_DEBUG("call %s done\n", __func__);
 }

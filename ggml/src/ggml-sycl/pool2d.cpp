@@ -71,7 +71,7 @@ static void pool2d_nchw_kernel(const int ih, const int iw, const int oh, const i
 static void ggml_sycl_op_pool2d(ggml_backend_sycl_context & ctx, ggml_tensor * dst) try {
     GGML_ASSERT(dst->src[0]->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(strcmp(dst->buffer->buft->iface.get_name(dst->buffer->buft), GGML_SYCL_NAME "_Split") != 0);
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(dst->buffer));
 
     const int32_t *   opts = (const int32_t *) dst->op_params;
     enum ggml_op_pool op   = static_cast<ggml_op_pool>(opts[0]);
