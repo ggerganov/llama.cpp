@@ -522,7 +522,7 @@ static common_chat_msg common_chat_parse_llama_3_1(const std::string & input, bo
     return parse_json_tool_calls(input, std::nullopt, function_regex, close_regex);
 }
 
-static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
+static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs, const llama_vocab * vocab) {
     common_chat_params data;
     data.grammar_lazy = inputs.tool_choice != "required";
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
@@ -860,7 +860,7 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
     return data;
 }
 
-common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
+common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs, const llama_vocab * vocab) {
     auto has_tools = !inputs.tools.is_null() && inputs.tool_choice != "none";
     LOG_DBG("[%s] has_tools=%s\n", __func__, has_tools ? "true" : "false");
 
@@ -894,7 +894,7 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
         return common_chat_params_init_llama_3_1_tool_calls(tmpl, inputs, allow_python_tag_builtin_tools);
     }
     if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos) {
-        return common_chat_params_init_deepseek_r1(tmpl, inputs);
+        return common_chat_params_init_deepseek_r1(tmpl, inputs, vocab);
     }
     if (src.find("[TOOL_CALLS]") != std::string::npos) {
         return common_chat_params_init_mistral_nemo(tmpl, inputs);
