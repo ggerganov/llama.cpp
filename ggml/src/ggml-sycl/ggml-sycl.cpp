@@ -29,15 +29,9 @@
 #include <stdlib.h>
 #include <regex>
 
-#include <sycl/sycl.hpp>
-#include <sycl/half_type.hpp>
-
 #include "ggml-sycl.h"
-#include "ggml-impl.h"
-#include "ggml-backend-impl.h"
-
+#include "common.hpp"
 #include "ggml-sycl/backend.hpp"
-#include "ggml-sycl/presets.hpp"
 #include "ggml-sycl/gemm.hpp"
 
 static bool g_sycl_loaded = false;

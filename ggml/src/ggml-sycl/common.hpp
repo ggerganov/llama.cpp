@@ -17,7 +17,6 @@
 #include <iostream>
 
 #include "dpct/helper.hpp"
-#include "ggml-sycl.h"
 #include "presets.hpp"
 #if GGML_SYCL_DNNL
 #include "dnnl.hpp"
@@ -31,6 +30,9 @@
 #pragma clang diagnostic ignored "-Wnested-anon-types"
 #include "ggml-common.h"
 #pragma clang diagnostic pop
+#include <sycl/half_type.hpp>
+#include <sycl/sycl.hpp>
+
 #include "ggml-backend-impl.h"
 #include "ggml-impl.h"
 #include "ggml.h"
@@ -87,6 +89,9 @@ extern int g_ggml_sycl_debug;
 #ifndef GGML_SYCL_MMV_Y
 #define GGML_SYCL_MMV_Y 1
 #endif
+
+#define GGML_SYCL_NAME "SYCL"
+#define GGML_SYCL_MAX_DEVICES 48
 
 typedef sycl::queue *queue_ptr;
 

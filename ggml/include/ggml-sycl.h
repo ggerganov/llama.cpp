@@ -9,9 +9,6 @@
 #include "ggml.h"
 #include "ggml-backend.h"
 
-#define GGML_SYCL_NAME "SYCL"
-#define GGML_SYCL_MAX_DEVICES 48
-
 #ifdef  __cplusplus
 extern "C" {
 #endif
