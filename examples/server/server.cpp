@@ -740,7 +740,7 @@ struct server_task_result_cmpl_final : server_task_result {
         }
 
         json message {
-            {"content", msg.content},
+            {"content", msg.content == "" && !tool_calls.empty() ? json() : json(msg.content)},
             {"tool_calls", tool_calls},
             {"role", "assistant"},
         };
