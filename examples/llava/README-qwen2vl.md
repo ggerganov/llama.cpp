@@ -28,7 +28,7 @@ Without defining the system prompt in the prompt, it will default to `You are a 
 ./llama-qwen2vl-cli -m /models/Qwen2-VL-2B-Instruct-Q4_0.gguf --mmproj /models/mmproj-Qwen2-VL-2B-Instruct-f32.gguf -p '<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|vision_pad|><|vision_end|>Describe this image.' --image '/models/test_image.jpg'
 ```
 
-**Note**: A lower temperature like 0.1 is recommended for better quality. Add `--temp 0.1` to the command to do so.  
+**Note**: A lower temperature like 0.1 is recommended for better quality. Add `--temp 0.1` to the command to do so.
 **Note**: For GPU offloading, ensure to use the `-ngl` flag as usual.
 
 ## GGUF Conversion
