@@ -567,8 +567,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             auto args_rule = builder.add_schema(name + "-args", parameters);
             tool_rules.push_back(builder.add_rule(name + "-call",
                 "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n"
-                "```json\\n\" " + args_rule + " \"```"
-                "<｜tool▁call▁end｜>\""));
+                "```json\\n\" " + args_rule + " \"```<｜tool▁call▁end｜>\""));
         });
         // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
         // so we accept common variants (then it's all constrained)
