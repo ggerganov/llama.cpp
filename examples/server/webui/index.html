@@ -173,12 +173,12 @@
         </div>
         <!-- section to display uploaded files -->
         <div class="flex flex-wrap">
-          <div v-for="(file, index) in uploadedFiles" :key="index" class="flex items-center mr-4 mb-2">
+          <div v-for="([fileName, text]) in Array.from(fileTextMap.entries())" :key="fileName" class="flex items-center mr-4 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-blue-500">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75v16.5m4.5-4.5H7.5M9 21h6a3 3 0 003-3V6a3 3 0 00-3-3H9a3 3 0 00-3 3v12a3 3 0 003 3z" />
             </svg>
-            <span class="text-sm ml-1">{{ file.name }}</span>
-            <button @click="removeFile(index)" class="ml-2 text-grey-500 hover:text-red-700">
+            <span class="text-sm ml-1">{{ fileName }}</span>
+            <button @click="removeFile(fileName)" class="ml-2 text-grey-500 hover:text-red-700">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>

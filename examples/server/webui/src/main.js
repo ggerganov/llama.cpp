@@ -392,8 +392,7 @@ const mainApp = createApp({
       viewingConvId: StorageUtils.getNewConvId(),
       inputMsg: '',
       isGenerating: false,
-      uploadedFiles: [],
-      fileText: '',
+      fileTextMap: new Map(),
       /** @type {Array<Message> | null} */
       pendingMsg: null, // the on-going message from assistant
       stopGeneration: () => {},
@@ -474,8 +473,8 @@ const mainApp = createApp({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     },
-    removeFile(index){
-      this.uploadedFiles.splice(index, 1);
+    removeFile(filename){
+      this.fileTextMap.delete(filename);
     },
     async handlePdfUpload(event) {
       const file = event.target.files[0];
@@ -488,8 +487,7 @@ const mainApp = createApp({
             console.log("PDF loaded:", pdfDocument);
             const pdfPromise = extractPdfText(file);
             pdfPromise.then((data) => {
-              this.uploadedFiles.push(file);
-              this.fileText += data;
+              this.fileTextMap.set(file.name, data);
             })
             .catch((error) => { 
               console.log(error)
@@ -507,16 +505,18 @@ const mainApp = createApp({
     async sendMessage() {
       if (!this.inputMsg) return;
       const currConvId = this.viewingConvId;
+      const fileTexts = await Promise.all([...this.fileTextMap.values()]);
+      const combinedFileText = fileTexts.join('\n');
 
       StorageUtils.appendMsg(currConvId, {
         id: Date.now(),
         role: 'user',
-        content: this.fileText + '\n' + this.inputMsg,
+        content: combinedFileText + '\n' + this.inputMsg,
       });
       this.fetchConversation();
       this.fetchMessages();
       this.inputMsg = '';
-      this.uploadedFiles = [];
+      this.fileTextMap.clear();
       this.fileText = '';
       this.generateMessage(currConvId);
       chatScrollToBottom();
