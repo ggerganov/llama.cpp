@@ -1831,12 +1831,15 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
 }
 
 std::string common_chat_apply_template(
-        const common_chat_template & tmpl,
+        const common_chat_templates & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja,
         const common_params_tools & tools)
 {
+    const auto & tmpl_selected =
+        tools.tools() && tmpl.template_tool_use ? *tmpl.template_tool_use : *tmpl.template_default;
+
     if (use_jinja) {
         common_chat_inputs inputs;
 
@@ -1844,9 +1847,11 @@ std::string common_chat_apply_template(
         for (const auto & msg : msgs) {
             messages.push_back({{"role", msg.role}, {"content", msg.content}});
         }
+
         if (tools.tools() != nullptr) {
             inputs.tools = *tools.tools();
         }
+
         auto choice = tools.choice();
         if (std::holds_alternative<std::string>(choice)) {
             inputs.tool_choice = std::get<std::string>(choice);
@@ -1857,9 +1862,10 @@ std::string common_chat_apply_template(
                 inputs.tool_choice = *choice_ptr;
             }
         }
+
         inputs.messages = messages;
         inputs.add_generation_prompt = add_ass;
-        return common_chat_params_init(tmpl, inputs).prompt;
+        return common_chat_params_init(tmpl_selected, inputs).prompt;
     }
 
     int alloc_size = 0;
@@ -1872,7 +1878,7 @@ std::string common_chat_apply_template(
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = llama_chat_apply_template(tmpl_selected.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
@@ -1884,7 +1890,7 @@ std::string common_chat_apply_template(
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
-        res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+        res = llama_chat_apply_template(tmpl_selected.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }
 
     std::string formatted_chat(buf.data(), res);
@@ -1892,7 +1898,7 @@ std::string common_chat_apply_template(
 }
 
 std::string common_chat_format_single(
-        const common_chat_template & tmpl,
+        const common_chat_templates & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
@@ -1916,7 +1922,7 @@ std::string common_chat_format_single(
     return ss.str();
 }
 
-std::string common_chat_format_example(const common_chat_template & tmpl, bool use_jinja) {
+std::string common_chat_format_example(const common_chat_templates & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
         {"system",    "You are a helpful assistant", {}},
         {"user",      "Hello", {}},

@@ -675,7 +675,7 @@ struct common_chat_templates {
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
 std::string common_chat_apply_template(
-        const common_chat_template & tmpl,
+        const common_chat_templates & tmpl,
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
         bool use_jinja,
@@ -683,7 +683,7 @@ std::string common_chat_apply_template(
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
-        const common_chat_template & tmpl,
+        const common_chat_templates & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
         bool add_ass,
@@ -692,7 +692,7 @@ std::string common_chat_format_single(
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(
-    const common_chat_template & tmpl, bool use_jinja);
+    const common_chat_templates & tmpl, bool use_jinja);
 
 common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
 
