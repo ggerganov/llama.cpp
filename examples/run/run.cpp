@@ -848,7 +848,15 @@ static int apply_chat_template(const common_chat_template & tmpl, LlamaData & ll
             });
         }
         try {
-            auto result = tmpl.apply(messages, /* tools= */ json(), append);
+            minja::chat_template_inputs tmpl_inputs;
+            tmpl_inputs.messages = messages;
+            tmpl_inputs.add_generation_prompt = append;
+
+            minja::chat_template_options tmpl_opts;
+            tmpl_opts.use_bos_token = false;
+            tmpl_opts.use_eos_token = false;
+
+            auto result = tmpl.apply(tmpl_inputs, tmpl_opts);
             llama_data.fmtted.resize(result.size() + 1);
             memcpy(llama_data.fmtted.data(), result.c_str(), result.size() + 1);
             return result.size();
