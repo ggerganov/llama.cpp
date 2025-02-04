@@ -92,6 +92,7 @@ def do_test_completion_with_required_tool_tiny(template_name: str, tool: dict, a
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
+    assert choice["message"].get("content") is None, f'Expected no content in {choice["message"]}'
     expected_function_name = "python" if tool["type"] == "code_interpreter" else tool["function"]["name"]
     assert expected_function_name == tool_call["function"]["name"]
     actual_arguments = tool_call["function"]["arguments"]
@@ -214,6 +215,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
+    assert choice["message"].get("content") is None, f'Expected no content in {choice["message"]}'
     expected_function_name = "python" if tool["type"] == "code_interpreter" else tool["function"]["name"]
     assert expected_function_name == tool_call["function"]["name"]
     actual_arguments = tool_call["function"]["arguments"]
@@ -332,6 +334,7 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
+    assert choice["message"].get("content") is None, f'Expected no content in {choice["message"]}'
     assert tool_call["function"]["name"] == WEATHER_TOOL["function"]["name"]
     actual_arguments = json.loads(tool_call["function"]["arguments"])
     assert 'location' in actual_arguments, f"location not found in {json.dumps(actual_arguments)}"
@@ -499,6 +502,7 @@ def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo:
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
+    assert choice["message"].get("content") is None, f'Expected no content in {choice["message"]}'
     assert tool_call["function"]["name"] == PYTHON_TOOL["function"]["name"]
     actual_arguments = tool_call["function"]["arguments"]
     if expected_arguments_override is not None:
