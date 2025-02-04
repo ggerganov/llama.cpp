@@ -101,7 +101,7 @@ if (LLAMA_LLGUIDANCE)
     if (WIN32)
         set(LLGUIDANCE_LIB_NAME "llguidance.lib")
         # Add Windows-specific libraries
-        set(LLGUIDANCE_PLATFORM_LIBS 
+        set(LLGUIDANCE_PLATFORM_LIBS
             ws2_32    # Windows Sockets API
             userenv   # For GetUserProfileDirectoryW
             ntdll     # For NT functions
