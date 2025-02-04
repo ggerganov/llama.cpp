@@ -604,13 +604,10 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             }
         }
         // Fix up tool call delta example added by Minja
-        std::string marker = "<｜tool▁call▁end｜>\n";
-        auto pos = prompt.rfind(marker);
-        if (pos != std::string::npos) {
-            prompt.insert(pos + marker.size() - 1, "<｜tool▁calls▁end｜>");
-        } else {
-            LOG_WRN("Failed to find expected broken tool call example marker in prompt\n");
-        }
+        prompt = std::regex_replace(
+            prompt,
+            std::regex("<｜tool▁call▁end｜>[\\s\\r\\n]*<｜User｜>"),
+            "<｜tool▁call▁end｜><｜tool▁calls▁end｜><｜User｜>");
     }
     data.prompt = prompt;
     data.format = COMMON_CHAT_FORMAT_DEEPSEEK_R1;
