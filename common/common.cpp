@@ -1775,6 +1775,10 @@ common_params_tools::common_params_tools(std::string tools, std::string choice) 
 }
 
 void common_params_tools::tools(std::string tools) {
+    if (tools.empty()) {
+        tools_.reset();
+        return;
+    }
     try {
         tools_ = std::make_shared<json>(json::parse(tools));
         if (! tools_->is_array()) {
