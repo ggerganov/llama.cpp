@@ -465,18 +465,18 @@ static void test_template_output_parsers() {
                       "  ]\n"
                       "}");
     }
-    // {
-    //     const common_chat_template tmpl(read_file("models/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja"), "<s>",
-    //                                     "</s>");
-    //     std::vector<std::string>   end_tokens{ "</s>" };
+    {
+        const common_chat_template tmpl(read_file("models/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja"), "<s>",
+                                        "</s>");
+        std::vector<std::string>   end_tokens{ "</s>" };
 
-    //     assert_equals(COMMON_CHAT_FORMAT_MISTRAL_NEMO, common_chat_params_init(tmpl, inputs_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_MISTRAL_NEMO, common_chat_params_init(tmpl, inputs_tools).format);
 
-    //     test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-    //     test_template(
-    //         tmpl, end_tokens, tool_call_message_with_id, tools,
-    //         "[TOOL_CALLS][{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}, \"id\": \"123456789\"}]");
-    // }
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(
+            tmpl, end_tokens, tool_call_message_with_id, tools,
+            "[TOOL_CALLS][{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}, \"id\": \"123456789\"}]");
+    }
     {
         const common_chat_template tmpl(
             read_file("models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja"), "<s>", "</s>");

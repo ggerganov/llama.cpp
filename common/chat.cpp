@@ -140,7 +140,6 @@ static common_chat_msg parse_json_tool_calls(
             LOG_WRN("Content found with tool calls: %s", result.content.c_str());
         }
         result.content = "";
-        result.role = "user";
     }
     return result;
 }
