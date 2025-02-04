@@ -1,5 +1,5 @@
 #include "norm.cuh"
-#include <stdint.h>
+#include <cstdint>
 
 template <int block_size>
 static __global__ void norm_f32(
