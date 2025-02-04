@@ -349,7 +349,7 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
     (None,                                     128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
     (None,                                     128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
     (None,                                     128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    
+
     # TODO: fix these (wrong results, either didn't respect decimal instruction or got wrong value)
     ("^So, 0\\.556442\\.",                     128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
     ("[\\s\\S\\r\\n]*?\\b0\\.55644242476$",    128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
@@ -393,7 +393,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
                 ]
             },
             {
-                "role": "tool", 
+                "role": "tool",
                 "name": "calculate",
                 "content": 0.55644242476,
                 "tool_call_id": "call_6789",
@@ -422,7 +422,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
-    assert tool_calls is None, f'Expected no tool call in {choice["message"]}' 
+    assert tool_calls is None, f'Expected no tool call in {choice["message"]}'
     content = choice["message"].get("content")
     assert content is not None, f'Expected content in {choice["message"]}'
     if result_override is not None:
@@ -436,7 +436,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
 @pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
     (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),
-    
+
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
 

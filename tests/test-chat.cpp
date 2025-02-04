@@ -598,7 +598,7 @@ static void test_template_output_parsers() {
         //               // Look what's not here: <｜tool▁calls▁end｜> (also missing the <｜end▁of▁sentence｜>, but that is removed lazily by the test's delta logic)
         //               "```<｜tool▁call▁end｜>",
         //               /* expect_grammar_triggered= */ true,
-        //               /* test_grammar_if_triggered= */ false); 
+        //               /* test_grammar_if_triggered= */ false);
     }
     {
         // Replacement DeepSeek R1 template. Makes the Distill Qwen 7B/32B models happy to call tools and all.
@@ -611,7 +611,7 @@ static void test_template_output_parsers() {
         test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, text_thoughts_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
         assert_msg_equals(msg_from_json(text_thoughts_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
-        
+
         assert_msg_equals(msg_from_json(tool_call_thoughts_message),
             common_chat_parse(
                 "<think>I'm\nthinking</think>\n\n"
