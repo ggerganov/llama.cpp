@@ -580,7 +580,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
             // so we accept common variants (then it's all constrained)
             builder.add_rule("root",
-                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" ) "
+                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" )? "
                 "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
                 "\"<｜tool▁calls▁end｜>\""
                 " space");
