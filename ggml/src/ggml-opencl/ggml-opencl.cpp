@@ -2857,6 +2857,9 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
             CL_CHECK(status);
 
             int height_B = N/4;
+            if (height_B == 0) {
+                height_B = 1;
+            }
             int width_B = K/4;
             int padded_height_B = (N + padding)/4;
 
