@@ -164,7 +164,7 @@ static void foreach_function(const json & tools, const std::function<void(const 
 }
 
 static std::string apply(
-    const common_chat_template & tmpl, 
+    const common_chat_template & tmpl,
     const nlohmann::ordered_json & messages,
     const nlohmann::ordered_json & tools,
     bool add_generation_prompt,
