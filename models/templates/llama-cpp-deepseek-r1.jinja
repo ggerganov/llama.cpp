@@ -9,7 +9,7 @@
 {%- endfor -%}
 {{bos_token}}
 {%- if tools %}
-You can call any of the following function tools to satisfy the user's requests: {{tools | map(attribute='function') | tojson(indent=4)}}
+You can call any of the following function tools to satisfy the user's requests: {{tools | map(attribute='function') | tojson(indent=2)}}
 
 Example function tool call syntax:
 

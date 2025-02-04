@@ -117,7 +117,6 @@ static common_chat_msg parse_json_tool_calls(
         std::sregex_iterator rend;
         std::sregex_iterator rit(it, end, function_regex);
         if (rit == rend) {
-            fprintf(stderr, "No more tool calls found\n");
             result.content += std::string(it, end);
             break;
         }
@@ -127,10 +126,10 @@ static common_chat_msg parse_json_tool_calls(
 
         json arguments;
         if (!parse_json(it, end, arguments)) {
-            throw std::runtime_error("Failed to parse json tool call arguments");
+            throw std::runtime_error("Failed to parse json tool call arguments: " + input);
         }
         if (!std::regex_search(it, end, match, close_regex)) {
-            throw std::runtime_error("Malformed input, missing closing pattern");
+            throw std::runtime_error("Malformed input, missing closing pattern: " + input);
         }
         it = match.suffix().first;
         result.tool_calls.push_back({name, arguments.is_string() ? arguments.get<std::string>() : arguments.dump(), /* id= */ ""});
@@ -574,13 +573,14 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
         // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
         // so we accept common variants (then it's all constrained)
         builder.add_rule("root",
-            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" ) "
+            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\_calls\\_begin｜>\" ) "
             "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
             "\"<｜tool▁calls▁end｜>\""
             " space");
         data.grammar_triggers.push_back({"<｜tool▁calls▁begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool_calls_begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool calls begin｜>", /* .at_start = */ false});
+        data.grammar_triggers.push_back({"<｜tool\\_calls\\_begin｜>", /* .at_start = */ false});
         data.preserved_tokens = {
             "<think>",
             "</think>",
@@ -614,7 +614,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
     return data;
 }
 static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) {
-    static std::regex trigger_regex("<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>");
+    static std::regex trigger_regex("<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>");
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```<｜tool▁call▁end｜>");
     static std::regex think_regex(R"(<think>([\s\S\n]*)(</think>)?([\s\S\r\n]*))");
