@@ -117,7 +117,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                     )
                     if (GGML_MACHINE_SUPPORTS_${tag})
                         set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+${tag}" PARENT_SCOPE)
-                    else()
+                    elseif(NOT tag STREQUAL "sme")
                         set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+no${tag}" PARENT_SCOPE)
                     endif()
                     set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
@@ -325,9 +325,9 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
 
         # Fetch KleidiAI sources:
         include(FetchContent)
-        set(KLEIDIAI_COMMIT_TAG "v1.2.0")
+        set(KLEIDIAI_COMMIT_TAG "v1.3.0")
         set(KLEIDIAI_DOWNLOAD_URL "https://github.com/ARM-software/kleidiai/archive/refs/tags/${KLEIDIAI_COMMIT_TAG}.tar.gz")
-        set(KLEIDIAI_ARCHIVE_MD5  "6634fefce7357ecfee9eace2068bc68b")
+        set(KLEIDIAI_ARCHIVE_MD5  "060bd2dc64642b091f461cc8dd7426d9")
 
         if (POLICY CMP0135)
             cmake_policy(SET CMP0135 NEW)
@@ -370,9 +370,9 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             ${KLEIDIAI_SRC}/kai/ukernels/matmul/matmul_clamp_f32_qsi8d32p_qsi4c32p/
             ${KLEIDIAI_SRC}/kai/ukernels/matmul/pack/)
 
-        string(FIND ${ARCH_FLAGS} "+dotprod" DOTPROD_ENABLED)
-        string(FIND ${ARCH_FLAGS} "+i8mm" I8MM_ENABLED)
-        string(FIND ${ARCH_FLAGS} "+sme" SME_ENABLED)
+        string(FIND "${ARCH_FLAGS}" "+dotprod" DOTPROD_ENABLED)
+        string(FIND "${ARCH_FLAGS}" "+i8mm" I8MM_ENABLED)
+        string(FIND "${ARCH_FLAGS}" "+sme" SME_ENABLED)
 
         set(PRIVATE_ARCH_FLAGS ${ARCH_FLAGS})
 
