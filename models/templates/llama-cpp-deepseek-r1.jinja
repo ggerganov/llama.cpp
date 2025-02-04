@@ -36,12 +36,12 @@ Example function tool call syntax:
         {{- flush_tool_outputs() -}}
     {%- endif -%}
     {%- if message['role'] == 'user' -%}
-        {#- {{- '<｜User｜>' + message['content']}} #}
-        {{- '<｜User｜>' + content + '<｜end▁of▁sentence｜>'}}
+        {{- '<｜User｜>' + message['content'] + '<｜end▁of▁sentence｜>' -}}
     {%- endif -%}
     {%- if message['role'] == 'assistant' and message['content'] is none -%}
-        {{- '<｜Assistant｜><｜tool▁calls▁begin｜>'}}
-        {%- for tc in message['tool_calls']%}
+        {{- '<｜Assistant｜><｜tool▁calls▁begin｜>' -}}
+        {%- set ns.is_first = true -%}
+        {%- for tc in message['tool_calls'] -%}
             {%- if ns.is_first -%}
                 {%- set ns.is_first = false -%}
             {%- else -%}
@@ -49,17 +49,17 @@ Example function tool call syntax:
             {%- endif -%}
             {%- set tool_name = tc['function']['name'] -%}
             {%- set tool_args = tc['function']['arguments'] -%}
-            {{- '<｜tool▁call▁begin｜>' + tc['type'] + '<｜tool▁sep｜>' + tool_name + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '<｜tool▁call▁end｜>'}}
+            {{- '<｜tool▁call▁begin｜>' + tc['type'] + '<｜tool▁sep｜>' + tool_name + '\n' + '```json' + '\n' + tool_args + '\n' + '```' + '<｜tool▁call▁end｜>' -}}
         {%- endfor -%}
-        {{- '<｜tool▁calls▁end｜><｜end▁of▁sentence｜>'}}
+        {{- '<｜tool▁calls▁end｜><｜end▁of▁sentence｜>' -}}
     {%- endif -%}
-    {%- if message['role'] == 'assistant' and message['content'] is not none -%}
+    {%- if message['role'] == 'assistant' and message['content'] is  not none -%}
         {{- flush_tool_outputs() -}}
         {%- set content = message['content'] -%}
         {%- if '</think>' in content -%}
             {%- set content = content.split('</think>')[-1] -%}
         {%- endif -%}
-        {{- '<｜Assistant｜>' + content + '<｜end▁of▁sentence｜>'}}
+        {{- '<｜Assistant｜>' + content + '<｜end▁of▁sentence｜>' -}}
     {%- endif -%}
     {%- if message['role'] == 'tool' -%}
         {%- set ns.is_tool_outputs = true -%}
@@ -67,7 +67,7 @@ Example function tool call syntax:
             {{- '<｜tool▁outputs▁begin｜>' -}}
             {%- set ns.is_output_first = false -%}
         {%- endif -%}
-        {{- '\n<｜tool▁output▁begin｜>' + message['content'] + '<｜tool▁output▁end｜>'}}
+        {{- '\n<｜tool▁output▁begin｜>' + message['content'] + '<｜tool▁output▁end｜>' -}}
     {%- endif -%}
 {%- endfor -%}
 {{- flush_tool_outputs() -}}
