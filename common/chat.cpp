@@ -572,7 +572,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
         // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
         // so we accept common variants (then it's all constrained)
         builder.add_rule("root",
-            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\_calls\\_begin｜>\" ) "
+            "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" ) "
             "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
             "\"<｜tool▁calls▁end｜>\""
             " space");
@@ -580,6 +580,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
         data.grammar_triggers.push_back({"<｜tool_calls_begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool calls begin｜>", /* .at_start = */ false});
         data.grammar_triggers.push_back({"<｜tool\\_calls\\_begin｜>", /* .at_start = */ false});
+        data.grammar_triggers.push_back({"<｜tool▁call▁begin｜>", /* .at_start = */ false});
         data.preserved_tokens = {
             "<think>",
             "</think>",
@@ -613,9 +614,9 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
     return data;
 }
 static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) {
-    static std::regex trigger_regex("<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>");
+    static std::regex trigger_regex("(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)?");
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
-    static std::regex close_regex("```<｜tool▁call▁end｜>");
+    static std::regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
     static std::regex think_regex(R"(<think>([\s\S\n]*)(</think>)?([\s\S\r\n]*))");
     auto msg = parse_json_tool_calls(input, trigger_regex, function_regex, close_regex);
     std::smatch match;
