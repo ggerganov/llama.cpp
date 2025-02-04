@@ -623,7 +623,7 @@ struct common_chat_msg {
     std::string role;
     std::string content;
     std::vector<common_tool_call> tool_calls;
-    std::string thoughts = "";
+    std::string reasoning_content = "";
     std::string tool_plan = "";
 };
 

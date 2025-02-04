@@ -745,8 +745,8 @@ struct server_task_result_cmpl_final : server_task_result {
             {"tool_calls", tool_calls},
             {"role", "assistant"},
         };
-        if (!msg.thoughts.empty()) {
-            message["thoughts"] = msg.thoughts;
+        if (!msg.reasoning_content.empty()) {
+            message["reasoning_content"] = msg.reasoning_content;
         }
         if (!msg.tool_plan.empty()) {
             message["tool_plan"] = msg.tool_plan;

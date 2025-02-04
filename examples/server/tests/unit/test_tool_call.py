@@ -436,12 +436,12 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("n_predict,expect_content,expect_thoughts,hf_repo,template_override", [
+@pytest.mark.parametrize("n_predict,expect_content,expect_reasoning_content,hf_repo,template_override", [
     (128, "^The sum of 102 and 7 is 109.*",  None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
     (1024, "To find the sum of.*",           "I need to calculate the sum of 102 and 7.*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (1024, "To find the sum of.*",           "First, I need to add the tens place.*",       "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
 ])
-def test_thoughts(n_predict: int, expect_content: str | None, expect_thoughts: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_reasoning_content(n_predict: int, expect_content: str | None, expect_reasoning_content: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
@@ -470,9 +470,9 @@ def test_thoughts(n_predict: int, expect_content: str | None, expect_thoughts: s
     if expect_content is not None:
         assert re.match(expect_content, content), f'Expected {expect_content}, got {content}'
 
-    thoughts = choice["message"].get("thoughts")
-    if expect_thoughts is not None:
-        assert re.match(expect_thoughts, thoughts), f'Expected {expect_thoughts}, got {thoughts}'
+    reasoning_content = choice["message"].get("reasoning_content")
+    if expect_reasoning_content is not None:
+        assert re.match(expect_reasoning_content, reasoning_content), f'Expected {expect_reasoning_content}, got {reasoning_content}'
 
 
 @pytest.mark.slow

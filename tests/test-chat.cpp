@@ -26,8 +26,8 @@ static common_chat_msg msg_from_json(const json & message) {
     if (message.contains("tool_plan")) {
         ret.tool_plan = message.at("tool_plan");
     }
-    if (message.contains("thoughts")) {
-        ret.thoughts = message.at("thoughts");
+    if (message.contains("reasoning_content")) {
+        ret.reasoning_content = message.at("reasoning_content");
     }
     auto has_tool_calls = message.contains("tool_calls");
     if (has_tool_calls) {
@@ -108,7 +108,7 @@ static std::string dump(const json & j) {
 static void assert_msg_equals(const common_chat_msg & expected, const common_chat_msg & actual) {
     assert_equals(expected.role, actual.role);
     assert_equals(expected.content, actual.content);
-    assert_equals(expected.thoughts, actual.thoughts);
+    assert_equals(expected.reasoning_content, actual.reasoning_content);
     assert_equals(expected.tool_plan, actual.tool_plan);
     assert_equals(expected.tool_calls.size(), actual.tool_calls.size());
     for (size_t i = 0; i < expected.tool_calls.size(); i++) {
@@ -293,10 +293,10 @@ static void test_template_output_parsers() {
         { "role",    "assistant"     },
         { "content", "Hello, world!" },
     };
-    json text_thoughts_message {
+    json text_reasoning_message {
         { "role",    "assistant"     },
         { "content", "Hello, world!" },
-        { "thoughts", "I'm thinking" },
+        { "reasoning_content", "I'm thinking" },
     };
     json tool_calls = json::array({{
         { "type", "function" },
@@ -316,10 +316,10 @@ static void test_template_output_parsers() {
             },
         }},
     };
-    json tool_call_thoughts_message = {
+    json tool_call_reasoning_message = {
         { "role",       "assistant"                },
         { "content",    nullptr                    },
-        { "thoughts",   "I'm\nthinking"              },
+        { "reasoning_content",   "I'm\nthinking"              },
         { "tool_calls",  {
             {
                 { "type", "function" },
@@ -589,8 +589,8 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1, common_chat_params_init(tmpl, inputs_tools).format);
 
         test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        test_template(tmpl, end_tokens, text_thoughts_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        assert_msg_equals(msg_from_json(text_thoughts_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
         // test_template(tmpl, end_tokens, tool_call_message, tools,
         //               "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>special_function\n"
         //               "```json\n"
@@ -609,10 +609,10 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1, common_chat_params_init(tmpl, inputs_tools).format);
 
         test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        test_template(tmpl, end_tokens, text_thoughts_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        assert_msg_equals(msg_from_json(text_thoughts_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
 
-        assert_msg_equals(msg_from_json(tool_call_thoughts_message),
+        assert_msg_equals(msg_from_json(tool_call_reasoning_message),
             common_chat_parse(
                 "<think>I'm\nthinking</think>\n\n"
                 "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>special_function\n"
