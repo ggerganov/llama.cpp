@@ -463,12 +463,8 @@ class chat_template {
             {"messages", actual_messages},
             {"add_generation_prompt", inputs.add_generation_prompt},
         }));
-        if (opts.use_bos_token) {
-            context->set("bos_token", bos_token_);
-        }
-        if (opts.use_eos_token) {
-            context->set("eos_token", eos_token_);
-        }
+        context->set("bos_token", opts.use_bos_token ? bos_token_ : "");
+        context->set("eos_token", opts.use_eos_token ? eos_token_ : "");
         if (opts.define_strftime_now) {
             auto now = inputs.now;
             context->set("strftime_now", Value::callable([now](const std::shared_ptr<minja::Context> &, minja::ArgumentsValue & args) {
