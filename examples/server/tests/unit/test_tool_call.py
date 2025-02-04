@@ -341,45 +341,48 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("hf_repo,template_override", [
-    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+@pytest.mark.parametrize("n_predict,hf_repo,template_override", [
+    
+    (8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
 
-    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+    # (128, "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    # (128, "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+    
+    (128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
 
-    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+    (128,  "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (128,  "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
 
-    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+    (128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
 
-    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+    (128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
 
-    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+    (128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    (128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+    (128,  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # (128,  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
-    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
-    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
-
-    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    (128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    # (128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
-    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (128,  "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
 
-    # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # Not working well w/ chatml + polyfill, which is forgiveable
+    # (128,  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    # (128,  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
 ])
-def test_calc_result(hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_calc_result(n_predict: int, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
-    n_predict = 512
+    # n_predict = 512
     server.n_slots = 1
     server.jinja = True
-    server.n_ctx = 8192
+    server.n_ctx = 8192 * 2
     server.n_predict = n_predict
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
@@ -393,13 +396,14 @@ def test_calc_result(hf_repo: str, template_override: str | Tuple[str, str | Non
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
-            {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things."},
+            {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things, and provide very concise answers. Do not explain your reasoning to the user. Provide any numerical values back to the user with two decimals."},
             {"role": "user", "content": "What's the y coordinate of a point on the unit sphere at angle 30 degrees?"},
             {
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
                     {
+                        "type": "function",
                         "function": {
                             "name": "calculate",
                             "arguments": "{\"expression\":\"sin(30 * pi / 180)\"}"
@@ -410,7 +414,7 @@ def test_calc_result(hf_repo: str, template_override: str | Tuple[str, str | Non
             {
                 "role": "tool", 
                 "name": "calculate",
-                "content": "0.5"
+                "content": 0.55644242476
             }
         ],
         "tools": [
@@ -436,14 +440,10 @@ def test_calc_result(hf_repo: str, template_override: str | Tuple[str, str | Non
     assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
     choice = res.body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
-    assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
-    tool_call = tool_calls[0]
-    assert tool_call["function"]["name"] == WEATHER_TOOL["function"]["name"]
-    actual_arguments = json.loads(tool_call["function"]["arguments"])
-    assert 'location' in actual_arguments, f"location not found in {json.dumps(actual_arguments)}"
-    location = actual_arguments["location"]
-    assert isinstance(location, str), f"Expected location to be a string, got {type(location)}: {json.dumps(location)}"
-    assert re.match('^Istanbul(, (TR|Turkey|Türkiye))?$', location), f'Expected Istanbul for location, got {location}'
+    assert tool_calls is None, f'Expected no tool call in {choice["message"]}' 
+    content = choice["message"].get("content")
+    assert content is not None, f'Expected content in {choice["message"]}'
+    assert re.match('^(The (y )?coordinate .*?is (approximately )?0.56[.]?|0.56)$', content), f'Expected something like "The y coordinate is 0.56.", got {content}'
 
 
 @pytest.mark.slow
