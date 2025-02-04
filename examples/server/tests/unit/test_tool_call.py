@@ -300,7 +300,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
     ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
     ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
-    
+
     ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
