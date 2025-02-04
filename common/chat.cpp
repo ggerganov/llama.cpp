@@ -134,6 +134,14 @@ static common_chat_msg parse_json_tool_calls(
         it = match.suffix().first;
         result.tool_calls.push_back({name, arguments.is_string() ? arguments.get<std::string>() : arguments.dump(), /* id= */ ""});
     }
+
+    if (!result.tool_calls.empty()) {
+        if (!string_trim(result.content).empty()) {
+            LOG_WRN("Content found with tool calls: %s", result.content.c_str());
+        }
+        result.content = "";
+        result.role = "user";
+    }
     return result;
 }
 
