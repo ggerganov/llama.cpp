@@ -352,11 +352,11 @@ def test_weather_tool_call(hf_repo: str, template_override: str | Tuple[str, str
     (None,                                     128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
     (None,                                     128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
     (None,                                     128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (None,                                     128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    ("^> 0.56$",                               128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
 
     # TODO: fix these (wrong results, either didn't respect decimal instruction or got wrong value)
-    ("^So, 0\\.556442\\.",                     128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
     ("[\\s\\S\\r\\n]*?\\b0\\.55644242476$",    128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    ("^> 0.56$",                               128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
     ("[\\s\\S\\r\\n]*?which equals 0\\.5\\.", 8192,  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     ("**Answer:** 0\\.25\\b",                 8192,  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
 ])
