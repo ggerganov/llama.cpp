@@ -564,7 +564,7 @@ static common_chat_msg common_chat_parse_llama_3_1(const std::string & input, bo
 
 static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
-    if (!inputs.tools.is_null() && !inputs.tools.empty()) {
+    if (inputs.tools.is_array() && !inputs.tools.empty()) {
         data.grammar_lazy = inputs.tool_choice != "required";
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             std::vector<std::string> tool_rules;
@@ -580,21 +580,19 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
             // so we accept common variants (then it's all constrained)
             builder.add_rule("root",
-                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" )? "
-                "(" +string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
+                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" ) "
+                "(" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
                 "\"<｜tool▁calls▁end｜>\""
                 " space");
             data.grammar_triggers.push_back({"<｜tool▁calls▁begin｜>", /* .at_start = */ false});
             data.grammar_triggers.push_back({"<｜tool_calls_begin｜>", /* .at_start = */ false});
             data.grammar_triggers.push_back({"<｜tool calls begin｜>", /* .at_start = */ false});
             data.grammar_triggers.push_back({"<｜tool\\_calls\\_begin｜>", /* .at_start = */ false});
-            data.grammar_triggers.push_back({"<｜tool▁call▁begin｜>", /* .at_start = */ false});
             data.preserved_tokens = {
                 "<think>",
                 "</think>",
                 "<｜tool▁sep｜>",
                 "<｜tool▁calls▁end｜",
-                "<｜tool▁call▁begin｜>",
                 "<｜tool▁call▁end｜>",
             };
         }, grammar_options);
@@ -654,7 +652,7 @@ static common_chat_params common_chat_params_init_firefunction_v2(const common_c
         {"datetime", "Jan 29 2025 13:00:00 GMT"},
         {"functions", json(inputs.tools.empty() ? "" : inputs.tools.dump(2))},
     });
-    if (!inputs.tools.is_null() && !inputs.tools.empty()) {
+    if (inputs.tools.is_array() && !inputs.tools.empty()) {
         data.grammar_lazy = inputs.tool_choice != "required";
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             auto schemas = json::array();
@@ -699,7 +697,7 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
     common_chat_params data;
     data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2;
-    if (!inputs.tools.is_null() && !inputs.tools.empty()) {
+    if (inputs.tools.is_array() && !inputs.tools.empty()) {
         data.grammar_lazy = inputs.tool_choice != "required";
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             std::vector<std::string> first_tool_rules;
