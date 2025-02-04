@@ -15,6 +15,11 @@ import daisyuiThemes from 'daisyui/src/theming/themes';
 // ponyfill for missing ReadableStream asyncIterator on Safari
 import { asyncIterator } from '@sec-ant/readable-stream/ponyfill/asyncIterator';
 
+// pdf parsing
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 const isDev = import.meta.env.MODE === 'development';
 
 // types
@@ -387,6 +392,8 @@ const mainApp = createApp({
       viewingConvId: StorageUtils.getNewConvId(),
       inputMsg: '',
       isGenerating: false,
+      uploadedFiles: [],
+      fileText: '',
       /** @type {Array<Message> | null} */
       pendingMsg: null, // the on-going message from assistant
       stopGeneration: () => {},
@@ -467,6 +474,36 @@ const mainApp = createApp({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     },
+    removeFile(index){
+      this.uploadedFiles.splice(index, 1);
+    },
+    async handlePdfUpload(event) {
+      const file = event.target.files[0];
+      if (file && file.type === "application/pdf") {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+          
+          loadingTask.promise.then(pdfDocument => {
+            console.log("PDF loaded:", pdfDocument);
+            const pdfPromise = extractPdfText(file);
+            pdfPromise.then((data) => {
+              this.uploadedFiles.push(file);
+              this.fileText += data;
+            })
+            .catch((error) => { 
+              console.log(error)
+            });
+          }).catch(error => {
+            console.error("Error loading PDF:", error);
+          });
+        } catch (error) {
+          console.error("Error extracting PDF text:", error);
+        }
+      } else {
+        alert("Please upload a valid PDF file.");
+      }
+    },    
     async sendMessage() {
       if (!this.inputMsg) return;
       const currConvId = this.viewingConvId;
@@ -474,11 +511,13 @@ const mainApp = createApp({
       StorageUtils.appendMsg(currConvId, {
         id: Date.now(),
         role: 'user',
-        content: this.inputMsg,
+        content: this.fileText + '\n' + this.inputMsg,
       });
       this.fetchConversation();
       this.fetchMessages();
       this.inputMsg = '';
+      this.uploadedFiles = [];
+      this.fileText = '';
       this.generateMessage(currConvId);
       chatScrollToBottom();
     },
@@ -668,6 +707,32 @@ try {
     <br/>
     <button class="btn" onClick="localStorage.clear(); window.location.reload();">Clear localStorage</button>
   </div>`;
+}
+/**
+ * extracts text content from a given PDF file using pdf.js
+ * @param {File} file
+ * @returns {Promise<string>}
+ */
+async function extractPdfText(file) {
+  const fileReader = new FileReader();
+  return new Promise((resolve, reject) => {
+    fileReader.onload = async (e) => {
+      const pdfData = new Uint8Array(e.target.result);
+      try {
+        const pdf = await pdfjsLib.getDocument(pdfData).promise;
+        let textContent = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContentPage = await page.getTextContent();
+          textContent += textContentPage.items.map(item => item.str).join(" ") + "\n";
+        }
+        resolve(textContent.trim());
+      } catch (error) {
+        reject(error);
+      }
+    };
+    fileReader.readAsArrayBuffer(file);
+  });
 }
 
 /**
