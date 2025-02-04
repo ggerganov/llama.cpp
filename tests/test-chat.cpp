@@ -291,11 +291,11 @@ static void test_template(const common_chat_template & tmpl, const std::vector<s
 static void test_template_output_parsers() {
     json text_message {
         { "role",    "assistant"     },
-        { "content", "Hello, world!" },
+        { "content", "Hello, world!\nWhat's up?" },
     };
     json text_reasoning_message {
         { "role",    "assistant"     },
-        { "content", "Hello, world!" },
+        { "content", "Hello, world!\nWhat's up?" },
         { "reasoning_content", "I'm thinking" },
     };
     json tool_calls = json::array({{
@@ -400,7 +400,7 @@ static void test_template_output_parsers() {
 
     common_chat_inputs inputs_no_tools;
     inputs_no_tools.messages = {
-        { { "role", "user" }, { "content", "Hey" } }
+        { { "role", "user" }, { "content", "Hey\nThere" } }
     };
 
     common_chat_inputs inputs_tools = inputs_no_tools;
@@ -429,7 +429,8 @@ static void test_template_output_parsers() {
                       "    {\"tool_call_id\": \"0\", \"tool_name\": \"special_function\", \"parameters\": {\"arg1\": 1}}\n"
                       "]<|END_ACTION|>");
         test_template(tmpl, end_tokens, text_message, tools,
-                      "<|START_RESPONSE|>Hello, world!<|END_RESPONSE|>",
+                      "<|START_RESPONSE|>Hello, world!\n"
+                      "What's up?<|END_RESPONSE|>",
                       /* expect_grammar_triggered= */ false);
     }
     {
@@ -449,7 +450,7 @@ static void test_template_output_parsers() {
 
         assert_msg_equals(msg_from_json(text_message),
                           common_chat_parse("{\n"
-                                            "  \"response\": \"Hello, world!\"\n"
+                                            "  \"response\": \"Hello, world!\\nWhat's up?\"\n"
                                             "}",
                                             common_chat_params_init(tmpl, inputs_tools).format));
         test_template(tmpl, end_tokens, tool_call_message_with_id, tools,
@@ -472,7 +473,7 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_MISTRAL_NEMO, common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_template(
             tmpl, end_tokens, tool_call_message_with_id, tools,
             "[TOOL_CALLS][{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}, \"id\": \"123456789\"}]");
@@ -497,7 +498,7 @@ static void test_template_output_parsers() {
                 inputs_tools)
                 .format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, tool_call_message, tools,
                       "<tool_call>\n"
                       "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
@@ -537,7 +538,7 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_LLAMA_3_X, common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, tool_call_message, tools,
                       "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}");
     }
@@ -549,7 +550,7 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
                       common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, tool_call_message, tools,
                       "<function=special_function>{\"arg1\": 1}</function>");
     }
@@ -563,7 +564,8 @@ static void test_template_output_parsers() {
 
         test_template(tmpl, end_tokens, text_message, {},
                       "all\n"
-                      "Hello, world!",
+                      "Hello, world!\n"
+                      "What's up?",
                       /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, tool_call_message, tools,
                       "special_function\n"
@@ -576,7 +578,7 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_FIREFUNCTION_V2, common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_template(tmpl, end_tokens, tool_call_message, tools,
                       " functools[{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}]");
     }
@@ -588,9 +590,9 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1, common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
+        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!\nWhat's up?", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
         // test_template(tmpl, end_tokens, tool_call_message, tools,
         //               "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>special_function\n"
         //               "```json\n"
@@ -608,9 +610,9 @@ static void test_template_output_parsers() {
 
         assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1, common_chat_params_init(tmpl, inputs_tools).format);
 
-        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!", /* expect_grammar_triggered= */ false);
-        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+        test_template(tmpl, end_tokens, text_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
+        test_template(tmpl, end_tokens, text_reasoning_message, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
+        assert_msg_equals(msg_from_json(text_reasoning_message), common_chat_parse("<think>I'm thinking</think>Hello, world!\nWhat's up?", COMMON_CHAT_FORMAT_DEEPSEEK_R1));
 
         assert_msg_equals(msg_from_json(tool_call_reasoning_message),
             common_chat_parse(
