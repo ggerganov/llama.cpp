@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 #include <sstream>
+// Change JSON_ASSERT from assert() to GGML_ASSERT:
+#define JSON_ASSERT GGML_ASSERT
+#include "json.hpp"
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -202,6 +205,31 @@ struct common_params_vocoder {
     bool use_guide_tokens = false; // enable guide tokens to improve TTS accuracy            // NOLINT
 };
 
+class common_params_tools {
+public:
+    using json = nlohmann::ordered_json;
+    using json_ptr = std::shared_ptr<json>;
+    using tool_choice_t = std::variant<std::string, json_ptr>;
+
+    common_params_tools(std::string tools  = "",
+                        std::string choice = "auto");
+
+    common_params_tools(const common_params_tools & other) = default;
+    common_params_tools(common_params_tools && other) noexcept = default;
+    common_params_tools & operator=(const common_params_tools & other) = default;
+    common_params_tools & operator=(common_params_tools && other) noexcept = default;
+
+    void tools(std::string tools);
+    const json * tools() const { return tools_.get(); }
+
+    void choice(std::string choice);
+    const tool_choice_t & choice() const { return tool_choice_; }
+
+private:
+    json_ptr tools_;
+    tool_choice_t tool_choice_;
+};
+
 struct common_params {
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =  4096; // context size
@@ -346,7 +374,8 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
-    std::string jinja_tools   = "";
+    common_params_tools jinja_tools;
+
     std::vector<std::string> api_keys;
 
     std::string ssl_file_key  = "";                                                                         // NOLINT
@@ -649,7 +678,7 @@ std::string common_chat_apply_template(
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
         bool use_jinja,
-        std::string tools_json_arr = std::string());
+        const common_params_tools & tools = common_params_tools());
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
@@ -658,7 +687,7 @@ std::string common_chat_format_single(
         const common_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        std::string tools_json_arr = std::string());
+        const common_params_tools & tools = common_params_tools());
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(
