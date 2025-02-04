@@ -3353,6 +3353,8 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
         return;
     }
 
+    // reminder: this function is not covered by httplib's exception handler; if someone does more complicated stuff, think about wrapping it in try-catch
+
     LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
 
     LOG_DBG("request:  %s\n", req.body.c_str());
@@ -3439,9 +3441,13 @@ int main(int argc, char ** argv) {
             message = "Unknown Exception";
         }
 
-        json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
-        LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
-        res_error(res, formatted_error);
+        try {
+            json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
+            LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
+            res_error(res, formatted_error);
+        } catch (const std::exception & e) {
+            LOG_ERR("got another exception: %s | while hanlding exception: %s\n", e.what(), message.c_str());
+        }
     });
 
     svr->set_error_handler([&res_error](const httplib::Request &, httplib::Response & res) {
