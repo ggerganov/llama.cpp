@@ -242,7 +242,7 @@ The project also includes many example programs and tools using the `llama` libr
 
 - Clone this repository and build locally, see [how to build](docs/build.md)
 - On MacOS or Linux, install `llama.cpp` via [brew, flox or nix](docs/install.md)
-- Use a Docker image, see [documentation for Docker](docs/docker.md)
+- Use a container image (Docker/Podman), see [documentation for containers](docs/container.md)
 - Download pre-built binaries from [releases](https://github.com/ggerganov/llama.cpp/releases)
 
 ## Obtaining and quantizing models
@@ -500,7 +500,7 @@ To learn more about model quantization, [read this documentation](examples/quant
 #### Development documentation
 
 - [How to build](docs/build.md)
-- [Running on Docker](docs/docker.md)
+- [Running in a container](docs/container.md)
 - [Build on Android](docs/android.md)
 - [Performance troubleshooting](docs/development/token_generation_performance_tips.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)

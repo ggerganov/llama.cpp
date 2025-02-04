@@ -1,11 +1,11 @@
-# Docker
+# Container
 
 ## Prerequisites
-* Docker must be installed and running on your system.
+* A container engine, ie Docker/Podman, must be installed and running on your system.
 * Create a folder to store big models & intermediate files (ex. /llama/models)
 
 ## Images
-We have three Docker images available for this project:
+We have three container images available for this project:
 
 1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
 2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file. (platforms: `linux/amd64`, `linux/arm64`)
@@ -27,43 +27,45 @@ The GPU enabled images are not currently tested by CI beyond being built. They a
 
 ## Usage
 
-The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full docker image.
+The easiest way to download the models, convert them to ggml and optimize them is with the --all-in-one command which includes the full container image.
 
 Replace `/path/to/models` below with the actual path where you downloaded the models.
 
-```bash
-docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B
-```
+<details><summary>Docker example</summary>docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B</details>
+<details><summary>Podman example</summary>podman run --security-opt label=disable -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --all-in-one "/models/" 7B</details>
 
 On completion, you are ready to play!
 
-```bash
-docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512
-```
+<details><summary>Docker example</summary>docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512</details>
+<details><summary>Podman example</summary>podman run --security-opt label=disable -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:full --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512</details>
 
 or with a light image:
 
-```bash
-docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512
-```
+<details><summary>Docker example</summary>docker run -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512</details>
+<details><summary>Podman example</summary>podman run --security-opt label=disable -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:light -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512</details>
 
 or with a server image:
 
-```bash
-docker run -v /path/to/models:/models -p 8000:8000 ghcr.io/ggerganov/llama.cpp:server -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512
-```
+<details><summary>Docker example</summary>docker run -v /path/to/models:/models -p 8000:8000 ghcr.io/ggerganov/llama.cpp:server -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512</details>
+<details><summary>Podman example</summary>podman run --security-opt label=disable -v /path/to/models:/models -p 8000:8000 ghcr.io/ggerganov/llama.cpp:server -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512</details>
 
-## Docker With CUDA
+
+## Container engines With CUDA
 
 Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) properly installed on Linux, or is using a GPU enabled cloud, `cuBLAS` should be accessible inside the container.
 
-## Building Docker locally
+## Building Container locally
 
-```bash
+<details><summary>Docker example</summary>
 docker build -t local/llama.cpp:full-cuda --target full -f .devops/cuda.Dockerfile .
 docker build -t local/llama.cpp:light-cuda --target light -f .devops/cuda.Dockerfile .
 docker build -t local/llama.cpp:server-cuda --target server -f .devops/cuda.Dockerfile .
-```
+</details>
+<details><summary>Podman example</summary>
+podman build -t local/llama.cpp:full-cuda --target full -f .devops/cuda.Dockerfile .
+podman build -t local/llama.cpp:light-cuda --target light -f .devops/cuda.Dockerfile .
+podman build -t local/llama.cpp:server-cuda --target server -f .devops/cuda.Dockerfile .
+</details>
 
 You may want to pass in some different `ARGS`, depending on the CUDA environment supported by your container host, as well as the GPU architecture.
 
@@ -82,23 +84,33 @@ The resulting images, are essentially the same as the non-CUDA images:
 
 After building locally, Usage is similar to the non-CUDA examples, but you'll need to add the `--gpus` flag. You will also want to use the `--n-gpu-layers` flag.
 
-```bash
+<details><summary>Docker example</summary>
 docker run --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
 docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
 docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512 --n-gpu-layers 1
-```
+</details>
+<details><summary>Podman example</summary>
+podman run --security-opt label=disable --gpus all -v /path/to/models:/models local/llama.cpp:full-cuda --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+podman run --security-opt label=disable --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
+podman run --security-opt label=disable --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512 --n-gpu-layers 1
+</details>
 
-## Docker With MUSA
+## Container engines With MUSA
 
 Assuming one has the [mt-container-toolkit](https://developer.mthreads.com/musa/native) properly installed on Linux, `muBLAS` should be accessible inside the container.
 
-## Building Docker locally
+## Building Container images locally
 
-```bash
+<details><summary>Docker example</summary>
 docker build -t local/llama.cpp:full-musa --target full -f .devops/musa.Dockerfile .
 docker build -t local/llama.cpp:light-musa --target light -f .devops/musa.Dockerfile .
 docker build -t local/llama.cpp:server-musa --target server -f .devops/musa.Dockerfile .
-```
+</details>
+<details><summary>Podman example</summary>
+podman build -t local/llama.cpp:full-musa --target full -f .devops/musa.Dockerfile .
+podman build -t local/llama.cpp:light-musa --target light -f .devops/musa.Dockerfile .
+podman build -t local/llama.cpp:server-musa --target server -f .devops/musa.Dockerfile .
+</details>
 
 You may want to pass in some different `ARGS`, depending on the MUSA environment supported by your container host, as well as the GPU architecture.
 

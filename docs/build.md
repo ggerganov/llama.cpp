@@ -94,13 +94,13 @@ Building through oneAPI compilers will make avx_vnni instruction set available f
 - Using manual oneAPI installation:
   By default, `GGML_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DGGML_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
     ```bash
-    source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
+    source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit container image, only required for manual installation
     cmake -B build -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_NATIVE=ON
     cmake --build build --config Release
     ```
 
-- Using oneAPI docker image:
-  If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
+- Using oneAPI container image:
+  If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
 
 Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
@@ -280,19 +280,21 @@ cmake -B build -DGGML_VULKAN=ON
 cmake --build build --config Release
 ```
 
-**With docker**:
+**With containers**:
 
 You don't need to install Vulkan SDK. It will be installed inside the container.
 
-```sh
 # Build the image
-docker build -t llama-cpp-vulkan --target light -f .devops/vulkan.Dockerfile .
+
+<details><summary>Docker example</summary>docker build -t llama-cpp-vulkan --target light -f .devops/vulkan.Dockerfile .</details>
+<details><summary>Podman example</summary>podman build -t llama-cpp-vulkan --target light -f .devops/vulkan.Dockerfile .</details>
+
 
 # Then, use it:
-docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
-```
+<details><summary>Docker example</summary>docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33</details>
+<details><summary>Podman example</summary>podman run --security-opt label=disable -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33</details>
 
-**Without docker**:
+**Without a container**:
 
 Firstly, you need to make sure you have installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
 
