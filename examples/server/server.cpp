@@ -3516,7 +3516,7 @@ int main(int argc, char ** argv) {
             auto tmp = string_split<std::string>(req.path, '.');
             if (req.path == "/" || tmp.back() == "html") {
                 res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
-                res.status = res.status == httplib::StatusCode::ServiceUnavailable_503;
+                res.status = httplib::StatusCode::ServiceUnavailable_503;
             } else {
                 res_error(res, format_error_response("Loading model", ERROR_TYPE_UNAVAILABLE));
             }
