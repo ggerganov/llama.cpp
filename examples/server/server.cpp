@@ -4321,7 +4321,6 @@ int main(int argc, char ** argv) {
             });
         }
         res_ok(res, result);
-        res.status = httplib::StatusCode::OK_200; // HTTP OK
     };
 
     const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
