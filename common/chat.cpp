@@ -937,7 +937,6 @@ static common_chat_msg common_chat_parse_content_only(const std::string & input)
 }
 
 common_chat_msg common_chat_parse(const std::string & input, common_chat_format format) {
-    LOG_DBG("[%s] format=%s, input:\n%s\n", __func__, common_chat_format_name(format).c_str(), input.c_str());
     switch (format) {
         case COMMON_CHAT_FORMAT_CONTENT_ONLY:
             return common_chat_parse_content_only(input);
