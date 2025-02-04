@@ -20,7 +20,10 @@
 #define GGML_METAL_MAX_COMMAND_BUFFERS 8
 
 // create residency sets only on macOS >= 15.0
-#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || \
+    TARGET_OS_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 || \
+    TARGET_OS_TV && __TV_OS_VERSION_MAX_ALLOWED >= 180000 || \
+    TARGET_OS_VISION && __VISION_OS_VERSION_MAX_ALLOWED >= 200000
 #define GGML_METAL_HAS_RESIDENCY_SETS 1
 #endif
 
@@ -1071,7 +1074,7 @@ static bool ggml_backend_metal_buffer_rset_init(
     }
 
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
-    if (@available(macOS 15.0, *)) {
+    if (@available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 2.0, *)) {
         MTLResidencySetDescriptor * desc = [[MTLResidencySetDescriptor alloc] init];
         desc.label = @"ggml_backend_metal";
         desc.initialCapacity = ctx->n_buffers;
@@ -1106,7 +1109,7 @@ static bool ggml_backend_metal_buffer_rset_init(
 // rset free
 static void ggml_backend_metal_buffer_rset_free(struct ggml_backend_metal_buffer_context * ctx) {
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
-    if (@available(macOS 15.0, *)) {
+    if (@available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 2.0, *)) {
         if (ctx->rset) {
             [ctx->rset endResidency];
             [ctx->rset removeAllAllocations];
