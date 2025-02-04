@@ -1136,61 +1136,74 @@ curl http://localhost:8080/v1/chat/completions \
 
   | Template | Format |
   |----------|--------|
-  | CohereForAI-c4ai-command-r-plus-default.jinja | generic tool calls |
-  | CohereForAI-c4ai-command-r-plus-rag.jinja | generic tool calls |
-  | CohereForAI-c4ai-command-r-plus-tool_use.jinja | generic tool calls |
-  | MiniMaxAI-MiniMax-Text-01.jinja | generic tool calls |
-  | NexaAIDev-Octopus-v2.jinja | generic tool calls |
-  | NousResearch-Hermes-2-Pro-Llama-3-8B-default.jinja | generic tool calls |
-  | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja | hermes 2 pro tool calls |
-  | NousResearch-Hermes-2-Pro-Mistral-7B-default.jinja | generic tool calls |
-  | NousResearch-Hermes-2-Pro-Mistral-7B-tool_use.jinja | hermes 2 pro tool calls |
-  | NousResearch-Hermes-3-Llama-3.1-70B-default.jinja | generic tool calls |
-  | NousResearch-Hermes-3-Llama-3.1-70B-tool_use.jinja | hermes 2 pro tool calls |
-  | OrionStarAI-Orion-14B-Chat.jinja | generic tool calls |
-  | Qwen-QwQ-32B-Preview.jinja | hermes 2 pro tool calls |
-  | Qwen-Qwen2-7B-Instruct.jinja | generic tool calls |
-  | Qwen-Qwen2-VL-7B-Instruct.jinja | generic tool calls |
-  | Qwen-Qwen2.5-7B-Instruct.jinja | hermes 2 pro tool calls |
-  | Qwen-Qwen2.5-Math-7B-Instruct.jinja | hermes 2 pro tool calls |
-  | TheBloke-FusionNet_34Bx2_MoE-AWQ.jinja | generic tool calls |
-  | abacusai-Fewshot-Metamath-OrcaVicuna-Mistral.jinja | generic tool calls |
-  | bofenghuang-vigogne-2-70b-chat.jinja | generic tool calls |
-  | databricks-dbrx-instruct.jinja | generic tool calls |
-  | deepseek-ai-DeepSeek-Coder-V2-Instruct.jinja | generic tool calls |
-  | deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja | deepseek r1 tool calls |
-  | deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja | deepseek r1 tool calls |
-  | deepseek-ai-DeepSeek-R1-Distill-Qwen-7B.jinja | deepseek r1 tool calls |
-  | deepseek-ai-DeepSeek-V2.5.jinja | deepseek r1 tool calls |
-  | deepseek-ai-deepseek-coder-33b-instruct.jinja | generic tool calls |
-  | google-gemma-2-2b-it.jinja | generic tool calls |
-  | google-gemma-7b-it.jinja | generic tool calls |
-  | indischepartij-MiniCPM-3B-OpenHermes-2.5-v2.jinja | generic tool calls |
-  | mattshumer-Reflection-Llama-3.1-70B.jinja | generic tool calls |
-  | meetkai-functionary-medium-v3.2.jinja | functionary v3.2 tool calls |
-  | meta-llama-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
-  | meta-llama-Llama-3.2-3B-Instruct.jinja | llama 3.x tool calls |
-  | meta-llama-Llama-3.3-70B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
-  | meta-llama-Meta-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
-  | microsoft-Phi-3-medium-4k-instruct.jinja | generic tool calls |
-  | microsoft-Phi-3-mini-4k-instruct.jinja | generic tool calls |
-  | microsoft-Phi-3-small-8k-instruct.jinja | generic tool calls |
-  | microsoft-Phi-3.5-mini-instruct.jinja | generic tool calls |
-  | microsoft-Phi-3.5-vision-instruct.jinja | generic tool calls |
-  | mistralai-Mistral-7B-Instruct-v0.2.jinja | generic tool calls |
-  | mistralai-Mistral-Large-Instruct-2407.jinja | mistral nemo tool calls |
-  | mistralai-Mistral-Large-Instruct-2411.jinja | generic tool calls |
-  | mistralai-Mistral-Nemo-Instruct-2407.jinja | mistral nemo tool calls |
-  | mistralai-Mixtral-8x7B-Instruct-v0.1.jinja | generic tool calls |
-  | mlabonne-AlphaMonarch-7B.jinja | generic tool calls |
-  | nvidia-Llama-3.1-Nemotron-70B-Instruct-HF.jinja | llama 3.x tool calls (w/ builtin tools) |
-  | openchat-openchat-3.5-0106.jinja | generic tool calls |
-  | teknium-OpenHermes-2.5-Mistral-7B.jinja | generic tool calls |
+  | CohereForAI-c4ai-command-r-plus-default.jinja | Generic |
+  | CohereForAI-c4ai-command-r-plus-rag.jinja | Generic |
+  | CohereForAI-c4ai-command-r-plus-tool_use.jinja | Generic |
+  | CohereForAI-c4ai-command-r7b-12-2024-default.jinja | Command R7B |
+  | CohereForAI-c4ai-command-r7b-12-2024-rag.jinja | Command R7B |
+  | CohereForAI-c4ai-command-r7b-12-2024-tool_use.jinja | Command R7B |
+  | Infinigence-Megrez-3B-Instruct.jinja | Generic |
+  | LGAI-EXAONE-EXAONE-3.5-7.8B-Instruct.jinja | Generic |
+  | MiniMaxAI-MiniMax-Text-01.jinja | Generic |
+  | NexaAIDev-Octopus-v2.jinja | Generic |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-default.jinja | Generic |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja | Hermes 2 Pro |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-default.jinja | Generic |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-tool_use.jinja | Hermes 2 Pro |
+  | NousResearch-Hermes-3-Llama-3.1-70B-default.jinja | Generic |
+  | NousResearch-Hermes-3-Llama-3.1-70B-tool_use.jinja | Hermes 2 Pro |
+  | OrionStarAI-Orion-14B-Chat.jinja | Generic |
+  | Qwen-QwQ-32B-Preview.jinja | Hermes 2 Pro |
+  | Qwen-Qwen2-7B-Instruct.jinja | Generic |
+  | Qwen-Qwen2-VL-7B-Instruct.jinja | Generic |
+  | Qwen-Qwen2.5-7B-Instruct.jinja | Hermes 2 Pro |
+  | Qwen-Qwen2.5-Math-7B-Instruct.jinja | Hermes 2 Pro |
+  | THUDM-glm-4-9b-chat.jinja | Generic |
+  | THUDM-glm-edge-1.5b-chat.jinja | Generic |
+  | TheBloke-FusionNet_34Bx2_MoE-AWQ.jinja | Generic |
+  | abacusai-Fewshot-Metamath-OrcaVicuna-Mistral.jinja | Generic |
+  | ai21labs-AI21-Jamba-1.5-Large.jinja | Generic |
+  | bofenghuang-vigogne-2-70b-chat.jinja | Generic |
+  | databricks-dbrx-instruct.jinja | Generic |
+  | deepseek-ai-DeepSeek-Coder-V2-Instruct.jinja | Generic |
+  | deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja | DeepSeek R1 |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja | DeepSeek R1 |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-7B.jinja | DeepSeek R1 |
+  | deepseek-ai-DeepSeek-V2.5.jinja | DeepSeek R1 |
+  | deepseek-ai-deepseek-coder-33b-instruct.jinja | Generic |
+  | fireworks-ai-llama-3-firefunction-v2.jinja | FireFunction v2 |
+  | google-gemma-2-2b-it.jinja | Generic |
+  | google-gemma-7b-it.jinja | Generic |
+  | ibm-granite-granite-3.1-8b-instruct.jinja | Generic |
+  | indischepartij-MiniCPM-3B-OpenHermes-2.5-v2.jinja | Generic |
+  | mattshumer-Reflection-Llama-3.1-70B.jinja | Generic |
+  | meetkai-functionary-medium-v3.1.jinja | Functionary v3.1 Llama 3.1 |
+  | meetkai-functionary-medium-v3.2.jinja | Functionary v3.2 |
+  | meta-llama-Llama-2-7b-chat-hf.jinja | Generic |
+  | meta-llama-Llama-3.1-8B-Instruct.jinja | Llama 3.x |
+  | meta-llama-Llama-3.2-3B-Instruct.jinja | Llama 3.x |
+  | meta-llama-Llama-3.3-70B-Instruct.jinja | Llama 3.x |
+  | meta-llama-Meta-Llama-3.1-8B-Instruct.jinja | Llama 3.x |
+  | microsoft-Phi-3-medium-4k-instruct.jinja | Generic |
+  | microsoft-Phi-3-mini-4k-instruct.jinja | Generic |
+  | microsoft-Phi-3-small-8k-instruct.jinja | Generic |
+  | microsoft-Phi-3.5-mini-instruct.jinja | Generic |
+  | microsoft-Phi-3.5-vision-instruct.jinja | Generic |
+  | mistralai-Mistral-7B-Instruct-v0.2.jinja | Generic |
+  | mistralai-Mistral-Large-Instruct-2407.jinja | Mistral Nemo |
+  | mistralai-Mistral-Large-Instruct-2411.jinja | Generic |
+  | mistralai-Mistral-Nemo-Instruct-2407.jinja | Mistral Nemo |
+  | mistralai-Mixtral-8x7B-Instruct-v0.1.jinja | Generic |
+  | mlabonne-AlphaMonarch-7B.jinja | Generic |
+  | nvidia-Llama-3.1-Nemotron-70B-Instruct-HF.jinja | Llama 3.x |
+  | openchat-openchat-3.5-0106.jinja | Generic |
+  | teknium-OpenHermes-2.5-Mistral-7B.jinja | Generic |
 
   This table can be generated with:
 
   ```bash
   ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+  ```
 
   </details>
 
