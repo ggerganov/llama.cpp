@@ -303,13 +303,13 @@ class chat_template {
         auto has_tool_responses = false;
         auto has_string_content = false;
         for (const auto & message : inputs.messages) {
-            if (!message["tool_calls"].is_null()) {
+            if (message.contains("tool_calls") && !message["tool_calls"].is_null()) {
                 has_tool_calls = true;
             }
-            if (message["role"] == "tool") {
+            if (message.contains("role") && message["role"] == "tool") {
                 has_tool_responses = true;
             }
-            if (message["content"].is_string()) {
+            if (message.contains("content") && message["content"].is_string()) {
                 has_string_content = true;
             }
         }
