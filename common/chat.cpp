@@ -1041,7 +1041,7 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
 
     // Use generic handler when forcing thoughts or JSON schema for final output
     // TODO: support thinking mode and/or JSON schema in handlers below this.
-    if (inputs.think || inputs.json_schema.is_object()) {
+    if (inputs.think || !inputs.tools.is_null() && inputs.json_schema.is_object()) {
         return common_chat_params_init_generic(tmpl, inputs);
     }
 
