@@ -279,18 +279,17 @@ static common_chat_params common_chat_params_init_generic(const common_chat_temp
             /*
               This kind of turns any model into a thinking model by requiring the output to be (in TypeScript notation):
 
-                // ResponseSchema is json_schema if set, otherwisestring
+                // ResponseSchema is json_schema if set, otherwise string
 
-                Schema             = ({thoughts: string} & ToolCallSchema) | {thoughts: string, response: ResponseSchema}
-                SchemaToolRequired =  {thoughts: string} & ToolCallSchema
+                type SchemaToolRequired     =  {thoughts: string} & ToolCallSchema
+                type Schema                 = ({thoughts: string} & ToolCallSchema) | {thoughts: string, response: ResponseSchema}
 
+                type ToolCallSchema         = SingleToolCallSchema | ParallelToolCallSchema
+                type SingleToolCallSchema   = {tool_call: ToolCall}
+                type ParallelToolCallSchema = {tool_calls: ToolCall[]} // If parallel_tool_calls is true
 
-                ToolCallSchema         = SingleToolCallSchema | ParallelToolCallSchema
-                SingleToolCallSchema   = {tool_call: ToolCall}
-                ParallelToolCallSchema = {tool_calls: ToolCall[]} // If parallel_tool_calls is true
-
-                ToolCall = {name: string, arguments: ParametersSchema, id?: string} // id only if parallel_tool_calls is true
-                ParametersSchema = tool1_params | tool2_params | ...
+                type ToolCall = {name: string, arguments: ParametersSchema, id?: string} // id only if parallel_tool_calls is true
+                type ParametersSchema = tool1_params | tool2_params | ...
             */
 
             // TODO(ochafik): make the prompts configurable (jinja template?).
@@ -1041,7 +1040,7 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
 
     // Use generic handler when forcing thoughts or JSON schema for final output
     // TODO: support thinking mode and/or JSON schema in handlers below this.
-    if (inputs.think || !inputs.tools.is_null() && inputs.json_schema.is_object()) {
+    if (inputs.think || (!inputs.tools.is_null() && inputs.json_schema.is_object())) {
         return common_chat_params_init_generic(tmpl, inputs);
     }
 
