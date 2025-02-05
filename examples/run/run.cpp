@@ -837,37 +837,50 @@ static void add_message(const char * role, const std::string & text, LlamaData &
     llama_data.messages.push_back({ role, llama_data.msg_strs.back().c_str() });
 }
 
+// Function to handle Jinja template application
+static int handle_jinja_template(const common_chat_template & tmpl, LlamaData & llama_data, const bool append) {
+    json messages = json::array();
+    for (const auto & msg : llama_data.messages) {
+        messages.push_back({
+            { "role",    msg.role    },
+            { "content", msg.content },
+        });
+    }
+
+    try {
+        minja::chat_template_inputs tmpl_inputs;
+        tmpl_inputs.messages              = messages;
+        tmpl_inputs.add_generation_prompt = append;
+
+        minja::chat_template_options tmpl_opts;
+        tmpl_opts.use_bos_token = false;
+        tmpl_opts.use_eos_token = false;
+
+        auto result = tmpl.apply(tmpl_inputs, tmpl_opts);
+        llama_data.fmtted.resize(result.size() + 1);
+        memcpy(llama_data.fmtted.data(), result.c_str(), result.size() + 1);
+        return result.size();
+    } catch (const std::exception & e) {
+        printe("failed to render the chat template: %s\n", e.what());
+    }
+
+    return -1;
+}
+
 // Function to apply the chat template and resize `formatted` if needed
 static int apply_chat_template(const common_chat_template & tmpl, LlamaData & llama_data, const bool append, bool use_jinja) {
     if (use_jinja) {
-        json messages = json::array();
-        for (const auto & msg : llama_data.messages) {
-            messages.push_back({
-                {"role", msg.role},
-                {"content", msg.content},
-            });
-        }
-        try {
-            minja::chat_template_inputs tmpl_inputs;
-            tmpl_inputs.messages = messages;
-            tmpl_inputs.add_generation_prompt = append;
-
-            minja::chat_template_options tmpl_opts;
-            tmpl_opts.use_bos_token = false;
-            tmpl_opts.use_eos_token = false;
-
-            auto result = tmpl.apply(tmpl_inputs, tmpl_opts);
-            llama_data.fmtted.resize(result.size() + 1);
-            memcpy(llama_data.fmtted.data(), result.c_str(), result.size() + 1);
-            return result.size();
-        } catch (const std::exception & e) {
-            printe("failed to render the chat template: %s\n", e.what());
-            return -1;
-        }
+        return handle_jinja_template(tmpl, llama_data, append);
     }
+
     int result = llama_chat_apply_template(
         tmpl.source().c_str(), llama_data.messages.data(), llama_data.messages.size(), append,
         append ? llama_data.fmtted.data() : nullptr, append ? llama_data.fmtted.size() : 0);
+    // If llama_chat_apply_template fails to apply template, fallback to using jinja
+    if (result < 0) {
+        return handle_jinja_template(tmpl, llama_data, append);
+    }
+
     if (append && result > static_cast<int>(llama_data.fmtted.size())) {
         llama_data.fmtted.resize(result);
         result = llama_chat_apply_template(tmpl.source().c_str(), llama_data.messages.data(),

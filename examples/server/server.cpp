@@ -1895,30 +1895,44 @@ struct server_context {
         return true;
     }
 
+    bool apply_jinja_templates() const {
+        auto               templates = common_chat_templates_from_model(model, "");
+        common_chat_inputs inputs;
+        inputs.messages = json::array({
+            {
+             { "role", "user" },
+             { "content", "test" },
+             }
+        });
+        GGML_ASSERT(templates.template_default);
+        try {
+            common_chat_params_init(*templates.template_default, inputs);
+            if (templates.template_tool_use) {
+                common_chat_params_init(*templates.template_tool_use, inputs);
+            }
+
+            return true;
+        } catch (const std::exception & e) {
+            SRV_ERR("failed to apply template: %s\n", e.what());
+
+            return false;
+        }
+    }
+
     bool validate_builtin_chat_template(bool use_jinja) const {
-        llama_chat_message chat[] = {{"user", "test"}};
+        llama_chat_message chat[] = {
+            { "user", "test" }
+        };
 
         if (use_jinja) {
-            auto templates = common_chat_templates_from_model(model, "");
-            common_chat_inputs inputs;
-            inputs.messages = json::array({{
-                {"role", "user"},
-                {"content", "test"},
-            }});
-            GGML_ASSERT(templates.template_default);
-            try {
-                common_chat_params_init(*templates.template_default, inputs);
-                if (templates.template_tool_use) {
-                    common_chat_params_init(*templates.template_tool_use, inputs);
-                }
-                return true;
-            } catch (const std::exception & e) {
-                SRV_ERR("failed to apply template: %s\n", e.what());
-                return false;
-            }
+            return apply_jinja_templates();
         } else {
-            const char * tmpl = llama_model_chat_template(model, /* name */ nullptr);
+            const char *  tmpl     = llama_model_chat_template(model, /* name */ nullptr);
             const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
+            if (chat_res < 0) {
+                return apply_jinja_templates();
+            }
+
             return chat_res > 0;
         }
     }
