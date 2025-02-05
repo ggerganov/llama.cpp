@@ -4329,6 +4329,21 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
         }
     }
 
+#if 0
+    for (int bs : {1, 64}) {
+        for (ggml_type type_a : {GGML_TYPE_Q4_0}) {
+            for (ggml_type type_b : {GGML_TYPE_F32}) {
+                int n_experts = 256;
+                int n_used = 8;
+                int n_embd = 7168;
+                int n_ff = 2048;
+                test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_experts, n_used, true, n_embd, bs, n_ff));
+                //test_cases.emplace_back(new test_mul_mat(type_a, type_b, n_embd, bs, n_ff, {1,  1}, {1, 1}));
+            }
+        }
+    }
+#endif
+
     for (int K : {3, 5}) {
         for (int IC : {256, 2560}) {
             for (int IW_IH : {32, 64, 256}) {
@@ -4462,7 +4477,7 @@ int main(int argc, char ** argv) {
         auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
         if (ggml_backend_set_n_threads_fn) {
             // TODO: better value for n_threads
-            ggml_backend_set_n_threads_fn(backend, std::thread::hardware_concurrency());
+            ggml_backend_set_n_threads_fn(backend, std::thread::hardware_concurrency() / 2);
         }
 
         printf("  Device description: %s\n", ggml_backend_dev_description(dev));
