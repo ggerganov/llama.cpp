@@ -1899,10 +1899,10 @@ struct server_context {
         auto               templates = common_chat_templates_from_model(model, "");
         common_chat_inputs inputs;
         inputs.messages = json::array({
-            {
-             { "role", "user" },
-             { "content", "test" },
-             }
+          {
+            { "role", "user" },
+            { "content", "test" },
+          }
         });
         GGML_ASSERT(templates.template_default);
         try {
@@ -1925,12 +1925,12 @@ struct server_context {
         };
 
         if (use_jinja) {
-            return apply_jinja_templates();
+            return validate_jinja_templates();
         } else {
             const char *  tmpl     = llama_model_chat_template(model, /* name */ nullptr);
             const int32_t chat_res = llama_chat_apply_template(tmpl, chat, 1, true, nullptr, 0);
             if (chat_res < 0) {
-                return apply_jinja_templates();
+                return validate_jinja_templates();
             }
 
             return chat_res > 0;
