@@ -2324,5 +2324,47 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_TTS}));
 
+    add_opt(common_arg(
+        {"--embd-bge-small-en-default"},
+        string_format("use default bge-small-en-v1.5 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "CompendiumLabs/bge-small-en-v1.5-gguf";
+            params.hf_file = "bge-small-en-v1.5-q4_k_m.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-e5-small-en-default"},
+        string_format("use default e5-small-v2 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ChristianAzinn/e5-small-v2-gguf";
+            params.hf_file = "e5-small-v2.Q4_K_M.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-gte-small-default"},
+        string_format("use default gte-small model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ChristianAzinn/gte-small-gguf";
+            params.hf_file = "gte-small.Q4_K_M.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
     return ctx_arg;
 }
