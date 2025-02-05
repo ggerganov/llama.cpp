@@ -671,6 +671,11 @@ struct common_chat_templates {
     std::unique_ptr<common_chat_template> template_tool_use;
 };
 
+struct common_chat_sampling_updater {
+    common_params_sampling * sparams;
+    const llama_vocab      * vocab;
+};
+
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
@@ -679,7 +684,8 @@ std::string common_chat_apply_template(
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
         bool use_jinja,
-        const common_params_tools & tools = common_params_tools());
+        const common_params_tools & tools = common_params_tools(),
+        common_chat_sampling_updater * update_sparams = nullptr);
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
@@ -688,7 +694,8 @@ std::string common_chat_format_single(
         const common_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        const common_params_tools & tools = common_params_tools());
+        const common_params_tools & tools = common_params_tools(),
+        common_chat_sampling_updater * update_sparams = nullptr);
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(

@@ -263,14 +263,18 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
-    auto chat_add_and_format = [&chat_msgs, &chat_templates](
+    auto chat_add_and_format = [&chat_msgs, &chat_templates, &sparams, vocab](
         const std::string & role, const std::string & content,
         const common_params_tools & tools = common_params_tools())
     {
+        bool add_ass = (role == "user");
+
         common_chat_msg new_msg{role, content, {}};
 
-        auto formatted = common_chat_format_single(chat_templates, chat_msgs,
-            new_msg, role == "user", g_params->use_jinja, tools);
+        common_chat_sampling_updater updater{&sparams, vocab};
+        auto formatted =
+            common_chat_format_single(chat_templates, chat_msgs, new_msg, add_ass, g_params->use_jinja,
+                                      tools, &updater);
 
         chat_msgs.push_back({role, content, {}});
         LOG_DBG("formatted: '%s'\n", formatted.c_str());
