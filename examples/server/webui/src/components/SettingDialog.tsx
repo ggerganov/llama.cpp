@@ -6,19 +6,44 @@ import StorageUtils from '../utils/storage';
 
 type SettKey = keyof typeof CONFIG_DEFAULT;
 
-const COMMON_SAMPLER_KEYS: SettKey[] = ['temperature', 'top_k', 'top_p', 'min_p', 'max_tokens'];
-const OTHER_SAMPLER_KEYS: SettKey[] = ['dynatemp_range', 'dynatemp_exponent', 'typical_p', 'xtc_probability', 'xtc_threshold'];
-const PENALTY_KEYS: SettKey[] = ['repeat_last_n', 'repeat_penalty', 'presence_penalty', 'frequency_penalty', 
-  'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n'];
+const COMMON_SAMPLER_KEYS: SettKey[] = [
+  'temperature',
+  'top_k',
+  'top_p',
+  'min_p',
+  'max_tokens',
+];
+const OTHER_SAMPLER_KEYS: SettKey[] = [
+  'dynatemp_range',
+  'dynatemp_exponent',
+  'typical_p',
+  'xtc_probability',
+  'xtc_threshold',
+];
+const PENALTY_KEYS: SettKey[] = [
+  'repeat_last_n',
+  'repeat_penalty',
+  'presence_penalty',
+  'frequency_penalty',
+  'dry_multiplier',
+  'dry_base',
+  'dry_allowed_length',
+  'dry_penalty_last_n',
+];
 
-export default function SettingDialog({ show, onClose }: {
+export default function SettingDialog({
+  show,
+  onClose,
+}: {
   show: boolean;
   onClose: () => void;
 }) {
   const { config, saveConfig } = useAppContext();
 
   // clone the config object to prevent direct mutation
-  const [localConfig, setLocalConfig] = useState<typeof CONFIG_DEFAULT>(JSON.parse(JSON.stringify(config)));
+  const [localConfig, setLocalConfig] = useState<typeof CONFIG_DEFAULT>(
+    JSON.parse(JSON.stringify(config))
+  );
 
   const resetConfig = () => {
     if (window.confirm('Are you sure to reset all settings?')) {
@@ -39,20 +64,24 @@ export default function SettingDialog({ show, onClose }: {
       StorageUtils.appendMsg(demoConv.id, msg);
     }
     onClose();
-  }
+  };
 
   return (
     <dialog className={`modal ${show ? 'modal-open' : ''}`}>
       <div className="modal-box">
         <h3 className="text-lg font-bold mb-6">Settings</h3>
         <div className="h-[calc(90vh-12rem)] overflow-y-auto">
-          <p className="opacity-40 mb-6">Settings below are saved in browser's localStorage</p>
-          
+          <p className="opacity-40 mb-6">
+            Settings below are saved in browser's localStorage
+          </p>
+
           <SettingsModalShortInput
             configKey="apiKey"
             configDefault={CONFIG_DEFAULT}
             value={localConfig.apiKey}
-            onChange={(value) => setLocalConfig({ ...localConfig, apiKey: value })}
+            onChange={(value) =>
+              setLocalConfig({ ...localConfig, apiKey: value })
+            }
           />
 
           <label className="form-control mb-2">
@@ -61,7 +90,12 @@ export default function SettingDialog({ show, onClose }: {
               className="textarea textarea-bordered h-24"
               placeholder={`Default: ${CONFIG_DEFAULT.systemMessage}`}
               value={localConfig.systemMessage}
-              onChange={(e) => setLocalConfig({ ...localConfig, systemMessage: e.target.value })}
+              onChange={(e) =>
+                setLocalConfig({
+                  ...localConfig,
+                  systemMessage: e.target.value,
+                })
+              }
             />
           </label>
 
@@ -71,19 +105,25 @@ export default function SettingDialog({ show, onClose }: {
               configKey={key}
               configDefault={CONFIG_DEFAULT}
               value={localConfig[key]}
-              onChange={(value) => setLocalConfig({ ...localConfig, [key]: value })}
+              onChange={(value) =>
+                setLocalConfig({ ...localConfig, [key]: value })
+              }
             />
           ))}
 
           <details className="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
-            <summary className="collapse-title font-bold">Other sampler settings</summary>
+            <summary className="collapse-title font-bold">
+              Other sampler settings
+            </summary>
             <div className="collapse-content">
               <SettingsModalShortInput
                 label="Samplers queue"
                 configKey="samplers"
                 configDefault={CONFIG_DEFAULT}
                 value={localConfig.samplers}
-                onChange={(value) => setLocalConfig({ ...localConfig, samplers: value })}
+                onChange={(value) =>
+                  setLocalConfig({ ...localConfig, samplers: value })
+                }
               />
               {OTHER_SAMPLER_KEYS.map((key) => (
                 <SettingsModalShortInput
@@ -91,14 +131,18 @@ export default function SettingDialog({ show, onClose }: {
                   configKey={key}
                   configDefault={CONFIG_DEFAULT}
                   value={localConfig[key]}
-                  onChange={(value) => setLocalConfig({ ...localConfig, [key]: value })}
+                  onChange={(value) =>
+                    setLocalConfig({ ...localConfig, [key]: value })
+                  }
                 />
               ))}
             </div>
           </details>
 
           <details className="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
-            <summary className="collapse-title font-bold">Penalties settings</summary>
+            <summary className="collapse-title font-bold">
+              Penalties settings
+            </summary>
             <div className="collapse-content">
               {PENALTY_KEYS.map((key) => (
                 <SettingsModalShortInput
@@ -106,51 +150,79 @@ export default function SettingDialog({ show, onClose }: {
                   configKey={key}
                   configDefault={CONFIG_DEFAULT}
                   value={localConfig[key]}
-                  onChange={(value) => setLocalConfig({ ...localConfig, [key]: value })}
+                  onChange={(value) =>
+                    setLocalConfig({ ...localConfig, [key]: value })
+                  }
                 />
               ))}
             </div>
           </details>
 
           <details className="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
-            <summary className="collapse-title font-bold">Reasoning models</summary>
+            <summary className="collapse-title font-bold">
+              Reasoning models
+            </summary>
             <div className="collapse-content">
               <div className="flex flex-row items-center mb-2">
                 <input
                   type="checkbox"
                   className="checkbox"
                   checked={localConfig.showThoughtInProgress}
-                  onChange={(e) => setLocalConfig({ ...localConfig, showThoughtInProgress: e.target.checked })}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      showThoughtInProgress: e.target.checked,
+                    })
+                  }
                 />
-                <span className="ml-4">Expand though process by default for generating message</span>
+                <span className="ml-4">
+                  Expand though process by default for generating message
+                </span>
               </div>
               <div className="flex flex-row items-center mb-2">
                 <input
                   type="checkbox"
                   className="checkbox"
                   checked={localConfig.excludeThoughtOnReq}
-                  onChange={(e) => setLocalConfig({ ...localConfig, excludeThoughtOnReq: e.target.checked })}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      excludeThoughtOnReq: e.target.checked,
+                    })
+                  }
                 />
-                <span className="ml-4">Exclude thought process when sending request to API (Recommended for DeepSeek-R1)</span>
+                <span className="ml-4">
+                  Exclude thought process when sending request to API
+                  (Recommended for DeepSeek-R1)
+                </span>
               </div>
             </div>
           </details>
 
           <details className="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
-            <summary className="collapse-title font-bold">Advanced config</summary>
+            <summary className="collapse-title font-bold">
+              Advanced config
+            </summary>
             <div className="collapse-content">
-                {/* this button only shows in dev mode, used to import a demo conversation to test message rendering */}
-                {isDev && (
+              {/* this button only shows in dev mode, used to import a demo conversation to test message rendering */}
+              {isDev && (
                 <div className="flex flex-row items-center mb-2">
-                  <button className="btn" onClick={debugImportDemoConv}>(debug) Import demo conversation</button>
+                  <button className="btn" onClick={debugImportDemoConv}>
+                    (debug) Import demo conversation
+                  </button>
                 </div>
-                )}
+              )}
               <div className="flex flex-row items-center mb-2">
                 <input
                   type="checkbox"
                   className="checkbox"
                   checked={localConfig.showTokensPerSecond}
-                  onChange={(e) => setLocalConfig({ ...localConfig, showTokensPerSecond: e.target.checked })}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      showTokensPerSecond: e.target.checked,
+                    })
+                  }
                 />
                 <span className="ml-4">Show tokens per second</span>
               </div>
@@ -171,7 +243,9 @@ export default function SettingDialog({ show, onClose }: {
                   className="textarea textarea-bordered h-24"
                   placeholder='Example: { "mirostat": 1, "min_p": 0.1 }'
                   value={localConfig.custom}
-                  onChange={(e) => setLocalConfig({ ...localConfig, custom: e.target.value })}
+                  onChange={(e) =>
+                    setLocalConfig({ ...localConfig, custom: e.target.value })
+                  }
                 />
               </label>
             </div>
@@ -194,9 +268,16 @@ export default function SettingDialog({ show, onClose }: {
   );
 }
 
-function SettingsModalShortInput({ configKey, configDefault, value, onChange, label }: {
-  configKey: string;
-  configDefault: any;
+function SettingsModalShortInput({
+  configKey,
+  configDefault,
+  value,
+  onChange,
+  label,
+}: {
+  configKey: SettKey;
+  configDefault: typeof CONFIG_DEFAULT;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
   onChange: (value: string) => void;
   label?: string;

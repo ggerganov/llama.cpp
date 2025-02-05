@@ -16,13 +16,9 @@ export const escapeAttr = (str: string) =>
   str.replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // wrapper for SSE
-export async function* sendSSEPostRequest(
-  url: string,
-  fetchOptions: RequestInit
-) {
-  const res = await fetch(url, fetchOptions);
-  if (!res.body) throw new Error('Response body is empty');
-  const lines: ReadableStream<string> = res.body
+export async function* getSSEStreamAsync(fetchResponse: Response) {
+  if (!fetchResponse.body) throw new Error('Response body is empty');
+  const lines: ReadableStream<string> = fetchResponse.body
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new TextLineStream());
   // @ts-expect-error asyncIterator complains about type, but it should work

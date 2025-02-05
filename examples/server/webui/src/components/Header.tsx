@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import StorageUtils from '../utils/storage';
 import { useAppContext } from '../utils/app.context';
 import { classNames } from '../utils/misc';
@@ -13,26 +13,29 @@ export default function Header() {
   const [showSettingDialog, setShowSettingDialog] = useState(false);
 
   const setTheme = (theme: string) => {
-    document.body.setAttribute('data-theme', theme);
-    document.body.setAttribute(
-      'data-color-scheme',
-      // @ts-expect-error daisyuiThemes complains about index type, but it should work
-      daisyuiThemes[theme]?.['color-scheme'] ?? 'auto'
-    );
     StorageUtils.setTheme(theme);
     setSelectedTheme(theme);
   };
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', selectedTheme);
+    document.body.setAttribute(
+      'data-color-scheme',
+      // @ts-expect-error daisyuiThemes complains about index type, but it should work
+      daisyuiThemes[selectedTheme]?.['color-scheme'] ?? 'auto'
+    );
+  }, [selectedTheme]);
 
   const { isGenerating, viewingConversation } = useAppContext();
 
   const removeConversation = () => {
     if (isGenerating || !viewingConversation) return;
     const convId = viewingConversation.id;
-      if (window.confirm('Are you sure to delete this conversation?')) {
-        StorageUtils.remove(convId);
-        navigate('/');
-      }
-    };
+    if (window.confirm('Are you sure to delete this conversation?')) {
+      StorageUtils.remove(convId);
+      navigate('/');
+    }
+  };
 
   const downloadConversation = () => {
     if (isGenerating || !viewingConversation) return;
@@ -47,7 +50,7 @@ export default function Header() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }
+  };
 
   return (
     <div className="flex flex-row items-center mt-6 mb-6">
@@ -105,7 +108,11 @@ export default function Header() {
           </ul>
         </div>
         <div className="tooltip tooltip-bottom" data-tip="Settings">
-          <button className="btn" disabled={isGenerating} onClick={() => setShowSettingDialog(true)}>
+          <button
+            className="btn"
+            disabled={isGenerating}
+            onClick={() => setShowSettingDialog(true)}
+          >
             {/* settings button */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -169,7 +176,10 @@ export default function Header() {
         </div>
       </div>
 
-      <SettingDialog show={showSettingDialog} onClose={() => setShowSettingDialog(false)} />
+      <SettingDialog
+        show={showSettingDialog}
+        onClose={() => setShowSettingDialog(false)}
+      />
     </div>
   );
 }

@@ -4,26 +4,34 @@ import StorageUtils from './storage';
 import {
   filterThoughtFromMsgs,
   normalizeMsgsForAPI,
-  sendSSEPostRequest,
+  getSSEStreamAsync,
 } from './misc';
 import { BASE_URL, CONFIG_DEFAULT, isDev } from '../Config';
-import { matchPath, useLocation, useParams } from 'react-router';
+import { matchPath, useLocation } from 'react-router';
 
 interface AppContextValue {
   isGenerating: boolean;
   viewingConversation: Conversation | null;
   pendingMessage: PendingMessage | null;
-  sendMessage: (convId: string, content: string) => Promise<void>;
+  sendMessage: (
+    convId: string,
+    content: string,
+    onChunk?: CallbackGeneratedChunk
+  ) => Promise<boolean>;
   stopGenerating: () => void;
   replaceMessageAndGenerate: (
     convId: string,
     origMsgId: Message['id'],
-    content?: string
+    content?: string,
+    onChunk?: CallbackGeneratedChunk
   ) => Promise<void>;
 
   config: typeof CONFIG_DEFAULT;
   saveConfig: (config: typeof CONFIG_DEFAULT) => void;
 }
+
+// for now, this callback is only used for scrolling to the bottom of the chat
+type CallbackGeneratedChunk = () => void;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AppContext = createContext<AppContextValue>({} as any);
@@ -58,7 +66,10 @@ export const AppContextProvider = ({
     };
   }, [convId]);
 
-  const generateMessage = async (convId: string) => {
+  const generateMessage = async (
+    convId: string,
+    onChunk?: CallbackGeneratedChunk
+  ) => {
     if (isGenerating) return;
 
     const config = StorageUtils.getConfig();
@@ -67,10 +78,12 @@ export const AppContextProvider = ({
       throw new Error('Current conversation is not found');
     }
 
+    const abortController = new AbortController();
     setIsGenerating(true);
-    setAbortController(new AbortController());
+    setAbortController(abortController);
 
     let pendingMsg: PendingMessage = {
+      convId,
       id: Date.now() + 1,
       role: 'assistant',
       content: null,
@@ -117,7 +130,7 @@ export const AppContextProvider = ({
       };
 
       // send request
-      const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
+      const fetchResponse = await fetch(`${BASE_URL}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -128,12 +141,21 @@ export const AppContextProvider = ({
         body: JSON.stringify(params),
         signal: abortController.signal,
       });
+      if (fetchResponse.status !== 200) {
+        const body = await fetchResponse.json();
+        throw new Error(body?.error?.message || 'Unknown error');
+      }
+      const chunks = getSSEStreamAsync(fetchResponse);
       for await (const chunk of chunks) {
         // const stop = chunk.stop;
+        if (chunk.error) {
+          throw new Error(chunk.error?.message || 'Unknown error');
+        }
         const addedContent = chunk.choices[0].delta.content;
         const lastContent = pendingMsg.content || '';
         if (addedContent) {
           pendingMsg = {
+            convId,
             id: pendingMsg.id,
             role: 'assistant',
             content: lastContent + addedContent,
@@ -150,8 +172,10 @@ export const AppContextProvider = ({
           };
         }
         setPendingMessage(pendingMsg);
+        onChunk?.();
       }
     } catch (err) {
+      console.error(err);
       setPendingMessage(null);
       setIsGenerating(false);
       if ((err as Error).name === 'AbortError') {
@@ -168,29 +192,39 @@ export const AppContextProvider = ({
 
     if (pendingMsg.content) {
       StorageUtils.appendMsg(currConversation.id, {
-        ...pendingMsg,
+        id: pendingMsg.id,
         content: pendingMsg.content,
+        role: pendingMsg.role,
+        timings: pendingMsg.timings,
       });
     }
     setPendingMessage(null);
     setIsGenerating(false);
+    onChunk?.(); // trigger scroll to bottom
   };
 
-  const sendMessage = async (convId: string, content: string) => {
-    if (isGenerating || content.trim().length === 0) return;
+  const sendMessage = async (
+    convId: string,
+    content: string,
+    onChunk?: CallbackGeneratedChunk
+  ): Promise<boolean> => {
+    if (isGenerating || content.trim().length === 0) return false;
 
     StorageUtils.appendMsg(convId, {
       id: Date.now(),
       role: 'user',
       content,
     });
+
     try {
-      await generateMessage(convId);
+      await generateMessage(convId, onChunk);
+      return true;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_) {
       // rollback
       StorageUtils.popMsg(convId);
     }
+    return false;
   };
 
   const stopGenerating = () => {
@@ -203,16 +237,18 @@ export const AppContextProvider = ({
   const replaceMessageAndGenerate = async (
     convId: string,
     origMsgId: Message['id'],
-    content?: string
+    content?: string,
+    onChunk?: CallbackGeneratedChunk
   ) => {
     if (isGenerating) return;
 
+    StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
     if (content) {
-      StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
-      await sendMessage(convId, content);
+      // case: replace user message then generate assistant message
+      await sendMessage(convId, content, onChunk);
     } else {
-      StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
-      await generateMessage(convId);
+      // case: generate last assistant message
+      await generateMessage(convId, onChunk);
     }
   };
 

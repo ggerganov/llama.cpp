@@ -28,7 +28,6 @@ function escapedBracketRule(options: typeof defaultOptions): RuleInline {
     const start = state.pos;
 
     for (const { left, right, display } of options.delimiters) {
-
       // Check if it starts with the left delimiter
       if (!state.src.slice(start).startsWith(left)) continue;
 
@@ -62,7 +61,7 @@ function escapedBracketRule(options: typeof defaultOptions): RuleInline {
       state.pos = pos + right.length;
       return true;
     }
-  }
+  };
 }
 
 export default function (md: MarkdownIt, options = defaultOptions) {
