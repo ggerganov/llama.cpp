@@ -162,7 +162,7 @@ if args.use_f32:
 
 if args.clip_model_is_siglip:
     model = SiglipVisionModel.from_pretrained(dir_model)
-    processor = None # TODO - optionally handle processor to correctly extract image stats etc
+    processor = None
 elif args.clip_model_is_vision or args.clip_model_is_openclip:
     model = CLIPVisionModel.from_pretrained(dir_model)
     processor = None
@@ -228,10 +228,12 @@ if has_text_encoder:
     fout.add_token_list(tokens)
 
 if has_vision_encoder:
-    # vision feature layer may be an integer or an array.
-    # TODO - it seems like llama cpp may not handle this correctly
-    # normally; check if HF llava next models can run through this converter...
-    if "vision_feature_layer" in v_hparams:
+    ## FIXME Need to pull this out of the overall model config, not just the top one?
+    #  TODO or document that vision_feature_layer can be set here, but it's usually in the
+    #  llava config and not the vision config itself;
+    # Handle vision feature layers in transformers, where features may be taken
+    # from layers that are not the last. NOTE - these values can be unsigned...
+    if "vision_feature_layer" in config:
         feature_layers = v_hparams["vision_feature_layer"]
         if isinstance(feature_layers, int):
             feature_layers = [feature_layers]
@@ -251,7 +253,7 @@ if has_vision_encoder:
     fout.add_uint32("clip.vision.projection_dim", visual_projection_dim)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), v_hparams["num_attention_heads"])
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), v_hparams["layer_norm_eps"])
-    block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
+    block_count = v_hparams["num_hidden_layers"] #- 1 if has_llava_projector else v_hparams["num_hidden_layers"]
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
                             #     /**
                             #      "image_grid_pinpoints": [
@@ -319,7 +321,7 @@ fout.add_bool("clip.use_gelu", use_gelu)
 
 
 if has_llava_projector:
-    model.vision_model.encoder.layers.pop(-1)
+    # model.vision_model.encoder.layers.pop(-1)
     projector = torch.load(args.llava_projector)
     for name, data in projector.items():
         name = get_tensor_name(name)
