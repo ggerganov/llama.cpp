@@ -767,7 +767,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // HACK - hold 4 vectors to stack
     std::vector<struct ggml_tensor *> embeddingStack;
 
-    for (int il = 0; il < n_layer - 1; il++) {
+    // TODO - n_layer was previously n_layer - 1, probably to use -2 as the feature layer,
+    // in actuality it probably is a good idea to use that as a default, but otherwise infer
+    // how deep in the encoder we actually have to go if we set the hparams for the vision feature
+    // layer...
+    for (int il = 0; il < n_layer; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
         LOG_INF("\tLayer %d...\n", il);
 
@@ -907,6 +911,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         // llava projector
         if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
+            LOG_INF("---- MLP projector ----");
             LOG_INF("proj mlp: mm 0 shape: [%d, %d, %d, %d] | embedding shape: [%d, %d, %d, %d]\n", model.mm_0_w->ne[0], model.mm_0_w->ne[1], model.mm_0_w->ne[2], model.mm_0_w->ne[3], embeddings->ne[0], embeddings->ne[1], embeddings->ne[2], embeddings->ne[3]);
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             LOG_INF("proj mlp - first mulmat done\n");
@@ -1506,6 +1511,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             LOG_INF("VISION FEATURE LAYER IDX %d\n", idx);
             int n = gguf_get_arr_n(ctx, idx);
             LOG_INF("GETTING %d VISION FEATURE LAYERS \n", n);
+            // TODO - fix this
+            LOG_INF("n_layer in hparams is: %d\n", hparams.n_layer);
+
             const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
             // HACK - need to set a good invalid number here; or maybe not, I guess it could just
             // be that it's not set in GGUF, we read all numbers as valid, and from this point on,
