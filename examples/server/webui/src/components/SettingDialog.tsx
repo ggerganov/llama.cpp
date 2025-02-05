@@ -85,7 +85,9 @@ export default function SettingDialog({
           />
 
           <label className="form-control mb-2">
-            <div className="label">System Message</div>
+            <div className="label">
+              System Message (will be disabled if left empty)
+            </div>
             <textarea
               className="textarea textarea-bordered h-24"
               placeholder={`Default: ${CONFIG_DEFAULT.systemMessage}`}

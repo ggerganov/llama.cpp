@@ -20,6 +20,9 @@
     @apply whitespace-pre-wrap rounded-lg p-2;
     border: 1px solid currentColor;
   }
+  p {
+    @apply mb-2;
+  }
   /* TODO: fix markdown table */
 }
 

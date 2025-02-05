@@ -93,7 +93,9 @@ export const AppContextProvider = ({
     try {
       // prepare messages for API
       let messages: APIMessage[] = [
-        { role: 'system', content: config.systemMessage },
+        ...(config.systemMessage.length === 0
+          ? []
+          : [{ role: 'system', content: config.systemMessage } as APIMessage]),
         ...normalizeMsgsForAPI(currConversation?.messages ?? []),
       ];
       if (config.excludeThoughtOnReq) {
@@ -243,12 +245,14 @@ export const AppContextProvider = ({
 
     StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
     if (content) {
-      // case: replace user message then generate assistant message
-      await sendMessage(convId, content, onChunk);
-    } else {
-      // case: generate last assistant message
-      await generateMessage(convId, onChunk);
+      StorageUtils.appendMsg(convId, {
+        id: Date.now(),
+        role: 'user',
+        content,
+      });
     }
+
+    await generateMessage(convId, onChunk);
   };
 
   const saveConfig = (config: typeof CONFIG_DEFAULT) => {

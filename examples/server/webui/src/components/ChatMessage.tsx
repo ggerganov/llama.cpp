@@ -10,6 +10,12 @@ import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import 'katex/dist/katex.min.css';
 
+interface SplitMessage {
+  content: PendingMessage['content'];
+  thought?: string;
+  isThinking?: boolean;
+}
+
 export default function ChatMessage({
   msg,
   id,
@@ -35,6 +41,34 @@ export default function ChatMessage({
         : null,
     [msg.timings]
   );
+
+  const isPending: boolean = !!(msg as PendingMessage).convId;
+
+  // for reasoning model, we split the message into content and thought
+  // TODO: implement this as remark/rehype plugin in the future
+  const { content, thought, isThinking }: SplitMessage = useMemo(() => {
+    if (msg.content === null || msg.role !== 'assistant') {
+      return { content: msg.content };
+    }
+    let actualContent = '';
+    let thought = '';
+    let isThinking = false;
+    let thinkSplit = msg.content.split('<think>', 2);
+    actualContent += thinkSplit[0];
+    while (thinkSplit[1] !== undefined) {
+      // <think> tag found
+      thinkSplit = thinkSplit[1].split('</think>', 2);
+      thought += thinkSplit[0];
+      isThinking = true;
+      if (thinkSplit[1] !== undefined) {
+        // </think> closing tag found
+        isThinking = false;
+        thinkSplit = thinkSplit[1].split('<think>', 2);
+        actualContent += thinkSplit[0];
+      }
+    }
+    return { content: actualContent, thought, isThinking };
+  }, [msg]);
 
   if (!viewingConversation) return null;
 
@@ -89,9 +123,10 @@ export default function ChatMessage({
               </button>
             </>
           )}
+          {/* not editing content, render message */}
           {editingContent === null && (
             <>
-              {msg.content === null ? (
+              {content === null ? (
                 <>
                   {/* show loading dots for pending message */}
                   <span className="loading loading-dots loading-md"></span>
@@ -100,7 +135,31 @@ export default function ChatMessage({
                 <>
                   {/* render message as markdown */}
                   <div dir="auto">
-                    <MarkdownDisplay content={msg.content} />
+                    {thought && (
+                      <details
+                        className="collapse bg-base-200 collapse-arrow mb-4"
+                        open={isThinking && config.showThoughtInProgress}
+                      >
+                        <summary className="collapse-title">
+                          {isPending && isThinking ? (
+                            <span>
+                              <span
+                                v-if="isGenerating"
+                                className="loading loading-spinner loading-md mr-2"
+                                style={{ verticalAlign: 'middle' }}
+                              ></span>
+                              <b>Thinking</b>
+                            </span>
+                          ) : (
+                            <b>Thought Process</b>
+                          )}
+                        </summary>
+                        <div className="collapse-content">
+                          <MarkdownDisplay content={thought} />
+                        </div>
+                      </details>
+                    )}
+                    <MarkdownDisplay content={content} />
                   </div>
                 </>
               )}
@@ -242,7 +301,7 @@ function MarkdownDisplay({ content }: { content: string }) {
 export function preprocessLaTeX(content: string): string {
   // Step 1: Protect code blocks
   const codeBlocks: string[] = [];
-  content = content.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match, code) => {
+  content = content.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (_, code) => {
     codeBlocks.push(code);
     return `<<CODE_BLOCK_${codeBlocks.length - 1}>>`;
   });

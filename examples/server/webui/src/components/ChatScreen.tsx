@@ -45,6 +45,8 @@ export default function ChatScreen() {
       // if user is creating a new conversation, redirect to the new conversation
       navigate(`/chat/${convId}`);
     }
+    scrollToBottom(false);
+    // auto scroll as message is being generated
     const onChunk = () => scrollToBottom(true);
     if (!(await sendMessage(convId, inputMsg, onChunk))) {
       // restore the input message if failed
