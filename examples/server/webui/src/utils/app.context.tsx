@@ -219,7 +219,6 @@ export const AppContextProvider = ({
     try {
       await generateMessage(convId, onChunk);
       return true;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_) {
       // rollback
       StorageUtils.popMsg(convId);
@@ -275,5 +274,4 @@ export const AppContextProvider = ({
   );
 };
 
-// eslint-disable-next-line
 export const useAppContext = () => useContext(AppContext);

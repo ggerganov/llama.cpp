@@ -104,7 +104,6 @@ const StorageUtils = {
     event.addEventListener('conversationChange', fn);
   },
   offConversationChanged(callback: CallbackConversationChanged) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const fn = onConversationChangedHandlers.find(([cb, _]) => cb === callback);
     if (fn) {
       event.removeEventListener('conversationChange', fn[1]);

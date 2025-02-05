@@ -80,12 +80,8 @@ export function filterThoughtFromMsgs(messages: APIMessage[]) {
 }
 
 export function classNames(classes: Record<string, boolean>): string {
-  return (
-    Object.entries(classes)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      .filter(([_, value]) => value)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      .map(([key, _]) => key)
-      .join(' ')
-  );
+  return Object.entries(classes)
+    .filter(([_, value]) => value)
+    .map(([key, _]) => key)
+    .join(' ');
 }

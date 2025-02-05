@@ -5,7 +5,6 @@
 @tailwind utilities;
 
 .markdown {
-  @apply whitespace-pre-wrap;
   h1,
   h2,
   h3,
@@ -58,4 +57,8 @@
 .hljs {
   background: transparent !important;
   padding: 0.5em !important;
+}
+
+.katex-display {
+  margin: 0 0 !important;
 }
