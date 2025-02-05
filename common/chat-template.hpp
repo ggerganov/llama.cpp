@@ -33,6 +33,29 @@ struct chat_template_caps {
     bool requires_typed_content = false;
 };
 
+struct chat_template_inputs {
+    nlohmann::ordered_json messages;
+    nlohmann::ordered_json tools;
+    bool add_generation_prompt = true;
+    nlohmann::ordered_json extra_context;
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+};
+
+struct chat_template_options {
+    bool apply_polyfills = true;
+    bool use_bos_token = true;
+    bool use_eos_token = true;
+    bool define_strftime_now = true;
+
+    bool polyfill_tools = true;
+    bool polyfill_tool_call_examples = true;
+    bool polyfill_tool_calls = true;
+    bool polyfill_tool_responses = true;
+    bool polyfill_system_role = true;
+    bool polyfill_object_arguments = true;
+    bool polyfill_typed_content = true;
+};
+
 class chat_template {
 
   private:
@@ -41,6 +64,7 @@ class chat_template {
     std::string bos_token_;
     std::string eos_token_;
     std::shared_ptr<minja::TemplateNode> template_root_;
+    std::string tool_call_example_;
 
     std::string try_raw_render(
         const nlohmann::ordered_json & messages,
@@ -49,7 +73,18 @@ class chat_template {
         const nlohmann::ordered_json & extra_context = nlohmann::ordered_json()) const
     {
         try {
-            auto prompt = apply(messages, tools, add_generation_prompt, extra_context, /* adjust_inputs= */ false);
+            chat_template_inputs inputs;
+            inputs.messages = messages;
+            inputs.tools = tools;
+            inputs.add_generation_prompt = add_generation_prompt;
+            inputs.extra_context = extra_context;
+            // Use fixed date for tests
+            inputs.now = std::chrono::system_clock::from_time_t(0);
+
+            chat_template_options opts;
+            opts.apply_polyfills = false;
+
+            auto prompt = apply(inputs, opts);
             // fprintf(stderr, "try_raw_render: %s\n", prompt.c_str());
             return prompt;
         } catch (const std::exception & e) {
@@ -176,6 +211,58 @@ class chat_template {
             caps_.supports_tool_responses = contains(out, "Some response!");
             caps_.supports_tool_call_id = contains(out, "call_911_");
         }
+
+        try {
+            if (!caps_.supports_tools) {
+                const json user_msg {
+                    {"role", "user"},
+                    {"content", "Hey"},
+                };
+                const json args {
+                    {"arg1", "some_value"},
+                };
+                const json tool_call_msg {
+                    {"role", "assistant"},
+                    {"content", nullptr},
+                    {"tool_calls", json::array({
+                        {
+                            // TODO: detect if requires numerical id or fixed length == 6 like Nemo
+                            {"id", "call_1___"},
+                            {"type", "function"},
+                            {"function", {
+                                {"name", "tool_name"},
+                                {"arguments", (caps_.requires_object_arguments ? args : json(minja::Value(args).dump(-1, /* to_json= */ true)))},
+                            }},
+                        },
+                    })},
+                };
+                std::string prefix, full;
+                {
+                    chat_template_inputs inputs;
+                    inputs.messages = json::array({user_msg});
+                    inputs.add_generation_prompt = true;
+                    prefix = apply(inputs);
+                }
+                {
+                    chat_template_inputs inputs;
+                    inputs.messages = json::array({user_msg, tool_call_msg});
+                    inputs.add_generation_prompt = false;
+                    full = apply(inputs);
+                }
+
+                if (full.find(prefix) != 0) {
+                    if (prefix.rfind(eos_token_) == prefix.size() - eos_token_.size()) {
+                        prefix = prefix.substr(0, prefix.size() - eos_token_.size());
+                    }
+                }
+                if (full.find(prefix) != 0) {
+                    fprintf(stderr, "Failed to infer a tool call example (possible template bug)\n");
+                }
+                tool_call_example_ = full.substr(prefix.size());
+            }
+        } catch (const std::exception & e) {
+            fprintf(stderr, "Failed to generate tool call example: %s\n", e.what());
+        }
     }
 
     const std::string & source() const { return source_; }
@@ -183,28 +270,72 @@ class chat_template {
     const std::string & eos_token() const { return eos_token_; }
     const chat_template_caps & original_caps() const { return caps_; }
 
+    // Deprecated, please use the form with chat_template_inputs and chat_template_options
     std::string apply(
         const nlohmann::ordered_json & messages,
         const nlohmann::ordered_json & tools,
         bool add_generation_prompt,
         const nlohmann::ordered_json & extra_context = nlohmann::ordered_json(),
-        bool adjust_inputs = true) const
+        bool apply_polyfills = true)
+    {
+        fprintf(stderr, "[%s] Deprecated!\n", __func__);
+        chat_template_inputs inputs;
+        inputs.messages = messages;
+        inputs.tools = tools;
+        inputs.add_generation_prompt = add_generation_prompt;
+        inputs.extra_context = extra_context;
+        inputs.now = std::chrono::system_clock::now();
+
+        chat_template_options opts;
+        opts.apply_polyfills = apply_polyfills;
+
+        return apply(inputs, opts);
+    }
+
+    std::string apply(
+        const chat_template_inputs & inputs,
+        const chat_template_options & opts = chat_template_options()) const
     {
         json actual_messages;
 
-        auto needs_adjustments = adjust_inputs && (false
-            || !caps_.supports_system_role
-            || !caps_.supports_tools
-            || !caps_.supports_tool_responses
-            || !caps_.supports_tool_calls
-            || caps_.requires_object_arguments
-            || caps_.requires_typed_content
+        auto has_tools = inputs.tools.is_array() && !inputs.tools.empty();
+        auto has_tool_calls = false;
+        auto has_tool_responses = false;
+        auto has_string_content = false;
+        for (const auto & message : inputs.messages) {
+            if (message.contains("tool_calls") && !message["tool_calls"].is_null()) {
+                has_tool_calls = true;
+            }
+            if (message.contains("role") && message["role"] == "tool") {
+                has_tool_responses = true;
+            }
+            if (message.contains("content") && message["content"].is_string()) {
+                has_string_content = true;
+            }
+        }
+
+        auto polyfill_system_role = opts.polyfill_system_role && !caps_.supports_system_role;
+        auto polyfill_tools = opts.polyfill_tools && has_tools && !caps_.supports_tools;
+        auto polyfill_tool_call_example = polyfill_tools && opts.polyfill_tool_call_examples;
+        auto polyfill_tool_calls = opts.polyfill_tool_calls && has_tool_calls && !caps_.supports_tool_calls;
+        auto polyfill_tool_responses = opts.polyfill_tool_responses && has_tool_responses && !caps_.supports_tool_responses;
+        auto polyfill_object_arguments = opts.polyfill_object_arguments && has_tool_calls && caps_.requires_object_arguments;
+        auto polyfill_typed_content = opts.polyfill_typed_content && has_string_content && caps_.requires_typed_content;
+
+        auto needs_polyfills = opts.apply_polyfills && (false
+            || polyfill_system_role
+            || polyfill_tools
+            || polyfill_tool_calls
+            || polyfill_tool_responses
+            || polyfill_object_arguments
+            || polyfill_typed_content
         );
-        if (needs_adjustments) {
+
+        if (needs_polyfills) {
             actual_messages = json::array();
 
             auto add_message = [&](const json & msg) {
-                if (caps_.requires_typed_content && msg.contains("content") && !msg.at("content").is_null() && msg.at("content").is_string()) {
+                if (polyfill_typed_content && msg.contains("content") && !msg.at("content").is_null() && msg.at("content").is_string()) {
                     actual_messages.push_back({
                         {"role", msg.at("role")},
                         {"content", {{
@@ -227,9 +358,17 @@ class chat_template {
                     pending_system.clear();
                 }
             };
-            auto needs_tools_in_system = !tools.is_null() && tools.size() > 0 && !caps_.supports_tools;
 
-            for (const auto & message_ : needs_tools_in_system ? add_system(messages, "Available tools: " + tools.dump(2)) : messages) {
+            json adjusted_messages;
+            if (polyfill_tools) {
+                adjusted_messages = add_system(inputs.messages,
+                    "You can call any of the following tools to satisfy the user's requests: " + minja::Value(inputs.tools).dump(2, /* to_json= */ true) +
+                    (!polyfill_tool_call_example || tool_call_example_.empty() ? "" : "\n\nExample tool call syntax:\n\n" + tool_call_example_));
+            } else {
+                adjusted_messages = inputs.messages;
+            }
+
+            for (const auto & message_ : adjusted_messages) {
                 auto message = message_;
                 if (!message.contains("role") || !message.contains("content")) {
                     throw std::runtime_error("message must have 'role' and 'content' fields: " + message.dump());
@@ -237,7 +376,7 @@ class chat_template {
                 std::string role = message.at("role");
 
                 if (message.contains("tool_calls")) {
-                    if (caps_.requires_object_arguments || !caps_.supports_tool_calls) {
+                    if (polyfill_object_arguments || polyfill_tool_calls) {
                         for (auto & tool_call : message.at("tool_calls")) {
                             if (tool_call["type"] == "function") {
                                 auto & function = tool_call.at("function");
@@ -252,7 +391,7 @@ class chat_template {
                             }
                         }
                     }
-                    if (!caps_.supports_tool_calls) {
+                    if (polyfill_tool_calls) {
                         auto content = message.at("content");
                         auto tool_calls = json::array();
                         for (const auto & tool_call : message.at("tool_calls")) {
@@ -279,7 +418,7 @@ class chat_template {
                         message.erase("tool_calls");
                     }
                 }
-                if (!caps_.supports_tool_responses && role == "tool") {
+                if (polyfill_tool_responses && role == "tool") {
                     message["role"] = "user";
                     auto obj = json {
                         {"tool_response", {
@@ -296,7 +435,7 @@ class chat_template {
                     message.erase("name");
                 }
 
-                if (!message["content"].is_null() && !caps_.supports_system_role) {
+                if (!message["content"].is_null() && polyfill_system_role) {
                     std::string content = message.at("content");
                     if (role == "system") {
                         if (!pending_system.empty()) pending_system += "\n";
@@ -315,28 +454,36 @@ class chat_template {
                 }
                 add_message(message);
             }
-            if (!caps_.supports_system_role) {
-                flush_sys();
-            }
+            flush_sys();
         } else {
-            actual_messages = messages;
+            actual_messages = inputs.messages;
         }
 
         auto context = minja::Context::make(json({
             {"messages", actual_messages},
-            {"add_generation_prompt", add_generation_prompt},
-            {"bos_token", bos_token_},
-            {"eos_token", eos_token_},
+            {"add_generation_prompt", inputs.add_generation_prompt},
         }));
+        context->set("bos_token", opts.use_bos_token ? bos_token_ : "");
+        context->set("eos_token", opts.use_eos_token ? eos_token_ : "");
+        if (opts.define_strftime_now) {
+            auto now = inputs.now;
+            context->set("strftime_now", Value::callable([now](const std::shared_ptr<minja::Context> &, minja::ArgumentsValue & args) {
+                args.expectArgs("strftime_now", {1, 1}, {0, 0});
+                auto format = args.args[0].get<std::string>();
 
-        if (!tools.is_null()) {
-            auto tools_val = minja::Value(tools);
-            context->set("tools", tools_val);
+                auto time = std::chrono::system_clock::to_time_t(now);
+                auto local_time = *std::localtime(&time);
+                std::ostringstream ss;
+                ss << std::put_time(&local_time, format.c_str());
+                return ss.str();
+            }));
         }
-        if (!extra_context.is_null()) {
-            for (auto & kv : extra_context.items()) {
-                minja::Value val(kv.value());
-                context->set(kv.key(), val);
+        if (!inputs.tools.is_null()) {
+            context->set("tools", minja::Value(inputs.tools));
+        }
+        if (!inputs.extra_context.is_null()) {
+            for (auto & kv : inputs.extra_context.items()) {
+                context->set(kv.key(), minja::Value(kv.value()));
             }
         }
 
@@ -353,7 +500,7 @@ class chat_template {
             std::string existing_system = messages_with_system.at(0).at("content");
             messages_with_system[0] = json {
                 {"role", "system"},
-                {"content", existing_system + "\n" + system_prompt},
+                {"content", existing_system + "\n\n" + system_prompt},
             };
         } else {
             messages_with_system.insert(messages_with_system.begin(), json {

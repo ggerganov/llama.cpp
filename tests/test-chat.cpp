@@ -18,12 +18,8 @@
 using json = nlohmann::ordered_json;
 
 static common_chat_msg msg_from_json(const json & message) {
-    common_chat_msg ret{
-        "assistant",
-        "",
-        {},
-        /* .tool_plan = */ "",
-    };
+    common_chat_msg ret;
+    ret.role = "assistant";
     if (message.contains("content") && !message.at("content").is_null()) {
         ret.content = message.at("content");
     }
