@@ -10,7 +10,7 @@
 
 static void print_usage(int argc, char ** argv) {
     (void) argc;
-    
+
     fprintf(stderr, "usage: %s /path/to/ggml-model-f32.gguf /path/to/ggml-model-quantized.gguf type\n", argv[0]);
     fprintf(stderr, "  type = 2 - q4_0\n");
     fprintf(stderr, "  type = 3 - q4_1\n");
