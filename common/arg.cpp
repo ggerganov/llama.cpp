@@ -1963,6 +1963,15 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_JINJA"));
     add_opt(common_arg(
+        {"--think"},
+        "*experimental* thinking mode (default: disabled)\n"
+        "returns reasoning_content in messages, forcing model to think unless it supports native <think> tags (DeepSeek R1)\n"
+        "only supported for non-streamed responses",
+        [](common_params & params) {
+            params.think = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_JINJA"));
+    add_opt(common_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
         string_format(
             "set custom jinja chat template (default: template taken from model's metadata)\n"

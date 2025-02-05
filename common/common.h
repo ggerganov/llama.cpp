@@ -346,6 +346,7 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
+    bool think                = false;     // return reasoning_content, force model to think unless it supports native <think> tags.
 
     std::vector<std::string> api_keys;
 

@@ -19,6 +19,7 @@ struct common_chat_inputs {
     bool stream;
     std::string grammar;
     bool add_generation_prompt = true;
+    bool think                 = false;
 };
 
 enum common_chat_format {
@@ -28,6 +29,7 @@ enum common_chat_format {
     COMMON_CHAT_FORMAT_LLAMA_3_X,
     COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS,
     COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+    COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK,
     COMMON_CHAT_FORMAT_FIREFUNCTION_V2,
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2,
     COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,

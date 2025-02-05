@@ -12,6 +12,7 @@ std::string common_chat_format_name(common_chat_format format) {
         case COMMON_CHAT_FORMAT_LLAMA_3_X: return "Llama 3.x";
         case COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS: return "Llama 3.x with builtin tools";
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1: return "DeepSeek R1";
+        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK: return "DeepSeek R1 (extract <think>)";
         case COMMON_CHAT_FORMAT_FIREFUNCTION_V2: return "FireFunction v2";
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2: return "Functionary v3.2";
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1: return "Functionary v3.1 Llama 3.1";
@@ -206,83 +207,149 @@ static std::string apply(
 static common_chat_params common_chat_params_init_generic(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
 
-    auto tool_call_schemas = json::array();
-    foreach_function(inputs.tools, [&](const json & tool) {
-        const auto & function = tool["function"];
-        auto tool_schema = json {
+    json schema;
+    auto make_object = []() {
+        return json {
             {"type", "object"},
-            {"properties", {
-                {"name", {
-                    {"type", "string"},
-                    {"const", function["name"]},
-                }},
-                {"arguments", function["parameters"]},
-            }},
-            {"required", json::array({"name", "arguments"})},
+            {"properties", json::object()},
+            {"required", json::array()},
         };
-        if (function.contains("description")) {
-            tool_schema["description"] = function["description"];
+    };
+    auto add_property = [](json & obj, const std::string & name, const json & schema) {
+        obj["properties"][name] = schema;
+        obj["required"].push_back(name);
+    };
+    auto add_thoughts = [&](json & obj) {
+        add_property(obj, "thoughts", {
+            {"type", "string"},
+            {"description", "The assistant's thoughts"},
+        });
+    };
+    auto make_response = [&]() {
+        json response_wrapper = make_object();
+        if (inputs.think) {
+            add_thoughts(response_wrapper);
+        }
+        add_property(response_wrapper, "response", inputs.json_schema.is_null() ? json {{"type", "string"}} : inputs.json_schema);
+        return response_wrapper;
+    };
+    std::ostringstream ss;
+    if (inputs.tools.is_array() && !inputs.tools.empty()) {
+        auto tool_call_schemas = json::array();
+        foreach_function(inputs.tools, [&](const json & tool) {
+            const auto & function = tool["function"];
+            auto tool_schema = json {
+                {"type", "object"},
+                {"properties", {
+                    {"name", {
+                        {"type", "string"},
+                        {"const", function["name"]},
+                    }},
+                    {"arguments", function["parameters"]},
+                }},
+                {"required", json::array({"name", "arguments"})},
+            };
+            if (function.contains("description")) {
+                tool_schema["description"] = function["description"];
+            }
+            if (inputs.parallel_tool_calls) {
+                tool_schema["properties"]["id"] = {
+                    {"type", "string"},
+                    {"minLength", 4},
+                };
+                tool_schema["required"].push_back("id");
+            }
+            tool_call_schemas.emplace_back(tool_schema);
+        });
+        const json tool_call = tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {{"anyOf", tool_call_schemas}};
+        json tool_call_wrapper = make_object();
+        if (inputs.think) {
+            add_thoughts(tool_call_wrapper);
         }
         if (inputs.parallel_tool_calls) {
-            tool_schema["properties"]["id"] = {
-                {"type", "string"},
-                {"minLength", 4},
-            };
-            tool_schema["required"].push_back("id");
+            add_property(tool_call_wrapper, "tool_calls", {
+                {"type", "array"},
+                {"items", tool_call},
+                {"minItems", 1},
+            });
+        } else {
+            add_property(tool_call_wrapper, "tool_call", tool_call);
         }
-        tool_call_schemas.emplace_back(tool_schema);
-    });
-    const auto tool_call =
-        inputs.parallel_tool_calls
-            ? json {
-                {"type", "object"},
-                {"properties", {
-                    {"tool_calls", {
-                        {"type", "array"},
-                        {"items", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
-                            {"anyOf", tool_call_schemas},
-                        }},
-                        {"minItems", 1},
-                    }},
-                }},
-                {"required", json::array({"tool_calls"})},
-            }
-            : json {
-                {"type", "object"},
-                {"properties", {
-                    {"tool_call", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
-                        {"anyOf", tool_call_schemas},
-                    }},
-                }},
-                {"required", json::array({"tool_call"})},
+        if (inputs.think) {
+            /*
+              This kind of turns any model into a thinking model by requiring the output to be (in TypeScript notation):
+
+                // ResponseSchema is json_schema if set, otherwisestring
+
+                Schema             = ({thoughts: string} & ToolCallSchema) | {thoughts: string, response: ResponseSchema}
+                SchemaToolRequired =  {thoughts: string} & ToolCallSchema
+
+
+                ToolCallSchema         = SingleToolCallSchema | ParallelToolCallSchema
+                SingleToolCallSchema   = {tool_call: ToolCall}
+                ParallelToolCallSchema = {tool_calls: ToolCall[]} // If parallel_tool_calls is true
+
+                ToolCall = {name: string, arguments: ParametersSchema, id?: string} // id only if parallel_tool_calls is true
+                ParametersSchema = tool1_params | tool2_params | ...
+            */
+
+            // TODO(ochafik): make the prompts configurable (jinja template?).
+            ss << "You are a tool-calling assistant that thinks before it acts.\n"
+                "You respond in JSON format, as follows:\n"
+                "- First, candidly explain your thoughts about the user's request "
+                "and elaborate a step-by-step reasoning about your plan to satisfy it "
+                "(including possible tool usage / function call), pondering pros and cons, "
+                "widening your reasoning than narrowing down on a plan. "
+                "Express all of these thoughts in the `thoughts` field.\n";
+        }
+        if (inputs.tool_choice == "required") {
+            schema = {
+                {"anyOf", json::array({tool_call_wrapper, make_response()})},
             };
-    const auto schema =
-        inputs.tool_choice != "required"
-            ? json {
-                {"anyOf", json::array({
-                    tool_call,
-                    {
-                        {"type", "object"},
-                        {"properties", {
-                            {"response", inputs.json_schema.is_null()
-                                ? json {{"type", "string"}}
-                                : inputs.json_schema
-                            },
-                        }},
-                        {"required", json::array({"response"})},
-                    },
-                })}
+            if (inputs.think) {
+                if (inputs.parallel_tool_calls && inputs.tools.size() > 1) {
+                    ss << "- Then if you need to perform operations or get data before responding to the user, "
+                        "call tools by providing an array of objects with name & arguments fields in the `tool_calls` field, "
+                        "or respond directly to the user's request in the `response` field.";
+                    // system = "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request";
+                } else {
+                    ss << "- Then if you need to perform an operation or get data before responding to the user, "
+                        "call a tool by providing its name & arguments in the `tool_call` field, "
+                        "or respond directly to the user's request in the `response` field.";
+                }
             }
-            : tool_call;
+        } else {
+            schema = tool_call_wrapper;
+            if (inputs.think) {
+                if (inputs.parallel_tool_calls && inputs.tools.size() > 1) {
+                    ss << "- Then call tools by providing their names and arguments in the `tool_calls` array.";
+                } else {
+                    ss << "- Then call a tool by providing its name and arguments in the `tool_call` object.";
+                }
+            }
+        }
+        ss << "- Finally, once you get results from previously requested tool calls (if you requested anys), "
+            "you iterate on your reasoning, update it if needed, and work towards a final response to the user's request "
+            "in as many iterations as needed.";
+    } else if (inputs.think) {
+        schema = make_response();
+        ss << "You are an assistant that thinks before it acts.\n"
+            "You respond in JSON format, as follows:\n"
+            "- First, candidly explain your thoughts about the user's request "
+            "and elaborate a step-by-step reasoning about your plan to satisfy it, "
+            "pondering pros and cons, "
+            "widening your reasoning than narrowing down on a plan. "
+            "Express all of these thoughts in the `thoughts` field.\n"
+            "- Then, respond directly to the user's request in the `response` field.";
+    }
+    auto system = ss.str();
 
     data.grammar_lazy = false;
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         builder.add_schema("root", schema);
     }, grammar_options);
 
-    auto tweaked_messages = common_chat_template::add_system(
-        inputs.messages,
-        "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request");
+    auto tweaked_messages = system.empty() ? inputs.messages : common_chat_template::add_system(inputs.messages, system);
 
     data.prompt = apply(tmpl, tweaked_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_GENERIC;
@@ -292,6 +359,9 @@ static common_chat_msg common_chat_parse_generic(const std::string & input) {
     json data = json::parse(input);
     common_chat_msg result;
     result.role = "assistant";
+    if (data.contains("thoughts")) {
+        result.reasoning_content = data["thoughts"];
+    }
     if (data.contains("tool_calls")) {
         for (const auto & tool_call : data["tool_calls"]) {
             result.tool_calls.push_back({
@@ -565,7 +635,7 @@ static common_chat_msg common_chat_parse_llama_3_1(const std::string & input, bo
 static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
     if (inputs.tools.is_array() && !inputs.tools.empty()) {
-        data.grammar_lazy = inputs.tool_choice != "required";
+        data.grammar_lazy = inputs.tool_choice != "required" && inputs.json_schema.is_null();
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             std::vector<std::string> tool_rules;
             foreach_function(inputs.tools, [&](const json & tool) {
@@ -617,27 +687,32 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             "$1<｜tool▁calls▁end｜><｜end▁of▁sentence｜>$2");
     }
     data.prompt = prompt;
-    data.format = COMMON_CHAT_FORMAT_DEEPSEEK_R1;
+    data.format = inputs.think ? COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK : COMMON_CHAT_FORMAT_DEEPSEEK_R1;
     return data;
 }
-static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) {
+static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, bool think) {
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
-    static std::regex reasoning_content_regex("(?:<think>([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
+    static std::regex reasoning_content_regex("(<think>([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
     static std::regex tool_calls_regex("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)([\\s\\S\\r\\n]*?)<｜tool▁calls▁end｜>");
     common_chat_msg msg;
     msg.role = "assistant";
     std::smatch match;
     if (std::regex_match(input, match, reasoning_content_regex)) {
-        msg.reasoning_content = string_trim(match[1].str());
-        auto rest = match[2].str();
+        std::string rest;
+        if (think) {
+            msg.reasoning_content = string_trim(match[2].str());
+        } else {
+            msg.content = match[1].str();
+        }
+        rest = match[3].str();
 
         if (std::regex_search(rest, match, tool_calls_regex)) {
             auto tool_calls = match[1].str();
             auto msg2 = parse_json_tool_calls(tool_calls, std::nullopt, function_regex, close_regex);
             msg.tool_calls = std::move(msg2.tool_calls);
         } else {
-            msg.content = std::string(rest.begin() + rest.find_first_not_of(" \r\n"), rest.end());
+            msg.content += std::string(rest.begin() + rest.find_first_not_of(" \r\n"), rest.end());
         }
     } else {
         msg.content = input;
@@ -953,47 +1028,66 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
 }
 
 common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
-    auto has_tools = !inputs.tools.is_null() && inputs.tool_choice != "none";
-    LOG_DBG("[%s] has_tools=%s\n", __func__, has_tools ? "true" : "false");
-
-    if (has_tools && !inputs.grammar.empty()) {
+    if (inputs.tools.is_array() && inputs.tool_choice != "none" && !inputs.grammar.empty()) {
         throw std::runtime_error("Cannot specify grammar with tools");
     }
 
     const auto & src = tmpl.source();
-    if (src.find(">>>all") != std::string::npos) {
-        // Functionary prepends "all\n" to plain content outputs, so we use the parser no matter when
-        return common_chat_params_init_functionary_v3_2(tmpl, inputs);
-    }
-    if (src.find(" functools[") != std::string::npos) {
-        // Firefunction v2 requires datetime and functions in the context, even w/o tools.
-        return common_chat_params_init_firefunction_v2(tmpl, inputs);
-    }
-    if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos) {
+
+    // DeepSeek R1: use handler in all cases except json schema (thinking / tools).
+    if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos && inputs.json_schema.is_null()) {
         return common_chat_params_init_deepseek_r1(tmpl, inputs);
     }
 
-    if (!has_tools) {
+    // Use generic handler when forcing thoughts or JSON schema for final output
+    // TODO: support thinking mode and/or JSON schema in handlers below this.
+    if (inputs.think || inputs.json_schema.is_object()) {
+        return common_chat_params_init_generic(tmpl, inputs);
+    }
+
+    // Functionary prepends "all\n" to plain content outputs, so we use its handler in all cases.
+    if (src.find(">>>all") != std::string::npos) {
+        return common_chat_params_init_functionary_v3_2(tmpl, inputs);
+    }
+
+    // Firefunction v2 requires datetime and functions in the context even w/o tools, so we also use its handler in all cases.
+    if (src.find(" functools[") != std::string::npos) {
+        return common_chat_params_init_firefunction_v2(tmpl, inputs);
+    }
+
+    // Plain handler (no tools)
+    if (inputs.tools.is_null() || inputs.tool_choice == "none") {
         return common_chat_params_init_without_tools(tmpl, inputs);
     }
 
+    // Hermes 2/3 Pro, Qwen 2.5 Instruct (w/ tools)
     if (src.find("<tool_call>") != std::string::npos) {
         return common_chat_params_init_hermes_2_pro(tmpl, inputs);
     }
+
+    // Functionary v3.1 (w/ tools)
     if (src.find("<|start_header_id|>") != std::string::npos
         && src.find("<function=") != std::string::npos) {
         return common_chat_params_init_functionary_v3_1_llama_3_1(tmpl, inputs);
     }
+
+    // Llama 3.1, 3.2, 3.3 (w/ tools)
     if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
         auto allow_python_tag_builtin_tools = src.find("<|python_tag|>") != std::string::npos;
         return common_chat_params_init_llama_3_1_tool_calls(tmpl, inputs, allow_python_tag_builtin_tools);
     }
+
+    // Mistral Nemo (w/ tools)
     if (src.find("[TOOL_CALLS]") != std::string::npos) {
         return common_chat_params_init_mistral_nemo(tmpl, inputs);
     }
+
+    // Command R7B (w/ tools)
     if (src.find("<|END_THINKING|><|START_ACTION|>") != std::string::npos) {
         return common_chat_params_init_command_r7b(tmpl, inputs);
     }
+
+    // Generic fallback
     return common_chat_params_init_generic(tmpl, inputs);
 }
 
@@ -1018,7 +1112,9 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
         case COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS:
             return common_chat_parse_llama_3_1(input, /* with_builtin_tools= */ true);
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1:
-            return common_chat_parse_deepseek_r1(input);
+            return common_chat_parse_deepseek_r1(input, /* think= */ false);
+        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK:
+            return common_chat_parse_deepseek_r1(input, /* think= */ true);
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2:
             return common_chat_parse_functionary_v3_2(input);
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1:
