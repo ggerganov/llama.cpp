@@ -24,18 +24,6 @@ std::string common_chat_format_name(common_chat_format format) {
     }
 }
 
-static std::string string_trim(const std::string & s) {
-    size_t start = 0;
-    while (start < s.size() && std::isspace(s[start])) {
-        start++;
-    }
-    size_t end = s.size();
-    while (end > start && std::isspace(s[end - 1])) {
-        end--;
-    }
-    return s.substr(start, end - start);
-}
-
 const common_grammar_options grammar_options {
     /* .dotall = */ false,
     /* .compact_spaces = */ false,
@@ -138,7 +126,7 @@ static common_chat_msg parse_json_tool_calls(
     }
 
     if (!result.tool_calls.empty()) {
-        if (!string_trim(result.content).empty()) {
+        if (!string_strip(result.content).empty()) {
             LOG_WRN("Content found with tool calls: %s", result.content.c_str());
         }
         result.content = "";
@@ -731,7 +719,7 @@ static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, 
     if (std::regex_match(input, match, reasoning_content_regex)) {
         std::string rest;
         if (think) {
-            msg.reasoning_content = string_trim(match[2].str());
+            msg.reasoning_content = string_strip(match[2].str());
         } else {
             msg.content = match[1].str();
         }
@@ -1058,11 +1046,17 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
 }
 
 common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
-    if (inputs.tools.is_array() && inputs.tool_choice != "none" && !inputs.grammar.empty()) {
-        throw std::runtime_error("Cannot specify grammar with tools");
-    }
-
     const auto & src = tmpl.source();
+    const auto & caps = tmpl.original_caps();
+
+    if (inputs.tools.is_array()) {
+        if (inputs.tool_choice != "none" && !inputs.grammar.empty()) {
+            throw std::runtime_error("Cannot specify grammar with tools");
+        }
+        if (caps.supports_tool_calls && !caps.supports_tools) {
+            LOG_WRN("Template supports tool calls but does not natively describe tools. The fallback behaviour used may produce bad results, inspect prompt w/ --verbose & consider overriding the template.");
+        }
+    }
 
     // DeepSeek R1: use handler in all cases except json schema (thinking / tools).
     if (src.find("<｜tool▁calls▁begin｜>") != std::string::npos && inputs.json_schema.is_null()) {
