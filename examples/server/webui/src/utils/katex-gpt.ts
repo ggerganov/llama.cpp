@@ -1,4 +1,7 @@
 import katex from 'katex';
+import MarkdownIt from 'markdown-it';
+import { StateInline } from 'markdown-it/index.js';
+import { RuleInline } from 'markdown-it/lib/parser_inline.mjs';
 
 // Adapted from https://github.com/SchneeHertz/markdown-it-katex-gpt
 // MIT license
@@ -10,7 +13,7 @@ const defaultOptions = {
   ],
 };
 
-export function renderLatexHTML(content, display = false) {
+export function renderLatexHTML(content: string, display = false) {
   return katex.renderToString(content, {
     throwOnError: false,
     output: 'mathml',
@@ -18,8 +21,9 @@ export function renderLatexHTML(content, display = false) {
   });
 }
 
-function escapedBracketRule(options) {
-  return (state, silent) => {
+function escapedBracketRule(options: typeof defaultOptions): RuleInline {
+  // @ts-expect-error not sure why type is incorrect here, but it should work
+  return (state: StateInline, silent: boolean) => {
     const max = state.posMax;
     const start = state.pos;
 
@@ -61,6 +65,6 @@ function escapedBracketRule(options) {
   }
 }
 
-export default function (md, options = defaultOptions) {
+export default function (md: MarkdownIt, options = defaultOptions) {
   md.inline.ruler.after('text', 'escaped_bracket', escapedBracketRule(options));
 }
