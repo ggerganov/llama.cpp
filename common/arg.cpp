@@ -1978,7 +1978,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     add_opt(common_arg(
         {"--think"},
         "*experimental* thinking mode (default: disabled)\n"
-        "returns reasoning_content in messages, forcing model to think unless it supports native <think> tags (DeepSeek R1)\n"
+        "returns reasoning_content in messages, forcing model to think unless it supports native <think> tags (DeepSeek R1, Command R7B)\n"
         "only supported for non-streamed responses",
         [](common_params & params) {
             params.think = true;

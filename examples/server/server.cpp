@@ -748,9 +748,6 @@ struct server_task_result_cmpl_final : server_task_result {
         if (!msg.reasoning_content.empty()) {
             message["reasoning_content"] = msg.reasoning_content;
         }
-        if (!msg.tool_plan.empty()) {
-            message["tool_plan"] = msg.tool_plan;
-        }
 
         json choice {
             {"finish_reason", finish_reason},

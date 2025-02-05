@@ -274,43 +274,44 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("hf_repo,template_override", [
-    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
+@pytest.mark.parametrize("think,hf_repo,template_override", [
+    (True,  "bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
 
-    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+    (False, "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (False, "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
-    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+    (False, "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (False, "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
 
-    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+    (False, "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (False, "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
 
-    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+    (False, "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (False, "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
 
-    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+    (False, "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (False, "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
 
-    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+    (False, "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (False, "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
 
-    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
-    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+    (False, "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    (False, "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    (False, "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (False, "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
-    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (True,  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
-    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (False, "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
 
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
 ])
-def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather(think: bool, hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
     n_predict = 512
+    server.think = think
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
@@ -488,44 +489,45 @@ def test_thoughts(n_predict: int, think: bool, expect_content: str | None, expec
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
-    (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),
+@pytest.mark.parametrize("think,expected_arguments_override,hf_repo,template_override", [
+    (True,  None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (True,  None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),
 
-    (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+    (False, None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (False, None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
 
-    (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
-    (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+    (False, None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
+    (False, None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    (None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+    (False, None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (False, '{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
-    ('{"code":"print("}',  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    (False, '{"code":"print("}',  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (False, None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
-    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    (False, '{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (False, '{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
-    (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+    (False, None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (False, None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
 
-    (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+    (False, None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (False, None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
 
-    (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
-    (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+    (False, None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (False, None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
 
-    (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+    (False, None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (False, None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
-    (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    (False, None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
 ])
-def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_hello_world(think: bool, expected_arguments_override: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
+    server.think = think
     server.n_ctx = 8192
     server.n_predict = 512 # High because of DeepSeek R1
     server.model_hf_repo = hf_repo

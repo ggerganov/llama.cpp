@@ -127,6 +127,8 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
 | `--jinja` | Enable experimental Jinja templating engine (required for tool use) |
+| `--think` | Enable experimental thinking mode (extracts DeepSeek R1 & Command R7B's native thinking tags and forces any other model to think before responding, resulting thoughts are in the `reasoning_content` output field) (requires `--jinja`) |
+--think 
 
 **Example-specific params**
 
@@ -1223,10 +1225,10 @@ curl http://localhost:8080/v1/chat/completions \
 
   # Native support for DeepSeek R1 works best w/ our own template (official template buggy)
 
-  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q6_K_L \
+  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q6_K_L --think \
     --chat-template-file models/templates/llama-cpp-deepseek-r1.jinja
 
-  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF:Q4_K_M \
+  llama-server --jinja -fa -hf bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF:Q4_K_M --think \
     --chat-template-file models/templates/llama-cpp-deepseek-r1.jinja
 
   # Native support requires the right template for these GGUFs:
@@ -1240,7 +1242,7 @@ curl http://localhost:8080/v1/chat/completions \
   llama-server --jinja -fa -hf bartowski/firefunction-v2-GGUF -hff firefunction-v2-IQ1_M.gguf \
     --chat-template-file <( python scripts/get_chat_template.py fireworks-ai/llama-3-firefunction-v2 tool_use )
 
-  llama-server --jinja -fa -hf bartowski/c4ai-command-r7b-12-2024-GGUF:Q6_K_L \
+  llama-server --jinja -fa -hf bartowski/c4ai-command-r7b-12-2024-GGUF:Q6_K_L --think \
     --chat-template-file <( python scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 tool_use )
 
   # Generic format support
