@@ -1895,7 +1895,7 @@ struct server_context {
         return true;
     }
 
-    bool apply_jinja_templates() const {
+    bool validate_jinja_templates() const {
         auto               templates = common_chat_templates_from_model(model, "");
         common_chat_inputs inputs;
         inputs.messages = json::array({
