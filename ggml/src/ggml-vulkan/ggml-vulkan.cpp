@@ -8182,9 +8182,11 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
         case GGML_OP_VIEW:
         case GGML_OP_PERMUTE:
         case GGML_OP_TRANSPOSE:
+            return true;
         case GGML_OP_NORM:
         case GGML_OP_GROUP_NORM:
         case GGML_OP_RMS_NORM:
+            return ggml_is_contiguous(op->src[0]);
         case GGML_OP_ADD:
         case GGML_OP_ACC:
         case GGML_OP_MUL:
