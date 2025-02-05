@@ -128,7 +128,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
 | `--jinja` | Enable experimental Jinja templating engine (required for tool use) |
 | `--think` | Enable experimental thinking mode (extracts DeepSeek R1 & Command R7B's native thinking tags and forces any other model to think before responding, resulting thoughts are in the `reasoning_content` output field) (requires `--jinja`) |
---think 
+--think
 
 **Example-specific params**
 
