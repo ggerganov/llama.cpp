@@ -316,7 +316,7 @@ class chat_template {
 
         auto polyfill_system_role = opts.polyfill_system_role && !caps_.supports_system_role;
         auto polyfill_tools = opts.polyfill_tools && has_tools && !caps_.supports_tools;
-        auto polyfill_tool_call_example = polyfill_tools && opts.polyfill_tool_call_examples && caps_.supports_tool_calls;
+        auto polyfill_tool_call_example = polyfill_tools && opts.polyfill_tool_call_examples;
         auto polyfill_tool_calls = opts.polyfill_tool_calls && has_tool_calls && !caps_.supports_tool_calls;
         auto polyfill_tool_responses = opts.polyfill_tool_responses && has_tool_responses && !caps_.supports_tool_responses;
         auto polyfill_object_arguments = opts.polyfill_object_arguments && has_tool_calls && caps_.requires_object_arguments;
