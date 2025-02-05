@@ -37,17 +37,64 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
     return False
 
 
-def get_tensor_name(name: str) -> str:
-    if "projection" in name:
-        return name
-    if "mm_projector" in name:
-        name = name.replace("model.mm_projector", "mm")
-        name = re.sub(r'mm\.mlp\.mlp', 'mm.model.mlp', name, count=1)
-        name = re.sub(r'mm\.peg\.peg', 'mm.model.peg', name, count=1)
-        return name
+def get_tensor_name_from_janus(name: str) -> str:
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.attn\.qkv\.(weight|bias)$', r'v.blk.\1.attn_qkv.\2',name)
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.norm1\.(.*)$', r'v.blk.\1.ln1.\2', name)
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.attn\.proj\.(.*)$', r'v.blk.\1.attn_out.\2', name)
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.norm2\.(.*)$', r'v.blk.\1.ln2.\2', name)
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.mlp\.fc1\.(.*)$', r'v.blk.\1.ffn_down.\2', name)
+    name = re.sub(r'^vision_tower\.blocks\.(\d+)\.mlp\.fc2\.(.*)$', r'v.blk.\1.ffn_up.\2', name)
+    name = re.sub(r'^vision_tower\.patch_embed\.proj\.(.*)$', r'v.patch_embd.\1', name)
+    name = re.sub(r'^vision_tower\.pos_embed$', r'v.position_embd.weight', name)
+    name = re.sub(r'^vision_tower\.norm\.(weight|bias)$', r'v.post_ln.\1', name)
+    
+    name = name.replace("vision_tower", "v")
+    name = name.replace("text_model", "t")
+    name = name.replace("vision_model", "v")
+    name = name.replace("encoder.layers", "blk")
+    name = name.replace("blocks", "blk")
+    name = name.replace("embeddings.", "")
+    name = name.replace("_proj", "")
+    name = name.replace("self_attn.", "attn_")
+    name = name.replace("layer_norm", "ln")
+    name = name.replace("layernorm", "ln")
+    name = name.replace("mlp.fc1", "ffn_down")
+    name = name.replace("mlp.fc2", "ffn_up")
+    name = name.replace("embedding", "embd")
+    name = name.replace("final", "post")
+    name = name.replace("layrnorm", "ln")
+    
+    return name
 
-    return name.replace("text_model", "t").replace("vision_model", "v").replace("encoder.layers", "blk").replace("embeddings.", "").replace("_proj", "").replace("self_attn.", "attn_").replace("layer_norm", "ln").replace("layernorm", "ln").replace("mlp.fc1", "ffn_down").replace("mlp.fc2", "ffn_up").replace("embedding", "embd").replace("final", "post").replace("layrnorm", "ln")
 
+def process_and_save_tensor(tensor: torch.Tensor, new_name: str, ftype: int, fout) -> None:
+    """Process a tensor (squeeze, cast dtype, log) and save it to `fout`."""
+    data = tensor.squeeze().numpy()
+    n_dims = len(data.shape)
+    ftype_str = {0: "f32", 1: "f16"}
+
+    ftype_cur = 0
+    if n_dims == 4:
+        print(f"tensor {new_name} is always saved in f16")
+        data = data.astype(np.float16)
+        ftype_cur = 1
+    elif ftype == 1:
+        if new_name.endswith(".weight") and n_dims == 2:
+            print("  Converting to float16")
+            data = data.astype(np.float16)
+            ftype_cur = 1
+        else:
+            print("  Converting to float32")
+            data = data.astype(np.float32)
+            ftype_cur = 0
+    else:
+        if data.dtype != np.float32:
+            print("  Converting to float32")
+            data = data.astype(np.float32)
+            ftype_cur = 0
+
+    print(f"{new_name} - {ftype_str[ftype_cur]} - shape = {data.shape}")
+    fout.add_tensor(new_name, data)
 
 def bytes_to_unicode():
     """
@@ -261,35 +308,17 @@ for name, data in state_dict.items():
         print(f"skipping parameter: {name}")
         continue
 
-    name = get_tensor_name(name)
-    data = data.squeeze().numpy()
+    name = get_tensor_name_from_janus(name)
 
-    n_dims = len(data.shape)
+    # Handle the qkv projection weights and biases
+    if "qkv" in name:
+        q_tensor, k_tensor, v_tensor = torch.chunk(data, 3, dim=0)
 
-    # ftype == 0 -> float32, ftype == 1 -> float16
-    ftype_cur = 0
-    if n_dims == 4:
-        print(f"tensor {name} is always saved in f16")
-        data = data.astype(np.float16)
-        ftype_cur = 1
-    elif ftype == 1:
-        if name[-7:] == ".weight" and n_dims == 2:
-            print("  Converting to float16")
-            data = data.astype(np.float16)
-            ftype_cur = 1
-        else:
-            print("  Converting to float32")
-            data = data.astype(np.float32)
-            ftype_cur = 0
+        process_and_save_tensor(q_tensor, name.replace("qkv", "q"), ftype, fout)
+        process_and_save_tensor(k_tensor, name.replace("qkv", "k"), ftype, fout)
+        process_and_save_tensor(v_tensor, name.replace("qkv", "v"), ftype, fout)
     else:
-        if data.dtype != np.float32:
-            print("  Converting to float32")
-            data = data.astype(np.float32)
-            ftype_cur = 0
-
-    print(f"{name} - {ftype_str[ftype_cur]} - shape = {data.shape}")
-    fout.add_tensor(name, data)
-
+        process_and_save_tensor(data, name, ftype, fout)
 
 fout.write_header_to_file()
 fout.write_kv_data_to_file()
