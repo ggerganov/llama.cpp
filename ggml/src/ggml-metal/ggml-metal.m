@@ -19,6 +19,10 @@
 // max number of MTLCommandBuffer used to submit a graph for processing
 #define GGML_METAL_MAX_COMMAND_BUFFERS 8
 
+#ifndef TARGET_OS_VISION
+#define TARGET_OS_VISION 0
+#endif
+
 // create residency sets only on macOS >= 15.0
 #if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || \
     TARGET_OS_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 || \
