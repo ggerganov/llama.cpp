@@ -1,11 +1,11 @@
-# Docker
+# Containers
 
 ## Prerequisites
-* Docker must be installed and running on your system.
+* Docker or Podman must be installed and running on your system. Replace `docker` with `podman` if using Podman.
 * Create a folder to store big models & intermediate files (ex. /llama/models)
 
 ## Images
-We have three Docker images available for this project:
+We have three container images available for this project:
 
 1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
 2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file. (platforms: `linux/amd64`, `linux/arm64`)
@@ -53,11 +53,11 @@ or with a server image:
 docker run -v /path/to/models:/models -p 8000:8000 ghcr.io/ggerganov/llama.cpp:server -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512
 ```
 
-## Docker With CUDA
+## Containers With CUDA
 
 Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) properly installed on Linux, or is using a GPU enabled cloud, `cuBLAS` should be accessible inside the container.
 
-## Building Docker locally
+## Building Container images locally
 
 ```bash
 docker build -t local/llama.cpp:full-cuda --target full -f .devops/cuda.Dockerfile .
@@ -88,11 +88,11 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /
 docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m /models/7B/ggml-model-q4_0.gguf --port 8000 --host 0.0.0.0 -n 512 --n-gpu-layers 1
 ```
 
-## Docker With MUSA
+## Containers With MUSA
 
 Assuming one has the [mt-container-toolkit](https://developer.mthreads.com/musa/native) properly installed on Linux, `muBLAS` should be accessible inside the container.
 
-## Building Docker locally
+## Building Container images locally
 
 ```bash
 docker build -t local/llama.cpp:full-musa --target full -f .devops/musa.Dockerfile .
@@ -114,7 +114,7 @@ The resulting images, are essentially the same as the non-MUSA images:
 
 ## Usage
 
-After building locally, Usage is similar to the non-MUSA examples, but you'll need to set `mthreads` as default Docker runtime. This can be done by executing `(cd /usr/bin/musa && sudo ./docker setup $PWD)` and verifying the changes by executing `docker info | grep mthreads` on the host machine. You will also want to use the `--n-gpu-layers` flag.
+After building locally, Usage is similar to the non-MUSA examples, but you'll need to set `mthreads` as default container runtime. This can be done by executing `(cd /usr/bin/musa && sudo ./docker setup $PWD)` and verifying the changes by executing `docker info | grep mthreads` on the host machine. You will also want to use the `--n-gpu-layers` flag.
 
 ```bash
 docker run -v /path/to/models:/models local/llama.cpp:full-musa --run -m /models/7B/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 512 --n-gpu-layers 1
