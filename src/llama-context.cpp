@@ -532,11 +532,13 @@ struct llama_batch_manager : public llama_batch_manager_i {
 
         // decide if we need to defrag the kv cache
         if (cparams.causal_attn && cparams.defrag_thold >= 0.0f) {
-            const float fragmentation = kv_self.n >= 128 ? 1.0f - float(kv_self.used)/float(kv_self.n) : 0.0f;
+            // - do not defrag small contexts (i.e. < 2048 tokens)
+            // - count the padding towards the number of used tokens
+            const float fragmentation = kv_self.n >= 2048 ? 1.0f - float(kv_self.used + lctx.get_ctx_padding(cparams))/float(kv_self.n) : 0.0f;
 
             // queue defragmentation for next llama_kv_cache_update
             if (fragmentation > cparams.defrag_thold) {
-                //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
+                LLAMA_LOG_DEBUG("%s: fragmentation: %.2f - requesting defrag\n", __func__, fragmentation);
 
                 kv_self.defrag();
             }
