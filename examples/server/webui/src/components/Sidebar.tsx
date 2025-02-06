@@ -3,7 +3,6 @@ import { classNames } from '../utils/misc';
 import { Conversation } from '../utils/types';
 import StorageUtils from '../utils/storage';
 import { useNavigate, useParams } from 'react-router';
-import { useAppContext } from '../utils/app.context';
 
 export default function Sidebar() {
   const params = useParams();
