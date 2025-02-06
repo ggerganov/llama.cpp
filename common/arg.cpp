@@ -2356,8 +2356,8 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--embd-gte-small-default"},
         string_format("use default gte-small model (note: can download weights from the internet)"),
         [](common_params & params) {
-            params.hf_repo = "ChristianAzinn/gte-small-gguf";
-            params.hf_file = "gte-small.Q8_0.gguf";
+            params.hf_repo = "ggml-org/gte-small-Q8_0-GGUF";
+            params.hf_file = "gte-small-q8_0.gguf";
             params.pooling_type = LLAMA_POOLING_TYPE_NONE;
             params.embd_normalize = 2;
             params.n_ctx = 512;
