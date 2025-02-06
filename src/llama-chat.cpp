@@ -58,6 +58,7 @@ static const std::map<std::string, llm_chat_template> LLM_CHAT_TEMPLATES = {
     { "granite",           LLM_CHAT_TEMPLATE_GRANITE           },
     { "gigachat",          LLM_CHAT_TEMPLATE_GIGACHAT          },
     { "megrez",            LLM_CHAT_TEMPLATE_MEGREZ            },
+    { "velvet",            LLM_CHAT_TEMPLATE_VELVET            },
 };
 
 llm_chat_template llm_chat_template_from_str(const std::string & name) {
@@ -167,6 +168,8 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
         return LLM_CHAT_TEMPLATE_GIGACHAT;
     } else if (tmpl_contains("<|role_start|>")) {
         return LLM_CHAT_TEMPLATE_MEGREZ;
+    } else if (tmpl_contains("<instruction>")) {
+        return LLM_CHAT_TEMPLATE_VELVET;    
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
 }
@@ -566,10 +569,32 @@ int32_t llm_chat_apply_template(
         if (add_ass) {
             ss << "<|role_start|>assistant<|role_end|>";
         }
+    } else if (tmpl == LLM_CHAT_TEMPLATE_VELVET) {
+        // Velvet template
+        std::string leading_space = "";
+        std::string trailing_space = "";
+        bool trim_assistant_message = true;
+        bool is_inside_turn = false;
+        for (auto message : chat) {
+            if (!is_inside_turn) {
+                ss << leading_space << "<instruction>" << trailing_space;
+                is_inside_turn = true;
+            }
+            std::string role(message->role);
+            std::string content(message->content);
+            if (role == "system") {
+                ss << content << "\n\n";
+            } else if (role == "user") {
+                ss << content << leading_space << "</instruction>";
+            } else {
+                ss << trailing_space << (trim_assistant_message ? trim(content) : content) << "</s>";
+                is_inside_turn = false;
+            }
+        }
     } else {
         // template not supported
         return -1;
-    }
+    }  
     dest = ss.str();
     return dest.size();
 }

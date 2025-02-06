@@ -699,6 +699,9 @@ class Model:
         if chkhsh == "b3f499bb4255f8ca19fccd664443283318f2fd2414d5e0b040fbdd0cc195d6c5":
             # ref: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
             res = "deepseek-r1-qwen"
+        if chkhsh == "a3df2b8943e01cfd7d68c9f8446b294f3d8706d1d6853df65df7fda5d4fcb19f":
+            # ref: https://huggingface.co/Almawave/Velvet-14B
+            res = "velvet"    
 
         if res is None:
             logger.warning("\n")

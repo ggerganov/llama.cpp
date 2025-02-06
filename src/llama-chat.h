@@ -39,6 +39,7 @@ enum llm_chat_template {
     LLM_CHAT_TEMPLATE_GIGACHAT,
     LLM_CHAT_TEMPLATE_MEGREZ,
     LLM_CHAT_TEMPLATE_UNKNOWN,
+    LLM_CHAT_TEMPLATE_VELVET
 };
 
 struct llama_chat_message;
