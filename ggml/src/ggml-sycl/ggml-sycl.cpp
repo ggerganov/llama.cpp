@@ -4537,14 +4537,17 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_VIEW:
         case GGML_OP_PERMUTE:
         case GGML_OP_TRANSPOSE:
-        case GGML_OP_NORM:
         case GGML_OP_ADD:
         case GGML_OP_ADD1:
         case GGML_OP_LOG:
         case GGML_OP_SUB:
         case GGML_OP_MUL:
         case GGML_OP_DIV:
+            return true;
+        case GGML_OP_NORM:
         case GGML_OP_RMS_NORM:
+        case GGML_OP_GROUP_NORM:
+            return ggml_is_contiguous(op->src[0]);
         case GGML_OP_SCALE:
         case GGML_OP_SQR:
         case GGML_OP_SQRT:
@@ -4576,7 +4579,6 @@ static bool ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:
-        case GGML_OP_GROUP_NORM:
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
         case GGML_OP_LEAKY_RELU:
