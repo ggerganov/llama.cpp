@@ -6850,7 +6850,7 @@ struct llm_build_context {
             cur = build_rwkv_channel_mix(layer, ffn_norm, x_prev, LLM_ARCH_RWKV6);
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            token_shift = ggml_concat(ctx0, 
+            token_shift = ggml_concat(ctx0,
                 ggml_view_3d(ctx0, att_norm, n_embd, 1, n_seqs, att_norm->nb[1], att_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(att_norm)),
                 ggml_view_3d(ctx0, ffn_norm, n_embd, 1, n_seqs, ffn_norm->nb[1], ffn_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(ffn_norm)),
                 1
