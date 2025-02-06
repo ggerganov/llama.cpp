@@ -16,6 +16,7 @@ std::string common_chat_format_name(common_chat_format format) {
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2: return "Functionary v3.2";
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1: return "Functionary v3.1 Llama 3.1";
         case COMMON_CHAT_FORMAT_HERMES_2_PRO: return "Hermes 2 Pro";
+        case COMMON_CHAT_FORMAT_COMMAND_R7B: return "Command R7B";
         default:
             throw std::runtime_error("Unknown chat format");
     }
@@ -162,6 +163,28 @@ static void foreach_function(const json & tools, const std::function<void(const 
     }
 }
 
+static std::string apply(
+    const common_chat_template & tmpl,
+    const nlohmann::ordered_json & messages,
+    const nlohmann::ordered_json & tools,
+    bool add_generation_prompt,
+    const nlohmann::ordered_json & extra_context = nlohmann::ordered_json())
+{
+    minja::chat_template_inputs tmpl_inputs;
+    tmpl_inputs.messages = messages;
+    tmpl_inputs.tools = tools;
+    tmpl_inputs.add_generation_prompt = add_generation_prompt;
+    tmpl_inputs.extra_context = extra_context;
+    // TODO: add flag to control date/time, if only for testing purposes.
+    // tmpl_inputs.now = std::chrono::system_clock::now();
+
+    minja::chat_template_options tmpl_opts;
+    tmpl_opts.use_bos_token = false;
+    tmpl_opts.use_eos_token = false;
+
+    return tmpl.apply(tmpl_inputs, tmpl_opts);
+}
+
 static common_chat_params common_chat_params_init_generic(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
 
@@ -243,7 +266,7 @@ static common_chat_params common_chat_params_init_generic(const common_chat_temp
         inputs.messages,
         "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request");
 
-    data.prompt = tmpl.apply(tweaked_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, tweaked_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_GENERIC;
     return data;
 }
@@ -309,12 +332,85 @@ static common_chat_params common_chat_params_init_mistral_nemo(const common_chat
         builder.add_rule("root", "\"[TOOL_CALLS]\" " + builder.add_schema("tool_calls", schema));
     }, grammar_options);
     data.grammar_triggers.push_back({"[TOOL_CALLS]", /* .at_start = */ true});
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_MISTRAL_NEMO;
     return data;
 }
 static common_chat_msg common_chat_parse_mistral_nemo(const std::string & input) {
     return parse_prefixed_json_tool_call_array(input, "[TOOL_CALLS]");
+}
+
+static common_chat_params common_chat_params_init_command_r7b(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
+    common_chat_params data;
+    data.grammar_lazy = inputs.tool_choice != "required";
+    data.grammar = build_grammar([&](const common_grammar_builder & builder) {
+        auto schemas = json::array();
+        foreach_function(inputs.tools, [&](const json & tool) {
+            const auto & function = tool["function"];
+            schemas.push_back({
+                {"type", "object"},
+                {"properties", {
+                    {"tool_call_id", {
+                        {"type", "string"},
+                        // Command-R's template expects an integer string.
+                        {"pattern", "^[0-9]{1,10}$"},
+                    }},
+                    {"tool_name", {
+                        {"type", "string"},
+                        {"const", function["name"]},
+                    }},
+                    {"parameters", function["parameters"]},
+                }},
+                {"required", json::array({"tool_call_id", "tool_name", "parameters"})},
+            });
+        });
+        auto schema = json {
+            {"type", "array"},
+            {"items", schemas.size() == 1 ? schemas[0] : json {{"anyOf", schemas}}},
+            {"minItems", 1},
+        };
+        if (!inputs.parallel_tool_calls) {
+            schema["maxItems"] = 1;
+        }
+        builder.add_rule("root", "\"<|START_ACTION|>\" " + builder.add_schema("tool_calls", schema) + " \"<|END_ACTION|>\"");
+    }, grammar_options);
+    data.grammar_triggers.push_back({"<|START_ACTION|>", /* .at_start = */ false});
+    data.preserved_tokens = {
+        "<|START_RESPONSE|>",
+        "<|END_RESPONSE|>",
+        "<|START_THINKING|>",
+        "<|END_THINKING|>",
+        "<|END_ACTION|>",
+    };
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.format = COMMON_CHAT_FORMAT_COMMAND_R7B;
+    return data;
+}
+static common_chat_msg common_chat_parse_command_r7b(const std::string & input) {
+    static std::regex response_regex("<\\|START_RESPONSE\\|>([\\s\\S\\n\\r]*?)<\\|END_RESPONSE\\|>");
+    static std::regex thought_action_regex("<\\|START_THINKING\\|>([\\s\\S\\n\\r]*?)<\\|END_THINKING\\|><\\|START_ACTION\\|>([\\s\\S\\n\\r]*?)<\\|END_ACTION\\|>");
+    std::smatch match;
+
+    common_chat_msg result;
+    result.role = "assistant";
+    if (std::regex_match(input, match, response_regex)) {
+        result.content = match[1].str();
+    } else if (std::regex_match(input, match, thought_action_regex)) {
+        result.tool_plan = match[1].str();
+        auto actions_str = match[2].str();
+        auto actions = json::parse(actions_str);
+        for (const auto & action : actions) {
+            result.tool_calls.push_back({
+                /* .name = */      action["tool_name"],
+                /* .arguments = */ action["parameters"].dump(),
+                /* .id = */        action["tool_call_id"],
+            });
+        }
+    } else {
+        LOG_ERR("Failed to parse command_r output");
+        result.content = input;
+    }
+    return result;
 }
 
 static void expect_tool_parameters(const std::string & name, const json & parameters, const std::vector<std::string> & expected_properties) {
@@ -403,7 +499,7 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
         builder.add_rule("root", string_join(tool_rules, " | "));
     }, grammar_options);
     data.additional_stops.push_back("<|eom_id|>");
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt, {
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt, {
         {"tools_in_user_message", false},
         {"builtin_tools", builtin_tools.empty() ? json() : builtin_tools},
     });
@@ -462,9 +558,14 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
                 "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n```json\\n\" " + args_rule + " \"```<｜tool▁call▁end｜>\""));
         });
         data.grammar_triggers.push_back({"<｜tool▁calls▁begin｜>", /* .at_start = */ false});
+        data.preserved_tokens = {
+            "<｜tool▁sep｜>",
+            "<｜tool▁call▁end｜>",
+        };
         builder.add_rule("root", "\"<｜tool▁calls▁begin｜>\" (" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " space");
     }, grammar_options);
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    auto prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = prompt;
     data.format = COMMON_CHAT_FORMAT_DEEPSEEK_R1;
     return data;
 }
@@ -478,10 +579,10 @@ static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input) 
 static common_chat_params common_chat_params_init_firefunction_v2(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     fprintf(stderr, "%s\n", __func__);
     common_chat_params data;
-    data.prompt = tmpl.apply(inputs.messages, /* tools= */ nullptr, inputs.add_generation_prompt, {
+    data.prompt = apply(tmpl, inputs.messages, /* tools= */ nullptr, inputs.add_generation_prompt, {
         {"datetime", "Jan 29 2025 13:00:00 GMT"},
         {"functions", json(inputs.tools.empty() ? "" : inputs.tools.dump(2))},
-    }, /* adjust_inputs= */ false);
+    });
     if (!inputs.tools.is_null() && !inputs.tools.empty()) {
         data.grammar_lazy = inputs.tool_choice != "required";
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
@@ -525,7 +626,7 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
     // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
     // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
     common_chat_params data;
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2;
     if (!inputs.tools.is_null() && !inputs.tools.empty()) {
         data.grammar_lazy = inputs.tool_choice != "required";
@@ -652,7 +753,7 @@ static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(con
         data.grammar_triggers.push_back({"<function=", /* .at_start = */ false});
     }, grammar_options);
 
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     // TODO: if (has_raw_python)
     data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1;
     return data;
@@ -704,11 +805,10 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
         auto tool_call = "\"<tool_call>\" space " + builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " \"</tool_call>\" space";
         builder.add_rule("root", inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
         data.grammar_triggers.push_back({"<tool_call>", /* .at_start = */ false});
-        // Not really a trigger but need to print this special token to get a successful parse.
-        data.grammar_triggers.push_back({"</tool_call>", /* .at_start = */ false});
+        data.preserved_tokens = { "</tool_call>" };
     }, grammar_options);
 
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_HERMES_2_PRO;
     return data;
 }
@@ -769,7 +869,7 @@ static common_chat_msg common_chat_parse_hermes_2_pro(const std::string & input)
 
 static common_chat_params common_chat_params_init_without_tools(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
-    data.prompt = tmpl.apply(inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
+    data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_CONTENT_ONLY;
     data.grammar_lazy = false;
     if (!inputs.json_schema.is_null()) {
@@ -822,6 +922,9 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
     if (src.find("[TOOL_CALLS]") != std::string::npos) {
         return common_chat_params_init_mistral_nemo(tmpl, inputs);
     }
+    if (src.find("<|END_THINKING|><|START_ACTION|>") != std::string::npos) {
+        return common_chat_params_init_command_r7b(tmpl, inputs);
+    }
     return common_chat_params_init_generic(tmpl, inputs);
 }
 
@@ -855,6 +958,8 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
             return common_chat_parse_hermes_2_pro(input);
         case COMMON_CHAT_FORMAT_FIREFUNCTION_V2:
             return common_chat_parse_firefunction_v2(input);
+        case COMMON_CHAT_FORMAT_COMMAND_R7B:
+            return common_chat_parse_command_r7b(input);
         default:
             throw std::runtime_error("Unsupported format: " + common_chat_format_name(format));
     }

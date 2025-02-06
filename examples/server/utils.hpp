@@ -5,10 +5,6 @@
 #include "llama.h"
 #include "common/base64.hpp"
 
-#ifndef NDEBUG
-// crash the server in debug mode, otherwise send an http 500 error
-#define CPPHTTPLIB_NO_EXCEPTIONS 1
-#endif
 // increase max payload length to allow use of larger context size
 #define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
@@ -662,6 +658,7 @@ static json oaicompat_completion_params_parse(
             });
         }
         llama_params["grammar_triggers"] = grammar_triggers;
+        llama_params["preserved_tokens"] = chat_params.preserved_tokens;
         for (const auto & stop : chat_params.additional_stops) {
             llama_params["stop"].push_back(stop);
         }
