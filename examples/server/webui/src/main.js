@@ -1,5 +1,5 @@
 import './styles.scss';
-import { createApp, defineComponent, shallowRef, computed, h } from 'vue/dist/vue.esm-bundler.js';
+import { createApp, defineComponent, shallowRef, computed, h, ref } from 'vue/dist/vue.esm-bundler.js';
 import MarkdownIt from 'markdown-it';
 import TextLineStream from 'textlinestream';
 
@@ -15,7 +15,73 @@ import daisyuiThemes from 'daisyui/src/theming/themes';
 // ponyfill for missing ReadableStream asyncIterator on Safari
 import { asyncIterator } from '@sec-ant/readable-stream/ponyfill/asyncIterator';
 
+//mcp sse client
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+
+// MCP Client class
+class MCPClient {
+  constructor(mcpServers) {
+    this.mcpServers = mcpServers;
+    this.availableTools = ref([]);
+    this.clients = {};
+  }
+
+  async connectToServers() {
+    for (const key in this.mcpServers.mcpServers) {
+      if (this.mcpServers.mcpServers.hasOwnProperty(key)) {
+        const server = this.mcpServers.mcpServers[key];
+        try {
+          const transport = new SSEClientTransport(new URL(server.serverUrl));
+          transport.onmessage = this.handleServerMessage.bind(this);
+          transport.onerror = this.handleServerError.bind(this);
+          await transport.start();
+          const client = new Client(
+            { name: 'example-client', version: '0.1.0' },
+            { capabilities: {} }, // Consider fetching or setting defaults from server capabilities
+          );
+          await client.connect(transport);
+          this.clients[server.name] = client;
+          const toolsResponse = await client.listTools();
+          this.availableTools.value = this.availableTools.value.concat(toolsResponse.tools.map((x) => ({
+            name: x.name,
+            description: x.description,
+            inputSchema: x.inputSchema,
+          })));
+        } catch (error) {
+          console.error(`Error connecting to server ${server.name}:`, error);
+          // Optionally, handle the error more gracefully, e.g., by not crashing the app
+        }
+      }
+    }
+  }
+
+  handleServerMessage(message) {
+    console.log('Received server message:', message); 
+  }
+
+  handleServerError(error) {
+    console.error('Server error:', error);
+  }
+
+  async callTool(toolName, input) {
+    for (const client of Object.values(this.clients)) {
+      const tools = await client.listTools();
+      const tool = tools.tools.find((t) => t.name === toolName);
+      if (tool) {
+        return await client.callTool({ name: toolName, arguments: input });
+      }
+    }
+    throw new Error(`Tool ${toolName} not found`);
+  }
+}
+
+// end MCP SSE client class defines 
+//for the sse servers testing with these: https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/servers/simple-tool
+
+
 const isDev = import.meta.env.MODE === 'development';
+
 
 // types
 /** @typedef {{ id: number, role: 'user' | 'assistant', content: string, timings: any }} Message */
@@ -343,6 +409,18 @@ const StorageUtils = {
       localStorage.setItem('theme', theme);
     }
   },
+  getMcpServers() {
+    return JSON.parse(localStorage.getItem('mcpServers') || '[]');
+  },
+  setMcpServers(mcpServers) {
+    localStorage.setItem('mcpServers', JSON.stringify(mcpServers));
+  },
+  getEnableMcpClient() {
+    return localStorage.getItem('enableMcpClient') === 'true';
+  },
+  setEnableMcpClient(enableMcpClient) {
+    localStorage.setItem('enableMcpClient', enableMcpClient);
+  },
 };
 
 // scroll to bottom of chat messages
@@ -399,11 +477,21 @@ const mainApp = createApp({
       configDefault: {...CONFIG_DEFAULT},
       configInfo: {...CONFIG_INFO},
       isDev,
+      mcpClient: null,
+      mcpServers: StorageUtils.getMcpServers(),
+      enableMcpClient: StorageUtils.getEnableMcpClient(),
+      maxToolCalls: 3, // Define a maximum number of tool calls
+      toolCallsCount: 0, // Counter for tool calls
     }
   },
   computed: {},
   mounted() {
     document.getElementById('app').classList.remove('opacity-0'); // show app
+    const mcpServers = StorageUtils.getMcpServers();
+    this.mcpClient = new MCPClient(this.mcpServers);
+    if (this.enableMcpClient) {
+      this.mcpClient.connectToServers();
+    }
     // scroll to the bottom when the pending message height is updated
     const pendingMsgElem = document.getElementById('pending-msg');
     const resizeObserver = new ResizeObserver(() => {
@@ -421,6 +509,18 @@ const mainApp = createApp({
       }
     }
   },
+  enableMcpClient: function(val) {
+      if (val) {
+        this.mcpClient.connectToServers();
+      } else {
+        for (const client of Object.values(this.mcpClient.clients)) {
+          client.transport.close();
+        }
+        this.mcpClient.availableTools.value = [];
+      }
+    
+  },
+
   methods: {
     hideSidebar() {
       document.getElementById('toggle-drawer').checked = false;
@@ -434,6 +534,7 @@ const mainApp = createApp({
     newConversation() {
       if (this.isGenerating) return;
       this.viewingConvId = StorageUtils.getNewConvId();
+      this.toolCallsCount = 0;
     },
     setViewingConv(convId) {
       if (this.isGenerating) return;
@@ -486,7 +587,7 @@ const mainApp = createApp({
       chatScrollToBottom();
     },
     async generateMessage(currConvId) {
-      if (this.isGenerating) return;
+      if (this.isGenerating || this.toolCallsCount >= this.maxToolCalls) return;
       this.pendingMsg = { id: Date.now()+1, role: 'assistant', content: null };
       this.isGenerating = true;
 
@@ -530,6 +631,11 @@ const mainApp = createApp({
           timings_per_token: !!config.showTokensPerSecond,
           ...(config.custom.length ? JSON.parse(config.custom) : {}),
         };
+        if (this.enableMcpClient) {
+          params.tools = this.mcpClient.availableTools.value;
+          console.log("available tools:")
+          console.log(params.tools)
+        }
         const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
           method: 'POST',
           headers: {
@@ -539,6 +645,9 @@ const mainApp = createApp({
           body: JSON.stringify(params),
           signal: abortController.signal,
         });
+        if (this.enableMcpClient) {
+
+        } else {
         for await (const chunk of chunks) {
           const stop = chunk.stop;
           const addedContent = chunk.choices[0].delta.content;
@@ -546,9 +655,11 @@ const mainApp = createApp({
           if (addedContent) {
             this.pendingMsg = {
               id: this.pendingMsg.id,
-              role: 'assistant',
+              role: this.pendingMsg.role,
               content: lastContent + addedContent,
+              tool_calls: this.pendingMsg.tool_calls,
             };
+          }
           }
           const timings = chunk.timings;
           if (timings && config.showTokensPerSecond) {
@@ -559,6 +670,32 @@ const mainApp = createApp({
               predicted_n: timings.predicted_n,
               predicted_ms: timings.predicted_ms,
             };
+          }
+        
+
+        if (chunk.choices[0].finish_reason === 'tool_calls') {
+            const toolCalls = chunk.choices[0].message.tool_calls;
+            for (const toolCall of toolCalls) {
+              const toolName = toolCall.function.name;
+              const input = toolCall.function.arguments;
+              const toolResponse = await this.mcpClient.callTool(toolName, input);
+              this.pendingMsg = {
+              id: "",
+              role: "function",
+              name: toolName,
+              content: toolResponse,
+    
+              
+            };
+              this.toolCallsCount++;
+              if (this.toolCallsCount < this.maxToolCalls) {
+                // Resubmit the conversation to the LLM with the tool response
+                await this.generateMessage(currConvId);
+              } else {
+                console.warn('Max tool calls reached, stopping generation.');
+                break;
+              }
+            }
           }
         }
 
@@ -630,14 +767,27 @@ const mainApp = createApp({
       }
       this.showConfigDialog = false;
       StorageUtils.setConfig(this.config);
+      const mcpServers = this.mcpServers;
+      StorageUtils.setMcpServers(mcpServers);
+      this.mcpClient = new MCPClient(mcpServers);
+      this.enableMcpClient = this.enableMcpClient;
+      StorageUtils.setEnableMcpClient(this.enableMcpClient);
+      if (this.enableMcpClient) {
+        this.mcpClient.connectToServers();
+      }
     },
     closeAndDiscardConfigDialog() {
       this.showConfigDialog = false;
       this.config = StorageUtils.getConfig();
+      this.mcpServers = StorageUtils.getMcpServers();
+      this.enableMcpClient = StorageUtils.getEnableMcpClient();
     },
     resetConfigDialog() {
       if (window.confirm('Are you sure to reset all settings?')) {
         this.config = {...CONFIG_DEFAULT};
+        //consider adding mcpservers to the default config. 
+        this.mcpServers = [];
+        this.enableMcpClient = false;
       }
     },
 

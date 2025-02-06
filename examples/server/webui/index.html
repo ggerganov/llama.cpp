@@ -235,7 +235,20 @@
             </div>
           </details>
         </div>
-
+        <!-- MCP settings -->
+        <details class="collapse collapse-arrow bg-base-200 mb-2 overflow-visible">
+          <summary class="collapse-title font-bold">MCP Settings</summary>
+          <div class="collapse-content">
+            <label class="form-control mb-2">
+              <div class="label">MCP SSE Servers</div>
+              <textarea class="textarea textarea-bordered h-24" v-model="mcpServers"></textarea>
+            </label>
+            <div class="flex flex-row items-center mb-2">
+              <input type="checkbox" class="checkbox" v-model="enableMcpClient" />
+              <span class="ml-4">Enable MCP Client</span>
+            </div>
+          </div>
+        </details>
         <!-- action buttons -->
         <div class="modal-action">
           <button class="btn" @click="resetConfigDialog">Reset to default</button>
