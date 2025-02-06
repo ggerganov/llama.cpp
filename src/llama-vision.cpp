@@ -982,7 +982,7 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
     }
 
     // alloc memory for graph
-    bool ok = ggml_backend_sched_alloc_graph(ctx.sched, gf);
+    bool ok = ggml_backend_sched_alloc_graph(ctx.sched.get(), gf);
     if (!ok) {
         LLAMA_LOG_ERROR("failed to alloc memory for graph\n");
         return -1;
@@ -1064,7 +1064,7 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
     // compute
     LLAMA_LOG_DEBUG("%s: compute start\n", __func__);
     int64_t t_start = ggml_time_ms();
-    ggml_backend_sched_graph_compute(ctx.sched, gf);
+    ggml_backend_sched_graph_compute(ctx.sched.get(), gf);
 
     // the last node is the embedding tensor
     struct ggml_tensor * output_node = ggml_graph_node(gf, -1);
@@ -1091,6 +1091,92 @@ static int32_t llama_vision_encode_impl(llama_vision_context & ctx, const llama_
 ////////////////////////////////////////////////////////////////////////////////////////
 // public API
 
+struct llama_vision_context_params llama_vision_context_default_params() {
+    return {
+        /*.n_threads =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
+    };
+}
+
+struct llama_vision_context * llama_vision_init_from_model(const struct llama_model * model, struct llama_vision_context_params params) {
+    if (!model->has_vision) {
+        return nullptr;
+    }
+
+    llama_vision_context * ctx = new llama_vision_context;
+    ctx->model = &model->vit;
+
+    // TODO: this looks ugly, mostly copied from llama.cpp, refactor it in the future
+
+    // init backends
+    {
+        // add CPU backend
+        ctx->backend_cpu = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+        if (ctx->backend_cpu == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
+            llama_vision_free(ctx);
+            return nullptr;
+        }
+        ctx->backends.emplace_back(ctx->backend_cpu);
+
+        // create a list of the set_n_threads functions in the backends
+        for (auto & backend : ctx->backends) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(backend.get());
+            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+            if (reg) {
+                auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+                ggml_backend_set_n_threads_fn(backend.get(), params.n_threads);
+            }
+        }
+    }
+
+    // scheduler and compute buffers
+    {
+        // buffer types used for the compute buffer of each backend
+        std::vector<ggml_backend_buffer_type_t> backend_buft;
+        std::vector<ggml_backend_t> backend_ptrs;
+        for (auto & backend : ctx->backends) {
+            auto * buft = ggml_backend_get_default_buffer_type(backend.get());
+            auto backend_type = ggml_backend_dev_type(ggml_backend_get_device(backend.get()));
+            if (backend_type == GGML_BACKEND_DEVICE_TYPE_CPU && !model->devices.empty()) {
+                // use the host buffer of the first device CPU for faster transfer of the intermediate state
+                auto * dev = model->devices[0];
+                auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+                if (host_buft) {
+                    buft = host_buft;
+                }
+            }
+            backend_buft.push_back(buft);
+            backend_ptrs.push_back(backend.get());
+        }
+
+        const size_t max_nodes = model->max_nodes();
+
+        // buffer used to store the computation graph and the tensor meta data
+        ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
+
+        // TODO: support pipeline_parallel
+        const bool pipeline_parallel = false;
+
+        ctx->sched.reset(ggml_backend_sched_new(backend_ptrs.data(), backend_buft.data(), backend_ptrs.size(), max_nodes, pipeline_parallel));
+
+        if (pipeline_parallel) {
+            LLAMA_LOG_INFO("%s: pipeline parallelism enabled (n_copies=%d)\n", __func__, ggml_backend_sched_get_n_copies(ctx->sched.get()));
+        }
+    }
+
+    const size_t max_nodes = VISION_GRAPH_MAX_NODE; // TODO: make it dynamic
+    ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
+
+    return ctx;
+}
+
+void llama_vision_free(struct llama_vision_context * ctx) {
+    if (ctx->ctx_ggml) {
+        ggml_free(ctx->ctx_ggml);
+    }
+    delete ctx;
+}
+
 struct llama_vision_bitmap * llama_vision_bitmap_init(uint32_t nx, uint32_t ny) {
     llama_vision_bitmap * bmp = new llama_vision_bitmap;
     bmp->nx = nx;
@@ -1105,16 +1191,15 @@ void llama_vision_bitmap_free(llama_vision_bitmap * bmp) {
 }
 
 struct llama_vision_tokens * llama_vision_tokenize(
-        struct llama_context * ctx,
-        llama_vision_bitmap * bmp) {
-    llama_vision_context & vctx = ctx->vctx;
-    switch (vctx.model->hparams.arch) {
+        struct llama_vision_context * ctx,
+        struct llama_vision_bitmap * bmp) {
+    switch (ctx->model->hparams.arch) {
         case LLM_ARCH_VISION_LLAVA:
         case LLM_ARCH_VISION_MOBILEVLM:
         case LLM_ARCH_VISION_IDEFICS3:
-            return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
+            return new llama_vision_tokens(llama_vision_processor_llava(*ctx).tokenize(*bmp));
         case LLM_ARCH_VISION_MINICPMV:
-            return new llama_vision_tokens(llama_vision_processor_llava(vctx).tokenize(*bmp));
+            return new llama_vision_tokens(llama_vision_processor_llava(*ctx).tokenize(*bmp));
         default:
             GGML_ASSERT(false && "unsupported arch");
     }
@@ -1124,19 +1209,18 @@ void llama_vision_tokens_free(llama_vision_tokens * p) {
     delete p;
 }
 
-int32_t llama_vision_encode(struct llama_context * ctx, llama_vision_tokens * p) {
+int32_t llama_vision_encode(struct llama_vision_context * ctx, struct llama_vision_tokens * p) {
     if (p->buf.empty()) {
         LLAMA_LOG_ERROR("%s: nothing to encode\n", __func__);
         return -1;
     }
 
-    llama_vision_context & vctx = ctx->vctx;
-    auto & hparams = vctx.model->hparams;
+    auto & hparams = ctx->model->hparams;
     switch (hparams.mm_patch_merge_type) {
         case MM_PATCH_MERGE_FLAT:
             {
                 // flat / default llava-1.5 type embedding
-                int32_t encoded = llama_vision_encode_impl(vctx, *p);
+                int32_t encoded = llama_vision_encode_impl(*ctx, *p);
                 if (encoded != 0) {
                     LLAMA_LOG_ERROR("Unable to encode image\n");
                     return encoded;
@@ -1154,8 +1238,8 @@ int32_t llama_vision_encode(struct llama_context * ctx, llama_vision_tokens * p)
     return 0;
 }
 
-struct ggml_tensor * llama_vision_get_output_tensor(llama_context * ctx) {
-    return ctx->vctx.output;
+struct ggml_tensor * llama_vision_get_output_tensor(struct llama_vision_context * ctx) {
+    return ctx->output;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

@@ -120,6 +120,14 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    llama_vision_context_params vparams = llama_vision_context_default_params();
+    vparams.n_threads = llama_n_threads(ctx);
+    llama_vision_context * vctx = llama_vision_init_from_model(model, vparams);
+    if (!vctx) {
+        LOG_ERR("model does not have vision encoder\n");
+        return 1;
+    }
+
     struct common_sampler * smpl = common_sampler_init(model, params.sampling);
 
     llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
@@ -136,12 +144,12 @@ int main(int argc, char ** argv) {
         }
         llama_vision_bitmap * img = load_image_from_file(img_path);
         LOG_INF("loaded image %s, size = %d x %d\n", img_path, img->nx, img->ny);
-        img_tokens = llama_vision_tokenize(ctx, img);
+        img_tokens = llama_vision_tokenize(vctx, img);
         if (!img_tokens) {
             LOG_ERR("failed to create image tokens\n");
             return 1;
         }
-        if (llama_vision_encode(ctx, img_tokens)) {
+        if (llama_vision_encode(vctx, img_tokens)) {
             LOG_ERR("failed to encode image\n");
             return 1;
         }
@@ -163,7 +171,7 @@ int main(int argc, char ** argv) {
                     return 1;
                 }
             } else {
-                auto * img_embd = llama_vision_get_output_tensor(ctx);
+                auto * img_embd = llama_vision_get_output_tensor(vctx);
                 // std::vector<float> output_debug(ggml_nelements(img_embd));
                 // ggml_backend_tensor_get(img_embd, output_debug.data(), 0, ggml_nbytes(img_embd));
                 // for (int row = 0; row < 10; row++) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-cpp.h"
 #include "llama.h"
 #include "llama-arch.h"
 
@@ -142,12 +143,14 @@ struct llama_vision_model {
 struct llama_vision_context {
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
-    ggml_backend_sched_t sched = nullptr;
-    struct ggml_context * ctx_ggml = nullptr;
+    ggml_backend_sched_ptr sched;
+    std::vector<ggml_backend_ptr> backends;
+    ggml_backend_t backend_cpu;
 
     const llama_vision_model * model;
 
     // temporary output data, to be picked up by llama_decode()
+    struct ggml_context * ctx_ggml = nullptr;
     struct ggml_tensor * output;
 };
 

@@ -8460,7 +8460,9 @@ static int llama_prepare_sbatch(
     // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
     const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
 
-    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
+    GGML_ASSERT((batch.token && !batch.embd && !batch.embd_tensor)
+            || (!batch.token &&  batch.embd && !batch.embd_tensor)
+            || (!batch.token && !batch.embd &&  batch.embd_tensor)); // NOLINT
     if (batch.token) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             if (batch.token[i] < 0 || uint32_t(batch.token[i]) >= model.vocab.n_tokens()) {
@@ -9891,13 +9893,6 @@ struct llama_context * llama_init_from_model(
                 LLAMA_LOG_INFO("%s: graph splits = %d (with bs=%d), %d (with bs=1)\n", __func__, n_splits_pp, n_tokens, n_splits_tg);
             }
         }
-    }
-
-    if (model->has_vision) {
-        ctx->vctx.model = &model->vit;
-        ctx->vctx.sched = ctx->sched.get();
-        const size_t max_nodes = VISION_GRAPH_MAX_NODE; // TODO: make it dynamic
-        ctx->vctx.buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
     }
 
     return ctx;
