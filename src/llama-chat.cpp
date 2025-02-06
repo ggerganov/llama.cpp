@@ -594,7 +594,7 @@ int32_t llm_chat_apply_template(
     } else {
         // template not supported
         return -1;
-    }  
+    }
     dest = ss.str();
     return dest.size();
 }
