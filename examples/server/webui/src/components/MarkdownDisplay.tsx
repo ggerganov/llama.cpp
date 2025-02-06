@@ -135,6 +135,8 @@ export function preprocessLaTeX(content: string): string {
 
   // Step 2: Protect existing LaTeX expressions
   const latexExpressions: string[] = [];
+
+  // Protect block math ($$...$$), \[...\], and \(...\) as before.
   content = content.replace(
     /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g,
     (match) => {
@@ -143,7 +145,22 @@ export function preprocessLaTeX(content: string): string {
     }
   );
 
-  // Step 3: Escape dollar signs that are likely currency indicators
+  // Protect inline math ($...$) only if it does NOT match a currency pattern.
+  // We assume a currency pattern is one where the inner content is purely numeric (with optional decimals).
+  content = content.replace(/\$([^$]+)\$/g, (match, inner) => {
+    if (/^\s*\d+(?:\.\d+)?\s*$/.test(inner)) {
+      // This looks like a currency value (e.g. "$123" or "$12.34"),
+      // so don't protect it.
+      return match;
+    } else {
+      // Otherwise, treat it as a LaTeX expression.
+      latexExpressions.push(match);
+      return `<<LATEX_${latexExpressions.length - 1}>>`;
+    }
+  });
+
+  // Step 3: Escape dollar signs that are likely currency indicators.
+  // (Now that inline math is protected, this will only escape dollars not already protected)
   content = content.replace(/\$(?=\d)/g, '\\$');
 
   // Step 4: Restore LaTeX expressions
