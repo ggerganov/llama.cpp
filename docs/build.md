@@ -136,6 +136,12 @@ If you are using Fedora (using Fedora Workstation, or an 'Atomic' variant such a
   cmake --build build --config Release
   ```
 
+- Using `CMake` with path :
+
+  ```bash
+  rm -rf build & /usr/local/bin/cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+  /usr/local/bin/cmake --build build --config Release -j
+  ```
 The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used.
 
 The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enable unified memory in Linux. This allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted. In Windows this setting is available in the NVIDIA control panel as `System Memory Fallback`.
