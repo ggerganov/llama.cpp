@@ -103,11 +103,10 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
     name = std::regex_replace(name, std::regex("\\(TM\\)"), "");
 
     auto global_mem_size = prop.get_global_mem_size()/1000000;
-    std::string xmx = gpu_has_xmx(device) ? "yes" : "no";
-    GGML_LOG_INFO("|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|%14s|\n", id, device_type.c_str(),
+    GGML_LOG_INFO("|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
             name.c_str(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
-            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str(), xmx.c_str());
+            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str());
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
@@ -118,16 +117,16 @@ void ggml_backend_sycl_print_sycl_devices() {
 
     GGML_LOG_INFO(
         "|  |                   |                                       |      "
-        " |Max    |        |Max  |Global |                     |         XMX  |\n");
+        " |Max    |        |Max  |Global |                     |\n");
     GGML_LOG_INFO(
         "|  |                   |                                       |      "
-        " |compute|Max work|sub  |mem    |                     |          or  |\n");
+        " |compute|Max work|sub  |mem    |                     |\n");
     GGML_LOG_INFO(
         "|ID|        Device Type|                                   "
-        "Name|Version|units  |group   |group|size   |       Driver version| Tensor Cores |\n");
+        "Name|Version|units  |group   |group|size   |       Driver version|\n");
     GGML_LOG_INFO(
         "|--|-------------------|---------------------------------------|------"
-        "-|-------|--------|-----|-------|---------------------|--------------|\n");
+        "-|-------|--------|-----|-------|---------------------|\n");
 
     for (int id = 0; id < device_count; ++id) {
       sycl::device device = dpct::dev_mgr::instance().get_device(id);
