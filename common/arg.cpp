@@ -2328,7 +2328,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--embd-bge-small-en-default"},
         string_format("use default bge-small-en-v1.5 model (note: can download weights from the internet)"),
         [](common_params & params) {
-            params.hf_repo = "CompendiumLabs/bge-small-en-v1.5-gguf";
+            params.hf_repo = "ggml-org/bge-small-en-v1.5-Q8_0-GGUF";
             params.hf_file = "bge-small-en-v1.5-q8_0.gguf";
             params.pooling_type = LLAMA_POOLING_TYPE_NONE;
             params.embd_normalize = 2;
@@ -2342,8 +2342,8 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--embd-e5-small-en-default"},
         string_format("use default e5-small-v2 model (note: can download weights from the internet)"),
         [](common_params & params) {
-            params.hf_repo = "ChristianAzinn/e5-small-v2-gguf";
-            params.hf_file = "e5-small-v2.Q8_0.gguf";
+            params.hf_repo = "ggml-org/e5-small-v2-Q8_0-GGUF";
+            params.hf_file = "e5-small-v2-q8_0.gguf";
             params.pooling_type = LLAMA_POOLING_TYPE_NONE;
             params.embd_normalize = 2;
             params.n_ctx = 512;
