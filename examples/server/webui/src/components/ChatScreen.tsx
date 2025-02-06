@@ -41,7 +41,7 @@ export default function ChatScreen() {
   }, [viewingConversation?.id]);
 
   const sendNewMessage = async () => {
-    if (inputMsg.trim().length === 0) return;
+    if (inputMsg.trim().length === 0 || isGenerating(currConvId)) return;
     const convId = viewingConversation?.id ?? StorageUtils.getNewConvId();
     const lastInpMsg = inputMsg;
     setInputMsg('');

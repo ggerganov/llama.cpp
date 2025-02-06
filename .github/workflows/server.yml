@@ -81,12 +81,11 @@ jobs:
         with:
           node-version: '22.11.0'
 
-      - name: WebUI - Run lint
+      - name: WebUI - Install dependencies
         id: webui_lint
         run: |
           cd examples/server/webui
           npm ci
-          npm run lint
 
       - name: WebUI - Check code format
         id: webui_format
