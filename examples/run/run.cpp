@@ -346,7 +346,7 @@ class HttpClient {
         if (!output_file.empty()) {
             output_file_partial = output_file + ".partial";
             if (!out.open(output_file_partial, "ab")) {
-                printe("Failed to open file\n");
+                printe("Failed to open file for writing\n");
 
                 return 1;
             }
