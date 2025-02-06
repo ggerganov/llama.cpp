@@ -577,12 +577,10 @@ static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
 // horizontally add 8 floats
 static inline float hsum_float_8(const __m256 x) {
     __m128 res = lasx_extractf128(x, 1);
-    ft_union tmp;
     res = __lsx_vfadd_s(res, lasx_extractf128(x, 0));
     res = __lsx_vfadd_s(res, (__m128)__lsx_vpickod_d((__m128i)res, (__m128i)res));
     res = __lsx_vfadd_s(res, (__m128)__lsx_vinsgr2vr_w(__lsx_vldi(0), __lsx_vpickve2gr_w(res, 1), 0));
-    tmp.i = __lsx_vpickve2gr_w(res, 0);
-    return tmp.f;
+    return ((v4f32)res)[0];
 }
 
 // horizontally add 8 int32_t
@@ -924,7 +922,6 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
 
 #elif defined(__loongarch_asx)
     for (int i = 0; i < nb; i++) {
-        ft_union fi;
         __m256 v0 = (__m256)__lasx_xvld( x , 0);
         __m256 v1 = (__m256)__lasx_xvld( x , 32);
         __m256 v2 = (__m256)__lasx_xvld( x , 64);
@@ -942,8 +939,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vpickod_d((__m128i) max4, (__m128i)max4 ) );
         __m128 tmp = max4;
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vinsgr2vr_w(tmp, __lsx_vpickve2gr_w( max4, 1 ), 0 ));
-        fi.i = __lsx_vpickve2gr_w( (__m128i)max4, 0 );
-        const float max_scalar = fi.f;
+        const float max_scalar = ((v4f32)max4)[0];
 
         // Quantize these floats
         const float d = max_scalar / 127.f;
@@ -1248,7 +1244,6 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) 
 
 #elif defined(__loongarch_asx)
     for (int i = 0; i < nb; i++) {
-        ft_union ft;
         __m256 v0 = (__m256)__lasx_xvld( x , 0 );
         __m256 v1 = (__m256)__lasx_xvld( x , 32 );
         __m256 v2 = (__m256)__lasx_xvld( x , 64 );
@@ -1266,8 +1261,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) 
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vpickod_d((__m128i) max4, (__m128i)max4 ) );
         __m128 tmp = max4;
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vextrins_w((__m128i)tmp, (__m128i)max4, 0x10 ));
-        ft.i = __lsx_vpickve2gr_w( (__m128i)max4, 0 );
-        const float max_scalar = ft.f;
+        const float max_scalar = ((v4f32)max4)[0];
 
         // Quantize these floats
         const float d = max_scalar / 127.f;
@@ -6139,9 +6133,7 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     acc_m = __lsx_vfadd_s(acc_m, (__m128)tmp1);
 
 
-    ft_union fi;
-    fi.i = __lsx_vpickve2gr_w(acc_m, 0);
-    *s = hsum_float_8(acc) + fi.f ;
+    *s = hsum_float_8(acc) + ((v4f32)acc_m)[0];
 #else
 
     const uint8_t * scales = (const uint8_t*)&utmp[0];
