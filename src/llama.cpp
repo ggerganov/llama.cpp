@@ -8803,8 +8803,8 @@ static int llama_decode_impl(
     // decide if we need to defrag the kv cache
     if (cparams.causal_attn && cparams.defrag_thold >= 0.0f) {
         // - do not defrag small contexts (i.e. < 2048 tokens)
-        // - do not defrag if the padding is bigger than the defrag threshold
-        const float fragmentation = (kv_self.n >= 2048 && kv_self.n*cparams.defrag_thold >= llama_kv_cache_get_padding(cparams)) ? 1.0f - float(kv_self.used)/float(kv_self.n) : 0.0f;
+        // - count the padding towards the number of used tokens
+        const float fragmentation = kv_self.n >= 2048 ? 1.0f - float(kv_self.used + llama_kv_cache_get_padding(cparams))/float(kv_self.n) : 0.0f;
 
         // queue defragmentation for next llama_kv_cache_update
         if (fragmentation > cparams.defrag_thold) {
