@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAppContext } from '../utils/app.context';
 import { Message, PendingMessage } from '../utils/types';
 import { classNames } from '../utils/misc';
-import MarkdownDisplay from './MarkdownDisplay';
+import MarkdownDisplay, { CopyButton } from './MarkdownDisplay';
 
 interface SplitMessage {
   content: PendingMessage['content'];
@@ -207,20 +207,19 @@ export default function ChatMessage({
           {/* assistant message */}
           {msg.role === 'assistant' && (
             <>
-              <button
+              {!isPending && (
+                <button
+                  className="badge btn-mini show-on-hover mr-2"
+                  onClick={regenerate}
+                  disabled={msg.content === null}
+                >
+                  🔄 Regenerate
+                </button>
+              )}
+              <CopyButton
                 className="badge btn-mini show-on-hover mr-2"
-                onClick={regenerate}
-                disabled={msg.content === null}
-              >
-                🔄 Regenerate
-              </button>
-              <button
-                className="badge btn-mini show-on-hover mr-2"
-                onClick={() => navigator.clipboard.writeText(msg.content || '')}
-                disabled={msg.content === null}
-              >
-                📋 Copy
-              </button>
+                content={msg.content}
+              />
             </>
           )}
         </div>

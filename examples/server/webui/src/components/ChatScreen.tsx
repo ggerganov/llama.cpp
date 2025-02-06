@@ -27,7 +27,7 @@ export default function ChatScreen() {
       msgListElem.scrollHeight -
       msgListElem.scrollTop -
       msgListElem.clientHeight;
-    if (!requiresNearBottom || spaceToBottom < 100) {
+    if (!requiresNearBottom || spaceToBottom < 50) {
       setTimeout(
         () => msgListElem.scrollTo({ top: msgListElem.scrollHeight }),
         1

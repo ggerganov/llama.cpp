@@ -6,7 +6,9 @@ import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import 'katex/dist/katex.min.css';
-import { copyStr } from '../utils/misc';
+import { classNames, copyStr } from '../utils/misc';
+import { ElementContent, Root } from 'hast';
+import { visit } from 'unist-util-visit';
 
 export default function MarkdownDisplay({ content }: { content: string }) {
   const preprocessedContent = useMemo(
@@ -16,9 +18,11 @@ export default function MarkdownDisplay({ content }: { content: string }) {
   return (
     <Markdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[rehypeHightlight, rehypeKatex]}
+      rehypePlugins={[rehypeHightlight, rehypeKatex, rehypeCustomCopyButton]}
       components={{
-        pre: (props) => <Pre {...props} origContent={preprocessedContent} />,
+        button: (props) => (
+          <CopyCodeButton {...props} origContent={preprocessedContent} />
+        ),
       }}
     >
       {preprocessedContent}
@@ -26,15 +30,14 @@ export default function MarkdownDisplay({ content }: { content: string }) {
   );
 }
 
-const Pre: React.ElementType<
-  React.ClassAttributes<HTMLPreElement> &
-    React.HTMLAttributes<HTMLPreElement> &
+const CopyCodeButton: React.ElementType<
+  React.ClassAttributes<HTMLButtonElement> &
+    React.HTMLAttributes<HTMLButtonElement> &
     ExtraProps & { origContent: string }
-> = ({ node, origContent, ...props }) => {
+> = ({ node, origContent }) => {
   const startOffset = node?.position?.start.offset ?? 0;
   const endOffset = node?.position?.end.offset ?? 0;
 
-  const [copied, setCopied] = useState(false);
   const copiedContent = useMemo(
     () =>
       origContent
@@ -44,28 +47,69 @@ const Pre: React.ElementType<
     [origContent, startOffset, endOffset]
   );
 
-  if (!node?.position) {
-    return <pre {...props} />;
-  }
-
   return (
-    <div className="relative my-4">
-      <div
-        className="text-right sticky top-4 mb-2 mr-2 h-0"
-        onClick={() => {
-          copyStr(copiedContent);
-          setCopied(true);
-        }}
-        onMouseLeave={() => setCopied(false)}
-      >
-        <button className="badge btn-mini">
-          {copied ? 'Copied!' : '📋 Copy'}
-        </button>
-      </div>
-      <pre {...props} />
+    <div
+      className={classNames({
+        'text-right sticky top-4 mb-2 mr-2 h-0': true,
+        'display-none': !node?.position,
+      })}
+    >
+      <CopyButton className="badge btn-mini" content={copiedContent} />
     </div>
   );
 };
+
+export const CopyButton = ({
+  content,
+  className,
+}: {
+  content: string;
+  className?: string;
+}) => {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className={className}
+      onClick={() => {
+        copyStr(content);
+        setCopied(true);
+      }}
+      onMouseLeave={() => setCopied(false)}
+    >
+      {copied ? 'Copied!' : '📋 Copy'}
+    </button>
+  );
+};
+
+/**
+ * This injects the "button" element before each "pre" element.
+ * The actual button will be replaced with a react component in the MarkdownDisplay.
+ * We don't replace "pre" node directly because it will cause the node to re-render, which causes this bug: https://github.com/ggerganov/llama.cpp/issues/9608
+ */
+function rehypeCustomCopyButton() {
+  return function (tree: Root) {
+    visit(tree, 'element', function (node) {
+      if (node.tagName === 'pre' && !node.properties.visited) {
+        const preNode = { ...node };
+        // replace current node
+        preNode.properties.visited = 'true';
+        node.tagName = 'div';
+        node.properties = {
+          className: 'relative my-4',
+        };
+        // add node for button
+        const btnNode: ElementContent = {
+          type: 'element',
+          tagName: 'button',
+          properties: {},
+          children: [],
+          position: node.position,
+        };
+        node.children = [btnNode, preNode];
+      }
+    });
+  };
+}
 
 /**
  * The part below is copied and adapted from:
