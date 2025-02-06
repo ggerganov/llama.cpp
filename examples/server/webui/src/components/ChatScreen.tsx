@@ -3,6 +3,7 @@ import { useAppContext } from '../utils/app.context';
 import StorageUtils from '../utils/storage';
 import { useNavigate } from 'react-router';
 import ChatMessage from './ChatMessage';
+import { PendingMessage } from '../utils/types';
 
 export default function ChatScreen() {
   const {
@@ -10,11 +11,14 @@ export default function ChatScreen() {
     sendMessage,
     isGenerating,
     stopGenerating,
-    pendingMessage,
+    pendingMessages,
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  const currConvId = viewingConversation?.id ?? '';
+  const pendingMsg: PendingMessage | undefined = pendingMessages[currConvId];
 
   const scrollToBottom = (requiresNearBottom: boolean) => {
     if (!containerRef.current) return;
@@ -70,14 +74,14 @@ export default function ChatScreen() {
           <ChatMessage key={msg.id} msg={msg} scrollToBottom={scrollToBottom} />
         ))}
 
-        {pendingMessage !== null &&
-          pendingMessage.convId === viewingConversation?.id && (
-            <ChatMessage
-              msg={pendingMessage}
-              scrollToBottom={scrollToBottom}
-              id="pending-msg"
-            />
-          )}
+        {pendingMsg && (
+          <ChatMessage
+            msg={pendingMsg}
+            scrollToBottom={scrollToBottom}
+            isPending
+            id="pending-msg"
+          />
+        )}
       </div>
 
       {/* chat input */}
@@ -97,8 +101,11 @@ export default function ChatScreen() {
           id="msg-input"
           dir="auto"
         ></textarea>
-        {isGenerating ? (
-          <button className="btn btn-neutral ml-2" onClick={stopGenerating}>
+        {isGenerating(currConvId) ? (
+          <button
+            className="btn btn-neutral ml-2"
+            onClick={() => stopGenerating(currConvId)}
+          >
             Stop
           </button>
         ) : (

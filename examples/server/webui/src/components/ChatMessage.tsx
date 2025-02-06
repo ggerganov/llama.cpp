@@ -20,10 +20,12 @@ export default function ChatMessage({
   msg,
   id,
   scrollToBottom,
+  isPending,
 }: {
   msg: Message | PendingMessage;
   id?: string;
   scrollToBottom: (requiresNearBottom: boolean) => void;
+  isPending?: boolean;
 }) {
   const { viewingConversation, replaceMessageAndGenerate, config } =
     useAppContext();
@@ -41,8 +43,6 @@ export default function ChatMessage({
         : null,
     [msg.timings]
   );
-
-  const isPending: boolean = !!(msg as PendingMessage).convId;
 
   // for reasoning model, we split the message into content and thought
   // TODO: implement this as remark/rehype plugin in the future

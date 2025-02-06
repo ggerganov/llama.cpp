@@ -21,6 +21,5 @@ export interface Conversation {
 }
 
 export type PendingMessage = Omit<Message, 'content'> & {
-  convId: string;
   content: string | null;
 };

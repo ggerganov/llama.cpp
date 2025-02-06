@@ -27,9 +27,10 @@ export default function Header() {
   }, [selectedTheme]);
 
   const { isGenerating, viewingConversation } = useAppContext();
+  const isCurrConvGenerating = isGenerating(viewingConversation?.id ?? '');
 
   const removeConversation = () => {
-    if (isGenerating || !viewingConversation) return;
+    if (isCurrConvGenerating || !viewingConversation) return;
     const convId = viewingConversation.id;
     if (window.confirm('Are you sure to delete this conversation?')) {
       StorageUtils.remove(convId);
@@ -38,7 +39,7 @@ export default function Header() {
   };
 
   const downloadConversation = () => {
-    if (isGenerating || !viewingConversation) return;
+    if (isCurrConvGenerating || !viewingConversation) return;
     const convId = viewingConversation.id;
     const conversationJson = JSON.stringify(viewingConversation, null, 2);
     const blob = new Blob([conversationJson], { type: 'application/json' });
@@ -81,7 +82,7 @@ export default function Header() {
             tabIndex={0}
             role="button"
             className="btn m-1"
-            disabled={isGenerating}
+            disabled={isCurrConvGenerating}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -108,11 +109,7 @@ export default function Header() {
           </ul>
         </div>
         <div className="tooltip tooltip-bottom" data-tip="Settings">
-          <button
-            className="btn"
-            disabled={isGenerating}
-            onClick={() => setShowSettingDialog(true)}
-          >
+          <button className="btn" onClick={() => setShowSettingDialog(true)}>
             {/* settings button */}
             <svg
               xmlns="http://www.w3.org/2000/svg"

@@ -10,15 +10,15 @@ import { BASE_URL, CONFIG_DEFAULT, isDev } from '../Config';
 import { matchPath, useLocation } from 'react-router';
 
 interface AppContextValue {
-  isGenerating: boolean;
   viewingConversation: Conversation | null;
-  pendingMessage: PendingMessage | null;
+  pendingMessages: Record<Conversation['id'], PendingMessage>;
+  isGenerating: (convId: string) => boolean;
   sendMessage: (
     convId: string,
     content: string,
     onChunk?: CallbackGeneratedChunk
   ) => Promise<boolean>;
-  stopGenerating: () => void;
+  stopGenerating: (convId: string) => void;
   replaceMessageAndGenerate: (
     convId: string,
     origMsgId: Message['id'],
@@ -45,13 +45,14 @@ export const AppContextProvider = ({
   const params = matchPath('/chat/:convId', pathname);
   const convId = params?.params?.convId;
 
-  const [isGenerating, setIsGenerating] = useState(false);
   const [viewingConversation, setViewingConversation] =
     useState<Conversation | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<PendingMessage | null>(
-    null
-  );
-  const [abortController, setAbortController] = useState(new AbortController());
+  const [pendingMessages, setPendingMessages] = useState<
+    Record<Conversation['id'], PendingMessage>
+  >({});
+  const [aborts, setAborts] = useState<
+    Record<Conversation['id'], AbortController>
+  >({});
   const [config, setConfig] = useState(StorageUtils.getConfig());
 
   useEffect(() => {
@@ -66,11 +67,41 @@ export const AppContextProvider = ({
     };
   }, [convId]);
 
+  const setPending = (convId: string, pendingMsg: PendingMessage | null) => {
+    // if pendingMsg is null, remove the key from the object
+    if (!pendingMsg) {
+      setPendingMessages((prev) => {
+        const newState = { ...prev };
+        delete newState[convId];
+        return newState;
+      });
+    } else {
+      setPendingMessages((prev) => ({ ...prev, [convId]: pendingMsg }));
+    }
+  };
+
+  const setAbort = (convId: string, controller: AbortController | null) => {
+    if (!controller) {
+      setAborts((prev) => {
+        const newState = { ...prev };
+        delete newState[convId];
+        return newState;
+      });
+    } else {
+      setAborts((prev) => ({ ...prev, [convId]: controller }));
+    }
+  };
+
+  ////////////////////////////////////////////////////////////////////////
+  // public functions
+
+  const isGenerating = (convId: string) => !!pendingMessages[convId];
+
   const generateMessage = async (
     convId: string,
     onChunk?: CallbackGeneratedChunk
   ) => {
-    if (isGenerating) return;
+    if (isGenerating(convId)) return;
 
     const config = StorageUtils.getConfig();
     const currConversation = StorageUtils.getOneConversation(convId);
@@ -79,16 +110,14 @@ export const AppContextProvider = ({
     }
 
     const abortController = new AbortController();
-    setIsGenerating(true);
-    setAbortController(abortController);
+    setAbort(convId, abortController);
 
     let pendingMsg: PendingMessage = {
-      convId,
       id: Date.now() + 1,
       role: 'assistant',
       content: null,
     };
-    setPendingMessage(pendingMsg);
+    setPending(convId, pendingMsg);
 
     try {
       // prepare messages for API
@@ -157,7 +186,6 @@ export const AppContextProvider = ({
         const lastContent = pendingMsg.content || '';
         if (addedContent) {
           pendingMsg = {
-            convId,
             id: pendingMsg.id,
             role: 'assistant',
             content: lastContent + addedContent,
@@ -173,18 +201,15 @@ export const AppContextProvider = ({
             predicted_ms: timings.predicted_ms,
           };
         }
-        setPendingMessage(pendingMsg);
+        setPending(convId, pendingMsg);
         onChunk?.();
       }
     } catch (err) {
-      console.error(err);
-      setPendingMessage(null);
-      setIsGenerating(false);
+      setPending(convId, null);
       if ((err as Error).name === 'AbortError') {
         // user stopped the generation via stopGeneration() function
         // we can safely ignore this error
       } else {
-        setIsGenerating(false);
         console.error(err);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         alert((err as any)?.message ?? 'Unknown error');
@@ -200,8 +225,7 @@ export const AppContextProvider = ({
         timings: pendingMsg.timings,
       });
     }
-    setPendingMessage(null);
-    setIsGenerating(false);
+    setPending(convId, null);
     onChunk?.(); // trigger scroll to bottom
   };
 
@@ -210,7 +234,7 @@ export const AppContextProvider = ({
     content: string,
     onChunk?: CallbackGeneratedChunk
   ): Promise<boolean> => {
-    if (isGenerating || content.trim().length === 0) return false;
+    if (isGenerating(convId) || content.trim().length === 0) return false;
 
     StorageUtils.appendMsg(convId, {
       id: Date.now(),
@@ -228,10 +252,9 @@ export const AppContextProvider = ({
     return false;
   };
 
-  const stopGenerating = () => {
-    setIsGenerating(false);
-    setPendingMessage(null);
-    abortController.abort();
+  const stopGenerating = (convId: string) => {
+    setPending(convId, null);
+    aborts[convId]?.abort();
   };
 
   // if content is undefined, we remove last assistant message
@@ -241,7 +264,7 @@ export const AppContextProvider = ({
     content?: string,
     onChunk?: CallbackGeneratedChunk
   ) => {
-    if (isGenerating) return;
+    if (isGenerating(convId)) return;
 
     StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
     if (content) {
@@ -265,7 +288,7 @@ export const AppContextProvider = ({
       value={{
         isGenerating,
         viewingConversation,
-        pendingMessage,
+        pendingMessages,
         sendMessage,
         stopGenerating,
         replaceMessageAndGenerate,
