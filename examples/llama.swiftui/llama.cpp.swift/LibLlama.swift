@@ -16,7 +16,7 @@ func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama
     for i in 0..<seq_ids.count {
         batch.seq_id[Int(batch.n_tokens)]![Int(i)] = seq_ids[i]
     }
-    batch.outputs  [Int(batch.n_tokens)] = outputs ? 1 : 0
+    batch.output  [Int(batch.n_tokens)] = outputs ? 1 : 0
 
     batch.n_tokens += 1
 }
