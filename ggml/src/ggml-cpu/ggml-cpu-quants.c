@@ -515,7 +515,7 @@ static __m256i lasx_ext8_16(__m128i a) {
 }
 
 static __m256i lasx_ext16_32(__m128i a) {
-    __m256i tmp1;
+    __m256i tmp1 = {0};
     tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 0), 0);
     tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 1), 1);
     tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 2), 2);
