@@ -1044,8 +1044,16 @@ static bool ggml_opencl_supports_op(ggml_backend_dev_t dev, const struct ggml_te
             return true;
         case GGML_OP_DIAG_MASK_INF:
             return op->ne[3] == 1;
-        case GGML_OP_ROPE:
+        case GGML_OP_ROPE: {
+            const int mode = ((const int32_t *) op->op_params)[2];
+            if (mode & GGML_ROPE_TYPE_MROPE) {
+                return false;
+            }
+            if (mode & GGML_ROPE_TYPE_VISION) {
+                return false;
+            }
             return true;
+        }
         default:
             return false;
     }
@@ -3766,7 +3774,8 @@ static void ggml_cl_rope(ggml_backend_t backend, const ggml_tensor * src0, const
     const int  nb2 = dst ? dst->nb[2] : 0;
     const int  nb3 = dst ? dst->nb[3] : 0;
 
-    GGML_ASSERT(ne10 == ne02);
+    GGML_ASSERT(ne10 % ne02 == 0);
+    GGML_ASSERT(ne10 >= ne02);
 
     int nth = MIN(64, ne00);
 
