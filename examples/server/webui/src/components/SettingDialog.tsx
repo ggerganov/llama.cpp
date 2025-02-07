@@ -75,6 +75,7 @@ export default function SettingDialog({
           alert(`Value for ${key} must be numeric`);
           return;
         }
+        // force conversion to number
         // @ts-expect-error this is safe
         newConfig[key] = numVal;
       } else if (mustBeBoolean) {
@@ -102,6 +103,7 @@ export default function SettingDialog({
   };
 
   const onChange = (key: SettKey) => (value: string | boolean) => {
+    // note: we do not perform validation here, because we may get incomplete value as user is still typing it
     setLocalConfig({ ...localConfig, [key]: value });
   };
 
