@@ -8801,10 +8801,10 @@ static int llama_decode_impl(
     //llama_synchronize(&lctx);
 
     // decide if we need to defrag the kv cache
-    if (cparams.causal_attn && cparams.defrag_thold >= 0.0f) {
+    if (cparams.causal_attn && cparams.defrag_thold > 0.0f) {
         // - do not defrag small contexts (i.e. < 2048 tokens)
         // - count the padding towards the number of used tokens
-        const float fragmentation = kv_self.n >= 2048 ? 1.0f - float(kv_self.used + llama_kv_cache_get_padding(cparams))/float(kv_self.n) : 0.0f;
+        const float fragmentation = kv_self.n >= 2048 ? std::max(0.0f, 1.0f - float(kv_self.used + llama_kv_cache_get_padding(cparams))/float(kv_self.n)) : 0.0f;
 
         // queue defragmentation for next llama_kv_cache_update
         if (fragmentation > cparams.defrag_thold) {
