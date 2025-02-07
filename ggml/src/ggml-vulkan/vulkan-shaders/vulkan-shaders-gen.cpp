@@ -504,6 +504,9 @@ void process_shaders() {
     string_to_spv("simpler_mul_mat_q6_k", "simpler_mul_mat_q6_k.comp", {});
     string_to_spv("simpler_mul_mat_q8_0", "simpler_mul_mat_q8_0.comp", {});
 
+    string_to_spv("simpler_soft_max_f16", "simpler_soft_max.comp", {{"A_TYPE", "float16_t"}});
+    string_to_spv("simpler_soft_max_f32", "simpler_soft_max.comp", {{"A_TYPE", "float"}});
+
     for (auto &c : compiles) {
         c.wait();
     }

@@ -228,6 +228,9 @@ struct vk_device_struct {
     vk_pipeline pipeline_simpler_mul_mat_q6_k;
     vk_pipeline pipeline_simpler_mul_mat_q8_0;
 
+    vk_pipeline pipeline_simpler_soft_max_f16;
+    vk_pipeline pipeline_simpler_soft_max_f32;
+
     vk_pipeline pipeline_get_rows[GGML_TYPE_COUNT];
     vk_pipeline pipeline_get_rows_f32[GGML_TYPE_COUNT];
     vk_pipeline pipeline_acc_f32;
@@ -516,6 +519,18 @@ struct vk_op_soft_max_push_constants {
     float m1;
     uint32_t n_head_log2;
     uint32_t nrows_x;
+};
+
+struct vk_op_simpler_soft_max_push_constants {
+    int32_t ne00;
+    int32_t ne01;
+    int32_t ne02;
+    float scale;
+    float max_bias;
+    float m0;
+    float m1;
+    uint32_t n_head_log2;
+    int32_t mask;
 };
 
 struct vk_op_argsort_push_constants {
@@ -2087,6 +2102,9 @@ static void ggml_vk_load_shaders(vk_device& device) {
     ggml_vk_create_pipeline(device, device->pipeline_simpler_mul_mat_q4_k, "simpler_mul_mat_q4_k", simpler_mul_mat_q4_k_len, simpler_mul_mat_q4_k_data, "main", 3, 18 * sizeof(uint32_t), {1, 1, 1}, {}, 1);
     ggml_vk_create_pipeline(device, device->pipeline_simpler_mul_mat_q6_k, "simpler_mul_mat_q6_k", simpler_mul_mat_q6_k_len, simpler_mul_mat_q6_k_data, "main", 3, 18 * sizeof(uint32_t), {1, 1, 1}, {2, device->subgroup_size}, 1);
     ggml_vk_create_pipeline(device, device->pipeline_simpler_mul_mat_q8_0, "simpler_mul_mat_q8_0", simpler_mul_mat_q8_0_len, simpler_mul_mat_q8_0_data, "main", 3, 18 * sizeof(uint32_t), {1, 1, 1}, {(device->subgroup_size * 2) / 8}, 1);
+
+    ggml_vk_create_pipeline(device, device->pipeline_simpler_soft_max_f16, "simpler_soft_max_f16", simpler_soft_max_f16_len, simpler_soft_max_f16_data, "main", 3, sizeof(vk_op_simpler_soft_max_push_constants), {1, 1, 1}, {}, 1);
+    ggml_vk_create_pipeline(device, device->pipeline_simpler_soft_max_f32, "simpler_soft_max_f32", simpler_soft_max_f32_len, simpler_soft_max_f32_data, "main", 3, sizeof(vk_op_simpler_soft_max_push_constants), {1, 1, 1}, {}, 1);
 
     ggml_vk_create_pipeline(device, device->pipeline_norm_f32, "norm_f32", norm_f32_len, norm_f32_data, "main", 2, sizeof(vk_op_push_constants), {1, 1, 1}, {}, 1);
     ggml_vk_create_pipeline(device, device->pipeline_group_norm_f32, "group_norm_f32", group_norm_f32_len, group_norm_f32_data, "main", 2, sizeof(vk_op_push_constants), {1, 1, 1}, {}, 1);
@@ -5440,6 +5458,13 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
     case GGML_OP_SOFT_MAX:
         GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32 || src1->type == GGML_TYPE_F16);
 
+        if (ctx->device->simpler_shaders) {
+            if (src1 && src1->type == GGML_TYPE_F16) {
+                return ctx->device->pipeline_simpler_soft_max_f16;
+            }
+            return ctx->device->pipeline_simpler_soft_max_f32;
+        }
+
         if (src0->type == GGML_TYPE_F32 && (src1 == nullptr || src1->type == GGML_TYPE_F32) && dst->type == GGML_TYPE_F32) {
             return src0->ne[0] > 1024 ? ctx->device->pipeline_soft_max_f32_wg512 : ctx->device->pipeline_soft_max_f32;
         }
@@ -5738,9 +5763,14 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context& subctx, co
     GGML_ASSERT(op_supports_incontiguous || (ggml_is_contiguous(src0) && (src1 == nullptr || ggml_is_contiguous(src1))));
 
     switch (op) {
+    case GGML_OP_SOFT_MAX:
+        if (ctx->device->simpler_shaders) {
+            elements = { (uint32_t)src0->ne[1], (uint32_t)src0->ne[2], (uint32_t)src0->ne[3] };
+            break;
+        }
+        // fall-through
     case GGML_OP_NORM:
     case GGML_OP_RMS_NORM:
-    case GGML_OP_SOFT_MAX:
     case GGML_OP_SUM_ROWS:
         {
             const uint32_t nr = ggml_nrows(src0);
@@ -6281,14 +6311,26 @@ static void ggml_vk_soft_max(ggml_backend_vk_context * ctx, vk_context& subctx, 
     const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
     const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
-    ggml_vk_op_f32<vk_op_soft_max_push_constants>(ctx, subctx, src0, src1, nullptr, dst, GGML_OP_SOFT_MAX, {
-        ncols,
-        src1 != nullptr ? nrows_y : (uint32_t)0,
-        scale, max_bias,
-        m0, m1,
-        n_head_log2,
-        nrows_x,
-    }, dryrun);
+    if (ctx->device->simpler_shaders) {
+        ggml_vk_op_f32<vk_op_simpler_soft_max_push_constants>(ctx, subctx, src0, src1, nullptr, dst, GGML_OP_SOFT_MAX, {
+            (int32_t) src0->ne[0],
+            (int32_t) src0->ne[1],
+            (int32_t) src0->ne[2],
+            scale, max_bias,
+            m0, m1,
+            n_head_log2,
+            src1 == nullptr ? 0 : 1,
+        }, dryrun);
+    } else {
+        ggml_vk_op_f32<vk_op_soft_max_push_constants>(ctx, subctx, src0, src1, nullptr, dst, GGML_OP_SOFT_MAX, {
+            ncols,
+            src1 != nullptr ? nrows_y : (uint32_t)0,
+            scale, max_bias,
+            m0, m1,
+            n_head_log2,
+            nrows_x,
+        }, dryrun);
+    }
 }
 
 static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst, bool dryrun = false) {
