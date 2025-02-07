@@ -61,7 +61,7 @@ static void init_kleidiai_context(void) {
     ggml_critical_section_end();
 }
 
-static inline int ggml_ne(const ggml_tensor * tensor, int dim) {
+static inline int64_t ggml_ne(const ggml_tensor * tensor, int dim) {
     GGML_ASSERT(dim >= 0 && dim < GGML_MAX_DIMS);
     return tensor->ne[dim];
 }
