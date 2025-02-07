@@ -23,6 +23,7 @@
 #include "ggml-cpu.h"
 #include "ggml-impl.h"
 #include "ggml-backend-impl.h"
+#include "ggml-threading.h"
 
 #include "kleidiai_kernels.h"
 
@@ -35,6 +36,8 @@ struct ggml_kleidiai_context {
 } static ctx = { NULL };
 
 static void init_kleidiai_context(void) {
+
+    ggml_critical_section_start();
     static bool initialized = false;
 
     if (!initialized) {
@@ -55,6 +58,12 @@ static void init_kleidiai_context(void) {
         }
         ctx.kernels = ggml_kleidiai_select_kernels(features);
     }
+    ggml_critical_section_end();
+}
+
+static inline int ggml_ne(const ggml_tensor * tensor, int dim) {
+    GGML_ASSERT(dim >= 0 && dim < GGML_MAX_DIMS);
+    return tensor->ne[dim];
 }
 
 namespace ggml::cpu::kleidiai {
@@ -237,7 +246,8 @@ class extra_buffer_type : ggml::cpu::extra_buffer_type {
             if (op->src[1]->buffer && !ggml_backend_buft_is_host(op->src[1]->buffer->buft)) {
                 return false;
             }
-            if (op->src[1]->type == GGML_TYPE_F32) {
+            if (op->src[1]->type == GGML_TYPE_F32 &&
+                ggml_ne(op->src[1], 2) == 1 && ggml_ne(op->src[1], 3) == 1) {
                 return true;
             }
         }

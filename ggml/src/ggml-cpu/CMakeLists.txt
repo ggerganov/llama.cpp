@@ -111,14 +111,15 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                 function(check_arm_feature tag code)
                     set(CMAKE_REQUIRED_FLAGS_SAVE ${CMAKE_REQUIRED_FLAGS})
                     set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+${tag}")
-                    check_cxx_source_runs(
-                        "${code}"
-                        GGML_MACHINE_SUPPORTS_${tag}
-                    )
+                    check_cxx_source_runs("${code}" GGML_MACHINE_SUPPORTS_${tag})
                     if (GGML_MACHINE_SUPPORTS_${tag})
                         set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+${tag}" PARENT_SCOPE)
-                    elseif(NOT tag STREQUAL "sme")
-                        set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+no${tag}" PARENT_SCOPE)
+                    else()
+                        set(CMAKE_REQUIRED_FLAGS "${ARM_MCPU_FLAG}+no${tag}")
+                        check_cxx_source_compiles("${code}" GGML_MACHINE_SUPPORTS_no${tag})
+                        if (GGML_MACHINE_SUPPORTS_no${tag})
+                            set(ARM_MCPU_FLAG_FIX "${ARM_MCPU_FLAG_FIX}+no${tag}" PARENT_SCOPE)
+                        endif()
                     endif()
                     set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
                 endfunction()
@@ -370,9 +371,13 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             ${KLEIDIAI_SRC}/kai/ukernels/matmul/matmul_clamp_f32_qsi8d32p_qsi4c32p/
             ${KLEIDIAI_SRC}/kai/ukernels/matmul/pack/)
 
-        string(FIND "${ARCH_FLAGS}" "+dotprod" DOTPROD_ENABLED)
-        string(FIND "${ARCH_FLAGS}" "+i8mm" I8MM_ENABLED)
-        string(FIND "${ARCH_FLAGS}" "+sme" SME_ENABLED)
+        set(ARCH_FLAGS_TEMP "${ARCH_FLAGS}")
+        if (NOT ARCH_FLAGS_TEMP)
+            string(REGEX MATCH "-march=[^ ]+" ARCH_FLAGS_TEMP "${CMAKE_C_FLAGS}")
+        endif()
+        string(FIND "${ARCH_FLAGS_TEMP}" "+dotprod" DOTPROD_ENABLED)
+        string(FIND "${ARCH_FLAGS_TEMP}" "+i8mm" I8MM_ENABLED)
+        string(FIND "${ARCH_FLAGS_TEMP}" "+sme" SME_ENABLED)
 
         set(PRIVATE_ARCH_FLAGS ${ARCH_FLAGS})
 
