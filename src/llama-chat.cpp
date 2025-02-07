@@ -169,7 +169,7 @@ llm_chat_template llm_chat_detect_template(const std::string & tmpl) {
     } else if (tmpl_contains("<|role_start|>")) {
         return LLM_CHAT_TEMPLATE_MEGREZ;
     } else if (tmpl_contains("<instruction>")) {
-        return LLM_CHAT_TEMPLATE_VELVET;    
+        return LLM_CHAT_TEMPLATE_VELVET;
     }
     return LLM_CHAT_TEMPLATE_UNKNOWN;
 }
