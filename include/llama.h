@@ -1114,11 +1114,12 @@ extern "C" {
     };
 
     struct llama_sampler {
-        struct llama_sampler_i  * iface;
-        llama_sampler_context_t   ctx;
+        const struct llama_sampler_i * iface;
+        llama_sampler_context_t        ctx;
     };
 
     // mirror of llama_sampler_i:
+    LLAMA_API struct llama_sampler * llama_sampler_init  (const struct llama_sampler_i * iface, llama_sampler_context_t ctx);
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
