@@ -9446,8 +9446,8 @@ static struct llama_model * llama_model_load_from_file_impl(
         };
     }
 
-    llama_model * model = new llama_model(params);    
-    
+    llama_model * model = new llama_model(params);
+
     // create list of devices to use with this model
     if (params.devices) {
         for (ggml_backend_dev_t * dev = params.devices; *dev; ++dev) {
