@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@sec-ant/readable-stream": "^0.6.0",
     "@vscode/markdown-it-katex": "^1.1.1",
     "autoprefixer": "^10.4.20",
