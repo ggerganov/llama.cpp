@@ -74,7 +74,7 @@ export default function CanvasPyInterpreter() {
     <div className="card bg-base-200 w-full h-full shadow-xl">
       <div className="card-body">
         <div className="flex justify-between items-center mb-4">
-          <span className="text-lg font-bold">Pyodide</span>
+          <span className="text-lg font-bold">Python Interpreter</span>
           <XCloseButton
             className="bg-base-100"
             onClick={() => setCanvasData(null)}
@@ -102,7 +102,7 @@ export default function CanvasPyInterpreter() {
                 {running ? 'Running...' : 'Run'}
               </button>
             </div>
-            <pre className="bg-slate-900 rounded-md grow text-gray-200 p-3">
+            <pre className="bg-slate-900 rounded-md grow text-gray-200 p-3 whitespace-pre-wrap overflow-auto">
               {output}
             </pre>
           </div>
