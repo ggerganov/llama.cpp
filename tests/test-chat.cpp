@@ -428,6 +428,7 @@ static void test_template_output_parsers() {
 
     common_chat_inputs inputs_no_tools;
     inputs_no_tools.messages                = json::array({message_user});
+    inputs_no_tools.extract_reasoning       = false;
 
     common_chat_inputs inputs_no_tools_think;
     inputs_no_tools_think.messages          = json::array({message_user});
@@ -436,6 +437,7 @@ static void test_template_output_parsers() {
     common_chat_inputs inputs_tools;
     inputs_tools.messages                   = json::array({message_user});
     inputs_tools.tools                      = json::array({special_function_tool});
+    inputs_tools.extract_reasoning          = false;
 
     common_chat_inputs inputs_tools_think;
     inputs_tools_think.messages             = json::array({message_user});
@@ -445,6 +447,7 @@ static void test_template_output_parsers() {
     common_chat_inputs inputs_tools_builtin;
     inputs_tools_builtin.messages           = json::array({message_user});
     inputs_tools_builtin.tools              = json::array({python_tool});
+    inputs_tools_builtin.extract_reasoning  = false;
 
     {
         // Not supported yet
