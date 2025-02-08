@@ -1,53 +1,103 @@
 import { useEffect, useState } from 'react';
 import { useAppContext } from '../utils/app.context';
-import { XCloseButton } from '../utils/common';
-import { delay } from '../utils/misc';
-import StorageUtils from '../utils/storage';
+import { OpenInNewTab, XCloseButton } from '../utils/common';
 import { CanvasType } from '../utils/types';
-import { PlayIcon } from '@heroicons/react/24/outline';
+import { PlayIcon, StopIcon } from '@heroicons/react/24/outline';
 
-const PyodideWrapper = {
-  load: async function () {
-    // load pyodide from CDN
-    // @ts-expect-error experimental pyodide
-    if (window.addedScriptPyodide) return;
-    // @ts-expect-error experimental pyodide
-    window.addedScriptPyodide = true;
-    const scriptElem = document.createElement('script');
-    scriptElem.src = 'https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js';
-    document.body.appendChild(scriptElem);
-  },
+const canInterrupt = typeof SharedArrayBuffer === 'function';
 
-  run: async function (code: string) {
-    PyodideWrapper.load();
+// adapted from https://pyodide.org/en/stable/usage/webworker.html
+const WORKER_CODE = `
+importScripts("https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js");
 
-    // wait for pyodide to be loaded
-    // @ts-expect-error experimental pyodide
-    while (!window.loadPyodide) {
-      await delay(100);
-    }
-    const stdOutAndErr: string[] = [];
-    // @ts-expect-error experimental pyodide
-    const pyodide = await window.loadPyodide({
-      stdout: (data: string) => stdOutAndErr.push(data),
-      stderr: (data: string) => stdOutAndErr.push(data),
-    });
-    try {
-      const result = await pyodide.runPythonAsync(code);
-      if (result) {
-        stdOutAndErr.push(result.toString());
-      }
-    } catch (e) {
-      console.error(e);
-      stdOutAndErr.push((e as Error).toString());
-    }
-    return stdOutAndErr.join('\n');
-  },
+let stdOutAndErr = [];
+
+let pyodideReadyPromise = loadPyodide({
+  stdout: (data) => stdOutAndErr.push(data),
+  stderr: (data) => stdOutAndErr.push(data),
+});
+
+let alreadySetBuff = false;
+
+self.onmessage = async (event) => {
+  stdOutAndErr = [];
+
+  // make sure loading is done
+  const pyodide = await pyodideReadyPromise;
+  const { id, python, context, interruptBuffer } = event.data;
+
+  if (interruptBuffer && !alreadySetBuff) {
+    pyodide.setInterruptBuffer(interruptBuffer);
+    alreadySetBuff = true;
+  }
+
+  // Now load any packages we need, run the code, and send the result back.
+  await pyodide.loadPackagesFromImports(python);
+
+  // make a Python dictionary with the data from content
+  const dict = pyodide.globals.get("dict");
+  const globals = dict(Object.entries(context));
+  try {
+    self.postMessage({ id, running: true });
+    // Execute the python code in this context
+    const result = pyodide.runPython(python, { globals });
+    self.postMessage({ result, id, stdOutAndErr });
+  } catch (error) {
+    self.postMessage({ error: error.message, id });
+  }
+  interruptBuffer[0] = 0;
 };
+`;
 
-if (StorageUtils.getConfig().pyIntepreterEnabled) {
-  PyodideWrapper.load();
-}
+let worker: Worker;
+const interruptBuffer = canInterrupt
+  ? new Uint8Array(new SharedArrayBuffer(1))
+  : null;
+
+const runCodeInWorker = (
+  pyCode: string,
+  callbackRunning: () => void
+): {
+  donePromise: Promise<string>;
+  interrupt: () => void;
+} => {
+  if (!worker) {
+    worker = new Worker(
+      URL.createObjectURL(new Blob([WORKER_CODE], { type: 'text/javascript' }))
+    );
+  }
+  const id = Math.random() * 1e8;
+  const context = {};
+  if (interruptBuffer) {
+    interruptBuffer[0] = 0;
+  }
+
+  const donePromise = new Promise<string>((resolve) => {
+    worker.onmessage = (event) => {
+      const { error, stdOutAndErr, running } = event.data;
+      if (id !== event.data.id) return;
+      if (running) {
+        callbackRunning();
+        return;
+      } else if (error) {
+        resolve(error.toString());
+      } else {
+        resolve(stdOutAndErr.join('\n'));
+      }
+    };
+    worker.postMessage({ id, python: pyCode, context, interruptBuffer });
+  });
+
+  const interrupt = () => {
+    console.log('Interrupting...');
+    console.trace();
+    if (interruptBuffer) {
+      interruptBuffer[0] = 2;
+    }
+  };
+
+  return { donePromise, interrupt };
+};
 
 export default function CanvasPyInterpreter() {
   const { canvasData, setCanvasData } = useAppContext();
@@ -55,13 +105,22 @@ export default function CanvasPyInterpreter() {
   const [code, setCode] = useState(canvasData?.content ?? ''); // copy to avoid direct mutation
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState('');
+  const [interruptFn, setInterruptFn] = useState<() => void>();
+  const [showStopBtn, setShowStopBtn] = useState(false);
 
   const runCode = async (pycode: string) => {
+    interruptFn?.();
     setRunning(true);
-    setOutput('Running...');
-    const out = await PyodideWrapper.run(pycode);
+    setOutput('Loading Pyodide...');
+    const { donePromise, interrupt } = runCodeInWorker(pycode, () => {
+      setOutput('Running...');
+      setShowStopBtn(canInterrupt);
+    });
+    setInterruptFn(() => interrupt);
+    const out = await donePromise;
     setOutput(out);
     setRunning(false);
+    setShowStopBtn(false);
   };
 
   // run code on mount
@@ -98,9 +157,21 @@ export default function CanvasPyInterpreter() {
                 onClick={() => runCode(code)}
                 disabled={running}
               >
-                <PlayIcon className="h-6 w-6" />{' '}
-                {running ? 'Running...' : 'Run'}
+                <PlayIcon className="h-6 w-6" /> Run
               </button>
+              {showStopBtn && (
+                <button
+                  className="btn btn-sm bg-base-100 ml-2"
+                  onClick={() => interruptFn?.()}
+                >
+                  <StopIcon className="h-6 w-6" /> Stop
+                </button>
+              )}
+              <span className="grow text-right text-xs">
+                <OpenInNewTab href="https://github.com/ggerganov/llama.cpp/issues/11762">
+                  Report a bug
+                </OpenInNewTab>
+              </span>
             </div>
             <textarea
               className="textarea textarea-bordered h-full dark-color"
