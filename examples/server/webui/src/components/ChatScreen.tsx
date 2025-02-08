@@ -3,7 +3,7 @@ import { useAppContext } from '../utils/app.context';
 import StorageUtils from '../utils/storage';
 import { useNavigate } from 'react-router';
 import ChatMessage from './ChatMessage';
-import { PendingMessage } from '../utils/types';
+import { CanvasType, PendingMessage } from '../utils/types';
 import { classNames } from '../utils/misc';
 import CanvasPyInterpreter from './CanvasPyInterpreter';
 
@@ -65,9 +65,9 @@ export default function ChatScreen() {
   return (
     <div
       className={classNames({
-        'grid gap-8 grow': true,
-        'grid-cols-1 lg:grid-cols-2': hasCanvas, // adapted for mobile
-        'grid-cols-1': !hasCanvas,
+        'grid lg:gap-8 grow transition-[300ms]': true,
+        'grid-cols-[1fr_0fr] lg:grid-cols-[1fr_1fr]': hasCanvas, // adapted for mobile
+        'grid-cols-[1fr_0fr]': !hasCanvas,
       })}
     >
       <div
@@ -136,11 +136,11 @@ export default function ChatScreen() {
           )}
         </div>
       </div>
-      {canvasData && (
-        <div className="w-full sticky top-[7em] h-[calc(100vh-9em)]">
+      <div className="w-full sticky top-[7em] h-[calc(100vh-9em)]">
+        {canvasData?.type === CanvasType.PY_INTERPRETER && (
           <CanvasPyInterpreter />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
