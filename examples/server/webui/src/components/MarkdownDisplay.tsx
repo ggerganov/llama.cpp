@@ -23,6 +23,7 @@ export default function MarkdownDisplay({ content }: { content: string }) {
         button: (props) => (
           <CopyCodeButton {...props} origContent={preprocessedContent} />
         ),
+        // note: do not use "pre", "p" or other basic html elements here, it will cause the node to re-render when the message is being generated (this should be a bug with react-markdown, not sure how to fix it)
       }}
     >
       {preprocessedContent}

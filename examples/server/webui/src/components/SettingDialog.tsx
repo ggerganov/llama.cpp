@@ -3,6 +3,7 @@ import { useAppContext } from '../utils/app.context';
 import { CONFIG_DEFAULT, CONFIG_INFO } from '../Config';
 import { isDev } from '../Config';
 import StorageUtils from '../utils/storage';
+import { isBoolean, isNumeric, isString } from '../utils/misc';
 
 type SettKey = keyof typeof CONFIG_DEFAULT;
 
@@ -52,7 +53,42 @@ export default function SettingDialog({
   };
 
   const handleSave = () => {
-    saveConfig(localConfig);
+    // copy the local config to prevent direct mutation
+    const newConfig: typeof CONFIG_DEFAULT = JSON.parse(
+      JSON.stringify(localConfig)
+    );
+    // validate the config
+    for (const key in newConfig) {
+      const value = newConfig[key as SettKey];
+      const mustBeBoolean = isBoolean(CONFIG_DEFAULT[key as SettKey]);
+      const mustBeString = isString(CONFIG_DEFAULT[key as SettKey]);
+      const mustBeNumeric = isNumeric(CONFIG_DEFAULT[key as SettKey]);
+      if (mustBeString) {
+        if (!isString(value)) {
+          alert(`Value for ${key} must be string`);
+          return;
+        }
+      } else if (mustBeNumeric) {
+        const trimedValue = value.toString().trim();
+        const numVal = Number(trimedValue);
+        if (isNaN(numVal) || !isNumeric(numVal) || trimedValue.length === 0) {
+          alert(`Value for ${key} must be numeric`);
+          return;
+        }
+        // force conversion to number
+        // @ts-expect-error this is safe
+        newConfig[key] = numVal;
+      } else if (mustBeBoolean) {
+        if (!isBoolean(value)) {
+          alert(`Value for ${key} must be boolean`);
+          return;
+        }
+      } else {
+        console.error(`Unknown default type for key ${key}`);
+      }
+    }
+    if (isDev) console.log('Saving config', newConfig);
+    saveConfig(newConfig);
     onClose();
   };
 
@@ -64,6 +100,11 @@ export default function SettingDialog({
       StorageUtils.appendMsg(demoConv.id, msg);
     }
     onClose();
+  };
+
+  const onChange = (key: SettKey) => (value: string | boolean) => {
+    // note: we do not perform validation here, because we may get incomplete value as user is still typing it
+    setLocalConfig({ ...localConfig, [key]: value });
   };
 
   return (
@@ -79,9 +120,7 @@ export default function SettingDialog({
             configKey="apiKey"
             configDefault={CONFIG_DEFAULT}
             value={localConfig.apiKey}
-            onChange={(value) =>
-              setLocalConfig({ ...localConfig, apiKey: value })
-            }
+            onChange={onChange('apiKey')}
           />
 
           <label className="form-control mb-2">
@@ -92,12 +131,7 @@ export default function SettingDialog({
               className="textarea textarea-bordered h-24"
               placeholder={`Default: ${CONFIG_DEFAULT.systemMessage}`}
               value={localConfig.systemMessage}
-              onChange={(e) =>
-                setLocalConfig({
-                  ...localConfig,
-                  systemMessage: e.target.value,
-                })
-              }
+              onChange={(e) => onChange('systemMessage')(e.target.value)}
             />
           </label>
 
@@ -107,9 +141,7 @@ export default function SettingDialog({
               configKey={key}
               configDefault={CONFIG_DEFAULT}
               value={localConfig[key]}
-              onChange={(value) =>
-                setLocalConfig({ ...localConfig, [key]: value })
-              }
+              onChange={onChange(key)}
             />
           ))}
 
@@ -123,9 +155,7 @@ export default function SettingDialog({
                 configKey="samplers"
                 configDefault={CONFIG_DEFAULT}
                 value={localConfig.samplers}
-                onChange={(value) =>
-                  setLocalConfig({ ...localConfig, samplers: value })
-                }
+                onChange={onChange('samplers')}
               />
               {OTHER_SAMPLER_KEYS.map((key) => (
                 <SettingsModalShortInput
@@ -133,9 +163,7 @@ export default function SettingDialog({
                   configKey={key}
                   configDefault={CONFIG_DEFAULT}
                   value={localConfig[key]}
-                  onChange={(value) =>
-                    setLocalConfig({ ...localConfig, [key]: value })
-                  }
+                  onChange={onChange(key)}
                 />
               ))}
             </div>
@@ -152,9 +180,7 @@ export default function SettingDialog({
                   configKey={key}
                   configDefault={CONFIG_DEFAULT}
                   value={localConfig[key]}
-                  onChange={(value) =>
-                    setLocalConfig({ ...localConfig, [key]: value })
-                  }
+                  onChange={onChange(key)}
                 />
               ))}
             </div>
@@ -171,10 +197,7 @@ export default function SettingDialog({
                   className="checkbox"
                   checked={localConfig.showThoughtInProgress}
                   onChange={(e) =>
-                    setLocalConfig({
-                      ...localConfig,
-                      showThoughtInProgress: e.target.checked,
-                    })
+                    onChange('showThoughtInProgress')(e.target.checked)
                   }
                 />
                 <span className="ml-4">
@@ -187,10 +210,7 @@ export default function SettingDialog({
                   className="checkbox"
                   checked={localConfig.excludeThoughtOnReq}
                   onChange={(e) =>
-                    setLocalConfig({
-                      ...localConfig,
-                      excludeThoughtOnReq: e.target.checked,
-                    })
+                    onChange('excludeThoughtOnReq')(e.target.checked)
                   }
                 />
                 <span className="ml-4">
@@ -220,10 +240,7 @@ export default function SettingDialog({
                   className="checkbox"
                   checked={localConfig.showTokensPerSecond}
                   onChange={(e) =>
-                    setLocalConfig({
-                      ...localConfig,
-                      showTokensPerSecond: e.target.checked,
-                    })
+                    onChange('showTokensPerSecond')(e.target.checked)
                   }
                 />
                 <span className="ml-4">Show tokens per second</span>
@@ -245,9 +262,7 @@ export default function SettingDialog({
                   className="textarea textarea-bordered h-24"
                   placeholder='Example: { "mirostat": 1, "min_p": 0.1 }'
                   value={localConfig.custom}
-                  onChange={(e) =>
-                    setLocalConfig({ ...localConfig, custom: e.target.value })
-                  }
+                  onChange={(e) => onChange('custom')(e.target.value)}
                 />
               </label>
             </div>
