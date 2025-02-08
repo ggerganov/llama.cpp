@@ -693,7 +693,10 @@ jobs:
       - name: Clone
         uses: actions/checkout@v4
 
-      - name: Install Deps
+      - name: Check curl version BEFORE
+        run: curl --version
+
+      - name: Install Choco Deps
         run: |
           choco install curl
 
@@ -776,7 +779,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Deps
+      - name: Check curl version BEFORE
+        run: curl --version
+
+      - name: Install Choco Deps
         run: |
           choco install ninja curl
 
@@ -964,7 +970,10 @@ jobs:
         with:
             fetch-depth: 0
 
-      - name: Install Deps
+      - name: Check curl version BEFORE
+        run: curl --version
+
+      - name: Install Choco Deps
         run: |
           choco install ninja curl
 
@@ -1109,7 +1118,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Deps
+      - name: Check curl version BEFORE
+        run: curl --version
+
+      - name: Install Choco Deps
         run: |
           choco install curl
 
@@ -1236,7 +1248,10 @@ jobs:
         with:
             fetch-depth: 0
 
-      - name: Install Deps
+      - name: Check curl version BEFORE
+        run: curl --version
+
+      - name: Install Choco Deps
         run: |
           choco install curl
 
