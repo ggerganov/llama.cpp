@@ -3,6 +3,7 @@ import { useAppContext } from '../utils/app.context';
 import { OpenInNewTab, XCloseButton } from '../utils/common';
 import { CanvasType } from '../utils/types';
 import { PlayIcon, StopIcon } from '@heroicons/react/24/outline';
+import StorageUtils from '../utils/storage';
 
 const canInterrupt = typeof SharedArrayBuffer === 'function';
 
@@ -54,6 +55,18 @@ const interruptBuffer = canInterrupt
   ? new Uint8Array(new SharedArrayBuffer(1))
   : null;
 
+const startWorker = () => {
+  if (!worker) {
+    worker = new Worker(
+      URL.createObjectURL(new Blob([WORKER_CODE], { type: 'text/javascript' }))
+    );
+  }
+};
+
+if (StorageUtils.getConfig().pyIntepreterEnabled) {
+  startWorker();
+}
+
 const runCodeInWorker = (
   pyCode: string,
   callbackRunning: () => void
@@ -61,11 +74,7 @@ const runCodeInWorker = (
   donePromise: Promise<string>;
   interrupt: () => void;
 } => {
-  if (!worker) {
-    worker = new Worker(
-      URL.createObjectURL(new Blob([WORKER_CODE], { type: 'text/javascript' }))
-    );
-  }
+  startWorker();
   const id = Math.random() * 1e8;
   const context = {};
   if (interruptBuffer) {

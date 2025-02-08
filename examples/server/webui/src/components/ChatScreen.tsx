@@ -137,7 +137,7 @@ export default function ChatScreen() {
         </div>
       </div>
       {canvasData && (
-        <div className="w-full sticky top-[8em] h-[calc(100vh-9em)]">
+        <div className="w-full sticky top-[7em] h-[calc(100vh-9em)]">
           <CanvasPyInterpreter />
         </div>
       )}
