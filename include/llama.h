@@ -1114,11 +1114,12 @@ extern "C" {
     };
 
     struct llama_sampler {
-        struct llama_sampler_i  * iface;
-        llama_sampler_context_t   ctx;
+        const struct llama_sampler_i * iface;
+        llama_sampler_context_t        ctx;
     };
 
     // mirror of llama_sampler_i:
+    LLAMA_API struct llama_sampler * llama_sampler_init  (const struct llama_sampler_i * iface, llama_sampler_context_t ctx);
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
@@ -1198,6 +1199,18 @@ extern "C" {
             const struct llama_vocab * vocab,
                           const char * grammar_str,
                           const char * grammar_root);
+
+    /// @details Lazy grammar sampler, introduced in https://github.com/ggerganov/llama.cpp/pull/9639
+    /// @param trigger_words A list of words that will trigger the grammar sampler. This may be updated to a loose regex syntax (w/ ^) in a near future.
+    /// @param trigger_tokens A list of tokens that will trigger the grammar sampler.
+    LLAMA_API struct llama_sampler * llama_sampler_init_grammar_lazy(
+            const struct llama_vocab * vocab,
+                          const char * grammar_str,
+                          const char * grammar_root,
+                         const char ** trigger_words,
+                                size_t num_trigger_words,
+                   const llama_token * trigger_tokens,
+                                size_t num_trigger_tokens);
 
     /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
