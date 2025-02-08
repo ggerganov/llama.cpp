@@ -60,15 +60,23 @@ export default function ChatScreen() {
     }
   };
 
+  const hasCanvas = !!canvasData;
+
   return (
     <div
       className={classNames({
         'grid gap-8 grow': true,
-        'grid-cols-2': !!canvasData,
-        'grid-cols-1': !canvasData,
+        'grid-cols-1 lg:grid-cols-2': hasCanvas, // adapted for mobile
+        'grid-cols-1': !hasCanvas,
       })}
     >
-      <div className="flex flex-col w-full max-w-[900px] mx-auto">
+      <div
+        className={classNames({
+          'flex flex-col w-full max-w-[900px] mx-auto': true,
+          'hidden lg:flex': hasCanvas, // adapted for mobile
+          flex: !hasCanvas,
+        })}
+      >
         {/* chat messages */}
         <div id="messages-list" className="grow">
           <div className="mt-auto flex justify-center">
