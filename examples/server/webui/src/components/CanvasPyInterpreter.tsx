@@ -36,7 +36,7 @@ const PyodideWrapper = {
     if (result) {
       stdOutAndErr.push(result.toString());
     }
-    return stdOutAndErr.join('');
+    return stdOutAndErr.join('\n');
   },
 };
 
@@ -102,9 +102,11 @@ export default function CanvasPyInterpreter() {
                 {running ? 'Running...' : 'Run'}
               </button>
             </div>
-            <pre className="bg-slate-900 rounded-md grow text-gray-200 p-3 whitespace-pre-wrap overflow-auto">
-              {output}
-            </pre>
+            <textarea
+              className="textarea textarea-bordered h-full dark-color"
+              value={output}
+              readOnly
+            ></textarea>
           </div>
         </div>
       </div>
