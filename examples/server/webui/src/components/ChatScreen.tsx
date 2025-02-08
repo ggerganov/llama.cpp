@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppContext } from '../utils/app.context';
 import StorageUtils from '../utils/storage';
 import { useNavigate } from 'react-router';
