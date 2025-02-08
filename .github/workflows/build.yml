@@ -693,17 +693,6 @@ jobs:
       - name: Clone
         uses: actions/checkout@v4
 
-      - name: Check curl version BEFORE
-        run: curl --version
-
-      - name: Install Choco Deps
-        run: |
-          choco install curl
-
-      - name: Check curl version
-        run: |
-          curl --version
-
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
@@ -779,17 +768,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check curl version BEFORE
-        run: curl --version
-
-      - name: Install Choco Deps
-        run: |
-          choco install ninja curl
-
-      - name: Check curl version
-        run: |
-          curl --version
-
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
@@ -824,6 +802,11 @@ jobs:
           & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
           Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      - name: Install Ninja
+        id: install_ninja
+        run: |
+          choco install ninja
 
       - name: Install OpenCL Headers and Libs
         id: install_opencl
@@ -970,17 +953,6 @@ jobs:
         with:
             fetch-depth: 0
 
-      - name: Check curl version BEFORE
-        run: curl --version
-
-      - name: Install Choco Deps
-        run: |
-          choco install ninja curl
-
-      - name: Check curl version
-        run: |
-          curl --version
-
       - name: Install ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
         with:
@@ -1043,6 +1015,11 @@ jobs:
           echo "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\libnvvp" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           echo "CUDA_PATH_V12_4=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install Ninja
+        id: install_ninja
+        run: |
+          choco install ninja
 
       - name: Build
         id: cmake_build
@@ -1117,17 +1094,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Check curl version BEFORE
-        run: curl --version
-
-      - name: Install Choco Deps
-        run: |
-          choco install curl
-
-      - name: Check curl version
-        run: |
-          curl --version
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
@@ -1247,17 +1213,6 @@ jobs:
         uses: actions/checkout@v4
         with:
             fetch-depth: 0
-
-      - name: Check curl version BEFORE
-        run: curl --version
-
-      - name: Install Choco Deps
-        run: |
-          choco install curl
-
-      - name: Check curl version
-        run: |
-          curl --version
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2.16
