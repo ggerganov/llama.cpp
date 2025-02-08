@@ -7603,6 +7603,15 @@ static void ggml_backend_vk_buffer_init_tensor(ggml_backend_buffer_t buffer, ggm
     }
 }
 
+static void ggml_backend_vk_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
+    VK_LOG_DEBUG("ggml_backend_vk_buffer_memset_tensor(" << buffer << ", " << tensor << ", " << value << ", " << offset << ", " << size << ")");
+    ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    vk_buffer buf = buf_ctx->dev_buffer;
+
+    uint32_t val32 = (uint32_t)value * 0x01010101;
+    ggml_vk_buffer_memset(buf, vk_tensor_offset(tensor) + tensor->view_offs + offset, val32, size);
+}
+
 static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     VK_LOG_DEBUG("ggml_backend_vk_buffer_set_tensor(" << buffer << ", " << tensor << ", " << data << ", " << offset << ", " << size << ")");
     ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)buffer->context;
@@ -7647,7 +7656,7 @@ static ggml_backend_buffer_i ggml_backend_vk_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_vk_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_vk_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_vk_buffer_init_tensor,
-    /* .memset_tensor   = */ NULL,
+    /* .memset_tensor   = */ ggml_backend_vk_buffer_memset_tensor,
     /* .set_tensor      = */ ggml_backend_vk_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_vk_buffer_get_tensor,
     /* .cpy_tensor      = */ ggml_backend_vk_buffer_cpy_tensor,
