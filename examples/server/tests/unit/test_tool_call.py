@@ -67,8 +67,8 @@ WEATHER_TOOL = {
 
 
 def do_test_completion_with_required_tool_tiny(template_name: str, tool: dict, argument_key: str | None):
-    n_predict = 512
     global server
+    n_predict = 512
     # server = ServerPreset.stories15m_moe()
     server.jinja = True
     server.n_predict = n_predict
@@ -139,29 +139,49 @@ def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict,
 @pytest.mark.parametrize("tool,argument_key,hf_repo,template_override", [
     (TEST_TOOL,    "success",  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+
+    # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
     (TEST_TOOL,    "success",  "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     (PYTHON_TOOL,  "code",     "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+
     (TEST_TOOL,    "success",  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
     (PYTHON_TOOL,  "code",     "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (PYTHON_TOOL,  "code",     "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
     (PYTHON_TOOL,  "code",     "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    (PYTHON_TOOL,  "code",     "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
     (PYTHON_TOOL,  "code",     "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (PYTHON_TOOL,  "code",     "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
     (PYTHON_TOOL,  "code",     "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (PYTHON_TOOL,  "code",     "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
     (PYTHON_TOOL,  "code",     "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    (TEST_TOOL,    "success",  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
-    (PYTHON_TOOL,  "code",     "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+
+    (TEST_TOOL,    "success",  "bartowski/functionary-small-v3.2-GGUF:Q4_K_M",       ("meetkai/functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/functionary-small-v3.2-GGUF:Q4_K_M",       ("meetkai/functionary-medium-v3.2", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/functionary-small-v3.2-GGUF:Q4_K_M",       "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
     (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+
     (TEST_TOOL,    "success",  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
     (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    (PYTHON_TOOL,  "code",     "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
     # TODO: fix these
     # (TEST_TOOL,    "success",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     # (PYTHON_TOOL,  "code",     "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+    global server
     n_predict = 512
     server.n_slots = 1
     server.jinja = True
@@ -169,10 +189,12 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
     server.n_predict = n_predict
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
-    if template_override:
+    if isinstance(template_override, tuple):
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+    elif isinstance(template_override, str):
+        server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
@@ -251,33 +273,55 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 @pytest.mark.slow
 @pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+
     ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+
     ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M", ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+
     ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+
     ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+
     ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+
+    # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
+    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
     # ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather(hf_repo: str, template_override: Tuple[str, str | None] | None):
     global server
+    n_predict = 512
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
-    server.n_predict = 512
+    server.n_predict = n_predict
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
-    if template_override:
+    if isinstance(template_override, tuple):
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+    elif isinstance(template_override, str):
+        server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
-        "max_tokens": 256,
+        "max_tokens": n_predict,
         "messages": [
             {"role": "user", "content": "What is the weather in Istanbul?"},
         ],
@@ -298,19 +342,39 @@ def test_weather_tool_call(hf_repo: str, template_override: Tuple[str, str | Non
 
 @pytest.mark.slow
 @pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
-    (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
-    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+
+    (None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+
+    ('{"code":"print("}',  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
+
     ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+
     (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",   ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+
+    (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (None,                 "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+
+    (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch-Hermes-3-Llama-3.1-8B", "tool_use")),
+    (None,                 "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+
     (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    (None,                 "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+
+    # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
+    (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+
     # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
@@ -318,10 +382,12 @@ def test_hello_world_tool_call(expected_arguments_override: str | None, hf_repo:
     server.n_predict = 128
     server.model_hf_repo = hf_repo
     server.model_hf_file = None
-    if template_override:
+    if isinstance(template_override, tuple):
         (template_hf_repo, template_variant) = template_override
         server.chat_template_file = f"../../../models/templates/{template_hf_repo.replace('/', '-') + ('-' + template_variant if template_variant else '')}.jinja"
         assert os.path.exists(server.chat_template_file), f"Template file {server.chat_template_file} does not exist. Run `python scripts/get_chat_template.py {template_hf_repo} {template_variant} > {server.chat_template_file}` to download the template."
+    elif isinstance(template_override, str):
+        server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": 256,
