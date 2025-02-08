@@ -8826,8 +8826,6 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
 
     ggml_tensor * src0 = tensor->src[0];
     ggml_tensor * src1 = tensor->src[1];
-    ggml_tensor * src2 = tensor->src[2];
-    ggml_tensor * src3 = tensor->src[3];
 
     struct ggml_init_params iparams = {
         /*.mem_size   =*/ 2ul*1024ul*1024ul*1024ul,
@@ -8837,240 +8835,111 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
 
     struct ggml_context * ggml_ctx = ggml_init(iparams);
 
-    struct ggml_tensor * src0_clone = nullptr;
-    struct ggml_tensor * src1_clone = nullptr;
-    struct ggml_tensor * src2_clone = nullptr;
-    struct ggml_tensor * src3_clone = nullptr;
+    std::array<struct ggml_tensor *, 6> src_clone = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    std::array<size_t, 6> src_size = {0, 0, 0, 0, 0, 0};
+    std::array<void *, 6> src_buffer = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    const char * srci_name[6] = {"src0", "src1", "src2", "src3", "src4", "src5"};
+
     struct ggml_tensor * tensor_clone = nullptr;
 
-    size_t src0_size;
-    size_t src1_size;
-    size_t src2_size;
-    size_t src3_size;
+    for (int i = 0; i < 6; i++) {
+        ggml_tensor * srci = tensor->src[i];
+        if (srci == nullptr) {
+            continue;
+        }
+        ggml_tensor * srci_clone = ggml_dup_tensor(ggml_ctx, srci);
+        size_t srci_size = ggml_nbytes(srci);
 
-    void * src0_buffer = nullptr;
-    void * src1_buffer = nullptr;
-    void * src2_buffer = nullptr;
-    void * src3_buffer = nullptr;
+        src_clone[i] = srci_clone;
+        src_size[i] = ggml_nbytes(srci);
+        src_buffer[i] = malloc(srci_size);
 
-    if (src0 != nullptr) {
-        src0_clone = ggml_dup_tensor(ggml_ctx, src0);
-
-        src0_size = ggml_nbytes(src0);
-
-        src0_buffer = malloc(src0_size);
-        src0_clone->data = src0_buffer;
-        if (ggml_backend_buffer_is_host(src0->buffer)) {
-            memcpy(src0_clone->data, src0->data, src0_size);
-            memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
-        } else if (ggml_backend_buffer_is_vk(src0->buffer)) {
-            ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)src0->buffer->context;
+        srci_clone->data = src_buffer[i];
+        if (ggml_backend_buffer_is_host(srci->buffer)) {
+            memcpy(srci_clone->data, srci->data, srci_size);
+            memcpy(srci_clone->nb, srci->nb, sizeof(size_t) * GGML_MAX_DIMS);
+        } else if (ggml_backend_buffer_is_vk(srci->buffer)) {
+            ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)srci->buffer->context;
             vk_buffer& buffer_gpu = buf_ctx->dev_buffer;
-            uint64_t offset = vk_tensor_offset(src0) + src0->view_offs;
-            if (!ggml_is_contiguous(src0) && ggml_vk_dim01_contiguous(src0)) {
-                for (int i3 = 0; i3 < src0->ne[3]; i3++) {
-                    for (int i2 = 0; i2 < src0->ne[2]; i2++) {
-                        const int idx = i3*src0->ne[2] + i2;
-                        ggml_vk_buffer_read(buffer_gpu, offset + idx * src0->nb[2], ((char *)src0_clone->data + idx * src0_clone->nb[2]), src0->ne[1] * src0->nb[1]);
+            uint64_t offset = vk_tensor_offset(srci) + srci->view_offs;
+            if (!ggml_is_contiguous(srci) && ggml_vk_dim01_contiguous(srci)) {
+                for (int i3 = 0; i3 < srci->ne[3]; i3++) {
+                    for (int i2 = 0; i2 < srci->ne[2]; i2++) {
+                        const int idx = i3*srci->ne[2] + i2;
+                        ggml_vk_buffer_read(buffer_gpu, offset + idx * srci->nb[2], ((char *)srci_clone->data + idx * srci_clone->nb[2]), srci->ne[1] * srci->nb[1]);
                     }
                 }
 
-                src0_clone->nb[0] = src0->nb[0];
-                src0_clone->nb[1] = src0->nb[1];
+                srci_clone->nb[0] = srci->nb[0];
+                srci_clone->nb[1] = srci->nb[1];
                 for (int i = 2; i < GGML_MAX_DIMS; i++) {
-                    src0_clone->nb[i] = src0_clone->nb[i - 1]*src0_clone->ne[i - 1];
+                    srci_clone->nb[i] = srci_clone->nb[i - 1]*srci_clone->ne[i - 1];
                 }
             } else {
-                if (offset + src0_size >= buffer_gpu->size) {
-                    src0_size = buffer_gpu->size - offset;
+                if (offset + srci_size >= buffer_gpu->size) {
+                    srci_size = buffer_gpu->size - offset;
                 }
-                ggml_vk_buffer_read(buffer_gpu, offset, src0_clone->data, src0_size);
-                memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
+                ggml_vk_buffer_read(buffer_gpu, offset, srci_clone->data, srci_size);
+                memcpy(srci_clone->nb, srci->nb, sizeof(size_t) * GGML_MAX_DIMS);
             }
         } else {
             GGML_ABORT("fatal error");
         }
 
         if (vk_output_tensor > 0 && vk_output_tensor == check_counter) {
-            ggml_vk_print_tensor(src0, "src0");
-        }
-    }
-    if (src1 != nullptr) {
-        src1_clone = ggml_dup_tensor(ggml_ctx, src1);
-
-        src1_size = ggml_nbytes(src1);
-
-        src1_buffer = malloc(src1_size);
-        src1_clone->data = src1_buffer;
-        if (ggml_backend_buffer_is_host(src1->buffer)) {
-            memcpy(src1_clone->data, src1->data, src1_size);
-            memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
-        } else if (ggml_backend_buffer_is_vk(src1->buffer)) {
-            ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)src1->buffer->context;
-            vk_buffer& buffer_gpu = buf_ctx->dev_buffer;
-            uint64_t offset = vk_tensor_offset(src1) + src1->view_offs;
-            if (!ggml_is_contiguous(src1) && ggml_vk_dim01_contiguous(src1)) {
-                for (int i3 = 0; i3 < src1->ne[3]; i3++) {
-                    for (int i2 = 0; i2 < src1->ne[2]; i2++) {
-                        const int idx = i3*src1->ne[2] + i2;
-                        ggml_vk_buffer_read(buffer_gpu, offset + idx * src1->nb[2], ((char *)src1_clone->data + idx * src1_clone->nb[2]), src1->ne[1] * src1->nb[1]);
-                    }
-                }
-
-                src1_clone->nb[0] = src1->nb[0];
-                src1_clone->nb[1] = src1->nb[1];
-                for (int i = 2; i < GGML_MAX_DIMS; i++) {
-                    src1_clone->nb[i] = src1_clone->nb[i - 1]*src1_clone->ne[i - 1];
-                }
-            } else {
-                if (offset + src1_size >= buffer_gpu->size) {
-                    src1_size = buffer_gpu->size - offset;
-                }
-                ggml_vk_buffer_read(buffer_gpu, offset, src1_clone->data, src1_size);
-                memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
-            }
-        } else {
-            GGML_ABORT("fatal error");
-        }
-
-        if (vk_output_tensor > 0 && vk_output_tensor == check_counter) {
-            ggml_vk_print_tensor(src1, "src1");
-        }
-    }
-    if (src2 != nullptr) {
-        src2_clone = ggml_dup_tensor(ggml_ctx, src2);
-
-        src2_size = ggml_nbytes(src2);
-
-        src2_buffer = malloc(src2_size);
-        src2_clone->data = src2_buffer;
-        if (ggml_backend_buffer_is_host(src2->buffer)) {
-            memcpy(src2_clone->data, src2->data, src2_size);
-            memcpy(src2_clone->nb, src2->nb, sizeof(size_t) * GGML_MAX_DIMS);
-        } else if (ggml_backend_buffer_is_vk(src2->buffer)) {
-            ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)src2->buffer->context;
-            vk_buffer& buffer_gpu = buf_ctx->dev_buffer;
-            uint64_t offset = vk_tensor_offset(src2) + src2->view_offs;
-            if (!ggml_is_contiguous(src2) && ggml_vk_dim01_contiguous(src2)) {
-                for (int i3 = 0; i3 < src2->ne[3]; i3++) {
-                    for (int i2 = 0; i2 < src2->ne[2]; i2++) {
-                        const int idx = i3*src2->ne[2] + i2;
-                        ggml_vk_buffer_read(buffer_gpu, offset + idx * src2->nb[2], ((char *)src2_clone->data + idx * src2_clone->nb[2]), src2->ne[1] * src2->nb[1]);
-                    }
-                }
-
-                src2_clone->nb[0] = src2->nb[0];
-                src2_clone->nb[1] = src2->nb[1];
-                for (int i = 2; i < GGML_MAX_DIMS; i++) {
-                    src2_clone->nb[i] = src2_clone->nb[i - 1]*src2_clone->ne[i - 1];
-                }
-            } else {
-                if (offset + src2_size >= buffer_gpu->size) {
-                    src2_size = buffer_gpu->size - offset;
-                }
-                ggml_vk_buffer_read(buffer_gpu, offset, src2_clone->data, src2_size);
-                memcpy(src2_clone->nb, src2->nb, sizeof(size_t) * GGML_MAX_DIMS);
-            }
-        } else {
-            GGML_ABORT("fatal error");
-        }
-
-        if (vk_output_tensor > 0 && vk_output_tensor == check_counter) {
-            ggml_vk_print_tensor(src2, "src2");
-        }
-    }
-    if (src3 != nullptr) {
-        src3_clone = ggml_dup_tensor(ggml_ctx, src3);
-
-        src3_size = ggml_nbytes(src3);
-
-        src3_buffer = malloc(src3_size);
-        src3_clone->data = src3_buffer;
-        if (ggml_backend_buffer_is_host(src3->buffer)) {
-            memcpy(src3_clone->data, src3->data, src3_size);
-            memcpy(src3_clone->nb, src3->nb, sizeof(size_t) * GGML_MAX_DIMS);
-        } else if (ggml_backend_buffer_is_vk(src3->buffer)) {
-            ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)src3->buffer->context;
-            vk_buffer& buffer_gpu = buf_ctx->dev_buffer;
-            uint64_t offset = vk_tensor_offset(src3) + src3->view_offs;
-            if (!ggml_is_contiguous(src3) && ggml_vk_dim01_contiguous(src3)) {
-                for (int i3 = 0; i3 < src3->ne[3]; i3++) {
-                    for (int i2 = 0; i2 < src3->ne[2]; i2++) {
-                        const int idx = i3*src3->ne[2] + i2;
-                        ggml_vk_buffer_read(buffer_gpu, offset + idx * src3->nb[2], ((char *)src3_clone->data + idx * src3_clone->nb[2]), src3->ne[1] * src3->nb[1]);
-                    }
-                }
-
-                src3_clone->nb[0] = src3->nb[0];
-                src3_clone->nb[1] = src3->nb[1];
-                for (int i = 2; i < GGML_MAX_DIMS; i++) {
-                    src3_clone->nb[i] = src3_clone->nb[i - 1]*src3_clone->ne[i - 1];
-                }
-            } else {
-                if (offset + src3_size >= buffer_gpu->size) {
-                    src3_size = buffer_gpu->size - offset;
-                }
-                ggml_vk_buffer_read(buffer_gpu, offset, src3_clone->data, src3_size);
-                memcpy(src3_clone->nb, src3->nb, sizeof(size_t) * GGML_MAX_DIMS);
-            }
-        } else {
-            GGML_ABORT("fatal error");
-        }
-
-        if (vk_output_tensor > 0 && vk_output_tensor == check_counter) {
-            ggml_vk_print_tensor(src3, "src3");
+            ggml_vk_print_tensor(srci, srci_name[i]);
         }
     }
 
     if (tensor->op == GGML_OP_FLASH_ATTN_EXT) {
         const float *params = (const float *)tensor->op_params;
-        tensor_clone = ggml_flash_attn_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, src3_clone, params[0], params[1], params[2]);
+        tensor_clone = ggml_flash_attn_ext(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], src_clone[3], params[0], params[1], params[2]);
     } else if (tensor->op == GGML_OP_MUL_MAT) {
-        tensor_clone = ggml_mul_mat(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_mul_mat(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_MUL_MAT_ID) {
-        tensor_clone = ggml_mul_mat_id(ggml_ctx, src0_clone, src1_clone, src2_clone);
+        tensor_clone = ggml_mul_mat_id(ggml_ctx, src_clone[0], src_clone[1], src_clone[2]);
     } else if (tensor->op == GGML_OP_SUB) {
-        tensor_clone = ggml_sub(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_sub(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_MUL) {
-        tensor_clone = ggml_mul(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_mul(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_DIV) {
-        tensor_clone = ggml_div(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_div(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_CONCAT) {
-        tensor_clone = ggml_concat(ggml_ctx, src0_clone, src1_clone, *(int *)tensor->op_params);
+        tensor_clone = ggml_concat(ggml_ctx, src_clone[0], src_clone[1], *(int *)tensor->op_params);
     } else if (tensor->op == GGML_OP_UPSCALE) {
-        tensor_clone = ggml_upscale_ext(ggml_ctx, src0_clone, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+        tensor_clone = ggml_upscale_ext(ggml_ctx, src_clone[0], tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
     } else if (tensor->op == GGML_OP_SCALE) {
-        tensor_clone = ggml_scale(ggml_ctx, src0_clone, ((float *)tensor->op_params)[0]);
+        tensor_clone = ggml_scale(ggml_ctx, src_clone[0], ((float *)tensor->op_params)[0]);
     } else if (tensor->op == GGML_OP_SQR) {
-        tensor_clone = ggml_sqr(ggml_ctx, src0_clone);
+        tensor_clone = ggml_sqr(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_SIN) {
-        tensor_clone = ggml_sin(ggml_ctx, src0_clone);
+        tensor_clone = ggml_sin(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_COS) {
-        tensor_clone = ggml_cos(ggml_ctx, src0_clone);
+        tensor_clone = ggml_cos(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_CLAMP) {
-        tensor_clone = ggml_clamp(ggml_ctx, src0_clone, ((float *)tensor->op_params)[0], ((float *)tensor->op_params)[1]);
+        tensor_clone = ggml_clamp(ggml_ctx, src_clone[0], ((float *)tensor->op_params)[0], ((float *)tensor->op_params)[1]);
     } else if (tensor->op == GGML_OP_PAD) {
-        tensor_clone = ggml_pad(ggml_ctx, src0_clone, tensor->ne[0] - src0_clone->ne[0], tensor->ne[1] - src0_clone->ne[1], tensor->ne[2] - src0_clone->ne[2], tensor->ne[3] - src0_clone->ne[3]);
+        tensor_clone = ggml_pad(ggml_ctx, src_clone[0], tensor->ne[0] - src_clone[0]->ne[0], tensor->ne[1] - src_clone[0]->ne[1], tensor->ne[2] - src_clone[0]->ne[2], tensor->ne[3] - src_clone[0]->ne[3]);
     } else if (tensor->op == GGML_OP_REPEAT) {
-        tensor_clone = ggml_repeat(ggml_ctx, src0_clone, tensor);
+        tensor_clone = ggml_repeat(ggml_ctx, src_clone[0], tensor);
     } else if (tensor->op == GGML_OP_ADD) {
-        tensor_clone = ggml_add(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_add(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_ACC) {
-        tensor_clone = ggml_acc(ggml_ctx, src0_clone, src1_clone, tensor->op_params[0], tensor->op_params[1], tensor->op_params[2], tensor->op_params[3]);
+        tensor_clone = ggml_acc(ggml_ctx, src_clone[0], src_clone[1], tensor->op_params[0], tensor->op_params[1], tensor->op_params[2], tensor->op_params[3]);
     } else if (tensor->op == GGML_OP_NORM) {
-        tensor_clone = ggml_norm(ggml_ctx, src0_clone, *(float *)tensor->op_params);
+        tensor_clone = ggml_norm(ggml_ctx, src_clone[0], *(float *)tensor->op_params);
     } else if (tensor->op == GGML_OP_GROUP_NORM) {
-        tensor_clone = ggml_group_norm(ggml_ctx, src0_clone, *(int *)tensor->op_params, ((float *)tensor->op_params)[1]);
+        tensor_clone = ggml_group_norm(ggml_ctx, src_clone[0], *(int *)tensor->op_params, ((float *)tensor->op_params)[1]);
     } else if (tensor->op == GGML_OP_RMS_NORM) {
-        tensor_clone = ggml_rms_norm(ggml_ctx, src0_clone, *(float *)tensor->op_params);
+        tensor_clone = ggml_rms_norm(ggml_ctx, src_clone[0], *(float *)tensor->op_params);
     } else if (tensor->op == GGML_OP_SOFT_MAX) {
         if (src1 != nullptr) {
-            tensor_clone = ggml_soft_max_ext(ggml_ctx, src0_clone, src1_clone, ((float *)tensor->op_params)[0], ((float *)tensor->op_params)[1]);
+            tensor_clone = ggml_soft_max_ext(ggml_ctx, src_clone[0], src_clone[1], ((float *)tensor->op_params)[0], ((float *)tensor->op_params)[1]);
         } else {
-            tensor_clone = ggml_soft_max(ggml_ctx, src0_clone);
+            tensor_clone = ggml_soft_max(ggml_ctx, src_clone[0]);
         }
     } else if (tensor->op == GGML_OP_DIAG_MASK_INF) {
-        tensor_clone = ggml_diag_mask_inf(ggml_ctx, src0_clone, *(int *)tensor->op_params);
+        tensor_clone = ggml_diag_mask_inf(ggml_ctx, src_clone[0], *(int *)tensor->op_params);
     } else if (tensor->op == GGML_OP_ROPE) {
         const int n_dims      = ((int32_t *) tensor->op_params)[1];
         const int mode        = ((int32_t *) tensor->op_params)[2];
@@ -9084,26 +8953,26 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         const float beta_slow       = ((float *) tensor->op_params)[10];
         if (mode & GGML_ROPE_TYPE_MROPE) {
             int32_t *sections = ((int32_t *) tensor->op_params) + 11;
-            tensor_clone = ggml_rope_multi(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, sections, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            tensor_clone = ggml_rope_multi(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, sections, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
         } else {
-            tensor_clone = ggml_rope_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            tensor_clone = ggml_rope_ext(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
         }
     } else if (tensor->op == GGML_OP_UNARY) {
         switch (ggml_get_unary_op(tensor)) {
         case GGML_UNARY_OP_SILU:
-            tensor_clone = ggml_silu(ggml_ctx, src0_clone);
+            tensor_clone = ggml_silu(ggml_ctx, src_clone[0]);
             break;
         case GGML_UNARY_OP_GELU:
-            tensor_clone = ggml_gelu(ggml_ctx, src0_clone);
+            tensor_clone = ggml_gelu(ggml_ctx, src_clone[0]);
             break;
         case GGML_UNARY_OP_GELU_QUICK:
-            tensor_clone = ggml_gelu_quick(ggml_ctx, src0_clone);
+            tensor_clone = ggml_gelu_quick(ggml_ctx, src_clone[0]);
             break;
         case GGML_UNARY_OP_RELU:
-            tensor_clone = ggml_relu(ggml_ctx, src0_clone);
+            tensor_clone = ggml_relu(ggml_ctx, src_clone[0]);
             break;
         case GGML_UNARY_OP_TANH:
-            tensor_clone = ggml_tanh(ggml_ctx, src0_clone);
+            tensor_clone = ggml_tanh(ggml_ctx, src_clone[0]);
             break;
         default:
             std::cerr << "Missing vk_check_results OP: " << ggml_op_name(tensor->op) << std::endl;
@@ -9111,34 +8980,34 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         }
     } else if (tensor->op == GGML_OP_CPY || tensor->op == GGML_OP_DUP) {
         if (src1 == nullptr) {
-            tensor_clone = ggml_dup(ggml_ctx, src0_clone);
+            tensor_clone = ggml_dup(ggml_ctx, src_clone[0]);
             tensor_clone->type = tensor->type;
         } else {
-            tensor_clone = ggml_cpy(ggml_ctx, src0_clone, src1_clone);
+            tensor_clone = ggml_cpy(ggml_ctx, src_clone[0], src_clone[1]);
         }
     } else if (tensor->op == GGML_OP_CONT) {
-        tensor_clone = ggml_cont_4d(ggml_ctx, src0_clone, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+        tensor_clone = ggml_cont_4d(ggml_ctx, src_clone[0], tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
     } else if (tensor->op == GGML_OP_RESHAPE) {
-        tensor_clone = ggml_reshape_4d(ggml_ctx, src0_clone, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+        tensor_clone = ggml_reshape_4d(ggml_ctx, src_clone[0], tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
     } else if (tensor->op == GGML_OP_VIEW) {
-        tensor_clone = ggml_view_4d(ggml_ctx, src0_clone, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], tensor->nb[1], tensor->nb[2], tensor->nb[3], ((int32_t *) tensor->op_params)[0]);
+        tensor_clone = ggml_view_4d(ggml_ctx, src_clone[0], tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], tensor->nb[1], tensor->nb[2], tensor->nb[3], ((int32_t *) tensor->op_params)[0]);
     } else if (tensor->op == GGML_OP_PERMUTE) {
         int32_t * params = (int32_t *)tensor->op_params;
-        tensor_clone = ggml_permute(ggml_ctx, src0_clone, params[0], params[1], params[2], params[3]);
+        tensor_clone = ggml_permute(ggml_ctx, src_clone[0], params[0], params[1], params[2], params[3]);
     } else if (tensor->op == GGML_OP_TRANSPOSE) {
-        tensor_clone = ggml_transpose(ggml_ctx, src0_clone);
+        tensor_clone = ggml_transpose(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_GET_ROWS) {
-        tensor_clone = ggml_get_rows(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_get_rows(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_ARGSORT) {
-        tensor_clone = ggml_argsort(ggml_ctx, src0_clone, (ggml_sort_order) *(int *)tensor->op_params);
+        tensor_clone = ggml_argsort(ggml_ctx, src_clone[0], (ggml_sort_order) *(int *)tensor->op_params);
     } else if (tensor->op == GGML_OP_SUM) {
-        tensor_clone = ggml_sum(ggml_ctx, src0_clone);
+        tensor_clone = ggml_sum(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_SUM_ROWS) {
-        tensor_clone = ggml_sum_rows(ggml_ctx, src0_clone);
+        tensor_clone = ggml_sum_rows(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_ARGMAX) {
-        tensor_clone = ggml_argmax(ggml_ctx, src0_clone);
+        tensor_clone = ggml_argmax(ggml_ctx, src_clone[0]);
     } else if (tensor->op == GGML_OP_COUNT_EQUAL) {
-        tensor_clone = ggml_count_equal(ggml_ctx, src0_clone, src1_clone);
+        tensor_clone = ggml_count_equal(ggml_ctx, src_clone[0], src_clone[1]);
     } else if (tensor->op == GGML_OP_IM2COL) {
         const int32_t s0 = tensor->op_params[0];
         const int32_t s1 = tensor->op_params[1];
@@ -9148,11 +9017,11 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         const int32_t d1 = tensor->op_params[5];
 
         const bool is_2D = tensor->op_params[6] == 1;
-        tensor_clone = ggml_im2col(ggml_ctx, src0_clone, src1_clone, s0, s1, p0, p1, d0, d1, is_2D, tensor->type);
+        tensor_clone = ggml_im2col(ggml_ctx, src_clone[0], src_clone[1], s0, s1, p0, p1, d0, d1, is_2D, tensor->type);
     } else if (tensor->op == GGML_OP_TIMESTEP_EMBEDDING) {
         const int32_t dim = tensor->op_params[0];
         const int32_t max_period = tensor->op_params[1];
-        tensor_clone = ggml_timestep_embedding(ggml_ctx, src0_clone, dim, max_period);
+        tensor_clone = ggml_timestep_embedding(ggml_ctx, src_clone[0], dim, max_period);
     } else if (tensor->op == GGML_OP_POOL_2D) {
         enum ggml_op_pool op = static_cast<ggml_op_pool>(tensor->op_params[0]);
         const int32_t k0 = tensor->op_params[1];
@@ -9162,16 +9031,17 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         const int32_t p0 = tensor->op_params[5];
         const int32_t p1 = tensor->op_params[6];
 
-        tensor_clone = ggml_pool_2d(ggml_ctx, src0_clone, op, k0, k1, s0, s1, p0, p1);
+        tensor_clone = ggml_pool_2d(ggml_ctx, src_clone[0], op, k0, k1, s0, s1, p0, p1);
     } else if (tensor->op == GGML_OP_LEAKY_RELU) {
         const float * op_params = (const float *)tensor->op_params;
-        tensor_clone = ggml_leaky_relu(ggml_ctx, src0_clone, op_params[0], false);
+        tensor_clone = ggml_leaky_relu(ggml_ctx, src_clone[0], op_params[0], false);
     } else if (tensor->op == GGML_OP_RWKV_WKV6) {
-        tensor_clone = ggml_rwkv_wkv6(ggml_ctx, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3],
-        tensor->src[4], tensor->src[5]);
+        tensor_clone = ggml_rwkv_wkv6(ggml_ctx, src_clone[0], src_clone[1],
+        src_clone[2], src_clone[3], src_clone[4], src_clone[5]);
     } else if (tensor->op == GGML_OP_OPT_STEP_ADAMW) {
-        tensor_clone = ggml_opt_step_adamw(ggml_ctx, tensor->src[0], tensor->src[1], tensor->src[2],
-        tensor->src[3], tensor->src[4]);
+        src_clone[0]->flags = src0->flags;
+        tensor_clone = ggml_opt_step_adamw(ggml_ctx, src_clone[0], src_clone[1],
+        src_clone[2], src_clone[3], src_clone[4]);
     }
     else {
         std::cerr << "Missing vk_check_results OP: " << ggml_op_name(tensor->op) << std::endl;
@@ -9193,11 +9063,10 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
     memcpy(comp_result, tensor_clone->data, comp_size);
     memcpy(comp_nb, tensor_clone->nb, sizeof(size_t) * GGML_MAX_DIMS);
 
-    if (src0 != nullptr) {
-        free(src0_buffer);
-    }
-    if (src1 != nullptr) {
-        free(src1_buffer);
+    for (int i = 0; i < 6; i++) {
+        if (src_buffer[i] != nullptr) {
+            free(src_buffer[i]);
+        }
     }
 
     ggml_free(ggml_ctx);
