@@ -32,9 +32,14 @@ const PyodideWrapper = {
       stdout: (data: string) => stdOutAndErr.push(data),
       stderr: (data: string) => stdOutAndErr.push(data),
     });
-    const result = await pyodide.runPythonAsync(code);
-    if (result) {
-      stdOutAndErr.push(result.toString());
+    try {
+      const result = await pyodide.runPythonAsync(code);
+      if (result) {
+        stdOutAndErr.push(result.toString());
+      }
+    } catch (e) {
+      console.error(e);
+      stdOutAndErr.push((e as Error).toString());
     }
     return stdOutAndErr.join('\n');
   },
@@ -64,7 +69,7 @@ export default function CanvasPyInterpreter() {
   useEffect(() => {
     runCode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canvasData?.content]);
 
   if (canvasData?.type !== CanvasType.PY_INTERPRETER) {
     return null;
