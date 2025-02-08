@@ -92,7 +92,7 @@ export default function ChatMessage({
             <>
               <textarea
                 dir="auto"
-                className="textarea textarea-bordered bg-base-100 text-base-content w-[calc(90vw-8em)] lg:w-96"
+                className="textarea textarea-bordered bg-base-100 text-base-content max-w-2xl w-[calc(90vw-8em)] h-24"
                 value={editingContent}
                 onChange={(e) => setEditingContent(e.target.value)}
               ></textarea>
