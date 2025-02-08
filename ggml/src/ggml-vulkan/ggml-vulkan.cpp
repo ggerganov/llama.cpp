@@ -257,6 +257,7 @@ struct vk_device_struct {
     vk_pipeline pipeline_argsort_f32;
     vk_pipeline pipeline_sum_rows_f32;
     vk_pipeline pipeline_argmax_f32;
+    vk_pipeline pipeline_count_equal_i32;
     vk_pipeline pipeline_im2col_f32, pipeline_im2col_f32_f16;
     vk_pipeline pipeline_timestep_embedding_f32;
     vk_pipeline pipeline_pool2d_f32;
@@ -2210,6 +2211,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
     ggml_vk_create_pipeline(device, device->pipeline_argmax_f32, "argmax_f32", argmax_f32_len, argmax_f32_data, "main", 2, sizeof(vk_op_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
 
     ggml_vk_create_pipeline(device, device->pipeline_sum_rows_f32, "sum_rows_f32", sum_rows_f32_len, sum_rows_f32_data, "main", 2, sizeof(vk_op_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
+
+    ggml_vk_create_pipeline(device, device->pipeline_count_equal_i32, "count_equal_i32", count_equal_i32_len, count_equal_i32_data, "main", 3, sizeof(vk_op_push_constants), {512, 1, 1}, { device->subgroup_size }, 1);
 
     ggml_vk_create_pipeline(device, device->pipeline_im2col_f32, "im2col_f32", im2col_f32_len, im2col_f32_data, "main", 2, sizeof(vk_op_im2col_push_constants), {512, 1, 1}, { device->subgroup_size }, 1, true);
     if (device->float_controls_rte_fp16) {
@@ -5380,6 +5383,11 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
             return ctx->device->pipeline_argmax_f32;
         }
         return nullptr;
+    case GGML_OP_COUNT_EQUAL:
+        if (src0->type == GGML_TYPE_I32 && src1->type == GGML_TYPE_I32 && dst->type == GGML_TYPE_I64) {
+            return ctx->device->pipeline_count_equal_i32;
+        }
+        return nullptr;
     case GGML_OP_IM2COL:
         if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
             return ctx->device->pipeline_im2col_f32;
@@ -6278,6 +6286,11 @@ static void ggml_vk_argmax(ggml_backend_vk_context * ctx, vk_context& subctx, co
     ggml_vk_op_f32<vk_op_push_constants>(ctx, subctx, src0, nullptr, nullptr, dst, GGML_OP_ARGMAX, { (uint32_t)src0->ne[0], 0, 0.0f, 0.0f }, dryrun);
 }
 
+static void ggml_vk_count_equal(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, bool dryrun = false) {
+    ggml_backend_tensor_memset(dst, 0, 0, ggml_nbytes(dst));
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, subctx, src0, src1, nullptr, dst, GGML_OP_COUNT_EQUAL, { (uint32_t)ggml_nelements(src0), 0, 0.0f, 0.0f }, dryrun);
+}
+
 static void ggml_vk_im2col(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, bool dryrun = false) {
     const int32_t s0 = dst->op_params[0];
     const int32_t s1 = dst->op_params[1];
@@ -7171,6 +7184,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_SUM:
     case GGML_OP_SUM_ROWS:
     case GGML_OP_ARGMAX:
+    case GGML_OP_COUNT_EQUAL:
     case GGML_OP_IM2COL:
     case GGML_OP_TIMESTEP_EMBEDDING:
     case GGML_OP_POOL_2D:
@@ -7225,6 +7239,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGMAX:
+        case GGML_OP_COUNT_EQUAL:
         case GGML_OP_IM2COL:
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_POOL_2D:
@@ -7361,6 +7376,10 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         ggml_vk_argmax(ctx, compute_ctx, src0, node, dryrun);
 
         break;
+    case GGML_OP_COUNT_EQUAL:
+        ggml_vk_count_equal(ctx, compute_ctx, src0, src1, node, dryrun);
+
+        break;
     case GGML_OP_IM2COL:
         ggml_vk_im2col(ctx, compute_ctx, src0, src1, node, dryrun);
 
@@ -7474,6 +7493,7 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
     case GGML_OP_SUM:
     case GGML_OP_SUM_ROWS:
     case GGML_OP_ARGMAX:
+    case GGML_OP_COUNT_EQUAL:
     case GGML_OP_IM2COL:
     case GGML_OP_TIMESTEP_EMBEDDING:
     case GGML_OP_POOL_2D:
@@ -8407,6 +8427,7 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
         case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGMAX:
+        case GGML_OP_COUNT_EQUAL:
         case GGML_OP_IM2COL:
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_POOL_2D:
@@ -8995,6 +9016,8 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         tensor_clone = ggml_sum_rows(ggml_ctx, src0_clone);
     } else if (tensor->op == GGML_OP_ARGMAX) {
         tensor_clone = ggml_argmax(ggml_ctx, src0_clone);
+    } else if (tensor->op == GGML_OP_COUNT_EQUAL) {
+        tensor_clone = ggml_count_equal(ggml_ctx, src0_clone, src1_clone);
     } else if (tensor->op == GGML_OP_IM2COL) {
         const int32_t s0 = tensor->op_params[0];
         const int32_t s1 = tensor->op_params[1];
@@ -9114,6 +9137,9 @@ static void ggml_vk_check_results_1(ggml_tensor * tensor) {
                         } else if (tensor->type == GGML_TYPE_I32) {
                             correct = *(int32_t *) ((char *) comp_result + i3*comp_nb[3] + i2*comp_nb[2] + i1*comp_nb[1] + i0*comp_nb[0]);
                             result  = *(int32_t *) ((char *) tensor_data + i3*tensor->nb[3] + i2*tensor->nb[2] + i1*tensor->nb[1] + i0*tensor->nb[0]);
+                        } else if (tensor->type == GGML_TYPE_I64) {
+                            correct = *(int64_t *) ((char *) comp_result + i3*comp_nb[3] + i2*comp_nb[2] + i1*comp_nb[1] + i0*comp_nb[0]);
+                            result  = *(int64_t *) ((char *) tensor_data + i3*tensor->nb[3] + i2*tensor->nb[2] + i1*tensor->nb[1] + i0*tensor->nb[0]);
                         } else {
                             std::cerr << "Results check not implemented for type " << ggml_type_name(tensor->type) << std::endl;
                         }

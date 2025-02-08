@@ -1254,7 +1254,7 @@ struct test_count_equal : public test_case {
         ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_set_name(b, "b");
 
-        ggml_tensor * b_argmax = ggml_argmax(ctx, a);
+        ggml_tensor * b_argmax = ggml_argmax(ctx, b);
         ggml_set_name(b_argmax, "b_argmax");
 
         ggml_tensor * out = ggml_count_equal(ctx, a_argmax, b_argmax);
@@ -3861,7 +3861,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_conv_transpose_1d({3,2,1,1}, {3,1,2,1}, 1, 0, 1));
     test_cases.emplace_back(new test_conv_transpose_1d({2,1,1,1}, {3,1,1,1}, 1, 0, 1));
 
-    test_cases.emplace_back(new test_count_equal());
+    test_cases.emplace_back(new test_count_equal(GGML_TYPE_F32, {4,  500, 1, 1}));
+    test_cases.emplace_back(new test_count_equal(GGML_TYPE_F32, {4, 5000, 1, 1}));
 
     test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32,    1, 1, 1}));
     test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {100,  10, 1, 1}));
