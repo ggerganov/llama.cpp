@@ -52,22 +52,22 @@ if (StorageUtils.getConfig().pyIntepreterEnabled) {
 export default function CanvasPyInterpreter() {
   const { canvasData, setCanvasData } = useAppContext();
 
+  const [code, setCode] = useState(canvasData?.content ?? ''); // copy to avoid direct mutation
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState('');
 
-  const runCode = async () => {
-    const code = canvasData?.content;
-    if (!code) return;
+  const runCode = async (pycode: string) => {
     setRunning(true);
     setOutput('Running...');
-    const out = await PyodideWrapper.run(code);
+    const out = await PyodideWrapper.run(pycode);
     setOutput(out);
     setRunning(false);
   };
 
   // run code on mount
   useEffect(() => {
-    runCode();
+    setCode(canvasData?.content ?? '');
+    runCode(canvasData?.content ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasData?.content]);
 
@@ -88,19 +88,14 @@ export default function CanvasPyInterpreter() {
         <div className="grid grid-rows-3 gap-4 h-full">
           <textarea
             className="textarea textarea-bordered w-full h-full font-mono"
-            value={canvasData.content}
-            onChange={(e) =>
-              setCanvasData({
-                ...canvasData,
-                content: e.target.value,
-              })
-            }
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
           ></textarea>
           <div className="font-mono flex flex-col row-span-2">
             <div className="flex items-center mb-2">
               <button
                 className="btn btn-sm bg-base-100"
-                onClick={runCode}
+                onClick={() => runCode(code)}
                 disabled={running}
               >
                 <PlayIcon className="h-6 w-6" />{' '}
