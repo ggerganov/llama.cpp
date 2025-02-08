@@ -578,7 +578,7 @@ static json oaicompat_completion_params_parse(const json & body) {
 static json oaicompat_completion_params_parse(
     const json & body, /* openai api json semantics */
     bool use_jinja,
-    bool think,
+    common_reasoning_format reasoning_format,
     const common_chat_templates & chat_templates)
 {
     json llama_params;
@@ -634,7 +634,7 @@ static json oaicompat_completion_params_parse(
             throw std::runtime_error("Cannot use custom grammar constraints with tools.");
         }
         common_chat_inputs inputs;
-        inputs.think               = think;
+        inputs.extract_reasoning   = reasoning_format != COMMON_REASONING_FORMAT_NONE;
         inputs.messages            = body.at("messages");
         inputs.tools               = tools;
         inputs.tool_choice         = tool_choice;

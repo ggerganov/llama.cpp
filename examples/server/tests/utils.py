@@ -78,7 +78,7 @@ class ServerProcess:
     draft_max: int | None = None
     no_webui: bool | None = None
     jinja: bool | None = None
-    think: bool | None = None
+    reasoning_format: Literal['deepseek', 'none'] | None = None
     chat_template: str | None = None
     chat_template_file: str | None = None
 
@@ -173,8 +173,8 @@ class ServerProcess:
             server_args.append("--no-webui")
         if self.jinja:
             server_args.append("--jinja")
-        if self.think:
-            server_args.append("--think")
+        if self.reasoning_format:
+            server_args.append("--reasoning-format")
         if self.chat_template:
             server_args.extend(["--chat-template", self.chat_template])
         if self.chat_template_file:

@@ -12,13 +12,13 @@ std::string common_chat_format_name(common_chat_format format) {
         case COMMON_CHAT_FORMAT_LLAMA_3_X: return "Llama 3.x";
         case COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS: return "Llama 3.x with builtin tools";
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1: return "DeepSeek R1";
-        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK: return "DeepSeek R1 (extract reasoning_content)";
+        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING: return "DeepSeek R1 (extract reasoning)";
         case COMMON_CHAT_FORMAT_FIREFUNCTION_V2: return "FireFunction v2";
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2: return "Functionary v3.2";
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1: return "Functionary v3.1 Llama 3.1";
         case COMMON_CHAT_FORMAT_HERMES_2_PRO: return "Hermes 2 Pro";
         case COMMON_CHAT_FORMAT_COMMAND_R7B: return "Command R7B";
-        case COMMON_CHAT_FORMAT_COMMAND_R7B_THINK: return "Command R7B (extract reasoning_content)";
+        case COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING: return "Command R7B (extract reasoning)";
         default:
             throw std::runtime_error("Unknown chat format");
     }
@@ -196,148 +196,83 @@ static std::string apply(
 static common_chat_params common_chat_params_init_generic(const common_chat_template & tmpl, const struct common_chat_inputs & inputs) {
     common_chat_params data;
 
-    json schema;
-    auto make_object = []() {
-        return json {
+    auto tool_call_schemas = json::array();
+    foreach_function(inputs.tools, [&](const json & tool) {
+        const auto & function = tool["function"];
+        auto tool_schema = json {
             {"type", "object"},
-            {"properties", json::object()},
-            {"required", json::array()},
-        };
-    };
-    auto add_property = [](json & obj, const std::string & name, const json & schema) {
-        obj["properties"][name] = schema;
-        obj["required"].push_back(name);
-    };
-    auto add_thoughts = [&](json & obj) {
-        add_property(obj, "thoughts", {
-            {"type", "string"},
-            {"description", "The assistant's thoughts"},
-        });
-    };
-    auto make_response = [&]() {
-        json response_wrapper = make_object();
-        if (inputs.think) {
-            add_thoughts(response_wrapper);
-        }
-        add_property(response_wrapper, "response", inputs.json_schema.is_null() ? json {{"type", "string"}} : inputs.json_schema);
-        return response_wrapper;
-    };
-    std::ostringstream ss;
-    if (inputs.tools.is_array() && !inputs.tools.empty()) {
-        auto tool_call_schemas = json::array();
-        foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            auto tool_schema = json {
-                {"type", "object"},
-                {"properties", {
-                    {"name", {
-                        {"type", "string"},
-                        {"const", function["name"]},
-                    }},
-                    {"arguments", function["parameters"]},
-                }},
-                {"required", json::array({"name", "arguments"})},
-            };
-            if (function.contains("description")) {
-                tool_schema["description"] = function["description"];
-            }
-            if (inputs.parallel_tool_calls) {
-                tool_schema["properties"]["id"] = {
+            {"properties", {
+                {"name", {
                     {"type", "string"},
-                    {"minLength", 4},
-                };
-                tool_schema["required"].push_back("id");
-            }
-            tool_call_schemas.emplace_back(tool_schema);
-        });
-        const json tool_call = tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {{"anyOf", tool_call_schemas}};
-        json tool_call_wrapper = make_object();
-        if (inputs.think) {
-            add_thoughts(tool_call_wrapper);
+                    {"const", function["name"]},
+                }},
+                {"arguments", function["parameters"]},
+            }},
+            {"required", json::array({"name", "arguments"})},
+        };
+        if (function.contains("description")) {
+            tool_schema["description"] = function["description"];
         }
         if (inputs.parallel_tool_calls) {
-            add_property(tool_call_wrapper, "tool_calls", {
-                {"type", "array"},
-                {"items", tool_call},
-                {"minItems", 1},
-            });
-        } else {
-            add_property(tool_call_wrapper, "tool_call", tool_call);
-        }
-        if (inputs.think) {
-            /*
-              This kind of turns any model into a thinking model by requiring the output to be (in TypeScript notation):
-
-                // ResponseSchema is json_schema if set, otherwise string
-
-                type SchemaToolRequired     =  {thoughts: string} & ToolCallSchema
-                type Schema                 = ({thoughts: string} & ToolCallSchema) | {thoughts: string, response: ResponseSchema}
-
-                type ToolCallSchema         = SingleToolCallSchema | ParallelToolCallSchema
-                type SingleToolCallSchema   = {tool_call: ToolCall}
-                type ParallelToolCallSchema = {tool_calls: ToolCall[]} // If parallel_tool_calls is true
-
-                type ToolCall = {name: string, arguments: ParametersSchema, id?: string} // id only if parallel_tool_calls is true
-                type ParametersSchema = tool1_params | tool2_params | ...
-            */
-
-            // TODO(ochafik): make the prompts configurable (jinja template?).
-            ss << "You are a tool-calling assistant that thinks before it acts.\n"
-                "You respond in JSON format, as follows:\n"
-                "- First, candidly explain your thoughts about the user's request "
-                "and elaborate a step-by-step reasoning about your plan to satisfy it "
-                "(including possible tool usage / function call), pondering pros and cons, "
-                "widening your reasoning than narrowing down on a plan. "
-                "Express all of these thoughts in the `thoughts` field.\n";
-        }
-        if (inputs.tool_choice == "required") {
-            schema = {
-                {"anyOf", json::array({tool_call_wrapper, make_response()})},
+            tool_schema["properties"]["id"] = {
+                {"type", "string"},
+                {"minLength", 4},
             };
-            if (inputs.think) {
-                if (inputs.parallel_tool_calls && inputs.tools.size() > 1) {
-                    ss << "- Then if you need to perform operations or get data before responding to the user, "
-                        "call tools by providing an array of objects with name & arguments fields in the `tool_calls` field, "
-                        "or respond directly to the user's request in the `response` field.";
-                    // system = "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request";
-                } else {
-                    ss << "- Then if you need to perform an operation or get data before responding to the user, "
-                        "call a tool by providing its name & arguments in the `tool_call` field, "
-                        "or respond directly to the user's request in the `response` field.";
-                }
-            }
-        } else {
-            schema = tool_call_wrapper;
-            if (inputs.think) {
-                if (inputs.parallel_tool_calls && inputs.tools.size() > 1) {
-                    ss << "- Then call tools by providing their names and arguments in the `tool_calls` array.";
-                } else {
-                    ss << "- Then call a tool by providing its name and arguments in the `tool_call` object.";
-                }
-            }
+            tool_schema["required"].push_back("id");
         }
-        ss << "- Finally, once you get results from previously requested tool calls (if you requested anys), "
-            "you iterate on your reasoning, update it if needed, and work towards a final response to the user's request "
-            "in as many iterations as needed.";
-    } else if (inputs.think) {
-        schema = make_response();
-        ss << "You are an assistant that thinks before it acts.\n"
-            "You respond in JSON format, as follows:\n"
-            "- First, candidly explain your thoughts about the user's request "
-            "and elaborate a step-by-step reasoning about your plan to satisfy it, "
-            "pondering pros and cons, "
-            "widening your reasoning than narrowing down on a plan. "
-            "Express all of these thoughts in the `thoughts` field.\n"
-            "- Then, respond directly to the user's request in the `response` field.";
-    }
-    auto system = ss.str();
+        tool_call_schemas.emplace_back(tool_schema);
+    });
+    const auto tool_call =
+        inputs.parallel_tool_calls
+            ? json {
+                {"type", "object"},
+                {"properties", {
+                    {"tool_calls", {
+                        {"type", "array"},
+                        {"items", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
+                            {"anyOf", tool_call_schemas},
+                        }},
+                        {"minItems", 1},
+                    }},
+                }},
+                {"required", json::array({"tool_calls"})},
+            }
+            : json {
+                {"type", "object"},
+                {"properties", {
+                    {"tool_call", tool_call_schemas.size() == 1 ? tool_call_schemas[0] : json {
+                        {"anyOf", tool_call_schemas},
+                    }},
+                }},
+                {"required", json::array({"tool_call"})},
+            };
+    const auto schema =
+        inputs.tool_choice != "required"
+            ? json {
+                {"anyOf", json::array({
+                    tool_call,
+                    {
+                        {"type", "object"},
+                        {"properties", {
+                            {"response", inputs.json_schema.is_null()
+                                ? json {{"type", "string"}}
+                                : inputs.json_schema
+                            },
+                        }},
+                        {"required", json::array({"response"})},
+                    },
+                })}
+            }
+            : tool_call;
 
     data.grammar_lazy = false;
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         builder.add_schema("root", schema);
     }, grammar_options);
 
-    auto tweaked_messages = system.empty() ? inputs.messages : common_chat_template::add_system(inputs.messages, system);
+    auto tweaked_messages = common_chat_template::add_system(
+        inputs.messages,
+        "Respond in JSON format, either with `tool_call` (a request to call tools) or with `response` reply to the user's request");
 
     data.prompt = apply(tmpl, tweaked_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_GENERIC;
@@ -471,14 +406,11 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
             adjusted_messages.push_back(msg);
         }
     }
-    // } else {
-    //     adjusted_messages = inputs.messages;
-    // }
     data.prompt = apply(tmpl, adjusted_messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt, {});
-    data.format = inputs.think ? COMMON_CHAT_FORMAT_COMMAND_R7B_THINK : COMMON_CHAT_FORMAT_COMMAND_R7B;
+    data.format = inputs.extract_reasoning ? COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING : COMMON_CHAT_FORMAT_COMMAND_R7B;
     return data;
 }
-static common_chat_msg common_chat_parse_command_r7b(const std::string & input, bool think) {
+static common_chat_msg common_chat_parse_command_r7b(const std::string & input, bool extract_reasoning) {
     static std::regex thought_regex("(<\\|START_THINKING\\|>([\\s\\S\\n\\r]*?)<\\|END_THINKING\\|>)([\\s\\S\\n\\r]*)");
     static std::regex action_regex("<\\|START_ACTION\\|>([\\s\\S\\n\\r]*?)<\\|END_ACTION\\|>");
     static std::regex response_regex("(?:<\\|START_RESPONSE\\|>)?([\\s\\S\\n\\r]*?)<\\|END_RESPONSE\\|>");
@@ -491,7 +423,7 @@ static common_chat_msg common_chat_parse_command_r7b(const std::string & input, 
     std::string rest = input;
 
     if (std::regex_match(rest, match, thought_regex)) {
-        if (think) {
+        if (extract_reasoning) {
             result.reasoning_content = match[2].str();
         } else if (!match[2].str().empty()) {
             // Let the unparsed thinking tags through in content only if their insides aren't empty.
@@ -705,10 +637,10 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             "$1<｜tool▁calls▁end｜><｜end▁of▁sentence｜>$2");
     }
     data.prompt = prompt;
-    data.format = inputs.think ? COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK : COMMON_CHAT_FORMAT_DEEPSEEK_R1;
+    data.format = inputs.extract_reasoning ? COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING : COMMON_CHAT_FORMAT_DEEPSEEK_R1;
     return data;
 }
-static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, bool think) {
+static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, bool extract_reasoning) {
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
     static std::regex reasoning_content_regex("(<think>([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
@@ -718,7 +650,7 @@ static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, 
     std::smatch match;
     if (std::regex_match(input, match, reasoning_content_regex)) {
         std::string rest;
-        if (think) {
+        if (extract_reasoning) {
             msg.reasoning_content = string_strip(match[2].str());
         } else {
             msg.content = match[1].str();
@@ -1068,9 +1000,9 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
         return common_chat_params_init_command_r7b(tmpl, inputs);
     }
 
-    // Use generic handler when forcing thoughts or JSON schema for final output
-    // TODO: support thinking mode and/or JSON schema in handlers below this.
-    if (inputs.think || (!inputs.tools.is_null() && inputs.json_schema.is_object())) {
+    // Use generic handler when mixing tools + JSON schema.
+    // TODO: support that mix in handlers below.
+    if ((!inputs.tools.is_array() && inputs.json_schema.is_object())) {
         return common_chat_params_init_generic(tmpl, inputs);
     }
 
@@ -1136,9 +1068,9 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
         case COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS:
             return common_chat_parse_llama_3_1(input, /* with_builtin_tools= */ true);
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1:
-            return common_chat_parse_deepseek_r1(input, /* think= */ false);
-        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_THINK:
-            return common_chat_parse_deepseek_r1(input, /* think= */ true);
+            return common_chat_parse_deepseek_r1(input, /* extract_reasoning= */ false);
+        case COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING:
+            return common_chat_parse_deepseek_r1(input, /* extract_reasoning= */ true);
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2:
             return common_chat_parse_functionary_v3_2(input);
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1:
@@ -1148,9 +1080,9 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
         case COMMON_CHAT_FORMAT_FIREFUNCTION_V2:
             return common_chat_parse_firefunction_v2(input);
         case COMMON_CHAT_FORMAT_COMMAND_R7B:
-            return common_chat_parse_command_r7b(input, /* think= */ false);
-        case COMMON_CHAT_FORMAT_COMMAND_R7B_THINK:
-            return common_chat_parse_command_r7b(input, /* think= */ true);
+            return common_chat_parse_command_r7b(input, /* extract_reasoning= */ false);
+        case COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING:
+            return common_chat_parse_command_r7b(input, /* extract_reasoning= */ true);
         default:
             throw std::runtime_error("Unsupported format: " + common_chat_format_name(format));
     }
