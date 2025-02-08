@@ -1674,11 +1674,10 @@ void quantize_row_q8_K(const float * restrict x, void * restrict y, int64_t k) {
             for (int j = 0; j < QK_K; j += 16) {
                 wasm_v128_store(yc[i].qs + j, zero);
             }
-            memset(yc[i].bsums, 0, QK_K/16 * sizeof(int));
             continue;
         }
 
-        const float iscale = -127.0f / max_val;
+        const float iscale = -127.0f / amax;
         const v128_t scale_vec = wasm_f32x4_splat(iscale);
 
         // Process 16 elements per iteration
