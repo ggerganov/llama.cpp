@@ -797,7 +797,7 @@ struct server_task_result_cmpl_final : server_task_result {
         json choice = json {
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"delta", json::object()}
+            {"delta", json {{"content", ""},}}
         };
 
         json ret = json {
