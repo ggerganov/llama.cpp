@@ -1485,13 +1485,15 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     add_opt(common_arg(
         {"--override-tensor", "-ot"}, "<tensor name pattern>=<buffer type>,...",
         "override tensor buffer type", [](common_params & params, const std::string & value) {
-            static std::map<std::string, ggml_backend_buffer_type_t> buft_list;
+            /* static */ std::map<std::string, ggml_backend_buffer_type_t> buft_list;
             if (buft_list.empty()) {
                 // enumerate all the devices and add their buffer types to the list
                 for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
                     auto * dev = ggml_backend_dev_get(i);
                     auto * buft = ggml_backend_dev_buffer_type(dev);
-                    buft_list[ggml_backend_buft_name(buft)] = buft;
+                    if (buft) {
+                        buft_list[ggml_backend_buft_name(buft)] = buft;
+                    }
                 }
             }
 
