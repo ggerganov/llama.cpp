@@ -23,3 +23,14 @@ export interface Conversation {
 export type PendingMessage = Omit<Message, 'content'> & {
   content: string | null;
 };
+
+export enum CanvasType {
+  PY_INTERPRETER,
+}
+
+export interface CanvasPyInterpreter {
+  type: CanvasType.PY_INTERPRETER;
+  content: string;
+}
+
+export type CanvasData = CanvasPyInterpreter;

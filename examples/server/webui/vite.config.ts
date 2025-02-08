@@ -72,5 +72,9 @@ export default defineConfig({
     proxy: {
       '/v1': 'http://localhost:8080',
     },
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
   },
 });

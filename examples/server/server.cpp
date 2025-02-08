@@ -4378,6 +4378,9 @@ int main(int argc, char ** argv) {
                     res.set_content("Error: gzip is not supported by this browser", "text/plain");
                 } else {
                     res.set_header("Content-Encoding", "gzip");
+                    // COEP and COOP headers, required by pyodide (python interpreter)
+                    res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
+                    res.set_header("Cross-Origin-Opener-Policy", "same-origin");
                     res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
                 }
                 return false;
