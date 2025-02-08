@@ -70,7 +70,7 @@ export default function ChatScreen() {
     >
       <div className="flex flex-col w-full max-w-[900px] mx-auto">
         {/* chat messages */}
-        <div id="messages-list" className="flex flex-col grow overflow-y-auto">
+        <div id="messages-list" className="grow">
           <div className="mt-auto flex justify-center">
             {/* placeholder to shift the message to the bottom */}
             {viewingConversation ? '' : 'Send a message to start'}

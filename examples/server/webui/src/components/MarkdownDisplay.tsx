@@ -77,7 +77,7 @@ const CodeBlockButtons: React.ElementType<
   return (
     <div
       className={classNames({
-        'text-right sticky top-4 mb-2 mr-2 h-0': true,
+        'text-right sticky top-[7em] mb-2 mr-2 h-0': true,
         'display-none': !node?.position,
       })}
     >
@@ -152,9 +152,7 @@ function rehypeCustomCopyButton() {
         // replace current node
         preNode.properties.visited = 'true';
         node.tagName = 'div';
-        node.properties = {
-          className: 'relative my-4',
-        };
+        node.properties = {};
         // add node for button
         const btnNode: ElementContent = {
           type: 'element',
