@@ -736,16 +736,20 @@ int main(int argc, char ** argv) {
         std::cout << "|----------|--------|\n";
 
         for (int i = 1; i < argc; i++) {
-            std::string path = argv[i];
-            if (path.rfind(".jinja") != path.size() - 6) {
-                std::cerr << "Skipping non-jinja file: " << path << std::endl;
-                continue;
+            try {
+                std::string path = argv[i];
+                if (path.rfind(".jinja") != path.size() - 6) {
+                    std::cerr << "Skipping non-jinja file: " << path << std::endl;
+                    continue;
+                }
+                common_chat_template tmpl(read_file(path), "", "");
+                auto parts  = string_split(path, "/");
+                auto name   = parts[parts.size() - 1];
+                auto format = common_chat_format_name(common_chat_params_init(tmpl, inputs).format);
+                std::cout << "| " << name << " | " << format << " |\n";
+            } catch (const std::exception & e) {
+                std::cerr << "Failed to process " << argv[i] << ": " << e.what() << std::endl;
             }
-            common_chat_template tmpl(read_file(path), "", "");
-            auto                 parts = string_split(path, "/");
-            auto                 name  = parts[parts.size() - 1];
-            std::cout << "| " << name << " | " << common_chat_format_name(common_chat_params_init(tmpl, inputs).format)
-                      << " |\n";
         }
     } else
 #endif
