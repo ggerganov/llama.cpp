@@ -725,9 +725,19 @@ struct server_task_result_cmpl_final : server_task_result {
             msg.content = content;
         }
 
-        json tool_calls;
+        json message {
+            {"role", "assistant"},
+        };
+        if (!msg.reasoning_content.empty()) {
+            message["reasoning_content"] = msg.reasoning_content;
+        }
+        if (msg.content == "" && !msg.tool_calls.empty()) {
+            message["content"] = json();
+        } else {
+            message["content"] = msg.content;
+        }
         if (!msg.tool_calls.empty()) {
-            tool_calls = json::array();
+            auto tool_calls = json::array();
             for (const auto & tc : msg.tool_calls) {
                 tool_calls.push_back({
                     {"type", "function"},
@@ -738,15 +748,7 @@ struct server_task_result_cmpl_final : server_task_result {
                     {"id", tc.id},
                 });
             }
-        }
-
-        json message {
-            {"content", msg.content == "" && !tool_calls.empty() ? json() : json(msg.content)},
-            {"tool_calls", tool_calls},
-            {"role", "assistant"},
-        };
-        if (!msg.reasoning_content.empty()) {
-            message["reasoning_content"] = msg.reasoning_content;
+            message["tool_calls"] = tool_calls;
         }
 
         json choice {
