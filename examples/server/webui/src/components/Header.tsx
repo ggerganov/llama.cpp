@@ -5,12 +5,11 @@ import { classNames } from '../utils/misc';
 import daisyuiThemes from 'daisyui/src/theming/themes';
 import { THEMES } from '../Config';
 import { useNavigate } from 'react-router';
-import SettingDialog from './SettingDialog';
 
 export default function Header() {
   const navigate = useNavigate();
   const [selectedTheme, setSelectedTheme] = useState(StorageUtils.getTheme());
-  const [showSettingDialog, setShowSettingDialog] = useState(false);
+  const { setShowSettings } = useAppContext();
 
   const setTheme = (theme: string) => {
     StorageUtils.setTheme(theme);
@@ -54,7 +53,7 @@ export default function Header() {
   };
 
   return (
-    <div className="flex flex-row items-center mt-6 mb-6">
+    <div className="flex flex-row items-center pt-6 pb-6 sticky top-0 z-10 bg-base-100">
       {/* open sidebar button */}
       <label htmlFor="toggle-drawer" className="btn btn-ghost lg:hidden">
         <svg
@@ -109,7 +108,7 @@ export default function Header() {
           </ul>
         </div>
         <div className="tooltip tooltip-bottom" data-tip="Settings">
-          <button className="btn" onClick={() => setShowSettingDialog(true)}>
+          <button className="btn" onClick={() => setShowSettings(true)}>
             {/* settings button */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -172,11 +171,6 @@ export default function Header() {
           </div>
         </div>
       </div>
-
-      <SettingDialog
-        show={showSettingDialog}
-        onClose={() => setShowSettingDialog(false)}
-      />
     </div>
   );
 }

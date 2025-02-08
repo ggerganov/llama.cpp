@@ -149,11 +149,17 @@ export default function ChatMessage({
                           )}
                         </summary>
                         <div className="collapse-content">
-                          <MarkdownDisplay content={thought} />
+                          <MarkdownDisplay
+                            content={thought}
+                            isGenerating={isPending}
+                          />
                         </div>
                       </details>
                     )}
-                    <MarkdownDisplay content={content} />
+                    <MarkdownDisplay
+                      content={content}
+                      isGenerating={isPending}
+                    />
                   </div>
                 </>
               )}

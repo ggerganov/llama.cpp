@@ -5,12 +5,14 @@ import { isDev } from '../Config';
 import StorageUtils from '../utils/storage';
 import { classNames, isBoolean, isNumeric, isString } from '../utils/misc';
 import {
+  BeakerIcon,
   ChatBubbleOvalLeftEllipsisIcon,
   Cog6ToothIcon,
   FunnelIcon,
   HandRaisedIcon,
   SquaresPlusIcon,
 } from '@heroicons/react/24/outline';
+import { OpenInNewTab } from '../utils/common';
 
 type SettKey = keyof typeof CONFIG_DEFAULT;
 
@@ -194,18 +196,63 @@ const SETTING_SECTIONS: SettingSection[] = [
         label: (
           <>
             Custom JSON config (For more info, refer to{' '}
-            <a
-              className="underline"
-              href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <OpenInNewTab href="https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md">
               server documentation
-            </a>
+            </OpenInNewTab>
             )
           </>
         ),
         key: 'custom',
+      },
+    ],
+  },
+  {
+    title: (
+      <>
+        <BeakerIcon className={ICON_CLASSNAME} />
+        Experimental
+      </>
+    ),
+    fields: [
+      {
+        type: SettingInputType.CUSTOM,
+        key: 'custom', // dummy key, won't be used
+        component: () => (
+          <>
+            <p className="mb-8">
+              Experimental features are not guaranteed to work correctly.
+              <br />
+              <br />
+              If you encounter any problems, create a{' '}
+              <OpenInNewTab href="https://github.com/ggerganov/llama.cpp/issues/new?template=019-bug-misc.yml">
+                Bug (misc.)
+              </OpenInNewTab>{' '}
+              report on Github. Please also specify <b>webui/experimental</b> on
+              the report title and include screenshots.
+              <br />
+              <br />
+              Some features may require packages downloaded from CDN, so they
+              need internet connection.
+            </p>
+          </>
+        ),
+      },
+      {
+        type: SettingInputType.CHECKBOX,
+        label: (
+          <>
+            <b>Enable Python interpreter</b>
+            <br />
+            <small className="text-xs">
+              This feature uses{' '}
+              <OpenInNewTab href="https://pyodide.org">pyodide</OpenInNewTab>,
+              downloaded from CDN. To use this feature, ask the LLM to generate
+              python code inside a markdown code block. You will see a "Run"
+              button on the code block, near the "Copy" button.
+            </small>
+          </>
+        ),
+        key: 'pyIntepreterEnabled',
       },
     ],
   },
@@ -278,7 +325,7 @@ export default function SettingDialog({
   };
 
   return (
-    <dialog className={`modal ${show ? 'modal-open' : ''}`}>
+    <dialog className={classNames({ 'modal': true, 'modal-open': show })}>
       <div className="modal-box w-11/12 max-w-3xl">
         <h3 className="text-lg font-bold mb-6">Settings</h3>
         <div className="flex flex-col md:flex-row h-[calc(90vh-12rem)]">
@@ -479,7 +526,7 @@ function SettingsModalCheckbox({
     <div className="flex flex-row items-center mb-2">
       <input
         type="checkbox"
-        className="checkbox"
+        className="toggle"
         checked={value}
         onChange={(e) => onChange(e.target.checked)}
       />

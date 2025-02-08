@@ -85,3 +85,6 @@ export function classNames(classes: Record<string, boolean>): string {
     .map(([key, _]) => key)
     .join(' ');
 }
+
+export const delay = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));

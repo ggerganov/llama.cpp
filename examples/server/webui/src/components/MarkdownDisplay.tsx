@@ -9,8 +9,16 @@ import 'katex/dist/katex.min.css';
 import { classNames, copyStr } from '../utils/misc';
 import { ElementContent, Root } from 'hast';
 import { visit } from 'unist-util-visit';
+import { useAppContext } from '../utils/app.context';
+import { CanvasType } from '../utils/types';
 
-export default function MarkdownDisplay({ content }: { content: string }) {
+export default function MarkdownDisplay({
+  content,
+  isGenerating,
+}: {
+  content: string;
+  isGenerating?: boolean;
+}) {
   const preprocessedContent = useMemo(
     () => preprocessLaTeX(content),
     [content]
@@ -21,7 +29,11 @@ export default function MarkdownDisplay({ content }: { content: string }) {
       rehypePlugins={[rehypeHightlight, rehypeKatex, rehypeCustomCopyButton]}
       components={{
         button: (props) => (
-          <CopyCodeButton {...props} origContent={preprocessedContent} />
+          <CodeBlockButtons
+            {...props}
+            isGenerating={isGenerating}
+            origContent={preprocessedContent}
+          />
         ),
         // note: do not use "pre", "p" or other basic html elements here, it will cause the node to re-render when the message is being generated (this should be a bug with react-markdown, not sure how to fix it)
       }}
@@ -31,11 +43,12 @@ export default function MarkdownDisplay({ content }: { content: string }) {
   );
 }
 
-const CopyCodeButton: React.ElementType<
+const CodeBlockButtons: React.ElementType<
   React.ClassAttributes<HTMLButtonElement> &
     React.HTMLAttributes<HTMLButtonElement> &
-    ExtraProps & { origContent: string }
-> = ({ node, origContent }) => {
+    ExtraProps & { origContent: string; isGenerating?: boolean }
+> = ({ node, origContent, isGenerating }) => {
+  const { config } = useAppContext();
   const startOffset = node?.position?.start.offset ?? 0;
   const endOffset = node?.position?.end.offset ?? 0;
 
@@ -48,6 +61,19 @@ const CopyCodeButton: React.ElementType<
     [origContent, startOffset, endOffset]
   );
 
+  const codeLanguage = useMemo(
+    () =>
+      origContent
+        .substring(startOffset, startOffset + 10)
+        .match(/^```([^\n]+)\n/)?.[1] ?? '',
+    [origContent, startOffset]
+  );
+
+  const canRunCode =
+    !isGenerating &&
+    config.pyIntepreterEnabled &&
+    codeLanguage.startsWith('py');
+
   return (
     <div
       className={classNames({
@@ -56,6 +82,12 @@ const CopyCodeButton: React.ElementType<
       })}
     >
       <CopyButton className="badge btn-mini" content={copiedContent} />
+      {canRunCode && (
+        <RunPyCodeButton
+          className="badge btn-mini ml-2"
+          content={copiedContent}
+        />
+      )}
     </div>
   );
 };
@@ -79,6 +111,31 @@ export const CopyButton = ({
     >
       {copied ? 'Copied!' : '📋 Copy'}
     </button>
+  );
+};
+
+export const RunPyCodeButton = ({
+  content,
+  className,
+}: {
+  content: string;
+  className?: string;
+}) => {
+  const { setCanvasData } = useAppContext();
+  return (
+    <>
+      <button
+        className={className}
+        onClick={() =>
+          setCanvasData({
+            type: CanvasType.PY_INTERPRETER,
+            content,
+          })
+        }
+      >
+        ▶️ Run
+      </button>
+    </>
   );
 };
 

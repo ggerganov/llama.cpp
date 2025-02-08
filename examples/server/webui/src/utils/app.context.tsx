@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { APIMessage, Conversation, Message, PendingMessage } from './types';
+import {
+  APIMessage,
+  CanvasData,
+  Conversation,
+  Message,
+  PendingMessage,
+} from './types';
 import StorageUtils from './storage';
 import {
   filterThoughtFromMsgs,
@@ -10,6 +16,7 @@ import { BASE_URL, CONFIG_DEFAULT, isDev } from '../Config';
 import { matchPath, useLocation } from 'react-router';
 
 interface AppContextValue {
+  // conversations and messages
   viewingConversation: Conversation | null;
   pendingMessages: Record<Conversation['id'], PendingMessage>;
   isGenerating: (convId: string) => boolean;
@@ -26,8 +33,15 @@ interface AppContextValue {
     onChunk?: CallbackGeneratedChunk
   ) => Promise<void>;
 
+  // canvas
+  canvasData: CanvasData | null;
+  setCanvasData: (data: CanvasData | null) => void;
+
+  // config
   config: typeof CONFIG_DEFAULT;
   saveConfig: (config: typeof CONFIG_DEFAULT) => void;
+  showSettings: boolean;
+  setShowSettings: (show: boolean) => void;
 }
 
 // for now, this callback is only used for scrolling to the bottom of the chat
@@ -54,8 +68,13 @@ export const AppContextProvider = ({
     Record<Conversation['id'], AbortController>
   >({});
   const [config, setConfig] = useState(StorageUtils.getConfig());
+  const [canvasData, setCanvasData] = useState<CanvasData | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
+  // handle change when the convId from URL is changed
   useEffect(() => {
+    // also reset the canvas data
+    setCanvasData(null);
     const handleConversationChange = (changedConvId: string) => {
       if (changedConvId !== convId) return;
       setViewingConversation(StorageUtils.getOneConversation(convId));
@@ -292,8 +311,12 @@ export const AppContextProvider = ({
         sendMessage,
         stopGenerating,
         replaceMessageAndGenerate,
+        canvasData,
+        setCanvasData,
         config,
         saveConfig,
+        showSettings,
+        setShowSettings,
       }}
     >
       {children}
