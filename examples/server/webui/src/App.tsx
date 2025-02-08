@@ -27,14 +27,19 @@ function AppLayout() {
   return (
     <>
       <Sidebar />
-      <div className="drawer-content grow flex flex-col h-screen w-screen mx-auto px-4 overflow-auto">
+      <div
+        className="drawer-content grow flex flex-col h-screen w-screen mx-auto px-4 overflow-auto"
+        id="main-scroll"
+      >
         <Header />
         <Outlet />
       </div>
-      {<SettingDialog
-        show={showSettings}
-        onClose={() => setShowSettings(false)}
-      />}
+      {
+        <SettingDialog
+          show={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      }
     </>
   );
 }

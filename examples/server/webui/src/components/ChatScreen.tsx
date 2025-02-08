@@ -17,22 +17,21 @@ export default function ChatScreen() {
     canvasData,
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const currConvId = viewingConversation?.id ?? '';
   const pendingMsg: PendingMessage | undefined = pendingMessages[currConvId];
 
   const scrollToBottom = (requiresNearBottom: boolean) => {
-    if (!containerRef.current) return;
-    const msgListElem = containerRef.current;
+    const mainScrollElem = document.getElementById('main-scroll');
+    if (!mainScrollElem) return;
     const spaceToBottom =
-      msgListElem.scrollHeight -
-      msgListElem.scrollTop -
-      msgListElem.clientHeight;
+      mainScrollElem.scrollHeight -
+      mainScrollElem.scrollTop -
+      mainScrollElem.clientHeight;
     if (!requiresNearBottom || spaceToBottom < 50) {
       setTimeout(
-        () => msgListElem.scrollTo({ top: msgListElem.scrollHeight }),
+        () => mainScrollElem.scrollTo({ top: mainScrollElem.scrollHeight }),
         1
       );
     }
@@ -71,11 +70,7 @@ export default function ChatScreen() {
     >
       <div className="flex flex-col w-full max-w-[900px] mx-auto">
         {/* chat messages */}
-        <div
-          id="messages-list"
-          className="flex flex-col grow overflow-y-auto"
-          ref={containerRef}
-        >
+        <div id="messages-list" className="flex flex-col grow overflow-y-auto">
           <div className="mt-auto flex justify-center">
             {/* placeholder to shift the message to the bottom */}
             {viewingConversation ? '' : 'Send a message to start'}
