@@ -1078,29 +1078,23 @@ do {                                                              \
 #define GGML_F16_STEP 32
 #define GGML_F16_EPR  8
 
-// F16 arithmetic is not supported by AVX, so we use F32 instead
+// F16 arithmetic is not supported by LASX, so we use F32 instead
 
 #define GGML_F32Cx8          __m256
 #define GGML_F32Cx8_ZERO    (__m256)__lasx_xvldi(0)
 #define GGML_F32Cx8_SET1(x) (__m256)__lasx_xvreplgr2vr_w((x))
 
 static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t * x) {
-    float tmp[8];
-
-    for (int i = 0; i < 8; i++) {
-        tmp[i] = GGML_FP16_TO_FP32(x[i]);
-    }
-
-    return (__m256)__lasx_xvld(tmp, 0);
+    __m256i a;
+    memcpy(&a, x, sizeof(ggml_fp16_t) * 8);
+    a = __lasx_xvpermi_d(a, 0 | (1 << 4));
+    return __lasx_xvfcvtl_s_h(a);
 }
+
 static inline void __lasx_f32cx8_store(ggml_fp16_t * x, __m256 y) {
-    float arr[8];
-
-    __lasx_xvst(y, arr, 0);
-
-    for (int i = 0; i < 8; i++) {
-        x[i] = GGML_FP32_TO_FP16(arr[i]);
-    }
+    __m256i a = __lasx_xvfcvt_h_s(y, y);
+    a = __lasx_xvpermi_d(a, 0 | (2 << 2));
+    memcpy(x, &a, sizeof(ggml_fp16_t) * 8);
 }
 #define GGML_F32Cx8_LOAD(x)     __lasx_f32cx8_load(x)
 #define GGML_F32Cx8_STORE(x, y) __lasx_f32cx8_store(x, y)
@@ -13862,8 +13856,12 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             tp->ec    = GGML_STATUS_ABORTED;
         }
 
-        ggml_barrier(state->threadpool);
+        if (node_n + 1 < cgraph->n_nodes) {
+            ggml_barrier(state->threadpool);
+        }
     }
+
+    ggml_barrier(state->threadpool);
 
     return 0;
 }

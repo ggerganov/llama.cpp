@@ -189,6 +189,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 - [ramalama](https://github.com/containers/ramalama) (MIT)
 - [semperai/amica](https://github.com/semperai/amica) (MIT)
 - [withcatai/catai](https://github.com/withcatai/catai) (MIT)
+- [Autopen](https://github.com/blackhole89/autopen) (GPL)
 
 </details>
 
