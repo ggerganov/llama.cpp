@@ -334,24 +334,24 @@ struct server_task {
         if (data.contains("json_schema") && !data.contains("grammar")) {
             try {
                 auto schema                  = json_value(data, "json_schema", json::object());
-                LOG_DBG("JSON schema: %s\n", schema.dump(2).c_str());
+                SRV_DBG("JSON schema: %s\n", schema.dump(2).c_str());
                 params.sampling.grammar      = json_schema_to_grammar(schema);
-                LOG_DBG("Converted grammar: %s\n", params.sampling.grammar.c_str());
+                SRV_DBG("Converted grammar: %s\n", params.sampling.grammar.c_str());
             } catch (const std::exception & e) {
                 throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
             }
         } else {
             params.sampling.grammar      = json_value(data, "grammar", defaults.sampling.grammar);
-            LOG_DBG("Grammar: %s\n", params.sampling.grammar.c_str());
+            SRV_DBG("Grammar: %s\n", params.sampling.grammar.c_str());
             params.sampling.grammar_lazy = json_value(data, "grammar_lazy", defaults.sampling.grammar_lazy);
-            LOG_DBG("Grammar lazy: %s\n", params.sampling.grammar_lazy ? "true" : "false");
+            SRV_DBG("Grammar lazy: %s\n", params.sampling.grammar_lazy ? "true" : "false");
         }
 
         {
             auto it = data.find("chat_format");
             if (it != data.end()) {
                 params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
-                LOG_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
+                SRV_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }
@@ -367,12 +367,12 @@ struct server_task {
 
                     auto ids = common_tokenize(vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
-                        LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
+                        SRV_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
                         params.sampling.grammar_trigger_tokens.push_back(ids[0]);
                         params.sampling.preserved_tokens.insert(ids[0]);
                         continue;
                     }
-                    LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
+                    SRV_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
                     params.sampling.grammar_trigger_words.push_back(trigger);
                 }
             }
@@ -381,11 +381,11 @@ struct server_task {
                 for (const auto & t : *preserved_tokens) {
                     auto ids = common_tokenize(vocab, t.get<std::string>(), /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
-                        LOG_DBG("Preserved token: %d\n", ids[0]);
+                        SRV_DBG("Preserved token: %d\n", ids[0]);
                         params.sampling.preserved_tokens.insert(ids[0]);
                     } else {
                         // This may happen when using a tool call style meant for a model with special tokens to preserve on a model without said tokens.
-                        LOG_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n", t.get<std::string>().c_str());
+                        SRV_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n", t.get<std::string>().c_str());
                     }
                 }
             }
@@ -717,7 +717,7 @@ struct server_task_result_cmpl_final : server_task_result {
         std::string finish_reason = "length";
         common_chat_msg msg;
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
-            LOG_DBG("Parsing chat message: %s\n", content.c_str());
+            SRV_DBG("Parsing chat message: %s\n", content.c_str());
             msg = common_chat_parse(content, oaicompat_chat_format);
             finish_reason = msg.tool_calls.empty() ? "stop" : "tool_calls";
         } else {
@@ -1885,7 +1885,7 @@ struct server_context {
         }
 
         if (params_base.chat_template.empty() && !validate_builtin_chat_template(params.use_jinja)) {
-            LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
+            SRV_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
             chat_templates = common_chat_templates_from_model(model, "chatml");
         } else {
             chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
@@ -3355,10 +3355,10 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
 
     // reminder: this function is not covered by httplib's exception handler; if someone does more complicated stuff, think about wrapping it in try-catch
 
-    LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+    SRV_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
 
-    LOG_DBG("request:  %s\n", req.body.c_str());
-    LOG_DBG("response: %s\n", res.body.c_str());
+    SRV_DBG("request:  %s\n", req.body.c_str());
+    SRV_DBG("response: %s\n", res.body.c_str());
 }
 
 std::function<void(int)> shutdown_handler;
@@ -3860,7 +3860,9 @@ int main(int argc, char ** argv) {
 
         try {
             const auto & prompt = data.at("prompt");
-            LOG_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
+            // TODO: this log can become very long, put it behind a flag or think about a more compact format
+            //SRV_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
+
             std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
             tasks.reserve(tokenized_prompts.size());
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
