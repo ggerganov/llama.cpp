@@ -3,6 +3,7 @@
 #include <musa_runtime.h>
 #include <musa.h>
 #include <mublas.h>
+#include <musa_bf16.h>
 #include <musa_fp16.h>
 #define CUBLAS_COMPUTE_16F CUDA_R_16F
 #define CUBLAS_COMPUTE_32F CUDA_R_32F
@@ -26,6 +27,7 @@
 #define cublasSetStream mublasSetStream
 #define cublasSgemm mublasSgemm
 #define cublasStatus_t mublasStatus_t
+#define cublasOperation_t mublasOperation_t
 #define cublasGetStatusString mublasStatus_to_string
 #define cudaDataType_t musaDataType_t
 #define cudaDeviceCanAccessPeer musaDeviceCanAccessPeer
@@ -56,6 +58,7 @@
 #define cudaLaunchHostFunc musaLaunchHostFunc
 #define cudaMalloc musaMalloc
 #define cudaMallocHost musaMallocHost
+#define cudaMallocManaged musaMallocManaged
 #define cudaMemcpy musaMemcpy
 #define cudaMemcpyAsync musaMemcpyAsync
 #define cudaMemcpyPeerAsync musaMemcpyPeerAsync
@@ -131,41 +134,4 @@
 #define cudaStreamCaptureModeRelaxed musaStreamCaptureModeRelaxed
 #define cudaStreamEndCapture musaStreamEndCapture
 
-// XXX: Clang builtins mapping
-#define __vsub4   __vsub4_musa
-#define __vcmpeq4 __vcmpeq4_musa
-#define __vcmpne4 __vcmpne4_musa
-
-#ifndef __has_builtin
-    #define __has_builtin(x) 0
-#endif
-
-typedef uint8_t uint8x4_t __attribute__((ext_vector_type(4)));
-
-static __device__ __forceinline__ int __vsub4_musa(const int a, const int b) {
-    return __vsubss4(a, b);
-}
-
-static __device__ __forceinline__ unsigned int __vcmpeq4_musa(unsigned int a, unsigned int b) {
-    const uint8x4_t& va = reinterpret_cast<const uint8x4_t&>(a);
-    const uint8x4_t& vb = reinterpret_cast<const uint8x4_t&>(b);
-    unsigned int c;
-    uint8x4_t& vc = reinterpret_cast<uint8x4_t&>(c);
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-        vc[i] = va[i] == vb[i] ? 0xff : 0x00;
-    }
-    return c;
-}
-
-static __device__ __forceinline__ unsigned int __vcmpne4_musa(unsigned int a, unsigned int b) {
-    const uint8x4_t& va = reinterpret_cast<const uint8x4_t&>(a);
-    const uint8x4_t& vb = reinterpret_cast<const uint8x4_t&>(b);
-    unsigned int c;
-    uint8x4_t& vc = reinterpret_cast<uint8x4_t&>(c);
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-        vc[i] = va[i] == vb[i] ? 0x00 : 0xff;
-    }
-    return c;
-}
+typedef mt_bfloat16 nv_bfloat16;

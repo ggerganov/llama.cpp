@@ -1,46 +1,27 @@
+#include "arg.h"
 #include "common.h"
+#include "log.h"
 #include "llama.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
-// mutates the input string
-static std::vector<int> parse_list(char * p) {
-    std::vector<int> ret;
-
-    char * q = p;
-
-    while (*p) {
-        if (*p == ',') {
-            *p = '\0';
-            ret.push_back(std::atoi(q));
-            q = p + 1;
-        }
-
-        ++p;
-    }
-
-    ret.push_back(std::atoi(q));
-
-    return ret;
-}
-
 static void print_usage(int, char ** argv) {
-    LOG_TEE("\nexample usage:\n");
-    LOG_TEE("\n    %s -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]\n", argv[0]);
-    LOG_TEE("\n");
+    LOG("\nexample usage:\n");
+    LOG("\n    %s -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]\n", argv[0]);
+    LOG("\n");
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_BENCH, print_usage);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_BENCH, print_usage)) {
         return 1;
     }
+
+    common_init();
 
     int is_pp_shared = params.is_pp_shared;
 
@@ -55,21 +36,21 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = llama_model_params_from_gpt_params(params);
+    llama_model_params model_params = common_model_params_to_llama(params);
 
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
+    llama_model * model = llama_model_load_from_file(params.model.c_str(), model_params);
 
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
         return 1;
     }
 
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(params);
+    llama_context_params ctx_params = common_context_params_to_llama(params);
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = n_pl.empty() ? 1 : *std::max_element(n_pl.begin(), n_pl.end());
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
 
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
@@ -93,12 +74,11 @@ int main(int argc, char ** argv) {
                 batch.n_seq_id + i,
                 batch.seq_id   + i,
                 batch.logits   + i,
-                0, 0, 0, // unused
             };
 
             const int ret = llama_decode(ctx, batch_view);
             if (ret != 0) {
-                LOG_TEE("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
+                LOG_ERR("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
                 return false;
             }
 
@@ -111,21 +91,21 @@ int main(int argc, char ** argv) {
     // warm up
     {
         for (int i = 0; i < 16; ++i) {
-            llama_batch_add(batch, 0, i, { 0 }, false);
+            common_batch_add(batch, 0, i, { 0 }, false);
         }
 
         if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
-            LOG_TEE("%s: llama_decode() failed\n", __func__);
+            LOG_ERR("%s: llama_decode() failed\n", __func__);
             return 1;
         }
     }
 
     if (!params.batched_bench_output_jsonl) {
-        LOG_TEE("\n");
-        LOG_TEE("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, flash_attn = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, params.n_batch, params.n_ubatch, params.flash_attn, params.is_pp_shared, params.n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
-        LOG_TEE("\n");
-        LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP", "TG", "B", "N_KV", "T_PP s", "S_PP t/s", "T_TG s", "S_TG t/s", "T s", "S t/s");
-        LOG_TEE("|%6s-|-%6s-|-%4s-|-%6s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|\n", "------", "------", "----", "------", "--------", "--------", "--------", "--------", "--------", "--------");
+        LOG("\n");
+        LOG("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, flash_attn = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, params.n_batch, params.n_ubatch, params.flash_attn, params.is_pp_shared, params.n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
+        LOG("\n");
+        LOG("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP", "TG", "B", "N_KV", "T_PP s", "S_PP t/s", "T_TG s", "S_TG t/s", "T s", "S t/s");
+        LOG("|%6s-|-%6s-|-%4s-|-%6s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|\n", "------", "------", "----", "------", "--------", "--------", "--------", "--------", "--------", "--------");
     }
 
     for (        int i_pp = 0; i_pp < (int) n_pp.size(); ++i_pp) {
@@ -141,11 +121,11 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
-                llama_batch_clear(batch);
+                common_batch_clear(batch);
 
                 for (int i = 0; i < pp; ++i) {
                     for (int j = 0; j < (is_pp_shared ? 1 : pl); ++j) {
-                        llama_batch_add(batch, 0, i, { j }, false);
+                        common_batch_add(batch, 0, i, { j }, false);
                     }
                 }
                 batch.logits[batch.n_tokens - 1] = true;
@@ -155,7 +135,7 @@ int main(int argc, char ** argv) {
                 llama_kv_cache_clear(ctx);
 
                 if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
-                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    LOG_ERR("%s: llama_decode() failed\n", __func__);
                     return 1;
                 }
 
@@ -170,14 +150,14 @@ int main(int argc, char ** argv) {
                 const auto t_tg_start = ggml_time_us();
 
                 for (int i = 0; i < tg; ++i) {
-                    llama_batch_clear(batch);
+                    common_batch_clear(batch);
 
                     for (int j = 0; j < pl; ++j) {
-                        llama_batch_add(batch, 0, pp + i, { j }, true);
+                        common_batch_add(batch, 0, pp + i, { j }, true);
                     }
 
                     if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
-                        LOG_TEE("%s: llama_decode() failed\n", __func__);
+                        LOG_ERR("%s: llama_decode() failed\n", __func__);
                         return 1;
                     }
                 }
@@ -195,30 +175,30 @@ int main(int argc, char ** argv) {
                 const float speed    = n_kv / t;
 
                 if(params.batched_bench_output_jsonl) {
-                    LOG_TEE(
+                    LOG(
                         "{\"n_kv_max\": %d, \"n_batch\": %d, \"n_ubatch\": %d, \"flash_attn\": %d, \"is_pp_shared\": %d, \"n_gpu_layers\": %d, \"n_threads\": %u, \"n_threads_batch\": %u, "
                         "\"pp\": %d, \"tg\": %d, \"pl\": %d, \"n_kv\": %d, \"t_pp\": %f, \"speed_pp\": %f, \"t_tg\": %f, \"speed_tg\": %f, \"t\": %f, \"speed\": %f}\n",
                         n_kv_max, params.n_batch, params.n_ubatch, params.flash_attn, params.is_pp_shared, params.n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch,
                         pp, tg, pl, n_kv, t_pp, speed_pp, t_tg, speed_tg, t, speed
                     );
                 } else {
-                    LOG_TEE("|%6d | %6d | %4d | %6d | %8.3f | %8.2f | %8.3f | %8.2f | %8.3f | %8.2f |\n", pp, tg, pl, n_kv, t_pp, speed_pp, t_tg, speed_tg, t, speed);
+                    LOG("|%6d | %6d | %4d | %6d | %8.3f | %8.2f | %8.3f | %8.2f | %8.3f | %8.2f |\n", pp, tg, pl, n_kv, t_pp, speed_pp, t_tg, speed_tg, t, speed);
                 }
             }
         }
     }
 
-    LOG_TEE("\n");
-    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+    LOG("\n");
+    llama_perf_context_print(ctx);
 
     llama_batch_free(batch);
 
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
 
     llama_backend_free();
 
-    fprintf(stderr, "\n\n");
+    LOG("\n\n");
 
     return 0;
 }

@@ -1,6 +1,9 @@
+#include "ggml.h"
+#include "gguf.h"
+
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
-#include "ggml.h"
 #include "pca.hpp"
 #include "mean.hpp"
 
@@ -12,14 +15,15 @@
 #include "ggml-metal.h"
 #endif
 
+#include <algorithm>
+#include <climits>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <climits>
 
 
 //////////////////////////////////////////////////
@@ -29,7 +33,7 @@ template <class Iter>
 static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     std::string ret;
     for (; begin != end; ++begin) {
-        ret += llama_token_to_piece(ctx, *begin);
+        ret += common_token_to_piece(ctx, *begin);
     }
 
     return ret;
@@ -269,9 +273,11 @@ struct tokenized_prompt {
     size_t max_seq_len;
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
-        tokens_pos = ::llama_tokenize(ctx, pos, add_bos, true);
-        tokens_neg = ::llama_tokenize(ctx, neg, add_bos, true);
+        const llama_model * model = llama_get_model(ctx);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
+        const bool add_bos = llama_vocab_get_add_bos(vocab);
+        tokens_pos = common_tokenize(ctx, pos, add_bos, true);
+        tokens_neg = common_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
         padding_seq(ctx, tokens_pos, max_seq_len);
         padding_seq(ctx, tokens_neg, max_seq_len);
@@ -279,7 +285,7 @@ struct tokenized_prompt {
 
     void padding_seq(llama_context * ctx, std::vector<llama_token> & tokens, size_t len) {
         // TODO: customize padding token
-        std::vector<llama_token> pad_tokens = ::llama_tokenize(ctx, " ", false);
+        std::vector<llama_token> pad_tokens = common_tokenize(ctx, " ", false);
         llama_token pad_tok = pad_tokens.back();
         while (tokens.size() < len) {
             tokens.push_back(pad_tok);
@@ -337,7 +343,7 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
 
 static bool get_hidden_layers(llama_context * ctx, std::vector<llama_token> & tokens) {
     llama_kv_cache_clear(ctx);
-    if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), 0, 0))) {
+    if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size()))) {
         fprintf(stderr, "%s : failed to eval\n", __func__);
         return false;
     }
@@ -368,7 +374,7 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
  * Load prompt files and completion file.
  * Then format each pair of prompt + completion to make an entry.
  */
-static int prepare_entries(gpt_params & params, train_context & ctx_train) {
+static int prepare_entries(common_params & params, train_context & ctx_train) {
     // load prompts
     std::vector<std::string> positive_prompts = ctrlvec_load_prompt_file(params.cvector_positive_file, true);
     std::vector<std::string> negative_prompts = ctrlvec_load_prompt_file(params.cvector_negative_file, true);
@@ -386,10 +392,9 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_params params;
+    common_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
         return 1;
     }
 
@@ -412,14 +417,15 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model to get hparams
-    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    common_init_result llama_init = common_init_from_params(params);
 
-    llama_model * model = llama_init.model;
-    llama_context * ctx = llama_init.context;
+    llama_model * model = llama_init.model.get();
+    llama_context * ctx = llama_init.context.get();
 
     // int n_ctx = llama_n_ctx(ctx);
-    int n_layers = llama_n_layer(model);
-    int n_embd = llama_n_embd(model);
+    int n_layers = llama_model_n_layer(model);
+    int n_embd = llama_model_n_embd(model);
+
     // get model hint param (a.k.a model arch name)
     char model_hint[128];
     llama_model_meta_val_str(model, "general.architecture", model_hint, 128);
@@ -473,8 +479,6 @@ int main(int argc, char ** argv) {
 
     // done with the model, we can now free it to make gain some memory
     printf("Done evaluate prompts, unload model...\n");
-    llama_free(ctx);
-    llama_free_model(model);
 
     bool use_pca = params.cvector_dimre_method == DIMRE_METHOD_PCA;
 

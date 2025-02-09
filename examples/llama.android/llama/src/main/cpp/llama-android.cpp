@@ -87,7 +87,7 @@ Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring fi
     auto path_to_model = env->GetStringUTFChars(filename, 0);
     LOGi("Loading model from %s", path_to_model);
 
-    auto model = llama_load_model_from_file(path_to_model, model_params);
+    auto model = llama_model_load_from_file(path_to_model, model_params);
     env->ReleaseStringUTFChars(filename, path_to_model);
 
     if (!model) {
@@ -102,7 +102,7 @@ Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring fi
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) {
-    llama_free_model(reinterpret_cast<llama_model *>(model));
+    llama_model_free(reinterpret_cast<llama_model *>(model));
 }
 
 extern "C"
@@ -186,11 +186,11 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
     for (nri = 0; nri < nr; nri++) {
         LOGi("Benchmark prompt processing (pp)");
 
-        llama_batch_clear(*batch);
+        common_batch_clear(*batch);
 
         const int n_tokens = pp;
         for (i = 0; i < n_tokens; i++) {
-            llama_batch_add(*batch, 0, i, { 0 }, false);
+            common_batch_add(*batch, 0, i, { 0 }, false);
         }
 
         batch->logits[batch->n_tokens - 1] = true;
@@ -210,9 +210,9 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
         const auto t_tg_start = ggml_time_us();
         for (i = 0; i < tg; i++) {
 
-            llama_batch_clear(*batch);
+            common_batch_clear(*batch);
             for (j = 0; j < pl; j++) {
-                llama_batch_add(*batch, 0, i, { j }, true);
+                common_batch_add(*batch, 0, i, { j }, true);
             }
 
             LOGi("llama_decode() text generation: %d", i);
@@ -283,9 +283,6 @@ Java_android_llama_cpp_LLamaAndroid_new_1batch(JNIEnv *, jobject, jint n_tokens,
         nullptr,
         nullptr,
         nullptr,
-        0,
-        0,
-        0,
     };
 
     if (embd) {
@@ -308,7 +305,9 @@ Java_android_llama_cpp_LLamaAndroid_new_1batch(JNIEnv *, jobject, jint n_tokens,
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1batch(JNIEnv *, jobject, jlong batch_pointer) {
-    llama_batch_free(*reinterpret_cast<llama_batch *>(batch_pointer));
+    //llama_batch_free(*reinterpret_cast<llama_batch *>(batch_pointer));
+    const auto batch = reinterpret_cast<llama_batch *>(batch_pointer);
+    delete batch;
 }
 
 extern "C"
@@ -348,6 +347,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
         jlong context_pointer,
         jlong batch_pointer,
         jstring jtext,
+        jboolean format_chat,
         jint n_len
     ) {
 
@@ -357,7 +357,8 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     const auto context = reinterpret_cast<llama_context *>(context_pointer);
     const auto batch = reinterpret_cast<llama_batch *>(batch_pointer);
 
-    const auto tokens_list = llama_tokenize(context, text, 1);
+    bool parse_special = (format_chat == JNI_TRUE);
+    const auto tokens_list = common_tokenize(context, text, true, parse_special);
 
     auto n_ctx = llama_n_ctx(context);
     auto n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
@@ -369,14 +370,14 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     }
 
     for (auto id : tokens_list) {
-        LOGi("%s", llama_token_to_piece(context, id).c_str());
+        LOGi("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
     }
 
-    llama_batch_clear(*batch);
+    common_batch_clear(*batch);
 
     // evaluate the initial prompt
     for (auto i = 0; i < tokens_list.size(); i++) {
-        llama_batch_add(*batch, tokens_list[i], i, { 0 }, false);
+        common_batch_add(*batch, tokens_list[i], i, { 0 }, false);
     }
 
     // llama_decode will output logits only for the last token of the prompt
@@ -406,6 +407,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     const auto batch   = reinterpret_cast<llama_batch   *>(batch_pointer);
     const auto sampler = reinterpret_cast<llama_sampler *>(sampler_pointer);
     const auto model = llama_get_model(context);
+    const auto vocab = llama_model_get_vocab(model);
 
     if (!la_int_var) la_int_var = env->GetObjectClass(intvar_ncur);
     if (!la_int_var_value) la_int_var_value = env->GetMethodID(la_int_var, "getValue", "()I");
@@ -414,14 +416,12 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     // sample the most likely token
     const auto new_token_id = llama_sampler_sample(sampler, context, -1);
 
-    llama_sampler_accept(sampler, new_token_id);
-
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
-    if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+    if (llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len) {
         return nullptr;
     }
 
-    auto new_token_chars = llama_token_to_piece(context, new_token_id);
+    auto new_token_chars = common_token_to_piece(context, new_token_id);
     cached_token_chars += new_token_chars;
 
     jstring new_token = nullptr;
@@ -433,8 +433,8 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
         new_token = env->NewStringUTF("");
     }
 
-    llama_batch_clear(*batch);
-    llama_batch_add(*batch, new_token_id, n_cur, { 0 }, true);
+    common_batch_clear(*batch);
+    common_batch_add(*batch, new_token_id, n_cur, { 0 }, true);
 
     env->CallVoidMethod(intvar_ncur, la_int_var_inc);
 

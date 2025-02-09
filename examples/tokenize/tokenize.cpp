@@ -1,11 +1,13 @@
 #include "common.h"
+//#include "log.h" // TODO: start using log.h
 #include "llama.h"
 
-#include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <vector>
+#include <iostream> // TODO: remove me
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -13,25 +15,26 @@
 #include <shellapi.h>   // For CommandLineToArgvW
 #endif
 
-static void print_usage_information(const char * argv0, FILE * stream) {
-    fprintf(stream, "usage: %s [options]\n\n", argv0);
-    fprintf(stream, "The tokenize program tokenizes a prompt using a given model,\n");
-    fprintf(stream, "and prints the resulting tokens to standard output.\n\n");
-    fprintf(stream, "It needs a model file, a prompt, and optionally other flags\n");
-    fprintf(stream, "to control the behavior of the tokenizer.\n\n");
-    fprintf(stream, "    The possible options are:\n");
-    fprintf(stream, "\n");
-    fprintf(stream, "    -h, --help                           print this help and exit\n");
-    fprintf(stream, "    -m MODEL_PATH, --model MODEL_PATH    path to model.\n");
-    fprintf(stream, "    --ids                                if given, only print numerical token IDs, and not token strings.\n");
-    fprintf(stream, "                                         The output format looks like [1, 2, 3], i.e. parseable by Python.\n");
-    fprintf(stream, "    -f PROMPT_FNAME, --file PROMPT_FNAME read prompt from a file.\n");
-    fprintf(stream, "    -p PROMPT, --prompt PROMPT           read prompt from the argument.\n");
-    fprintf(stream, "    --stdin                              read prompt from standard input.\n");
-    fprintf(stream, "    --no-bos                             do not ever add a BOS token to the prompt, even if normally the model uses a BOS token.\n");
-    fprintf(stream, "    --no-parse-special                   do not parse control tokens.\n");
-    fprintf(stream, "    --log-disable                        disable logs. Makes stderr quiet when loading the model.\n");
-    fprintf(stream, "    --show-count                         print the total number of tokens.\n");
+static void print_usage_information(const char * argv0) {
+    printf("usage: %s [options]\n\n", argv0);
+    printf("The tokenize program tokenizes a prompt using a given model,\n");
+    printf("and prints the resulting tokens to standard output.\n\n");
+    printf("It needs a model file, a prompt, and optionally other flags\n");
+    printf("to control the behavior of the tokenizer.\n\n");
+    printf("    The possible options are:\n");
+    printf("\n");
+    printf("    -h, --help                           print this help and exit\n");
+    printf("    -m MODEL_PATH, --model MODEL_PATH    path to model.\n");
+    printf("    --ids                                if given, only print numerical token IDs, and not token strings.\n");
+    printf("                                         The output format looks like [1, 2, 3], i.e. parseable by Python.\n");
+    printf("    -f PROMPT_FNAME, --file PROMPT_FNAME read prompt from a file.\n");
+    printf("    -p PROMPT, --prompt PROMPT           read prompt from the argument.\n");
+    printf("    --stdin                              read prompt from standard input.\n");
+    printf("    --no-bos                             do not ever add a BOS token to the prompt, even if normally the model uses a BOS token.\n");
+    printf("    --no-escape                          do not escape input (such as \\n, \\t, etc.).\n");
+    printf("    --no-parse-special                   do not parse control tokens.\n");
+    printf("    --log-disable                        disable logs. Makes stderr quiet when loading the model.\n");
+    printf("    --show-count                         print the total number of tokens.\n");
 }
 
 static void llama_log_callback_null(ggml_log_level level, const char * text, void * user_data) {
@@ -185,7 +188,7 @@ int main(int raw_argc, char ** raw_argv) {
     const int argc = argv.size();
 
     if (argc <= 1) {
-        print_usage_information(argv[0].c_str(), stderr);
+        print_usage_information(argv[0].c_str());
         return 1;
     }
 
@@ -196,6 +199,7 @@ int main(int raw_argc, char ** raw_argv) {
     // variables where to put any arguments we see.
     bool printing_ids = false;
     bool no_bos = false;
+    bool no_escape = false;
     bool no_parse_special = false;
     bool disable_logging = false;
     bool show_token_count = false;
@@ -214,7 +218,7 @@ int main(int raw_argc, char ** raw_argv) {
     for (; iarg < argc; ++iarg) {
         std::string arg{argv[iarg]};
         if (arg == "-h" || arg == "--help") {
-            print_usage_information(argv[0].c_str(), stdout);
+            print_usage_information(argv[0].c_str());
             return 0;
         }
         else if (arg == "--ids") {
@@ -230,6 +234,9 @@ int main(int raw_argc, char ** raw_argv) {
         }
         else if (arg == "--no-bos") {
             no_bos = true;
+        }
+        else if (arg == "--no-escape") {
+            no_escape = true;
         }
         else if (arg == "--no-parse-special") {
             no_parse_special = true;
@@ -323,10 +330,6 @@ int main(int raw_argc, char ** raw_argv) {
     // Start actually doing the tokenizing stuff.
     //////
 
-#ifdef LOG_DISABLE_LOGS
-    disable_logging = true;
-#endif
-
     if (disable_logging) {
         llama_log_set(llama_log_callback_null, NULL);
     }
@@ -335,14 +338,16 @@ int main(int raw_argc, char ** raw_argv) {
 
     llama_model_params model_params = llama_model_default_params();
     model_params.vocab_only = true;
-    llama_model * model = llama_load_model_from_file(model_path, model_params);
+    llama_model * model = llama_model_load_from_file(model_path, model_params);
     if (!model) {
         fprintf(stderr, "Error: could not load model from file '%s'.\n", model_path);
         return 1;
     }
 
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+
     llama_context_params ctx_params = llama_context_default_params();
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_init_from_model(model, ctx_params);
     if (!ctx) {
         fprintf(stderr, "Error: could not create context.\n");
         return 1;
@@ -362,12 +367,17 @@ int main(int raw_argc, char ** raw_argv) {
         prompt = stdin_buffer.str();
     }
 
-    const bool model_wants_add_bos = llama_add_bos_token(model);
+    const bool model_wants_add_bos = llama_vocab_get_add_bos(vocab);
     const bool add_bos = model_wants_add_bos && !no_bos;
     const bool parse_special = !no_parse_special;
+    const bool escape = !no_escape;
+
+    if (escape) {
+        string_process_escapes(prompt);
+    }
 
     std::vector<llama_token> tokens;
-    tokens = ::llama_tokenize(model, prompt, add_bos, parse_special);
+    tokens = common_tokenize(vocab, prompt, add_bos, parse_special);
 
     if (printing_ids) {
         printf("[");
@@ -382,7 +392,7 @@ int main(int raw_argc, char ** raw_argv) {
         } else {
             bool invalid_utf8 = false;
             printf("%6d -> '", tokens[i]);
-            write_utf8_cstr_to_stdout(llama_token_to_piece(ctx, tokens[i]).c_str(), invalid_utf8);
+            write_utf8_cstr_to_stdout(common_token_to_piece(ctx, tokens[i]).c_str(), invalid_utf8);
             if (invalid_utf8) {
                 printf("' (utf-8 decode failure)\n");
             } else {
@@ -396,11 +406,11 @@ int main(int raw_argc, char ** raw_argv) {
     }
 
     if (show_token_count) {
-        printf("Total number of tokens: %ld\n", tokens.size());
+        printf("Total number of tokens: %zu\n", tokens.size());
     }
     // silence valgrind
     llama_free(ctx);
-    llama_free_model(model);
+    llama_model_free(model);
 
     return 0;
 }

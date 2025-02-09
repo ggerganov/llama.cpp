@@ -1,5 +1,6 @@
 #include "common.h"
 #include "llama.h"
+#include "gguf.h"
 
 #include <cstdio>
 #include <cstring>
@@ -47,9 +48,6 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q5_K_M",   LLAMA_FTYPE_MOSTLY_Q5_K_M,   " 5.33G, +0.0569 ppl @ Llama-3-8B",  },
     { "Q6_K",     LLAMA_FTYPE_MOSTLY_Q6_K,     " 6.14G, +0.0217 ppl @ Llama-3-8B",  },
     { "Q8_0",     LLAMA_FTYPE_MOSTLY_Q8_0,     " 7.96G, +0.0026 ppl @ Llama-3-8B",  },
-    { "Q4_0_4_4", LLAMA_FTYPE_MOSTLY_Q4_0_4_4, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "Q4_0_4_8", LLAMA_FTYPE_MOSTLY_Q4_0_4_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
-    { "Q4_0_8_8", LLAMA_FTYPE_MOSTLY_Q4_0_8_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
     { "F16",      LLAMA_FTYPE_MOSTLY_F16,      "14.00G, +0.0020 ppl @ Mistral-7B",  },
     { "BF16",     LLAMA_FTYPE_MOSTLY_BF16,     "14.00G, -0.0050 ppl @ Mistral-7B",  },
     { "F32",      LLAMA_FTYPE_ALL_F32,         "26.00G              @ 7B",          },
@@ -67,6 +65,16 @@ static const char * const LLM_KV_IMATRIX_DATASET     = "imatrix.dataset";
 static const char * const LLM_KV_IMATRIX_CHUNK_COUNT = "imatrix.chunk_count";
 static const char * const LLM_KV_IMATRIX_CHUNK_SIZE  = "imatrix.chunk_size";
 
+static bool striequals(const char * a, const char * b) {
+    while (*a && *b) {
+        if (std::tolower(*a) != std::tolower(*b)) {
+            return false;
+        }
+        a++; b++;
+    }
+    return *a == *b;
+}
+
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
 
@@ -74,7 +82,7 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
         ftype_str.push_back(std::toupper(ch));
     }
     for (auto & it : QUANT_OPTIONS) {
-        if (it.name == ftype_str) {
+        if (striequals(it.name.c_str(), ftype_str.c_str())) {
             ftype = it.ftype;
             ftype_str_out = it.name;
             return true;
@@ -276,15 +284,15 @@ static int prepare_imatrix(const std::string & imatrix_file,
 }
 
 static ggml_type parse_ggml_type(const char * arg) {
-    ggml_type result = GGML_TYPE_COUNT;
-    for (int j = 0; j < GGML_TYPE_COUNT; ++j) {
-        auto type = ggml_type(j);
+    for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
+        auto type = (ggml_type)i;
         const auto * name = ggml_type_name(type);
-        if (name && strcmp(arg, name) == 0) {
-            result = type; break;
+        if (name && striequals(name, arg)) {
+            return type;
         }
     }
-    return result;
+    fprintf(stderr, "%s: invalid ggml_type '%s'\n", __func__, arg);
+    return GGML_TYPE_COUNT;
 }
 
 int main(int argc, char ** argv) {
@@ -305,12 +313,18 @@ int main(int argc, char ** argv) {
         } else if (strcmp(argv[arg_idx], "--output-tensor-type") == 0) {
             if (arg_idx < argc-1) {
                 params.output_tensor_type = parse_ggml_type(argv[++arg_idx]);
+                if (params.output_tensor_type == GGML_TYPE_COUNT) {
+                    usage(argv[0]);
+                }
             } else {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--token-embedding-type") == 0) {
             if (arg_idx < argc-1) {
                 params.token_embedding_type = parse_ggml_type(argv[++arg_idx]);
+                if (params.token_embedding_type == GGML_TYPE_COUNT) {
+                    usage(argv[0]);
+                }
             } else {
                 usage(argv[0]);
             }

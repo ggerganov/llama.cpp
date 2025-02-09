@@ -3,6 +3,7 @@
 *.a
 *.bat
 *.bin
+*.d
 *.dll
 *.dot
 *.etag
@@ -17,6 +18,7 @@
 *.metallib
 *.o
 *.so
+*.swp
 *.tmp
 
 # IDE / OS
@@ -103,6 +105,10 @@ examples/server/*.mjs.hpp
 !examples/sycl/*.bat
 !examples/sycl/*.sh
 
+# Server Web UI temporary files
+node_modules
+examples/server/webui/dist
+
 # Python
 
 /.venv
@@ -133,3 +139,7 @@ poetry.toml
 
 # Test models for lora adapters
 /lora-tests
+
+# Local scripts
+/run-vim.sh
+/run-chat.sh

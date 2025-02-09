@@ -1,13 +1,27 @@
 #include "clip.h"
-#include "common.h"
-#include "llama.h"
 #include "llava.h"
-#include "base64.hpp"
 
+#include "llama.h"
+
+#include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <vector>
-#include <numeric>
+
+#if defined(LLAVA_LOG_OFF)
+#   define LOG_INF(...)
+#   define LOG_WRN(...)
+#   define LOG_ERR(...)
+#   define LOG_DBG(...)
+#else // defined(LLAVA_LOG_OFF)
+#   define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#   define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#   define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#   define LOG_DBG(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#endif // defined(LLAVA_LOG_OFF)
 
 // RGB uint8 image
 struct clip_image_u8 {
@@ -54,7 +68,7 @@ static std::pair<int, int> select_best_resolution(const std::pair<int, int>& ori
         int downscaled_height = static_cast<int>(original_height * scale);
         int effective_resolution = std::min(downscaled_width * downscaled_height, original_width * original_height);
         int wasted_resolution = (width * height) - effective_resolution;
-        // LOG_TEE("resolution: %d %d, scale: %f, downscaled: %d %d, effective: %d, wasted: %d\n", width, height, scale, downscaled_width, downscaled_height, effective_resolution, wasted_resolution);
+        // LOG_DBG("resolution: %d %d, scale: %f, downscaled: %d %d, effective: %d, wasted: %d\n", width, height, scale, downscaled_width, downscaled_height, effective_resolution, wasted_resolution);
         if (effective_resolution > max_effective_resolution || (effective_resolution == max_effective_resolution && wasted_resolution < min_wasted_resolution)) {
             max_effective_resolution = effective_resolution;
             min_wasted_resolution = wasted_resolution;
@@ -184,7 +198,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     // ggml_tensor_printf(flatten,"flatten",__LINE__,false,false);
     ggml_build_forward_expand(gf, flatten);
     ggml_graph_compute_with_ctx(model.ctx, gf, 1);
-    struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor* result = ggml_graph_node(gf, -1);
 
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
     // append without newline tokens (default behavior in llava_arch when not using unpad ):
@@ -202,7 +216,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     return true;
 }
 
-static clip_image_f32 * only_v2_5_reshape_by_patch(clip_image_f32 * image, int patch_size) {
+static clip_image_f32 * reshape_by_patch(clip_image_f32 * image, int patch_size) {
     int width = image->nx;
     int height = image->ny;
     int num_patches = (height / patch_size) * (width / patch_size);
@@ -236,7 +250,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     img_res_v.size = 0;
     img_res_v.data = nullptr;
     if (!clip_image_preprocess(ctx_clip, img, &img_res_v)) {
-        LOG_TEE("%s: unable to preprocess image\n", __func__);
+        LOG_ERR("%s: unable to preprocess image\n", __func__);
         delete[] img_res_v.data;
         return false;
     }
@@ -245,39 +259,44 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
     const char * mm_patch_merge_type = clip_patch_merge_type(ctx_clip);
 
-    if (clip_is_minicpmv(ctx_clip)) {
+    if (clip_is_minicpmv(ctx_clip) || clip_is_qwen2vl(ctx_clip)) {
         std::vector<float *> image_embd_v;
         image_embd_v.resize(img_res_v.size);
         struct clip_image_size * load_image_size = clip_image_size_init();
+
         for (size_t i = 0; i < img_res_v.size; i++) {
             const int64_t t_img_enc_step_start_us = ggml_time_us();
-            image_embd_v[i] = (float *)malloc(clip_embd_nbytes(ctx_clip));
+            image_embd_v[i] = (float *)malloc(clip_embd_nbytes_by_img(ctx_clip, img_res_v.data[i].nx, img_res_v.data[i].ny));
             int patch_size=14;
             load_image_size->width = img_res_v.data[i].nx;
             load_image_size->height = img_res_v.data[i].ny;
             clip_add_load_image_size(ctx_clip, load_image_size);
+
             bool encoded = false;
-            int has_minicpmv_projector = clip_is_minicpmv(ctx_clip);
-            if (has_minicpmv_projector == 2) {
-                encoded = clip_image_encode(ctx_clip, n_threads, only_v2_5_reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
-            }
-            else if (has_minicpmv_projector == 3) {
+            if (clip_is_qwen2vl(ctx_clip)) {
                 encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
             }
+            else {
+                encoded = clip_image_encode(ctx_clip, n_threads, reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
+            }
+
             if (!encoded) {
-                LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
+                LOG_ERR("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
                 return false;
             }
             const int64_t t_img_enc_steop_batch_us = ggml_time_us();
-            LOG_TEE("%s: step %d of %d encoded in %8.2f ms\n", __func__, (int)i+1, (int)img_res_v.size, (t_img_enc_steop_batch_us - t_img_enc_step_start_us) / 1000.0);
+            LOG_INF("%s: step %d of %d encoded in %8.2f ms\n", __func__, (int)i+1, (int)img_res_v.size, (t_img_enc_steop_batch_us - t_img_enc_step_start_us) / 1000.0);
         }
         const int64_t t_img_enc_batch_us = ggml_time_us();
-        LOG_TEE("%s: all %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
+        LOG_INF("%s: all %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
 
         int n_img_pos_out = 0;
         for (size_t i = 0; i < image_embd_v.size(); i++) {
-            std::memcpy(image_embd + n_img_pos_out * clip_n_mmproj_embd(ctx_clip), image_embd_v[i], clip_embd_nbytes(ctx_clip));
-            n_img_pos_out += clip_n_patches(ctx_clip);
+            std::memcpy(
+                image_embd + n_img_pos_out * clip_n_mmproj_embd(ctx_clip),
+                image_embd_v[i],
+                clip_embd_nbytes_by_img(ctx_clip, img_res_v.data[i].nx, img_res_v.data[i].ny));
+            n_img_pos_out += clip_n_patches_by_img(ctx_clip, &img_res_v.data[i]);
         }
         *n_img_pos = n_img_pos_out;
         for (size_t i = 0; i < image_embd_v.size(); i++) {
@@ -287,7 +306,10 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         load_image_size->width = img->nx;
         load_image_size->height = img->ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
-        LOG_TEE("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+        LOG_INF("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+        delete[] img_res_v.data;
+        img_res_v.size = 0;
+        img_res_v.data = nullptr;
     }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
         // flat / default llava-1.5 type embedding
@@ -295,7 +317,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd); // image_embd shape is 576 x 4096
         delete[] img_res_v.data;
         if (!encoded) {
-            LOG_TEE("Unable to encode image\n");
+            LOG_ERR("Unable to encode image\n");
 
             return false;
         }
@@ -309,12 +331,12 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
             image_embd_v[i] = (float *)malloc(clip_embd_nbytes(ctx_clip)); // 576 patches * 4096 embeddings * 4 bytes = 9437184
             const bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
             if (!encoded) {
-                LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
+                LOG_ERR("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
                 return false;
             }
         }
         const int64_t t_img_enc_batch_us = ggml_time_us();
-        LOG_TEE("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
+        LOG_INF("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
 
         const int32_t * image_grid = clip_image_grid(ctx_clip);
 
@@ -347,22 +369,22 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         // clip_image_save_to_bmp(*tmp, "image_feature.bmp");
     }
 
-    LOG_TEE("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
+    LOG_INF("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
 
     const int64_t t_img_enc_end_us = ggml_time_us();
     float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
 
-    LOG_TEE("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
+    LOG_INF("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
 
     return true;
 }
 
 bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip) {
         // make sure that the correct mmproj was used, i.e., compare apples to apples
-    int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
+    int n_llama_embd = llama_model_n_embd(llama_get_model(ctx_llama));
     auto n_image_embd = clip_n_mmproj_embd(ctx_clip);
     if (n_image_embd != n_llama_embd) {
-        LOG_TEE("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
+        LOG_ERR("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
         return false;
     }
     return true;
@@ -373,15 +395,21 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
     if (clip_is_minicpmv(ctx_clip)) {
         num_max_patches = 10;
     }
-    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
+    float * image_embd;
+    if (clip_is_qwen2vl(ctx_clip)) {
+        // qwen2vl don't split image into chunks, so `num_max_patches` is not needed.
+        image_embd = (float *)malloc(clip_embd_nbytes_by_img(ctx_clip, img->nx, img->ny));
+    } else {
+        image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
+    }
     if (!image_embd) {
-        LOG_TEE("Unable to allocate memory for image embeddings\n");
+        LOG_ERR("Unable to allocate memory for image embeddings\n");
         return false;
     }
 
     int n_img_pos;
     if (!encode_image_with_clip(ctx_clip, n_threads, img, image_embd, &n_img_pos)) {
-        LOG_TEE("%s: cannot encode image, aborting\n", __func__);
+        LOG_ERR("%s: cannot encode image, aborting\n", __func__);
         free(image_embd);
         return false;
     }
@@ -391,17 +419,51 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
     return true;
 }
 
+struct llava_embd_batch {
+    std::vector<llama_pos>      pos;
+    std::vector<int32_t>        n_seq_id;
+    std::vector<llama_seq_id>   seq_id_0;
+    std::vector<llama_seq_id *> seq_ids;
+    std::vector<int8_t>         logits;
+    llama_batch batch;
+    llava_embd_batch(float * embd, int32_t n_tokens, llama_pos pos_0, llama_seq_id seq_id) {
+        pos     .resize(n_tokens);
+        n_seq_id.resize(n_tokens);
+        seq_ids .resize(n_tokens + 1);
+        logits  .resize(n_tokens);
+        seq_id_0.resize(1);
+        seq_id_0[0] = seq_id;
+        seq_ids [n_tokens] = nullptr;
+        batch = {
+            /*n_tokens       =*/ n_tokens,
+            /*tokens         =*/ nullptr,
+            /*embd           =*/ embd,
+            /*pos            =*/ pos.data(),
+            /*n_seq_id       =*/ n_seq_id.data(),
+            /*seq_id         =*/ seq_ids.data(),
+            /*logits         =*/ logits.data(),
+        };
+        for (int i = 0; i < n_tokens; i++) {
+            batch.pos     [i] = pos_0 + i;
+            batch.n_seq_id[i] = 1;
+            batch.seq_id  [i] = seq_id_0.data();
+            batch.logits  [i] = false;
+        }
+    }
+};
+
 bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+    int n_embd  = llama_model_n_embd(llama_get_model(ctx_llama));
 
     for (int i = 0; i < image_embed->n_image_pos; i += n_batch) {
         int n_eval = image_embed->n_image_pos - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        llama_batch batch = {int32_t(n_eval), nullptr, (image_embed->embed+i*n_embd), nullptr, nullptr, nullptr, nullptr, *n_past, 1, 0, };
-        if (llama_decode(ctx_llama, batch)) {
-            LOG_TEE("%s : failed to eval\n", __func__);
+        float * embd = image_embed->embed+i*n_embd;
+        llava_embd_batch llava_batch = llava_embd_batch(embd, n_eval, *n_past, 0);
+        if (llama_decode(ctx_llama, llava_batch.batch)) {
+            LOG_ERR("%s : failed to eval\n", __func__);
             return false;
         }
         *n_past += n_eval;
@@ -413,7 +475,7 @@ struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * c
     clip_image_u8 * img = clip_image_u8_init();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
-        LOG_TEE("%s: can't load image from bytes, is it a valid image?", __func__);
+        LOG_ERR("%s: can't load image from bytes, is it a valid image?", __func__);
         return NULL;
     }
 
@@ -422,7 +484,7 @@ struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * c
     bool image_embed_result = llava_image_embed_make_with_clip_img(ctx_clip, n_threads, img, &image_embed, &n_image_pos);
     if (!image_embed_result) {
         clip_image_u8_free(img);
-        LOG_TEE("%s: coulnd't embed the image\n", __func__);
+        LOG_ERR("%s: couldn't embed the image\n", __func__);
         return NULL;
     }
 
@@ -436,7 +498,7 @@ struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * c
 static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut) {
     auto file = fopen(path, "rb");
     if (file == NULL) {
-        LOG_TEE("%s: can't read file %s\n", __func__, path);
+        LOG_ERR("%s: can't read file %s\n", __func__, path);
         return false;
     }
 
@@ -446,7 +508,7 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
 
     auto buffer = (unsigned char *)malloc(fileSize); // Allocate memory to hold the file data
     if (buffer == NULL) {
-        LOG_TEE("%s: failed to alloc %ld bytes for file %s\n", __func__, fileSize, path);
+        LOG_ERR("%s: failed to alloc %ld bytes for file %s\n", __func__, fileSize, path);
         perror("Memory allocation error");
         fclose(file);
         return false;
@@ -454,10 +516,16 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
     errno = 0;
     size_t ret = fread(buffer, 1, fileSize, file); // Read the file into the buffer
     if (ferror(file)) {
-        die_fmt("read error: %s", strerror(errno));
+        LOG_ERR("read error: %s", strerror(errno));
+        free(buffer);
+        fclose(file);
+        return false;
     }
     if (ret != (size_t) fileSize) {
-        die("unexpectedly reached end of file");
+        LOG_ERR("unexpectedly reached end of file");
+        free(buffer);
+        fclose(file);
+        return false;
     }
     fclose(file); // Close the file
 
@@ -471,7 +539,7 @@ struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx 
     long image_bytes_length;
     auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
     if (!loaded) {
-        LOG_TEE("%s: failed to load %s\n", __func__, image_path);
+        LOG_ERR("%s: failed to load %s\n", __func__, image_path);
         return NULL;
     }
 

@@ -19,22 +19,22 @@ logger = logging.getLogger("compare-llama-bench")
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
-    "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
-    "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_ubatch", "embeddings", "n_threads",
-    "type_k", "type_v", "use_mmap", "no_kv_offload", "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
+    "cpu_info", "gpu_info", "backends", "n_gpu_layers", "model_filename", "model_type", "n_batch", "n_ubatch",
+    "embeddings", "cpu_mask", "cpu_strict", "poll", "n_threads", "type_k", "type_v", "use_mmap", "no_kv_offload",
+    "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
-BOOL_PROPERTIES = ["cuda", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas", "embeddings", "use_mmap", "no_kv_offload", "flash_attn"]
+BOOL_PROPERTIES = ["embeddings", "cpu_strict", "use_mmap", "no_kv_offload", "flash_attn"]
 
 # Header names for the table:
 PRETTY_NAMES = {
-    "cuda": "CUDA", "vulkan": "Vulkan", "kompute": "Kompute", "metal": "Metal", "sycl": "SYCL", "rpc": "RPC",
-    "gpu_blas": "GPU BLAS", "blas": "BLAS", "cpu_info": "CPU", "gpu_info": "GPU", "model_filename": "File", "model_type": "Model",
-    "model_size": "Model Size [GiB]", "model_n_params": "Num. of Par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
-    "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "n_gpu_layers": "GPU layers", "split_mode": "Split mode",
-    "main_gpu": "Main GPU", "no_kv_offload": "NKVO", "flash_attn": "FlashAttention", "tensor_split": "Tensor split",
-    "use_mmap": "Use mmap", "embeddings": "Embeddings",
+    "cpu_info": "CPU", "gpu_info": "GPU", "backends": "Backends", "n_gpu_layers": "GPU layers",
+    "model_filename": "File", "model_type": "Model", "model_size": "Model size [GiB]",
+    "model_n_params": "Num. of par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
+    "embeddings": "Embeddings", "cpu_mask": "CPU mask", "cpu_strict": "CPU strict", "poll": "Poll",
+    "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "split_mode": "Split mode", "main_gpu": "Main GPU",
+    "no_kv_offload": "NKVO", "flash_attn": "FlashAttention", "tensor_split": "Tensor split", "use_mmap": "Use mmap",
 }
 
 DEFAULT_SHOW = ["model_type"]  # Always show these properties by default.
@@ -92,12 +92,17 @@ help_s = (
     "If the columns are manually specified, then the results for each unique combination of the "
     "specified values are averaged WITHOUT weighing by the --repetitions parameter of llama-bench."
 )
+parser.add_argument("--check", action="store_true", help="check if all required Python libraries are installed")
 parser.add_argument("-s", "--show", help=help_s)
 parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 known_args, unknown_args = parser.parse_known_args()
 
 logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
+
+if known_args.check:
+    # Check if all required Python libraries are installed. Would have failed earlier if not.
+    sys.exit(0)
 
 if unknown_args:
     logger.error(f"Received unknown args: {unknown_args}.\n")
@@ -121,6 +126,8 @@ connection = sqlite3.connect(input_file)
 cursor = connection.cursor()
 builds = cursor.execute("SELECT DISTINCT build_commit FROM test;").fetchall()
 
+commit_short_len = len(builds[0][0])
+
 try:
     repo = git.Repo(".", search_parent_directories=True)
 except git.InvalidGitRepositoryError:
@@ -133,11 +140,11 @@ def find_parent_in_data(commit: git.Commit):
     seen_hexsha8 = set()
     while heap:
         depth, current_commit = heapq.heappop(heap)
-        current_hexsha8 = commit.hexsha[:8]
+        current_hexsha8 = commit.hexsha[:commit_short_len]
         if (current_hexsha8,) in builds:
             return current_hexsha8
         for parent in commit.parents:
-            parent_hexsha8 = parent.hexsha[:8]
+            parent_hexsha8 = parent.hexsha[:commit_short_len]
             if parent_hexsha8 not in seen_hexsha8:
                 seen_hexsha8.add(parent_hexsha8)
                 heapq.heappush(heap, (depth + 1, parent))
@@ -151,9 +158,9 @@ def get_all_parent_hexsha8s(commit: git.Commit):
 
     while unvisited:
         current_commit = unvisited.pop(0)
-        visited.append(current_commit.hexsha[:8])
+        visited.append(current_commit.hexsha[:commit_short_len])
         for parent in current_commit.parents:
-            if parent.hexsha[:8] not in visited:
+            if parent.hexsha[:commit_short_len] not in visited:
                 unvisited.append(parent)
 
     return visited
@@ -164,10 +171,10 @@ def get_commit_name(hexsha8):
     if repo is None:
         return hexsha8
     for h in repo.heads:
-        if h.commit.hexsha[:8] == hexsha8:
+        if h.commit.hexsha[:commit_short_len] == hexsha8:
             return h.name
     for t in repo.tags:
-        if t.commit.hexsha[:8] == hexsha8:
+        if t.commit.hexsha[:commit_short_len] == hexsha8:
             return t.name
     return hexsha8
 
@@ -178,13 +185,13 @@ def get_commit_hexsha8(name):
         return None
     for h in repo.heads:
         if h.name == name:
-            return h.commit.hexsha[:8]
+            return h.commit.hexsha[:commit_short_len]
     for t in repo.tags:
         if t.name == name:
-            return t.commit.hexsha[:8]
+            return t.commit.hexsha[:commit_short_len]
     for c in repo.iter_commits("--all"):
-        if c.hexsha[:8] == name[:8]:
-            return c.hexsha[:8]
+        if c.hexsha[:commit_short_len] == name[:commit_short_len]:
+            return c.hexsha[:commit_short_len]
     return None
 
 
@@ -298,14 +305,11 @@ else:
 
     show = []
     # Show CPU and/or GPU by default even if the hardware for all results is the same:
-    if "gpu_blas" not in properties_different and "n_gpu_layers" not in properties_different:
-        gpu_blas = bool(rows_full[0][KEY_PROPERTIES.index("gpu_blas")])
+    if "n_gpu_layers" not in properties_different:
         ngl = int(rows_full[0][KEY_PROPERTIES.index("n_gpu_layers")])
 
-        if not gpu_blas or ngl != 99 and "cpu_info" not in properties_different:
+        if ngl != 99 and "cpu_info" not in properties_different:
             show.append("cpu_info")
-        if gpu_blas and "gpu_info" not in properties_different:
-            show.append("gpu_info")
 
     show += properties_different
 

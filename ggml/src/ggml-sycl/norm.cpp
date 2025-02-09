@@ -8,7 +8,6 @@ static void norm_f32(const float* x, float* dst, const int ncols, const float ep
 
     const int nthreads = item_ct1.get_local_range(2);
     const int nwarps = nthreads / WARP_SIZE;
-    assert(nwarps % WARP_SIZE == 0);
     sycl::float2 mean_var = sycl::float2(0.f, 0.f);
 
     for (int col = tid; col < ncols; col += block_size) {
@@ -32,7 +31,7 @@ static void norm_f32(const float* x, float* dst, const int ncols, const float ep
         */
         item_ct1.barrier(sycl::access::fence_space::local_space);
         mean_var = 0.f;
-        int nreduce = nwarps / WARP_SIZE;
+        size_t nreduce = nwarps / WARP_SIZE;
         for (size_t i = 0; i < nreduce; i += 1)
         {
             mean_var += s_sum[lane_id + i * WARP_SIZE];
@@ -55,9 +54,8 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
     int end = start + group_size;
     const int nthreads = item_ct1.get_local_range(2);
     const int nwarps = nthreads / WARP_SIZE;
-    assert(nwarps % WARP_SIZE == 0);
     start += item_ct1.get_local_id(2);
-    int nreduce = nwarps / WARP_SIZE;
+    size_t nreduce = nwarps / WARP_SIZE;
 
     if (end >= ne_elements) {
         end = ne_elements;
@@ -144,7 +142,6 @@ static void rms_norm_f32(const float* x, float* dst, const int ncols, const floa
     const int tid = item_ct1.get_local_id(2);
     const int nthreads = item_ct1.get_local_range(2);
     const int nwarps = nthreads / WARP_SIZE;
-    assert(nwarps % WARP_SIZE == 0);
     float tmp = 0.0f; // partial sum for thread in warp
 
     for (int col = tid; col < ncols; col += block_size) {
@@ -166,7 +163,7 @@ static void rms_norm_f32(const float* x, float* dst, const int ncols, const floa
         converged control flow. You may need to adjust the code.
         */
         item_ct1.barrier(sycl::access::fence_space::local_space);
-        int nreduce = nwarps / WARP_SIZE;
+        size_t nreduce = nwarps / WARP_SIZE;
         tmp = 0.f;
         for (size_t i = 0; i < nreduce; i += 1)
         {
@@ -202,6 +199,7 @@ static void norm_f32_sycl(const float* x, float* dst, const int ncols,
     }
     else {
         const int work_group_size = ggml_sycl_info().max_work_group_sizes[device];
+        assert(work_group_size % (WARP_SIZE * WARP_SIZE) == 0);
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:17: The work-group size passed to the SYCL kernel may exceed
@@ -244,6 +242,7 @@ static void group_norm_f32_sycl(const float* x, float* dst,
     }
     else {
         const int work_group_size = ggml_sycl_info().max_work_group_sizes[device];
+        assert(work_group_size % (WARP_SIZE * WARP_SIZE) == 0);
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:18: The work-group size passed to the SYCL kernel may exceed
@@ -290,6 +289,7 @@ static void rms_norm_f32_sycl(const float* x, float* dst, const int ncols,
     }
     else {
         const int work_group_size = ggml_sycl_info().max_work_group_sizes[device];
+        assert(work_group_size % (WARP_SIZE * WARP_SIZE) == 0);
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:19: The work-group size passed to the SYCL kernel may exceed
@@ -352,6 +352,7 @@ void ggml_sycl_op_group_norm(ggml_backend_sycl_context& ctx, const ggml_tensor* 
     (void)src1;
     (void)dst;
     (void)src1_dd;
+    GGML_UNUSED(ctx);
 }
 
 void ggml_sycl_op_rms_norm(ggml_backend_sycl_context& ctx, const ggml_tensor* src0,
