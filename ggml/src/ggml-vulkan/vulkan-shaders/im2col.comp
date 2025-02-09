@@ -49,7 +49,9 @@ void main() {
     [[unroll]] for (uint idx = 0; idx < NUM_ITER; ++idx) {
 
         const uint i = gidx * NUM_ITER + idx;
-        if (i >= p.pelements) continue;
+        if (i >= p.pelements) {
+            continue;
+        }
 
         const uint kx = i / ksize;
         const uint ky = (i % ksize) / p.OW;
