@@ -1465,14 +1465,27 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--list-devices"},
         "print list of available devices and exit",
         [](common_params &) {
-            printf("Available devices:\n");
+            std::vector<ggml_backend_dev_t> rpc_devices;
+            std::vector<ggml_backend_dev_t> all_devices;
             for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
                 auto * dev = ggml_backend_dev_get(i);
                 if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
-                    size_t free, total;
-                    ggml_backend_dev_memory(dev, &free, &total);
-                    printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
+                    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+                    if (ggml_backend_reg_name(reg) == std::string("RPC")) {
+                        rpc_devices.push_back(dev);
+                    } else {
+                        all_devices.push_back(dev);
+                    }
                 }
+            }
+            // insert RPC devices in front
+            all_devices.insert(all_devices.begin(), rpc_devices.begin(), rpc_devices.end());
+            printf("Available devices:\n");
+            for (size_t i = 0; i < all_devices.size(); ++i) {
+                auto * dev = all_devices[i];
+                size_t free, total;
+                ggml_backend_dev_memory(dev, &free, &total);
+                printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
             }
             exit(0);
         }
@@ -2310,6 +2323,48 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.vocoder.hf_file = "WavTokenizer-Large-75-F16.gguf";
         }
     ).set_examples({LLAMA_EXAMPLE_TTS}));
+
+    add_opt(common_arg(
+        {"--embd-bge-small-en-default"},
+        string_format("use default bge-small-en-v1.5 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/bge-small-en-v1.5-Q8_0-GGUF";
+            params.hf_file = "bge-small-en-v1.5-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-e5-small-en-default"},
+        string_format("use default e5-small-v2 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/e5-small-v2-Q8_0-GGUF";
+            params.hf_file = "e5-small-v2-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-gte-small-default"},
+        string_format("use default gte-small model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/gte-small-Q8_0-GGUF";
+            params.hf_file = "gte-small-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
 
     return ctx_arg;
 }

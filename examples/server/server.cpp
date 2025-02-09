@@ -131,6 +131,11 @@ struct slot_params {
             lora.push_back({{"id", i}, {"scale", this->lora[i].scale}});
         }
 
+        std::vector<std::string> grammar_trigger_words;
+        for (const auto & trigger : sampling.grammar_trigger_words) {
+            grammar_trigger_words.push_back(trigger.word);
+        }
+
         return json {
             {"n_predict",                 n_predict},     // Server configured n_predict
             {"seed",                      sampling.seed},
@@ -165,8 +170,9 @@ struct slot_params {
             {"n_probs",                   sampling.n_probs},
             {"min_keep",                  sampling.min_keep},
             {"grammar",                   sampling.grammar},
-            // {"grammar_trigger_words",     sampling.grammar_trigger_words},
+            {"grammar_trigger_words",     grammar_trigger_words},
             {"grammar_trigger_tokens",    sampling.grammar_trigger_tokens},
+            {"preserved_tokens",          sampling.preserved_tokens},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
@@ -328,24 +334,24 @@ struct server_task {
         if (data.contains("json_schema") && !data.contains("grammar")) {
             try {
                 auto schema                  = json_value(data, "json_schema", json::object());
-                LOG_DBG("JSON schema: %s\n", schema.dump(2).c_str());
+                SRV_DBG("JSON schema: %s\n", schema.dump(2).c_str());
                 params.sampling.grammar      = json_schema_to_grammar(schema);
-                LOG_DBG("Converted grammar: %s\n", params.sampling.grammar.c_str());
+                SRV_DBG("Converted grammar: %s\n", params.sampling.grammar.c_str());
             } catch (const std::exception & e) {
                 throw std::runtime_error(std::string("\"json_schema\": ") + e.what());
             }
         } else {
             params.sampling.grammar      = json_value(data, "grammar", defaults.sampling.grammar);
-            LOG_DBG("Grammar: %s\n", params.sampling.grammar.c_str());
+            SRV_DBG("Grammar: %s\n", params.sampling.grammar.c_str());
             params.sampling.grammar_lazy = json_value(data, "grammar_lazy", defaults.sampling.grammar_lazy);
-            LOG_DBG("Grammar lazy: %s\n", params.sampling.grammar_lazy ? "true" : "false");
+            SRV_DBG("Grammar lazy: %s\n", params.sampling.grammar_lazy ? "true" : "false");
         }
 
         {
             auto it = data.find("chat_format");
             if (it != data.end()) {
                 params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
-                LOG_DBG("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
+                SRV_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
             } else {
                 params.oaicompat_chat_format = defaults.oaicompat_chat_format;
             }
@@ -361,12 +367,26 @@ struct server_task {
 
                     auto ids = common_tokenize(vocab, trigger.word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
-                        LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
+                        SRV_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
                         params.sampling.grammar_trigger_tokens.push_back(ids[0]);
+                        params.sampling.preserved_tokens.insert(ids[0]);
                         continue;
                     }
-                    LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
+                    SRV_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
                     params.sampling.grammar_trigger_words.push_back(trigger);
+                }
+            }
+            const auto preserved_tokens = data.find("preserved_tokens");
+            if (preserved_tokens != data.end()) {
+                for (const auto & t : *preserved_tokens) {
+                    auto ids = common_tokenize(vocab, t.get<std::string>(), /* add_special= */ false, /* parse_special= */ true);
+                    if (ids.size() == 1) {
+                        SRV_DBG("Preserved token: %d\n", ids[0]);
+                        params.sampling.preserved_tokens.insert(ids[0]);
+                    } else {
+                        // This may happen when using a tool call style meant for a model with special tokens to preserve on a model without said tokens.
+                        SRV_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n", t.get<std::string>().c_str());
+                    }
                 }
             }
             if (params.sampling.grammar_lazy) {
@@ -695,37 +715,43 @@ struct server_task_result_cmpl_final : server_task_result {
 
     json to_json_oaicompat_chat() {
         std::string finish_reason = "length";
-        common_chat_msg message;
+        common_chat_msg msg;
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
-            message = common_chat_parse(content, oaicompat_chat_format);
-            finish_reason = message.tool_calls.empty() ? "stop" : "tool_calls";
+            SRV_DBG("Parsing chat message: %s\n", content.c_str());
+            msg = common_chat_parse(content, oaicompat_chat_format);
+            finish_reason = msg.tool_calls.empty() ? "stop" : "tool_calls";
         } else {
-            message.content = content;
+            msg.content = content;
         }
 
         json tool_calls;
-        if (!message.tool_calls.empty()) {
+        if (!msg.tool_calls.empty()) {
             tool_calls = json::array();
-            for (const auto & tc : message.tool_calls) {
+            for (const auto & tc : msg.tool_calls) {
                 tool_calls.push_back({
                     {"type", "function"},
                     {"function", {
                         {"name", tc.name},
                         {"arguments", tc.arguments},
                     }},
-                    {"id", tc.id.empty() ? json() : json(tc.id)},
+                    {"id", tc.id},
                 });
             }
+        }
+
+        json message {
+            {"content", msg.content},
+            {"tool_calls", tool_calls},
+            {"role", "assistant"},
+        };
+        if (!msg.tool_plan.empty()) {
+            message["tool_plan"] = msg.tool_plan;
         }
 
         json choice {
             {"finish_reason", finish_reason},
             {"index", 0},
-            {"message", json {
-                {"content", message.content},
-                {"tool_calls", tool_calls},
-                {"role", "assistant"},
-            }},
+            {"message", message},
         };
 
         if (!stream && probs_output.size() > 0) {
@@ -1858,7 +1884,12 @@ struct server_context {
             llama_init_dft.context.reset();
         }
 
-        chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        if (params_base.chat_template.empty() && !validate_builtin_chat_template(params.use_jinja)) {
+            SRV_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
+            chat_templates = common_chat_templates_from_model(model, "chatml");
+        } else {
+            chat_templates = common_chat_templates_from_model(model, params_base.chat_template);
+        }
         GGML_ASSERT(chat_templates.template_default.get() != nullptr);
 
         return true;
@@ -2827,8 +2858,7 @@ struct server_context {
         server_slot * slot_batched = nullptr;
 
         auto accept_special_token = [&](server_slot & slot, llama_token token) {
-            const auto & trigger_tokens = slot.params.sampling.grammar_trigger_tokens;
-            return params_base.special || std::find(trigger_tokens.begin(), trigger_tokens.end(), token) != trigger_tokens.end();
+            return params_base.special || slot.params.sampling.preserved_tokens.find(token) != slot.params.sampling.preserved_tokens.end();
         };
 
         // frist, add sampled tokens from any ongoing sequences
@@ -3323,10 +3353,12 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
         return;
     }
 
-    LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+    // reminder: this function is not covered by httplib's exception handler; if someone does more complicated stuff, think about wrapping it in try-catch
 
-    LOG_DBG("request:  %s\n", req.body.c_str());
-    LOG_DBG("response: %s\n", res.body.c_str());
+    SRV_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+
+    SRV_DBG("request:  %s\n", req.body.c_str());
+    SRV_DBG("response: %s\n", res.body.c_str());
 }
 
 std::function<void(int)> shutdown_handler;
@@ -3409,9 +3441,13 @@ int main(int argc, char ** argv) {
             message = "Unknown Exception";
         }
 
-        json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
-        LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
-        res_error(res, formatted_error);
+        try {
+            json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
+            LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
+            res_error(res, formatted_error);
+        } catch (const std::exception & e) {
+            LOG_ERR("got another exception: %s | while hanlding exception: %s\n", e.what(), message.c_str());
+        }
     });
 
     svr->set_error_handler([&res_error](const httplib::Request &, httplib::Response & res) {
@@ -3633,11 +3669,11 @@ int main(int argc, char ** argv) {
                     {"value",  (uint64_t) res_metrics->kv_cache_tokens_count}
             },{
                     {"name",  "requests_processing"},
-                    {"help",  "Number of request processing."},
+                    {"help",  "Number of requests processing."},
                     {"value",  (uint64_t) res_metrics->n_processing_slots}
             },{
                     {"name",  "requests_deferred"},
-                    {"help",  "Number of request deferred."},
+                    {"help",  "Number of requests deferred."},
                     {"value",  (uint64_t) res_metrics->n_tasks_deferred}
             }}}
         };
@@ -3824,7 +3860,9 @@ int main(int argc, char ** argv) {
 
         try {
             const auto & prompt = data.at("prompt");
-            LOG_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
+            // TODO: this log can become very long, put it behind a flag or think about a more compact format
+            //SRV_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
+
             std::vector<llama_tokens> tokenized_prompts = tokenize_input_prompts(ctx_server.vocab, prompt, true, true);
             tasks.reserve(tokenized_prompts.size());
             for (size_t i = 0; i < tokenized_prompts.size(); i++) {
@@ -4340,6 +4378,9 @@ int main(int argc, char ** argv) {
                     res.set_content("Error: gzip is not supported by this browser", "text/plain");
                 } else {
                     res.set_header("Content-Encoding", "gzip");
+                    // COEP and COOP headers, required by pyodide (python interpreter)
+                    res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
+                    res.set_header("Cross-Origin-Opener-Policy", "same-origin");
                     res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
                 }
                 return false;
@@ -4434,14 +4475,6 @@ int main(int argc, char ** argv) {
     state.store(SERVER_STATE_READY);
 
     LOG_INF("%s: model loaded\n", __func__);
-
-    // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
-    if (params.chat_template.empty()) {
-        if (!ctx_server.validate_builtin_chat_template(params.use_jinja)) {
-            LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
-            params.chat_template = "chatml";
-        }
-    }
 
     // print sample chat example to make it clear which template is used
     LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,

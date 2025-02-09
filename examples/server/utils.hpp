@@ -5,10 +5,6 @@
 #include "llama.h"
 #include "common/base64.hpp"
 
-#ifndef NDEBUG
-// crash the server in debug mode, otherwise send an http 500 error
-#define CPPHTTPLIB_NO_EXCEPTIONS 1
-#endif
 // increase max payload length to allow use of larger context size
 #define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
@@ -484,13 +480,14 @@ static bool ends_with(const std::string & str, const std::string & suffix) {
 
 static size_t find_partial_stop_string(const std::string &stop, const std::string &text) {
     if (!text.empty() && !stop.empty()) {
-        auto it = std::find(stop.rbegin(), stop.rend(), text.back());
-        while (it != stop.rend()) {
-            size_t length = std::distance(it, stop.rend());
-            if (text.length() >= length && 0 == text.compare(text.length() - length, length, stop)) {
-                return text.length() - length;
+        const char text_last_char = text.back();
+        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
+            if (stop[char_index] == text_last_char) {
+                const std::string current_partial = stop.substr(0, char_index + 1);
+                if (ends_with(text, current_partial)) {
+                    return text.size() - char_index - 1;
+                }
             }
-            it = std::find(std::next(it), stop.rend(), text.back());
         }
     }
 
@@ -640,9 +637,13 @@ static json oaicompat_completion_params_parse(
         inputs.tools = tools;
         inputs.tool_choice = tool_choice;
         inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
+        if (inputs.parallel_tool_calls && !tmpl.original_caps().supports_parallel_tool_calls) {
+            LOG_DBG("Disabling parallel_tool_calls because the template does not support it\n");
+            inputs.parallel_tool_calls = false;
+        }
         inputs.stream = stream;
         // TODO: support mixing schema w/ tools beyond generic format.
-        inputs.json_schema = json_value(llama_params, "json_schema", json::object());
+        inputs.json_schema = json_value(llama_params, "json_schema", json());
         auto chat_params = common_chat_params_init(tmpl, inputs);
 
         llama_params["chat_format"] = static_cast<int>(chat_params.format);
@@ -657,6 +658,7 @@ static json oaicompat_completion_params_parse(
             });
         }
         llama_params["grammar_triggers"] = grammar_triggers;
+        llama_params["preserved_tokens"] = chat_params.preserved_tokens;
         for (const auto & stop : chat_params.additional_stops) {
             llama_params["stop"].push_back(stop);
         }

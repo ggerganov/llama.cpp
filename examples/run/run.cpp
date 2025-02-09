@@ -24,15 +24,16 @@
 #include <string>
 #include <vector>
 
+#include "chat-template.hpp"
 #include "common.h"
 #include "json.hpp"
 #include "linenoise.cpp/linenoise.h"
 #include "llama-cpp.h"
-#include "chat-template.hpp"
+#include "log.h"
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(_WIN32)
 [[noreturn]] static void sigint_handler(int) {
-    printf("\n\033[0m");
+    printf("\n" LOG_COL_DEFAULT);
     exit(0);  // not ideal, but it's the only way to guarantee exit in all cases
 }
 #endif
@@ -63,6 +64,13 @@ static int printe(const char * fmt, ...) {
     va_end(args);
 
     return ret;
+}
+
+static std::string strftime_fmt(const char * fmt, const std::tm & tm) {
+    std::ostringstream oss;
+    oss << std::put_time(&tm, fmt);
+
+    return oss.str();
 }
 
 class Opt {
@@ -338,7 +346,7 @@ class HttpClient {
         if (!output_file.empty()) {
             output_file_partial = output_file + ".partial";
             if (!out.open(output_file_partial, "ab")) {
-                printe("Failed to open file\n");
+                printe("Failed to open file for writing\n");
 
                 return 1;
             }
@@ -527,8 +535,7 @@ class HttpClient {
 
     static void print_progress(const std::string & progress_prefix, const std::string & progress_bar,
                                const std::string & progress_suffix) {
-        printe("\r%*s\r%s%s| %s", get_terminal_width(), " ", progress_prefix.c_str(), progress_bar.c_str(),
-               progress_suffix.c_str());
+        printe("\r" LOG_CLR_TO_EOL "%s%s| %s", progress_prefix.c_str(), progress_bar.c_str(), progress_suffix.c_str());
     }
     // Function to write data to a file
     static size_t write_data(void * ptr, size_t size, size_t nmemb, void * stream) {
@@ -698,6 +705,39 @@ class LlamaData {
         return download(url, bn, true);
     }
 
+    int s3_dl(const std::string & model, const std::string & bn) {
+        const size_t slash_pos = model.find('/');
+        if (slash_pos == std::string::npos) {
+            return 1;
+        }
+
+        const std::string bucket     = model.substr(0, slash_pos);
+        const std::string key        = model.substr(slash_pos + 1);
+        const char * access_key = std::getenv("AWS_ACCESS_KEY_ID");
+        const char * secret_key = std::getenv("AWS_SECRET_ACCESS_KEY");
+        if (!access_key || !secret_key) {
+            printe("AWS credentials not found in environment\n");
+            return 1;
+        }
+
+        // Generate AWS Signature Version 4 headers
+        // (Implementation requires HMAC-SHA256 and date handling)
+        // Get current timestamp
+        const time_t                   now     = time(nullptr);
+        const tm                       tm      = *gmtime(&now);
+        const std::string              date     = strftime_fmt("%Y%m%d", tm);
+        const std::string              datetime = strftime_fmt("%Y%m%dT%H%M%SZ", tm);
+        const std::vector<std::string> headers  = {
+            "Authorization: AWS4-HMAC-SHA256 Credential=" + std::string(access_key) + "/" + date +
+                "/us-east-1/s3/aws4_request",
+            "x-amz-content-sha256: UNSIGNED-PAYLOAD", "x-amz-date: " + datetime
+        };
+
+        const std::string url = "https://" + bucket + ".s3.amazonaws.com/" + key;
+
+        return download(url, bn, true, headers);
+    }
+
     std::string basename(const std::string & path) {
         const size_t pos = path.find_last_of("/\\");
         if (pos == std::string::npos) {
@@ -738,6 +778,9 @@ class LlamaData {
             rm_until_substring(model_, "github:");
             rm_until_substring(model_, "://");
             ret = github_dl(model_, bn);
+        } else if (string_starts_with(model_, "s3://")) {
+            rm_until_substring(model_, "://");
+            ret = s3_dl(model_, bn);
         } else {  // ollama:// or nothing
             rm_until_substring(model_, "ollama.com/library/");
             rm_until_substring(model_, "://");
@@ -753,16 +796,13 @@ class LlamaData {
     llama_model_ptr initialize_model(Opt & opt) {
         ggml_backend_load_all();
         resolve_model(opt.model_);
-        printe(
-            "\r%*s"
-            "\rLoading model",
-            get_terminal_width(), " ");
+        printe("\r" LOG_CLR_TO_EOL "Loading model");
         llama_model_ptr model(llama_model_load_from_file(opt.model_.c_str(), opt.model_params));
         if (!model) {
             printe("%s: error: unable to load model from file: %s\n", __func__, opt.model_.c_str());
         }
 
-        printe("\r%*s\r", static_cast<int>(sizeof("Loading model")), " ");
+        printe("\r" LOG_CLR_TO_EOL);
         return model;
     }
 
@@ -804,7 +844,15 @@ static int apply_chat_template(const common_chat_template & tmpl, LlamaData & ll
             });
         }
         try {
-            auto result = tmpl.apply(messages, /* tools= */ json(), append);
+            minja::chat_template_inputs tmpl_inputs;
+            tmpl_inputs.messages = messages;
+            tmpl_inputs.add_generation_prompt = append;
+
+            minja::chat_template_options tmpl_opts;
+            tmpl_opts.use_bos_token = false;
+            tmpl_opts.use_eos_token = false;
+
+            auto result = tmpl.apply(tmpl_inputs, tmpl_opts);
             llama_data.fmtted.resize(result.size() + 1);
             memcpy(llama_data.fmtted.data(), result.c_str(), result.size() + 1);
             return result.size();
@@ -847,7 +895,7 @@ static int check_context_size(const llama_context_ptr & ctx, const llama_batch &
     const int n_ctx      = llama_n_ctx(ctx.get());
     const int n_ctx_used = llama_get_kv_cache_used_cells(ctx.get());
     if (n_ctx_used + batch.n_tokens > n_ctx) {
-        printf("\033[0m\n");
+        printf(LOG_COL_DEFAULT "\n");
         printe("context size exceeded\n");
         return 1;
     }
@@ -910,17 +958,14 @@ static int generate(LlamaData & llama_data, const std::string & prompt, std::str
         batch = llama_batch_get_one(&new_token_id, 1);
     }
 
-    printf("\033[0m");
+    printf(LOG_COL_DEFAULT);
     return 0;
 }
 
 static int read_user_input(std::string & user_input) {
     static const char * prompt_prefix = "> ";
 #ifdef WIN32
-    printf(
-        "\r%*s"
-        "\r\033[0m%s",
-        get_terminal_width(), " ", prompt_prefix);
+    printf("\r" LOG_CLR_TO_EOL LOG_COL_DEFAULT "%s", prompt_prefix);
 
     std::getline(std::cin, user_input);
     if (std::cin.eof()) {
@@ -956,7 +1001,7 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
                              const bool stdout_a_terminal) {
     // Set response color
     if (stdout_a_terminal) {
-        printf("\033[33m");
+        printf(LOG_COL_YELLOW);
     }
 
     if (generate(llama_data, prompt, response)) {
@@ -965,7 +1010,7 @@ static int generate_response(LlamaData & llama_data, const std::string & prompt,
     }
 
     // End response with color reset and newline
-    printf("\n%s", stdout_a_terminal ? "\033[0m" : "");
+    printf("\n%s", stdout_a_terminal ? LOG_COL_DEFAULT : "");
     return 0;
 }
 

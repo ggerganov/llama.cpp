@@ -19,8 +19,15 @@
 // max number of MTLCommandBuffer used to submit a graph for processing
 #define GGML_METAL_MAX_COMMAND_BUFFERS 8
 
+#ifndef TARGET_OS_VISION
+#define TARGET_OS_VISION 0
+#endif
+
 // create residency sets only on macOS >= 15.0
-#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || \
+    TARGET_OS_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 || \
+    TARGET_OS_TV && __TV_OS_VERSION_MAX_ALLOWED >= 180000 || \
+    TARGET_OS_VISION && __VISION_OS_VERSION_MAX_ALLOWED >= 200000
 #define GGML_METAL_HAS_RESIDENCY_SETS 1
 #endif
 
@@ -1071,7 +1078,7 @@ static bool ggml_backend_metal_buffer_rset_init(
     }
 
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
-    if (@available(macOS 15.0, *)) {
+    if (@available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 2.0, *)) {
         MTLResidencySetDescriptor * desc = [[MTLResidencySetDescriptor alloc] init];
         desc.label = @"ggml_backend_metal";
         desc.initialCapacity = ctx->n_buffers;
@@ -1106,7 +1113,7 @@ static bool ggml_backend_metal_buffer_rset_init(
 // rset free
 static void ggml_backend_metal_buffer_rset_free(struct ggml_backend_metal_buffer_context * ctx) {
 #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
-    if (@available(macOS 15.0, *)) {
+    if (@available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 2.0, *)) {
         if (ctx->rset) {
             [ctx->rset endResidency];
             [ctx->rset removeAllAllocations];
@@ -1201,12 +1208,13 @@ static bool ggml_metal_supports_op(const struct ggml_backend_metal_device_contex
         case GGML_OP_SUM_ROWS:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_GROUP_NORM:
-            return has_simdgroup_reduction;
+            return has_simdgroup_reduction && ggml_is_contiguous(op->src[0]);
         case GGML_OP_RMS_NORM:
-            return has_simdgroup_reduction && (op->ne[0] % 4 == 0);
+            return has_simdgroup_reduction && (op->ne[0] % 4 == 0 && ggml_is_contiguous_1(op->src[0]));
         case GGML_OP_ARGMAX:
-        case GGML_OP_NORM:
             return true;
+        case GGML_OP_NORM:
+            return has_simdgroup_reduction && (op->ne[0] % 4 == 0 && ggml_is_contiguous_1(op->src[0]));
         case GGML_OP_ROPE:
             {
                 const int mode = ((const int32_t *) op->op_params)[2];
