@@ -198,17 +198,24 @@ static delta_data init_delta(const common_chat_template & tmpl, const std::vecto
     std::string prefix = params_prefix.prompt;
     std::string full   = params_full.prompt;
 
-    // Check full starts with prefix
-    if (full.find(prefix) != 0) {
-        fprintf(stderr, "Full:\n%s\n\nPrefix:\n%s\n\n", full.c_str(), prefix.c_str());
-        throw std::runtime_error("Full message does not start with prefix");
-    }
-
     if (full == prefix) {
         throw std::runtime_error("Full message is the same as the prefix");
     }
 
-    auto delta = full.substr(prefix.size());
+    size_t common_prefix_length = 0;
+    for (size_t i = 0; i < prefix.size() && i < full.size(); ++i) {
+        if (prefix[i] != full[i]) {
+            break;
+        }
+        if (prefix[i] == '<') {
+            // DeepSeek R1's template (as of 20250209) adds a trailing <think> if add_generation_prompt,
+            // but it removes thinking tags for past messages.
+            // The prefix and full strings diverge at <think> vs. <｜tool▁calls▁begin｜>, we avoid consuming the leading <.
+            continue;
+        }
+        common_prefix_length = i + 1;
+    }
+    auto delta = full.substr(common_prefix_length);
 
     // Strip end tokens
     for (const auto & end_token : end_tokens) {
