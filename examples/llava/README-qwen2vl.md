@@ -57,6 +57,7 @@ Now the model is ready to use in the `model_path` directory. You can quantize th
 
 *Have fun with the models ! :)*
 
-## Limitations
+## Current limitations
 
-* Currently, only support the image to be in the very beginning of the input prompt to the LLM.
+* This only supports the image to be in the very beginning of the input prompt to the LLM.
+* The vision model (clip.cpp)'s GPU backend support, which Qwen2VL uses, is disabled.

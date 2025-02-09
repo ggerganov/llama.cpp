@@ -524,7 +524,7 @@ int main(int argc, char ** argv) {
 
     common_init();
 
-    if (params.mmproj.empty()) {
+    if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
         print_usage(argc, argv);
         return 1;
     }
@@ -545,15 +545,6 @@ int main(int argc, char ** argv) {
 
         llama_perf_context_print(ctx_llava->ctx_llama);
         llava_image_embed_free(image_embed);
-        ctx_llava->model = NULL;
-        llava_free(ctx_llava);
-    } else if (params.image.empty()) {
-        auto ctx_llava = llava_init_context(&params, model);
-
-        // process the prompt
-        process_prompt(ctx_llava, nullptr, &params, params.prompt);
-
-        llama_perf_context_print(ctx_llava->ctx_llama);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
 #ifndef NDEBUG
