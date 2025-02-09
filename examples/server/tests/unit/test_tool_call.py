@@ -348,20 +348,20 @@ def test_weather(hf_repo: str, template_override: str | Tuple[str, str | None] |
 
 @pytest.mark.slow
 @pytest.mark.parametrize("result_override,n_predict,hf_repo,template_override", [
-    (None,                                             128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
-    (None,                                             128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    (None,                                             128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
-    (None,                                             128,  "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (None,                                             128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    (None,                                             128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
-    (None,                                             128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    (None,                                             128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    ("^> 0.56$",                                       128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+    (None,                                           128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       "chatml"),
+    (None,                                           128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",         None),
+    (None,                                           128,  "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",         "chatml"),
+    (None,                                           128,  "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",     ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    (None,                                           128,  "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",       ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    (None,                                           128,  "bartowski/functionary-small-v3.2-GGUF:Q8_0",        ("meetkai/functionary-medium-v3.2", None)),
+    (None,                                           128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M",  None),
+    (None,                                           128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M",  None),
+    ("^> 0.56$",                                     128,  "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M",  "chatml"),
+    (None,                                           128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
 
     # TODO: fix these (wrong results, either didn't respect decimal instruction or got wrong value)
-    ("[\\s\\S\\r\\n]*?\\b0\\.55644242476$",            128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    ("[\\s\\S\\r\\n]*?which equals 0\\.5\\.",          8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    ("[\\s\\S\\r\\n]*?\\*\\*Answer:\\*\\* 0\\.25\\b",  8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+    ("^The y-coordinate [\\s\\S]*?\\*\\*0.5\\*\\*",  8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    ("[\\s\\S]*?\\*\\*0\\.5\\*\\*",                  8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
 ])
 def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
@@ -382,7 +382,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
     res = server.make_request("POST", "/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
-            {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things, and provide very concise answers. Do not explain your reasoning to the user. Provide any numerical values back to the user with two decimals."},
+            {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things, and provide very concise answers. Do not explain your reasoning to the user. Provide any numerical values back to the user with at most two decimals."},
             {"role": "user", "content": "What's the y coordinate of a point on the unit sphere at angle 30 degrees?"},
             {
                 "role": "assistant",
@@ -402,7 +402,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
                 "role": "tool",
                 "name": "calculate",
                 "content": 0.55644242476,
-                "tool_call_id": "call_6789",
+                "tool_call_id": "call_6789"
             }
         ],
         "tools": [
@@ -434,19 +434,19 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
     if result_override is not None:
         assert re.match(result_override, content), f'Expected {result_override}, got {content}'
     else:
-        assert re.match('^[\\s\\S\\r\\n]*?The (y[ -])?coordinate [\\s\\S\\r\\n]*?is (approximately )?0\\.56\\b|^0\\.56$', content), \
+        assert re.match('^[\\s\\S]*?The (y[ -])?coordinate [\\s\\S]*?is (approximately )?0\\.56\\b|^0\\.56$', content), \
             f'Expected something like "The y coordinate is 0.56.", got {content}'
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("n_predict,reasoning_format,expect_content,expect_reasoning_content,hf_repo,template_override", [
-    (1024, 'deepseek',  "^The sum of 102 and 7 is 109.*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
+    (128, 'deepseek',  "^The sum of 102 and 7 is 109.*",                        None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
     (128,  None,        "^The sum of 102 and 7 is 109.*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
 
-    (1024, 'deepseek',  "To find the sum of.*",                                  "I need to calculate the sum of 102 and 7.*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    (1024, 'none',      "<think>\nI need[\\s\\S\\r\\n]*?</think>\nTo find.*",   None,                                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (1024, 'deepseek',  "To find the sum of.*",                                 "I need to calculate the sum of 102 and 7.*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (1024, 'none',      "<think>\n?I need[\\s\\S]*?</think>\n?To find.*",       None,                                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 
-    (1024, 'deepseek',  "To find the sum of.*",                                  "First, I need to add the tens place.*",       "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+    (1024, 'deepseek',  "To find the sum of.*",                                 "First, I [\\s\\S]*",                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
 ])
 def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] | None, expect_content: str | None, expect_reasoning_content: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server

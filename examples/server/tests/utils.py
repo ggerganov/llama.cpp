@@ -173,8 +173,8 @@ class ServerProcess:
             server_args.append("--no-webui")
         if self.jinja:
             server_args.append("--jinja")
-        if self.reasoning_format:
-            server_args.append("--reasoning-format")
+        if self.reasoning_format is not None:
+            server_args.extend(("--reasoning-format", self.reasoning_format))
         if self.chat_template:
             server_args.extend(["--chat-template", self.chat_template])
         if self.chat_template_file:
