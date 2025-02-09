@@ -2852,6 +2852,8 @@ bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
     }
     return true;
 #else
+    (void)buffer;
+    (void)size;
     return false;
 #endif
 }
