@@ -282,9 +282,6 @@ static common_chat_msg common_chat_parse_generic(const std::string & input) {
     json data = json::parse(input);
     common_chat_msg result;
     result.role = "assistant";
-    if (data.contains("thoughts")) {
-        result.reasoning_content = data["thoughts"];
-    }
     if (data.contains("tool_calls")) {
         for (const auto & tool_call : data["tool_calls"]) {
             result.tool_calls.push_back({
