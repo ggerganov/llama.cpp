@@ -10020,7 +10020,7 @@ int32_t llama_chat_apply_template(
 
     std::string formatted_chat;
     llm_chat_template detected_tmpl = llm_chat_detect_template(curr_tmpl);
-    if (detected_tmpl == LLM_CHAT_TEMPLATE_UNKNOWN) {
+    if (detected_tmpl == llm_chat_template::LLM_CHAT_TEMPLATE_UNKNOWN) {
         return -1;
     }
     int32_t res = llm_chat_apply_template(detected_tmpl, chat_vec, formatted_chat, add_ass);
