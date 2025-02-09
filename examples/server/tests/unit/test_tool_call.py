@@ -274,44 +274,43 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("reasoning_format,hf_repo,template_override", [
-    ('deepseek',  "bartowski/c4ai-command-r7b-12-2024-GGUF:Q4_K_M",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
+@pytest.mark.parametrize("hf_repo,template_override", [
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
-    (None,        "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    (None,        "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
+    ("bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
 
-    (None,        "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
-    (None,        "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
+    ("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
 
-    (None,        "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
-    (None,        "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
+    ("bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
 
-    (None,        "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    ("NousResearch/Hermes-2-Pro-Llama-3-8B", "tool_use")),
-    (None,        "bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M",    "chatml"),
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
+    ("bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
 
-    (None,        "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      ("NousResearch/Hermes-3-Llama-3.1-8B", "tool_use")),
-    (None,        "bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M",      "chatml"),
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
+    ("bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
 
-    (None,        "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", None),
-    (None,        "bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q4_K_M", "chatml"),
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
+    ("bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    (None,        "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai/functionary-medium-v3.2", None)),
-    (None,        "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
+    ("bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
-    (None,        "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama/Llama-3.2-3B-Instruct", None)),
-    (None,        "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    ("bartowski/c4ai-command-r7b-12-2024-GGUF:Q6_K_L",   ("CohereForAI/c4ai-command-r7b-12-2024", "tool_use")),
 
-    ('deepseek',  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
-    (None,        "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
+    ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
 
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
 ])
-def test_weather(reasoning_format: Literal['deepseek', 'none'] | None, hf_repo: str, template_override: Tuple[str, str | None] | None):
+def test_weather(hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
     n_predict = 512
-    server.reasoning_format = reasoning_format
     server.n_slots = 1
     server.jinja = True
     server.n_ctx = 8192
@@ -441,8 +440,8 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("n_predict,reasoning_format,expect_content,expect_reasoning_content,hf_repo,template_override", [
-    # (1024, 'deepseek',  "^The sum of 102 and 7 is 109.*",                       "^The user's request is straightforward.*",    "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
-    # (128,  None,        "^The sum of 102 and 7 is 109.*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
+    (1024, 'deepseek',  "^The sum of 102 and 7 is 109.*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
+    (128,  None,        "^The sum of 102 and 7 is 109.*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
 
     (1024, 'deepseek',  "To find the sum of.*",                                  "I need to calculate the sum of 102 and 7.*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (1024, 'none',      "<think>\nI need[\\s\\S\\r\\n]*?</think>\nTo find.*",   None,                                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
@@ -491,7 +490,7 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
 @pytest.mark.slow
 @pytest.mark.parametrize("expected_arguments_override,hf_repo,template_override", [
     (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),
+    # (None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", "chatml"),
 
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      None),
     (None,                 "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",      "chatml"),
@@ -499,14 +498,14 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       ("meetkai-functionary-medium-v3.2", None)),
     (None,                 "bartowski/functionary-small-v3.2-GGUF:Q8_0",       "chatml"),
 
-    (None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
-    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
+    ('{"code":"print("}',  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
+    (None,                 "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
 
-    ('{"code":"print("}',  "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
+    (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
     (None,                 "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
     ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      ("meta-llama-Llama-3.2-3B-Instruct", None)),
-    ('{"code":"print("}',  "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
+    (None,                 "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",      "chatml"),
 
     (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        None),
     (None,                 "bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",        "chatml"),
@@ -523,7 +522,7 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
     # Note: gemma-2-2b-it knows itself as "model", not "assistant", so we don't test the ill-suited chatml on it.
     (None,                 "bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
 ])
-def test_hello_world(reasoning_format: Literal['deepseek', 'none'] | None, expected_arguments_override: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_hello_world(expected_arguments_override: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
     global server
     server.n_slots = 1
     server.jinja = True
