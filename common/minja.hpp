@@ -2194,7 +2194,7 @@ private:
     }
 
     TemplateTokenVector tokenize() {
-      static std::regex comment_tok(R"(\{#([-~]?)(.*?)([-~]?)#\})");
+      static std::regex comment_tok(R"(\{#([-~]?)([\s\S\r\n]*?)([-~]?)#\})");
       static std::regex expr_open_regex(R"(\{\{([-~])?)");
       static std::regex block_open_regex(R"(^\{%([-~])?[\s\n\r]*)");
       static std::regex block_keyword_tok(R"((if|else|elif|endif|for|endfor|generation|endgeneration|set|endset|block|endblock|macro|endmacro|filter|endfilter|break|continue)\b)");
@@ -2615,6 +2615,7 @@ inline std::shared_ptr<Context> Context::builtins() {
   }));
   globals.set("join", simple_function("join", { "items", "d" }, [](const std::shared_ptr<Context> &, Value & args) {
     auto do_join = [](Value & items, const std::string & sep) {
+      if (!items.is_array()) throw std::runtime_error("object is not iterable: " + items.dump());
       std::ostringstream oss;
       auto first = true;
       for (size_t i = 0, n = items.size(); i < n; ++i) {
@@ -2695,6 +2696,10 @@ inline std::shared_ptr<Context> Context::builtins() {
     return Value::callable([=](const std::shared_ptr<Context> & context, ArgumentsValue & args) {
       args.expectArgs(is_select ? "select" : "reject", {2, (std::numeric_limits<size_t>::max)()}, {0, 0});
       auto & items = args.args[0];
+      if (items.is_null())
+        return Value::array();
+      if (!items.is_array()) throw std::runtime_error("object is not iterable: " + items.dump());
+
       auto filter_fn = context->get(args.args[1]);
       if (filter_fn.is_null()) throw std::runtime_error("Undefined filter: " + args.args[1].dump());
 
@@ -2772,6 +2777,7 @@ inline std::shared_ptr<Context> Context::builtins() {
       auto & items = args.args[0];
       if (items.is_null())
         return Value::array();
+      if (!items.is_array()) throw std::runtime_error("object is not iterable: " + items.dump());
       auto attr_name = args.args[1].get<std::string>();
 
       bool has_test = false;
