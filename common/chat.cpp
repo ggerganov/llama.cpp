@@ -442,7 +442,6 @@ static common_chat_msg common_chat_parse_command_r7b(const std::string & input, 
         auto response = match[1].str();
         result.content += response;
     } else {
-        LOG_ERR("Failed to parse command_r output");
         result.content += rest;
     }
     return result;
