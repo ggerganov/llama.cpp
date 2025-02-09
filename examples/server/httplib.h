@@ -7157,16 +7157,26 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
 #endif
 #endif
 
+  auto req_line = line_reader.ptr();
+
+  // Extract URI from the request line
+  std::string method, uri, version;
+  std::istringstream iss(req_line);
+  iss >> method >> uri >> version;
+
   // Check if the request URI doesn't exceed the limit
-  if (line_reader.size() > CPPHTTPLIB_REQUEST_URI_MAX_LENGTH) {
+  if (uri.size() > CPPHTTPLIB_REQUEST_URI_MAX_LENGTH) {
     Headers dummy;
     detail::read_headers(strm, dummy);
     res.status = StatusCode::UriTooLong_414;
+    res.body = "Request URI too long: " + uri;
+    res.set_header("Content-Type", "text/plain");
+
     return write_response(strm, close_connection, req, res);
   }
 
   // Request line and headers
-  if (!parse_request_line(line_reader.ptr(), req) ||
+  if (!parse_request_line(req_line, req) ||
       !detail::read_headers(strm, req.headers)) {
     res.status = StatusCode::BadRequest_400;
     return write_response(strm, close_connection, req, res);
