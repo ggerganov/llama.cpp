@@ -72,5 +72,5 @@ Example function tool call syntax:
 {%- endfor -%}
 {{- flush_tool_outputs() -}}
 {%- if add_generation_prompt and not ns.is_tool_outputs -%}
-    {{- '<｜Assistant｜>' -}}
+    {{- '<｜Assistant｜><think>\n' -}}
 {%- endif -%}

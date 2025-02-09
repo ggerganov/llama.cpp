@@ -7,9 +7,24 @@
     ./scripts/get_chat_template.py model_id [variant]
 
   Examples:
-    ./scripts/get_chat_template.py NousResearch/Meta-Llama-3-8B-Instruct
-    ./scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use
-    ./scripts/get_chat_template.py meta-llama/Llama-3.2-3B-Instruct
+    ./scripts/get_chat_template.py CohereForAI/c4ai-command-r-plus tool_use      | tee models/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja
+    ./scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 default  | tee models/templates/CohereForAI-c4ai-command-r7b-12-2024-default.jinja
+    ./scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 rag      | tee models/templates/CohereForAI-c4ai-command-r7b-12-2024-rag.jinja
+    ./scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 tool_use | tee models/templates/CohereForAI-c4ai-command-r7b-12-2024-tool_use.jinja
+    ./scripts/get_chat_template.py deepseek-ai/DeepSeek-R1-Distill-Llama-8B      | tee models/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja
+    ./scripts/get_chat_template.py deepseek-ai/DeepSeek-R1-Distill-Qwen-32B      | tee models/templates/deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja
+    ./scripts/get_chat_template.py fireworks-ai/llama-3-firefunction-v2          | tee models/templates/fireworks-ai-llama-3-firefunction-v2.jinja
+    ./scripts/get_chat_template.py google/gemma-2-2b-it                          | tee models/templates/google-gemma-2-2b-it.jinja
+    ./scripts/get_chat_template.py meetkai/functionary-medium-v3.                | tee models/templates/meetkai-functionary-medium-v3.jinja
+    ./scripts/get_chat_template.py meetkai/functionary-medium-v3.2               | tee models/templates/meetkai-functionary-medium-v3.2.jinja
+    ./scripts/get_chat_template.py meta-llama/Llama-3.1-8B-Instruct              | tee models/templates/meta-llama-Llama-3.1-8B-Instruct.jinja
+    ./scripts/get_chat_template.py meta-llama/Llama-3.2-3B-Instruct              | tee models/templates/meta-llama-Llama-3.2-3B-Instruct.jinja
+    ./scripts/get_chat_template.py meta-llama/Llama-3.3-70B-Instruct             | tee models/templates/meta-llama-Llama-3.3-70B-Instruct.jinja
+    ./scripts/get_chat_template.py microsoft/Phi-3.5-mini-instruct               | tee models/templates/microsoft-Phi-3.5-mini-instruct.jinja
+    ./scripts/get_chat_template.py mistralai/Mistral-Nemo-Instruct-2407          | tee models/templates/mistralai-Mistral-Nemo-Instruct-2407.jinja
+    ./scripts/get_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B tool_use | tee models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja
+    ./scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use   | tee models/templates/NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja
+    ./scripts/get_chat_template.py Qwen/Qwen2.5-7B-Instruct                      | tee models/templates/Qwen-Qwen2.5-7B-Instruct.jinja
 '''
 
 import json
