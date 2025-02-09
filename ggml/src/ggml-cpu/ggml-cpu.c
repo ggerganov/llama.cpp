@@ -7824,21 +7824,23 @@ static void ggml_compute_forward_mul_mat_id(
         const int64_t nr0 = ne01;
         const int64_t nr1 = cne1;
 
-
-#if defined(__aarch64__)
-        // disable for ARM
-        int chunk_size = (nr0 + nr1) / nth;
-#else
         int chunk_size = 16;
         if (nr0 == 1 || nr1 == 1) {
             chunk_size = 64;
         }
+
+#if defined(__aarch64__)
+        // disable for ARM
+        const bool disable_chunking = true;
+#else
+        // disable for NUMA
+        const bool disable_chunking = ggml_is_numa();
 #endif // defined(__aarch64__)
 
         int64_t nchunk0 = (nr0 + chunk_size - 1) / chunk_size;
         int64_t nchunk1 = (nr1 + chunk_size - 1) / chunk_size;
 
-        if (nchunk0 * nchunk1 < nth * 4 || ggml_is_numa()) {
+        if (nchunk0 * nchunk1 < nth * 4 || disable_chunking) {
             nchunk0 = nr0 > nr1 ? nth : 1;
             nchunk1 = nr0 > nr1 ? 1 : nth;
         }
