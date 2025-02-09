@@ -675,6 +675,10 @@ static void test_template_output_parsers() {
         assert_msg_equals(msg_from_json(message_assist_thoughts),
             common_chat_parse("<think>I'm thinking</think>Hello, world!\nWhat's up?",
             COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING));
+        assert_msg_equals(msg_from_json(message_assist_thoughts),
+            // Latest template update (ast of 20250209) adds a trailing <think>\n if add_generation_prompt is true.
+            common_chat_parse("I'm thinking</think>Hello, world!\nWhat's up?",
+            COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING));
         // test_template(tmpl, end_tokens, message_assist_call, tools,
         //               "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>special_function\n"
         //               "```json\n"

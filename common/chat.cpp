@@ -640,7 +640,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
 static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, bool extract_reasoning) {
     static std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static std::regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
-    static std::regex reasoning_content_regex("(<think>([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
+    static std::regex reasoning_content_regex("((?:<think>)?([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
     static std::regex tool_calls_regex("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)([\\s\\S\\r\\n]*?)<｜tool▁calls▁end｜>");
     common_chat_msg msg;
     msg.role = "assistant";
