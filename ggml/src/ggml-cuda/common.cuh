@@ -85,39 +85,24 @@ constexpr bool ggml_cuda_has_arch(const int arch) {
     return ggml_cuda_has_arch_impl(arch, __CUDA_ARCH_LIST__);
 }
 
-static int ggml_cuda_highest_compiled_arch(const int arch) {
-    switch (arch) {
-        case 1200: if (ggml_cuda_has_arch(1200)) return 1200; [[fallthrough]];
-        case 1010: if (ggml_cuda_has_arch(1010)) return 1010; [[fallthrough]];
-        case 1000: if (ggml_cuda_has_arch(1000)) return 1000; [[fallthrough]];
-        case  900: if (ggml_cuda_has_arch( 900)) return  900; [[fallthrough]];
-        case  890: if (ggml_cuda_has_arch( 890)) return  890; [[fallthrough]];
-        case  870: if (ggml_cuda_has_arch( 870)) return  870; [[fallthrough]];
-        case  860: if (ggml_cuda_has_arch( 860)) return  860; [[fallthrough]];
-        case  800: if (ggml_cuda_has_arch( 800)) return  800; [[fallthrough]];
-        case  750: if (ggml_cuda_has_arch( 750)) return  750; [[fallthrough]];
-        case  720: if (ggml_cuda_has_arch( 720)) return  720; [[fallthrough]];
-        case  700: if (ggml_cuda_has_arch( 700)) return  700; [[fallthrough]];
-        case  620: if (ggml_cuda_has_arch( 620)) return  620; [[fallthrough]];
-        case  610: if (ggml_cuda_has_arch( 610)) return  610; [[fallthrough]];
-        case  600: if (ggml_cuda_has_arch( 600)) return  600; [[fallthrough]];
-        case  530: if (ggml_cuda_has_arch( 530)) return  530; [[fallthrough]];
-        case  520: if (ggml_cuda_has_arch( 520)) return  520; [[fallthrough]];
-        case  500: if (ggml_cuda_has_arch( 500)) return  500; [[fallthrough]];
-        case  370: if (ggml_cuda_has_arch( 370)) return  370; [[fallthrough]];
-        case  350: if (ggml_cuda_has_arch( 350)) return  350; [[fallthrough]];
-        case  320: if (ggml_cuda_has_arch( 320)) return  320; [[fallthrough]];
-        case  300: if (ggml_cuda_has_arch( 300)) return  300; [[fallthrough]];
-        case  210: if (ggml_cuda_has_arch( 210)) return  210; [[fallthrough]];
-        case  200: if (ggml_cuda_has_arch( 200)) return  200; [[fallthrough]];
-        case  130: if (ggml_cuda_has_arch( 130)) return  130; [[fallthrough]];
-        case  120: if (ggml_cuda_has_arch( 120)) return  120; [[fallthrough]];
-        case  110: if (ggml_cuda_has_arch( 110)) return  110; [[fallthrough]];
-        case  100: if (ggml_cuda_has_arch( 100)) return  100;
+constexpr int ggml_cuda_highest_compiled_arch_impl(const int arch, const int cur) {
+    if (cur == 0) {
         GGML_ABORT("ggml was not compiled with any CUDA arch <= %d", arch);
-
-        default: GGML_ABORT("unknown CUDA arch: %d", arch);
     }
+    return cur;
+}
+
+template<class ... Archs>
+constexpr int ggml_cuda_highest_compiled_arch_impl(const int arch, const int cur, const int first, Archs... rest) {
+    if (first <= arch && first > cur) {
+        return ggml_cuda_highest_compiled_arch_impl(arch, first, rest...);
+    } else {
+        return ggml_cuda_highest_compiled_arch_impl(arch, cur, rest...);
+    }
+}
+
+constexpr int ggml_cuda_highest_compiled_arch(const int arch) {
+    return ggml_cuda_highest_compiled_arch_impl(arch, 0, __CUDA_ARCH_LIST__);
 }
 #else
 static int ggml_cuda_highest_compiled_arch(const int arch) {
