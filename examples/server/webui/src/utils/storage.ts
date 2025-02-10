@@ -211,6 +211,7 @@ interface LSConversation {
   id: string; // format: `conv-{timestamp}`
   lastModified: number; // timestamp from Date.now()
   messages: LSMessage[];
+  migrated?: boolean; // additionally, we add a flag to prevent duplicate migration
 }
 interface LSMessage {
   id: number;
@@ -227,10 +228,15 @@ async function migrationLStoIDB() {
   }
   if (res.length === 0) return;
   await db.transaction('rw', db.conversations, db.messages, async () => {
+    let migratedCount = 0;
     for (const conv of res) {
       const { id: convId, lastModified, messages } = conv;
       const firstMsg = messages[0];
       const lastMsg = messages.at(-1);
+      if (conv.migrated) {
+        console.log(`Skipping conversation ${convId} already migrated`);
+        continue;
+      }
       if (messages.length < 2 || !firstMsg || !lastMsg) {
         console.log(
           `Skipping conversation ${convId} with ${messages.length} messages`
@@ -266,13 +272,14 @@ async function migrationLStoIDB() {
           children: i === messages.length - 1 ? [] : [messages[i + 1].id],
         });
       }
-      localStorage.removeItem(convId);
+      localStorage.setItem(convId, JSON.stringify({ ...conv, migrated: true }));
+      migratedCount++;
       console.log(
         `Migrated conversation ${convId} with ${messages.length} messages`
       );
     }
     console.log(
-      `Migrated ${res.length} conversations from localStorage to IndexedDB`
+      `Migrated ${migratedCount} conversations from localStorage to IndexedDB`
     );
   });
 }
