@@ -9,121 +9,6 @@
 #include <stdexcept>
 #include <cinttypes>
 
-// llama output (TMP)
-
-// Make sure enough space is available for outputs.
-// Returns max number of outputs for which space was reserved.
-static size_t llama_output_reserve(struct llama_context & lctx, size_t n_outputs) {
-    const auto & cparams = lctx.cparams;
-    const auto & hparams = lctx.model.hparams;
-    const auto & vocab   = lctx.model.vocab;
-
-    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
-
-    const auto n_batch = cparams.n_batch;
-    const auto n_vocab = vocab.n_tokens();
-    const auto n_embd  = hparams.n_embd;
-
-    // TODO: use a per-batch flag for logits presence instead
-    const bool has_logits = !cparams.embeddings;
-    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
-
-    const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
-    const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
-
-    if (lctx.output_ids.empty()) {
-        // init, never resized afterwards
-        lctx.output_ids.resize(n_batch);
-    }
-
-    const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
-    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
-
-    // alloc only when more than the current capacity is required
-    // TODO: also consider shrinking the buffer
-    if (!lctx.buf_output || prev_size < new_size) {
-        if (lctx.buf_output) {
-#ifndef NDEBUG
-            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
-            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
-#endif
-            lctx.buf_output = nullptr;
-            lctx.logits = nullptr;
-            lctx.embd = nullptr;
-        }
-
-        auto * buft = ggml_backend_cpu_buffer_type();
-        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
-        auto * output_dev = lctx.model.dev_output();
-        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
-        if (output_dev_host_buft) {
-            buft = output_dev_host_buft;
-        }
-        lctx.buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
-        if (lctx.buf_output == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
-            return 0;
-        }
-    }
-
-    float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output.get());
-
-    lctx.logits = has_logits ? output_base               : nullptr;
-    lctx.embd   = has_embd   ? output_base + logits_size : nullptr;
-
-    lctx.output_size = n_outputs_max;
-    lctx.logits_size = logits_size;
-    lctx.embd_size   = embd_size;
-
-    // set all ids as invalid (negative)
-    std::fill(lctx.output_ids.begin(), lctx.output_ids.end(), -1);
-
-    ggml_backend_buffer_clear(lctx.buf_output.get(), 0);
-
-    lctx.n_outputs = 0;
-
-    return n_outputs_max;
-}
-
-// make the outputs have the same order they had in the user-provided batch
-static void llama_output_reorder(struct llama_context & ctx) {
-    std::vector<size_t> & out_ids = ctx.sbatch.out_ids;
-    if (!out_ids.empty()) {
-        const uint32_t n_vocab = ctx.model.vocab.n_tokens();
-        const uint32_t n_embd  = ctx.model.hparams.n_embd;
-
-        const int32_t n_outputs = ctx.n_outputs;
-        GGML_ASSERT((size_t) n_outputs == out_ids.size());
-
-        // TODO: is there something more efficient which also minimizes swaps?
-        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
-        for (int32_t i = 0; i < n_outputs - 1; ++i) {
-            int32_t j_min = i;
-            for (int32_t j = i + 1; j < n_outputs; ++j) {
-                if (out_ids[j] < out_ids[j_min]) {
-                    j_min = j;
-                }
-            }
-            if (j_min == i) { continue; }
-            std::swap(out_ids[i], out_ids[j_min]);
-            if (ctx.logits_size > 0) {
-                for (uint32_t k = 0; k < n_vocab; k++) {
-                    std::swap(ctx.logits[i*n_vocab + k], ctx.logits[j_min*n_vocab + k]);
-                }
-            }
-            if (ctx.embd_size > 0) {
-                for (uint32_t k = 0; k < n_embd; k++) {
-                    std::swap(ctx.embd[i*n_embd + k], ctx.embd[j_min*n_embd + k]);
-                }
-            }
-        }
-        std::fill(ctx.output_ids.begin(), ctx.output_ids.end(), -1);
-        for (int32_t i = 0; i < n_outputs; ++i) {
-            ctx.output_ids[out_ids[i]] = i;
-        }
-        out_ids.clear();
-    }
-}
 static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional) {
     // TODO move to hparams if a T5 variant appears that uses a different value
     const int64_t max_distance = 128;
@@ -334,7 +219,7 @@ llama_context::llama_context(
         // graph outputs buffer
         {
             // resized during inference when a batch uses more outputs
-            if (llama_output_reserve(*this, params.n_seq_max) < params.n_seq_max) {
+            if (reserve_outputs(params.n_seq_max) < params.n_seq_max) {
                 LLAMA_LOG_ERROR("%s: failed to reserve initial output buffer\n", __func__);
                 throw std::runtime_error("failed to reserve initial output buffer");
             }
@@ -716,7 +601,7 @@ int llama_context::decode(llama_batch & inp_batch) {
 
     // reserve output buffer
     // TODO: move to batch manager?
-    if (llama_output_reserve(*this, bman->n_outputs_all) < (size_t) n_outputs_all) {
+    if (reserve_outputs(bman->n_outputs_all) < (size_t) n_outputs_all) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %" PRId64 " outputs\n", __func__, n_outputs_all);
         return -2;
     };
@@ -940,7 +825,7 @@ int llama_context::encode(llama_batch & inp_batch) {
     const llama_ubatch ubatch = sbatch.split_simple(n_tokens);
 
     // reserve output buffer
-    if (llama_output_reserve(*this, n_tokens) < n_tokens) {
+    if (reserve_outputs(n_tokens) < n_tokens) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_tokens);
         return -2;
     };
@@ -1553,6 +1438,113 @@ void llama_context::set_inputs(const llama_ubatch & ubatch) {
             }
         }
     }
+}
+
+void llama_context::reorder_outputs() {
+    std::vector<size_t> & out_ids = sbatch.out_ids;
+    if (!out_ids.empty()) {
+        const uint32_t n_vocab = model.vocab.n_tokens();
+        const uint32_t n_embd  = model.hparams.n_embd;
+
+        GGML_ASSERT((size_t) n_outputs == out_ids.size());
+
+        // TODO: is there something more efficient which also minimizes swaps?
+        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
+        for (int32_t i = 0; i < n_outputs - 1; ++i) {
+            int32_t j_min = i;
+            for (int32_t j = i + 1; j < n_outputs; ++j) {
+                if (out_ids[j] < out_ids[j_min]) {
+                    j_min = j;
+                }
+            }
+            if (j_min == i) { continue; }
+            std::swap(out_ids[i], out_ids[j_min]);
+            if (logits_size > 0) {
+                for (uint32_t k = 0; k < n_vocab; k++) {
+                    std::swap(logits[i*n_vocab + k], logits[j_min*n_vocab + k]);
+                }
+            }
+            if (embd_size > 0) {
+                for (uint32_t k = 0; k < n_embd; k++) {
+                    std::swap(embd[i*n_embd + k], embd[j_min*n_embd + k]);
+                }
+            }
+        }
+        std::fill(output_ids.begin(), output_ids.end(), -1);
+        for (int32_t i = 0; i < n_outputs; ++i) {
+            output_ids[out_ids[i]] = i;
+        }
+        out_ids.clear();
+    }
+}
+
+size_t llama_context::reserve_outputs(size_t n_outputs) {
+    const auto & hparams = model.hparams;
+    const auto & vocab   = model.vocab;
+
+    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
+
+    const auto n_batch = cparams.n_batch;
+    const auto n_vocab = vocab.n_tokens();
+    const auto n_embd  = hparams.n_embd;
+
+    // TODO: use a per-batch flag for logits presence instead
+    const bool has_logits = !cparams.embeddings;
+    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+
+    logits_size = has_logits ? n_vocab*n_outputs_max : 0;
+    embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
+
+    if (output_ids.empty()) {
+        // init, never resized afterwards
+        output_ids.resize(n_batch);
+    }
+
+    const size_t prev_size = buf_output ? ggml_backend_buffer_get_size(buf_output.get()) : 0;
+    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
+
+    // alloc only when more than the current capacity is required
+    // TODO: also consider shrinking the buffer
+    if (!buf_output || prev_size < new_size) {
+        if (buf_output) {
+#ifndef NDEBUG
+            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
+            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
+#endif
+            buf_output = nullptr;
+            logits = nullptr;
+            embd = nullptr;
+        }
+
+        auto * buft = ggml_backend_cpu_buffer_type();
+        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
+        auto * output_dev = model.dev_output();
+        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
+        if (output_dev_host_buft) {
+            buft = output_dev_host_buft;
+        }
+        buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
+        if (buf_output == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            return 0;
+        }
+    }
+
+    float * output_base = (float *) ggml_backend_buffer_get_base(buf_output.get());
+
+    logits = has_logits ? output_base               : nullptr;
+    embd   = has_embd   ? output_base + logits_size : nullptr;
+
+    output_size = n_outputs_max;
+
+    // set all ids as invalid (negative)
+    std::fill(output_ids.begin(), output_ids.end(), -1);
+
+    ggml_backend_buffer_clear(buf_output.get(), 0);
+
+    n_outputs = 0;
+
+    return n_outputs_max;
 }
 
 // do mat_mul, while optionally apply lora
@@ -2827,8 +2819,7 @@ float * llama_get_logits(struct llama_context * ctx) {
     llama_synchronize(ctx);
 
     // reorder logits for backward compatibility
-    // TODO: maybe deprecate this
-    llama_output_reorder(*ctx);
+    ctx->reorder_outputs();
 
     return ctx->logits;
 }
@@ -2877,8 +2868,7 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     llama_synchronize(ctx);
 
     // reorder embeddings for backward compatibility
-    // TODO: maybe deprecate this
-    llama_output_reorder(*ctx);
+    ctx->reorder_outputs();
 
     return ctx->embd;
 }
@@ -3187,7 +3177,7 @@ struct llama_data_write {
     //}
 
     void write_output_ids(struct llama_context * ctx) {
-        llama_output_reorder(*ctx);
+        ctx->reorder_outputs();
 
         const uint32_t n_outputs = ctx->n_outputs;
 
@@ -3281,7 +3271,7 @@ struct llama_data_read {
         uint32_t n_outputs;
         read_to(&n_outputs, sizeof(n_outputs));
 
-        if (n_outputs > llama_output_reserve(*ctx, n_outputs)) {
+        if (n_outputs > ctx->reserve_outputs(n_outputs)) {
             throw std::runtime_error("could not reserve outputs");
         }
 

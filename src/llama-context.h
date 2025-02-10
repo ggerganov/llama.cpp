@@ -114,6 +114,14 @@ struct llama_context {
 
     void set_inputs(const llama_ubatch & ubatch);
 
+    // make the outputs have the same order they had in the user-provided batch
+    // TODO: maybe deprecate this
+    void reorder_outputs();
+
+    // Make sure enough space is available for outputs.
+    // Returns max number of outputs for which space was reserved.
+    size_t reserve_outputs(size_t n_outputs);
+
     ggml_tensor * build_lora_mm(
             ggml_context * ctx0,
              ggml_tensor * w,
