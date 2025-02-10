@@ -1553,7 +1553,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 LOG_INF("%d ", hparams.image_grid_pinpoints[i]);
             }
             LOG_INF("\n");
-            LOG_INF("vision_feature_layer: ");
+            LOG_INF("v_vision_feature_layer: ");
             for(int i = 0; i < 4 && (hparams.vision_feature_layer[i] > 0); i++) {
                 LOG_INF("%d ", hparams.vision_feature_layer[i]);
             }
