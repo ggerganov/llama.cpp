@@ -16,7 +16,7 @@
 #include "common.cuh"
 
 
-#if CUDART_VERSION >= 11080
+#if (CUDART_VERSION >= 11080) && (__CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER)
 
 static __device__ __forceinline__ int ggml_cuda_movmatrix(const int x) {
     int ret = 0;

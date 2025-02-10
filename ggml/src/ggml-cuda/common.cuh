@@ -47,6 +47,7 @@
 #define GGML_CUDA_CC_TURING     750
 #define GGML_CUDA_CC_AMPERE     800
 #define GGML_CUDA_CC_OFFSET_AMD 0x1000000
+#define GGML_CUDA_CC_HOPPER     900
 
 // GCN/CNDA, wave size is 64
 #define GGML_CUDA_CC_GCN4       (GGML_CUDA_CC_OFFSET_AMD + 0x803)  // Tonga, Fiji, Polaris, minimum for fast fp16
