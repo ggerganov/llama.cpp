@@ -37,35 +37,37 @@ void main() {
     const uint gidx = gl_GlobalInvocationID.x;
 
     const uint oh = gl_GlobalInvocationID.y;
-    const uint batch_ic = gl_GlobalInvocationID.z;
+    const uint batch = gl_GlobalInvocationID.z / p.IC;
+    const uint ic = gl_GlobalInvocationID.z % p.IC;
 
-    const uint batch = batch_ic / p.IC;
-    const uint ic = batch_ic % p.IC;
-
-    const uint ksize = p.OW * ((p.KH > 1) ? p.KW : 1);
+    const uint ksize = p.OW * (p.KH > 1 ? p.KW : 1);
     const uint src_base = ic * p.offset_delta + batch * p.batch_offset;
-    const uint dst_base = ((batch * p.OH + oh) * p.OW) * p.CHW + ic * p.KW * p.KH;
+    const uint dst_base = ((batch * p.OH + oh) * p.OW) * p.CHW + ic * (p.KW * p.KH);
+    const int oh_s1 = int(oh) * p.s1;
+    const uint base_idx = gidx * NUM_ITER;
 
     [[unroll]] for (uint idx = 0; idx < NUM_ITER; ++idx) {
 
-        const uint i = gidx * NUM_ITER + idx;
+        uint i = base_idx + idx;
+
         if (i >= p.pelements) {
-            continue;
+            break;
         }
 
-        const uint kx = i / ksize;
-        const uint ky = (i % ksize) / p.OW;
-        const uint ix = i % p.OW;
+        const uint kx  = i / ksize;
+        const uint rem = i % ksize;
+        const uint ky  = rem / p.OW;
+        const uint ix  = rem % p.OW;
 
-        const int iiw = int(ix * uint(p.s0)) + int(kx * uint(p.d0)) - p.p0;
-        const int iih = int(oh * uint(p.s1)) + int(ky * uint(p.d1)) - p.p1;
+        int iiw = int(ix) * p.s0 + int(kx) * p.d0 - p.p0;
+        int iih = oh_s1 + int(ky) * p.d1 - p.p1;
 
         const uint dst_offset = dst_base + ix * p.CHW + ky * p.KW + kx;
 
-        const bool valid = iih >= 0 && iih < int(p.IH) && iiw >= 0 && iiw < int(p.IW);
-        const uint src_offset = src_base + uint(iih) * p.IW + uint(iiw);
-
-        data_d[dst_offset] = D_TYPE(valid ? data_a[src_offset] : 0.0);
+        data_d[dst_offset] = D_TYPE((iih >= 0 && iih < int(p.IH) &&
+                                     iiw >= 0 && iiw < int(p.IW))
+                              ? data_a[src_base + uint(iih) * p.IW + uint(iiw)]
+                              : 0);
     }
 
 }
