@@ -4166,7 +4166,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         for (float max_bias : {0.0f, 8.0f}) {
             if (!mask && max_bias > 0.0f) continue;
             for (float scale : {1.0f, 0.1f}) {
-                for (int64_t ne0 : {16, 1024}) {
+                for (int64_t ne0 : {16, 1024, 2048}) {
                     for (int64_t ne1 : {16, 1024}) {
                         if (mask) {
                             for (ggml_type m_prec : {GGML_TYPE_F32, GGML_TYPE_F16}) {
