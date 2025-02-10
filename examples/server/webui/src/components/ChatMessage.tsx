@@ -47,18 +47,18 @@ export default function ChatMessage({
     let actualContent = '';
     let thought = '';
     let isThinking = false;
-    let thinkSplit = msg.content.split('<think>', 2);
-    actualContent += thinkSplit[0];
-    while (thinkSplit[1] !== undefined) {
+    let [match, ...rest] = msg.content.split('<think>');
+    actualContent += match;
+    while (rest.length !== 0) {
       // <think> tag found
-      thinkSplit = thinkSplit[1].split('</think>', 2);
-      thought += thinkSplit[0];
+      [match, ...rest] = rest.join('<think>').split('</think>');
+      thought += thought !== '' ? '\n***\n' + match : match;
       isThinking = true;
-      if (thinkSplit[1] !== undefined) {
+      if (rest.length !== 0) {
         // </think> closing tag found
         isThinking = false;
-        thinkSplit = thinkSplit[1].split('<think>', 2);
-        actualContent += thinkSplit[0];
+        [match, ...rest] = rest.join('</think>').split('<think>');
+        actualContent += match;
       }
     }
     return { content: actualContent, thought, isThinking };
