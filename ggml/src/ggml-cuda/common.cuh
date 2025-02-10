@@ -226,9 +226,19 @@ static bool fast_fp16_available(const int cc) {
     return fp16_available(cc) && cc != 610;
 }
 
-// Any FP16 tensor cores are available.
+// To be used for feature selection of external libraries, e.g. cuBLAS.
+static bool fast_fp16_hardware_available(const int cc) {
+    return cc >= GGML_CUDA_CC_PASCAL && cc != 610;
+}
+
+// Any FP16 tensor core instructions are available for ggml code.
 static bool fp16_mma_available(const int cc) {
     return cc < GGML_CUDA_CC_OFFSET_AMD && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_VOLTA;
+}
+
+// To be used for feature selection of external libraries, e.g. cuBLAS.
+static bool fp16_mma_hardware_available(const int cc) {
+    return cc < GGML_CUDA_CC_OFFSET_AMD && cc >= GGML_CUDA_CC_VOLTA;
 }
 
 // Volta technically had FP16 tensor cores but they work very differently compared to Turing and later.
