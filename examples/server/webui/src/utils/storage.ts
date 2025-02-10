@@ -55,6 +55,8 @@ const StorageUtils = {
   },
   /**
    * use in conjunction with getMessages to filter messages by leafNodeId
+   * includeRoot: whether to include the root node in the result
+   * if node with leafNodeId does not exist, return the path with the latest timestamp
    */
   filterByLeafNodeId(
     msgs: Readonly<Message[]>,
