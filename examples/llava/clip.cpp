@@ -1495,14 +1495,14 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // Load the vision feature layer indices if they are explicitly provided;
         // if multiple vision feature layers are present, the values will be concatenated
         // to form the final visual features.
+        // NOTE: gguf conversions should standardize the values of the vision feature layer to uints,
+        // since we use -1 as an unset value here.
         try {
             int idx = get_key_idx(ctx, KEY_VISION_FEATURE_LAYER);
             int n = gguf_get_arr_n(ctx, idx);
 
             const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
-            // HACK - need to set a good invalid number here; or maybe not, I guess it could just
-            // be that it's not set in GGUF, we read all numbers as valid, and from this point on,
-            // -1 is the sad one
+
             for (int i = 0; i < 4 && i < n && vision_feature_layer[i] != 0; ++i) {
                 hparams.vision_feature_layer[i] = vision_feature_layer[i];
             }
