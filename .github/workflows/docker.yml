@@ -28,10 +28,11 @@ jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       COMMIT_SHA: ${{ github.sha }}
     strategy:
+      fail-fast: false
       matrix:
         config:
           # Multi-stage build
@@ -97,10 +98,9 @@ jobs:
           GITHUB_BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
           GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
 
-      # https://github.com/jlumbroso/free-disk-space/tree/54081f138730dfa15788a46383842cd2f914a1be#example
       - name: Free Disk Space (Ubuntu)
         if: ${{ matrix.config.free_disk_space == true }}
-        uses: jlumbroso/free-disk-space@main
+        uses: ggml-org/free-disk-space@v1.3.1
         with:
           # this might remove tools that are actually needed,
           # if set to "true" but frees about 6 GB

@@ -23,6 +23,10 @@ from typing import (
     Set,
 )
 from re import RegexFlag
+import wget
+
+
+DEFAULT_HTTP_TIMEOUT = 12 if "LLAMA_SANITIZE" not in os.environ else 30
 
 
 class ServerResponse:
@@ -37,7 +41,7 @@ class ServerProcess:
     server_port: int = 8080
     server_host: str = "127.0.0.1"
     model_hf_repo: str = "ggml-org/models"
-    model_hf_file: str = "tinyllamas/stories260K.gguf"
+    model_hf_file: str | None = "tinyllamas/stories260K.gguf"
     model_alias: str = "tinyllama-2"
     temperature: float = 0.8
     seed: int = 42
@@ -68,12 +72,14 @@ class ServerProcess:
     pooling: str | None = None
     draft: int | None = None
     api_key: str | None = None
-    response_format: str | None = None
     lora_files: List[str] | None = None
     disable_ctx_shift: int | None = False
     draft_min: int | None = None
     draft_max: int | None = None
     no_webui: bool | None = None
+    jinja: bool | None = None
+    chat_template: str | None = None
+    chat_template_file: str | None = None
 
     # session variables
     process: subprocess.Popen | None = None
@@ -86,7 +92,7 @@ class ServerProcess:
         if "PORT" in os.environ:
             self.server_port = int(os.environ["PORT"])
 
-    def start(self, timeout_seconds: int = 10) -> None:
+    def start(self, timeout_seconds: int | None = DEFAULT_HTTP_TIMEOUT) -> None:
         if "LLAMA_SERVER_BIN_PATH" in os.environ:
             server_path = os.environ["LLAMA_SERVER_BIN_PATH"]
         elif os.name == "nt":
@@ -164,6 +170,12 @@ class ServerProcess:
             server_args.extend(["--draft-min", self.draft_min])
         if self.no_webui:
             server_args.append("--no-webui")
+        if self.jinja:
+            server_args.append("--jinja")
+        if self.chat_template:
+            server_args.extend(["--chat-template", self.chat_template])
+        if self.chat_template_file:
+            server_args.extend(["--chat-template-file", self.chat_template_file])
 
         args = [str(arg) for arg in [server_path, *server_args]]
         print(f"bench: starting server with: {' '.join(args)}")
@@ -179,7 +191,7 @@ class ServerProcess:
             creationflags=flags,
             stdout=sys.stdout,
             stderr=sys.stdout,
-            env={**os.environ, "LLAMA_CACHE": "tmp"},
+            env={**os.environ, "LLAMA_CACHE": "tmp"} if "LLAMA_CACHE" not in os.environ else None,
         )
         server_instances.add(self)
 
@@ -215,17 +227,18 @@ class ServerProcess:
         path: str,
         data: dict | Any | None = None,
         headers: dict | None = None,
+        timeout: float | None = None,
     ) -> ServerResponse:
         url = f"http://{self.server_host}:{self.server_port}{path}"
         parse_body = False
         if method == "GET":
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=timeout)
             parse_body = True
         elif method == "POST":
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)
             parse_body = True
         elif method == "OPTIONS":
-            response = requests.options(url, headers=headers)
+            response = requests.options(url, headers=headers, timeout=timeout)
         else:
             raise ValueError(f"Unimplemented method: {method}")
         result = ServerResponse()
@@ -377,6 +390,26 @@ def match_regex(regex: str, text: str) -> bool:
         ).search(text)
         is not None
     )
+
+
+def download_file(url: str, output_file_path: str | None = None) -> str:
+    """
+    Download a file from a URL to a local path. If the file already exists, it will not be downloaded again.
+
+    output_file_path is the local path to save the downloaded file. If not provided, the file will be saved in the root directory.
+
+    Returns the local path of the downloaded file.
+    """
+    file_name = url.split('/').pop()
+    output_file = f'./tmp/{file_name}' if output_file_path is None else output_file_path
+    if not os.path.exists(output_file):
+        print(f"Downloading {url} to {output_file}")
+        wget.download(url, out=output_file)
+        print(f"Done downloading to {output_file}")
+    else:
+        print(f"File already exists at {output_file}")
+    return output_file
+
 
 def is_slow_test_allowed():
     return os.environ.get("SLOW_TESTS") == "1" or os.environ.get("SLOW_TESTS") == "ON"

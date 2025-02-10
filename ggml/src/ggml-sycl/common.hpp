@@ -333,7 +333,11 @@ struct ggml_backend_sycl_context {
     // pool
     std::unique_ptr<ggml_sycl_pool> pools[GGML_SYCL_MAX_DEVICES];
 
+    std::unique_ptr<ggml_sycl_pool> host_pools[GGML_SYCL_MAX_DEVICES];
+
     static std::unique_ptr<ggml_sycl_pool> new_pool_for_device(queue_ptr qptr, int device);
+
+    static std::unique_ptr<ggml_sycl_pool> new_pool_for_host(queue_ptr qptr, int device);
 
     ggml_sycl_pool & pool(int device) {
         if (pools[device] == nullptr) {
@@ -345,6 +349,15 @@ struct ggml_backend_sycl_context {
     ggml_sycl_pool & pool() {
         return pool(device);
     }
+
+    ggml_sycl_pool & host_pool(int device) {
+        if (host_pools[device] == nullptr) {
+            host_pools[device] = new_pool_for_host(stream(device, 0), device);
+        }
+        return *host_pools[device];
+    }
+
+    ggml_sycl_pool & host_pool() { return host_pool(device); }
 };
 
 // common device functions
@@ -662,6 +675,7 @@ inline void ggml_sycl_op_bin_bcast(ggml_backend_sycl_context & ctx, const ggml_t
     }
 }
 
+bool gpu_has_xmx(sycl::device &dev);
 
 void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
                                  const ggml_tensor *src1, ggml_tensor *dst,

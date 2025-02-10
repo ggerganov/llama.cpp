@@ -45,10 +45,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-ub, --ubatch-size N` | physical maximum batch size (default: 512)<br/>(env: LLAMA_ARG_UBATCH) |
 | `--keep N` | number of tokens to keep from the initial prompt (default: 0, -1 = all) |
 | `-fa, --flash-attn` | enable Flash Attention (default: disabled)<br/>(env: LLAMA_ARG_FLASH_ATTN) |
-| `-p, --prompt PROMPT` | prompt to start generation with |
 | `--no-perf` | disable internal libllama performance timings (default: false)<br/>(env: LLAMA_ARG_NO_PERF) |
-| `-f, --file FNAME` | a file containing the prompt (default: none) |
-| `-bf, --binary-file FNAME` | binary file containing the prompt (default: none) |
 | `-e, --escape` | process escapes sequences (\n, \r, \t, \', \", \\) (default: true) |
 | `--no-escape` | do not process escape sequences |
 | `--rope-scaling {none,linear,yarn}` | RoPE frequency scaling method, defaults to linear unless specified by the model<br/>(env: LLAMA_ARG_ROPE_SCALING_TYPE) |
@@ -129,7 +126,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--grammar GRAMMAR` | BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '') |
 | `--grammar-file FNAME` | file to read grammar from |
 | `-j, --json-schema SCHEMA` | JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object<br/>For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead |
-
+| `--jinja` | Enable experimental Jinja templating engine (required for tool use) |
 
 **Example-specific params**
 
@@ -223,7 +220,7 @@ services:
 The project includes a web-based user interface that enables interaction with the model through the `/chat/completions` endpoint.
 
 The web UI is developed using:
-- `vue` framework for frontend development
+- `react` framework for frontend development
 - `tailwindcss` and `daisyui` for styling
 - `vite` for build tooling
 
@@ -239,9 +236,13 @@ npm i
 # to run the dev server
 npm run dev
 
-# to build the public/index.html
+# to build the public/index.html.gz
 npm run build
 ```
+After `public/index.html.gz` has been generated we need to generate the c++
+headers (like build/examples/server/index.html.gz.hpp) that will be included
+by server.cpp. This is done by building `llama-server` as described in the
+[build](#build) section above.
 
 NOTE: if you are using the vite dev server, you can change the API base URL to llama.cpp. To do that, run this code snippet in browser's console:
 
@@ -345,7 +346,7 @@ node index.js
 
 > [!IMPORTANT]
 >
-> This endpoint is **not** OAI-compatible
+> This endpoint is **not** OAI-compatible. For OAI-compatible client, use `/v1/completions` instead.
 
 *Options:*
 
@@ -452,12 +453,14 @@ These words will not be included in the completion, so make sure to add them to 
 
 `response_fields`: A list of response fields, for example: `"response_fields": ["content", "generation_settings/n_predict"]`. If the specified field is missing, it will simply be omitted from the response without triggering an error. Note that fields with a slash will be unnested; for example, `generation_settings/n_predict` will move the field `n_predict` from the `generation_settings` object to the root of the response and give it a new name.
 
+`lora`: A list of LoRA adapters to be applied to this specific request. Each object in the list must contain `id` and `scale` fields. For example: `[{"id": 0, "scale": 0.5}, {"id": 1, "scale": 1.1}]`. If a LoRA adapter is not specified in the list, its scale will default to `0.0`. Please note that requests with different LoRA configurations will not be batched together, which may result in performance degradation.
+
 **Response format**
 
 - Note: In streaming mode (`stream`), only `content`, `tokens` and `stop` will be returned until end of completion. Responses are sent using the [Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) standard. Note: the browser's `EventSource` interface cannot be used due to its lack of `POST` request support.
 
 - `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has a nested array `top_logprobs`. It contains at **maximum** `n_probs` elements:
-  ```json
+  ```
   {
     "content": "<the generated completion text>",
     "tokens": [ generated token ids if requested ],
@@ -523,6 +526,7 @@ These words will not be included in the completion, so make sure to add them to 
 - `tokens_evaluated`: Number of tokens evaluated in total from the prompt
 - `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
+
 ### POST `/tokenize`: Tokenize a given text
 
 *Options:*
@@ -557,7 +561,7 @@ If `with_pieces` is `true`:
 ```
 
 With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
-```json
+```
 {
   "tokens": [
     {"id": 198, "piece": [195]}, // hex C3
@@ -572,7 +576,23 @@ With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
 
 `tokens`: Set the tokens to detokenize.
 
+### POST `/apply-template`: Apply chat template to a conversation
+
+Uses the server's prompt template formatting functionality to convert chat messages to a single string expected by a chat model as input, but does not perform inference. Instead, the prompt string is returned in the `prompt` field of the JSON response. The prompt can then be modified as desired (for example, to insert "Sure!" at the beginning of the model's response) before sending to `/completion` to generate the chat response.
+
+*Options:*
+
+`messages`: (Required) Chat turns in the same format as `/v1/chat/completions`.
+
+**Response format**
+
+Returns a JSON object with a field `prompt` containing a string of the input messages formatted according to the model's chat template format.
+
 ### POST `/embedding`: Generate embedding of a given text
+
+> [!IMPORTANT]
+>
+> This endpoint is **not** OAI-compatible. For OAI-compatible client, use `/v1/embeddings` instead.
 
 The same as [the embedding example](../embedding) does.
 
@@ -744,96 +764,6 @@ To use this endpoint with POST method, you need to start server with `--props`
 
 - None yet
 
-### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
-
-Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
-
-*Options:*
-
-See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
-
-The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
-
-*Examples:*
-
-You can use either Python `openai` library with appropriate checkpoints:
-
-```python
-import openai
-
-client = openai.OpenAI(
-    base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
-    api_key = "sk-no-key-required"
-)
-
-completion = client.chat.completions.create(
-model="gpt-3.5-turbo",
-messages=[
-    {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
-    {"role": "user", "content": "Write a limerick about python exceptions"}
-]
-)
-
-print(completion.choices[0].message)
-```
-
-... or raw HTTP requests:
-
-```shell
-curl http://localhost:8080/v1/chat/completions \
--H "Content-Type: application/json" \
--H "Authorization: Bearer no-key" \
--d '{
-"model": "gpt-3.5-turbo",
-"messages": [
-{
-    "role": "system",
-    "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
-},
-{
-    "role": "user",
-    "content": "Write a limerick about python exceptions"
-}
-]
-}'
-```
-
-### POST `/v1/embeddings`: OpenAI-compatible embeddings API
-
-This endpoint requires that the model uses a pooling different than type `none`. The embeddings are normalized using the Eucledian norm.
-
-*Options:*
-
-See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
-
-*Examples:*
-
-- input as string
-
-  ```shell
-  curl http://localhost:8080/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer no-key" \
-  -d '{
-          "input": "hello",
-          "model":"GPT-4",
-          "encoding_format": "float"
-  }'
-  ```
-
-- `input` as string array
-
-  ```shell
-  curl http://localhost:8080/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer no-key" \
-  -d '{
-          "input": ["hello", "world"],
-          "model":"GPT-4",
-          "encoding_format": "float"
-  }'
-  ```
-
 ### POST `/embeddings`: non-OpenAI-compatible embeddings API
 
 This endpoint supports all poolings, including `--pooling none`. When the pooling is `none`, the responses will contain the *unnormalized* embeddings for *all* input tokens. For all other pooling types, only the pooled embeddings are returned, normalized using Euclidian norm.
@@ -850,7 +780,7 @@ Same as the `/v1/embeddings` endpoint.
 
 **Response format**
 
-```json
+```
 [
   {
     "index": 0,
@@ -1030,6 +960,8 @@ This endpoint returns the loaded LoRA adapters. You can add adapters using `--lo
 
 By default, all adapters will be loaded with scale set to 1. To initialize all adapters scale to 0, add `--lora-init-without-apply`
 
+Please note that this value will be overwritten by the `lora` field for each request.
+
 If an adapter is disabled, the scale will be set to 0.
 
 **Response format**
@@ -1051,6 +983,8 @@ If an adapter is disabled, the scale will be set to 0.
 
 ### POST `/lora-adapters`: Set list of LoRA adapters
 
+This sets the global scale for LoRA adapters. Please note that this value will be overwritten by the `lora` field for each request.
+
 To disable an adapter, either remove it from the list below, or set scale to 0.
 
 **Request format**
@@ -1063,6 +997,339 @@ To know the `id` of the adapter, use GET `/lora-adapters`
   {"id": 1, "scale": 0.8}
 ]
 ```
+
+## OpenAI-compatible API Endpoints
+
+### GET `/v1/models`: OpenAI-compatible Model Info API
+
+Returns information about the loaded model. See [OpenAI Models API documentation](https://platform.openai.com/docs/api-reference/models).
+
+The returned list always has one single element.
+
+By default, model `id` field is the path to model file, specified via `-m`. You can set a custom value for model `id` field via `--alias` argument. For example, `--alias gpt-4o-mini`.
+
+Example:
+
+```json
+{
+    "object": "list",
+    "data": [
+        {
+            "id": "../models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+            "object": "model",
+            "created": 1735142223,
+            "owned_by": "llamacpp",
+            "meta": {
+                "vocab_type": 2,
+                "n_vocab": 128256,
+                "n_ctx_train": 131072,
+                "n_embd": 4096,
+                "n_params": 8030261312,
+                "size": 4912898304
+            }
+        }
+    ]
+}
+```
+
+### POST `/v1/completions`: OpenAI-compatible Completions API
+
+Given an input `prompt`, it returns the predicted completion. Streaming mode is also supported. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps.
+
+*Options:*
+
+See [OpenAI Completions API documentation](https://platform.openai.com/docs/api-reference/completions).
+
+llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+*Examples:*
+
+Example usage with `openai` python library:
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+    api_key = "sk-no-key-required"
+)
+
+completion = client.completions.create(
+  model="davinci-002",
+  prompt="I believe the meaning of life is",
+  max_tokens=8
+)
+
+print(completion.choices[0].text)
+```
+
+### POST `/v1/chat/completions`: OpenAI-compatible Chat Completions API
+
+Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
+
+*Options:*
+
+See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). llama.cpp `/completion`-specific features such as `mirostat` are also supported.
+
+The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` or `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`), similar to other OpenAI-inspired API providers.
+
+*Examples:*
+
+You can use either Python `openai` library with appropriate checkpoints:
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+    api_key = "sk-no-key-required"
+)
+
+completion = client.chat.completions.create(
+  model="gpt-3.5-turbo",
+  messages=[
+    {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
+    {"role": "user", "content": "Write a limerick about python exceptions"}
+  ]
+)
+
+print(completion.choices[0].message)
+```
+
+... or raw HTTP requests:
+
+```shell
+curl http://localhost:8080/v1/chat/completions \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer no-key" \
+-d '{
+"model": "gpt-3.5-turbo",
+"messages": [
+{
+    "role": "system",
+    "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
+},
+{
+    "role": "user",
+    "content": "Write a limerick about python exceptions"
+}
+]
+}'
+```
+
+*Tool call support*
+
+[Function calling](https://platform.openai.com/docs/guides/function-calling) is supported for all models (see https://github.com/ggerganov/llama.cpp/pull/9639):
+
+- Requires `--jinja` flag
+- Native tool call formats supported:
+  - Llama 3.1 / 3.3 (including builtin tools support - tool names for `wolfram_alpha`, `web_search` / `brave_search`, `code_interpreter`), Llama 3.2
+  - Functionary v3.1 / v3.2
+  - Hermes 2/3, Qwen 2.5
+  - Mistral Nemo
+  - Firefunction v2
+  - Command R7B
+  - DeepSeek R1 (WIP / seems reluctant to call any tools?)
+
+  <details>
+  <summary>Show some common templates and which format handler they use</summary>
+
+  | Template | Format |
+  |----------|--------|
+  | CohereForAI-c4ai-command-r-plus-default.jinja | generic tool calls |
+  | CohereForAI-c4ai-command-r-plus-rag.jinja | generic tool calls |
+  | CohereForAI-c4ai-command-r-plus-tool_use.jinja | generic tool calls |
+  | MiniMaxAI-MiniMax-Text-01.jinja | generic tool calls |
+  | NexaAIDev-Octopus-v2.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja | hermes 2 pro tool calls |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-2-Pro-Mistral-7B-tool_use.jinja | hermes 2 pro tool calls |
+  | NousResearch-Hermes-3-Llama-3.1-70B-default.jinja | generic tool calls |
+  | NousResearch-Hermes-3-Llama-3.1-70B-tool_use.jinja | hermes 2 pro tool calls |
+  | OrionStarAI-Orion-14B-Chat.jinja | generic tool calls |
+  | Qwen-QwQ-32B-Preview.jinja | hermes 2 pro tool calls |
+  | Qwen-Qwen2-7B-Instruct.jinja | generic tool calls |
+  | Qwen-Qwen2-VL-7B-Instruct.jinja | generic tool calls |
+  | Qwen-Qwen2.5-7B-Instruct.jinja | hermes 2 pro tool calls |
+  | Qwen-Qwen2.5-Math-7B-Instruct.jinja | hermes 2 pro tool calls |
+  | TheBloke-FusionNet_34Bx2_MoE-AWQ.jinja | generic tool calls |
+  | abacusai-Fewshot-Metamath-OrcaVicuna-Mistral.jinja | generic tool calls |
+  | bofenghuang-vigogne-2-70b-chat.jinja | generic tool calls |
+  | databricks-dbrx-instruct.jinja | generic tool calls |
+  | deepseek-ai-DeepSeek-Coder-V2-Instruct.jinja | generic tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-R1-Distill-Qwen-7B.jinja | deepseek r1 tool calls |
+  | deepseek-ai-DeepSeek-V2.5.jinja | deepseek r1 tool calls |
+  | deepseek-ai-deepseek-coder-33b-instruct.jinja | generic tool calls |
+  | google-gemma-2-2b-it.jinja | generic tool calls |
+  | google-gemma-7b-it.jinja | generic tool calls |
+  | indischepartij-MiniCPM-3B-OpenHermes-2.5-v2.jinja | generic tool calls |
+  | mattshumer-Reflection-Llama-3.1-70B.jinja | generic tool calls |
+  | meetkai-functionary-medium-v3.2.jinja | functionary v3.2 tool calls |
+  | meta-llama-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | meta-llama-Llama-3.2-3B-Instruct.jinja | llama 3.x tool calls |
+  | meta-llama-Llama-3.3-70B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | meta-llama-Meta-Llama-3.1-8B-Instruct.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | microsoft-Phi-3-medium-4k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3-mini-4k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3-small-8k-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3.5-mini-instruct.jinja | generic tool calls |
+  | microsoft-Phi-3.5-vision-instruct.jinja | generic tool calls |
+  | mistralai-Mistral-7B-Instruct-v0.2.jinja | generic tool calls |
+  | mistralai-Mistral-Large-Instruct-2407.jinja | mistral nemo tool calls |
+  | mistralai-Mistral-Large-Instruct-2411.jinja | generic tool calls |
+  | mistralai-Mistral-Nemo-Instruct-2407.jinja | mistral nemo tool calls |
+  | mistralai-Mixtral-8x7B-Instruct-v0.1.jinja | generic tool calls |
+  | mlabonne-AlphaMonarch-7B.jinja | generic tool calls |
+  | nvidia-Llama-3.1-Nemotron-70B-Instruct-HF.jinja | llama 3.x tool calls (w/ builtin tools) |
+  | openchat-openchat-3.5-0106.jinja | generic tool calls |
+  | teknium-OpenHermes-2.5-Mistral-7B.jinja | generic tool calls |
+
+  This table can be generated with:
+
+  ```bash
+  ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
+
+  </details>
+
+- Generic tool call is supported when the template isn't recognized by native format handlers (you'll see `Chat format: Generic` in the logs).
+  - Use `--chat-template-file` to override the template when appropriate (see examples below)
+  - Generic support may consume more tokens and be less efficient than a model's native format.
+
+- Run with:
+
+  ```shell
+  # Native support:
+  llama-server --jinja -fa -hf bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/Mistral-Nemo-Instruct-2407-GGUF:Q6_K_L
+  llama-server --jinja -fa -hf bartowski/functionary-small-v3.2-GGUF:Q4_K_M
+  llama-server --jinja -fa -hf bartowski/Llama-3.3-70B-Instruct-GGUF:Q4_K_M
+
+  # Native support requires the right template for these GGUFs:
+
+  llama-server --jinja -fa -hf bartowski/Hermes-2-Pro-Llama-3-8B-GGUF:Q4_K_M \
+    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-2-Pro-Llama-3-8B tool_use )
+
+  llama-server --jinja -fa -hf bartowski/Hermes-3-Llama-3.1-8B-GGUF:Q4_K_M \
+    --chat-template-file <( python scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use )
+
+  llama-server --jinja -fa -hf bartowski/firefunction-v2-GGUF -hff firefunction-v2-IQ1_M.gguf \
+    --chat-template-file <( python scripts/get_chat_template.py fireworks-ai/llama-3-firefunction-v2 tool_use )
+
+  llama-server --jinja -fa -hf bartowski/c4ai-command-r7b-12-2024-GGUF:Q6_K_L \
+    --chat-template-file <( python scripts/get_chat_template.py CohereForAI/c4ai-command-r7b-12-2024 tool_use )
+
+  # Generic format support
+  llama-server --jinja -fa -hf bartowski/phi-4-GGUF:Q4_0
+  llama-server --jinja -fa -hf bartowski/gemma-2-2b-it-GGUF:Q8_0
+  llama-server --jinja -fa -hf bartowski/c4ai-command-r-v01-GGUF:Q2_K
+  ```
+
+- Test in CLI:
+
+  ```bash
+  curl http://localhost:8080/v1/chat/completions -d '{
+    "model": "gpt-3.5-turbo",
+    "tools": [
+      {
+        "type":"function",
+        "function":{
+          "name":"get_current_weather",
+          "description":"Get the current weather in a given location",
+          "parameters":{
+            "type":"object",
+            "properties":{
+              "location":{
+                "type":"string",
+                "description":"The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required":["location"]
+          }
+        }
+      }
+    ],
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the weather like in Istanbul?."
+      }
+    ]
+  }'
+  ```
+
+  <details>
+  <summary>Show output</summary>
+
+  ```json
+  {
+    "choices": [
+      {
+        "finish_reason": "tool",
+        "index": 0,
+        "message": {
+          "content": null,
+          "tool_calls": [
+            {
+              "name": "python",
+              "arguments": "{\"code\":\" \\nprint(\\\"Hello, World!\\\")\"}"
+            }
+          ],
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 1727287211,
+    "model": "gpt-3.5-turbo",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 16,
+      "prompt_tokens": 44,
+      "total_tokens": 60
+    },
+    "id": "chatcmpl-Htbgh9feMmGM0LEH2hmQvwsCxq3c6Ni8"
+  }
+  ```
+
+  </details>
+
+### POST `/v1/embeddings`: OpenAI-compatible embeddings API
+
+This endpoint requires that the model uses a pooling different than type `none`. The embeddings are normalized using the Eucledian norm.
+
+*Options:*
+
+See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).
+
+*Examples:*
+
+- input as string
+
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": "hello",
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
+
+- `input` as string array
+
+  ```shell
+  curl http://localhost:8080/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer no-key" \
+  -d '{
+          "input": ["hello", "world"],
+          "model":"GPT-4",
+          "encoding_format": "float"
+  }'
+  ```
 
 ## More examples
 

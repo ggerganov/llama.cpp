@@ -1,5 +1,7 @@
 import pytest
+import requests
 import time
+from openai import OpenAI
 from utils import *
 
 server = ServerPreset.tinyllama2()
@@ -83,6 +85,40 @@ def test_completion_stream_vs_non_stream():
     for data in res_stream:
         content_stream += data["content"]
     assert content_stream == res_non_stream.body["content"]
+
+
+def test_completion_with_openai_library():
+    global server
+    server.start()
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
+    res = client.completions.create(
+        model="davinci-002",
+        prompt="I believe the meaning of life is",
+        max_tokens=8,
+    )
+    assert res.system_fingerprint is not None and res.system_fingerprint.startswith("b")
+    assert res.choices[0].finish_reason == "length"
+    assert res.choices[0].text is not None
+    assert match_regex("(going|bed)+", res.choices[0].text)
+
+
+def test_completion_stream_with_openai_library():
+    global server
+    server.start()
+    client = OpenAI(api_key="dummy", base_url=f"http://{server.server_host}:{server.server_port}/v1")
+    res = client.completions.create(
+        model="davinci-002",
+        prompt="I believe the meaning of life is",
+        max_tokens=8,
+        stream=True,
+    )
+    output_text = ''
+    for data in res:
+        choice = data.choices[0]
+        if choice.finish_reason is None:
+            assert choice.text is not None
+            output_text += choice.text
+    assert match_regex("(going|bed)+", output_text)
 
 
 @pytest.mark.parametrize("n_slots", [1, 2])
@@ -370,3 +406,23 @@ def test_n_probs_post_sampling():
             assert "bytes" in prob and type(prob["bytes"]) == list
         # because the test model usually output token with either 100% or 0% probability, we need to check all the top_probs
         assert any(prob["prob"] == 1.0 for prob in tok["top_probs"])
+
+
+def test_cancel_request():
+    global server
+    server.n_ctx = 4096
+    server.n_predict = -1
+    server.n_slots = 1
+    server.server_slots = True
+    server.start()
+    # send a request that will take a long time, but cancel it before it finishes
+    try:
+        server.make_request("POST", "/completion", data={
+            "prompt": "I believe the meaning of life is",
+        }, timeout=0.1)
+    except requests.exceptions.ReadTimeout:
+        pass # expected
+    # make sure the slot is free
+    time.sleep(1) # wait for HTTP_POLLING_SECONDS
+    res = server.make_request("GET", "/slots")
+    assert res.body[0]["is_processing"] == False
