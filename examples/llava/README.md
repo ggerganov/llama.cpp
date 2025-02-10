@@ -101,7 +101,9 @@ python ./examples/convert_legacy_llama.py ../llava-v1.6-vicuna-7b/ --skip-unknow
 ```
 
 **note** llava-1.6 needs more context than llava-1.5, at least 3000 is needed (just run it at -c 4096)
+
 **note** llava-1.6 greatly benefits from batched prompt processing (defaults work)
+
 **note** if the language model in step `6)` is incompatible with the legacy conversion script, the easiest way handle the LLM model conversion is to load the model in transformers, and export only the LLM from the llava next model.
 
 ```python
