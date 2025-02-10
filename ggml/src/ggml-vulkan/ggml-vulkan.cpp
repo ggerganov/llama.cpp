@@ -167,6 +167,7 @@ struct vk_device_struct {
     uint32_t subgroup_size;
     uint32_t shader_core_count;
     bool uma;
+    bool prefer_host_memory;
     bool float_controls_rte_fp16;
 
     bool subgroup_size_control;
@@ -1294,7 +1295,9 @@ static vk_buffer ggml_vk_create_buffer_check(vk_device& device, size_t size, vk:
 static vk_buffer ggml_vk_create_buffer_device(vk_device& device, size_t size) {
     vk_buffer buf;
     try {
-        if (device->uma) {
+        if (device->prefer_host_memory) {
+            buf = ggml_vk_create_buffer(device, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        } else if (device->uma) {
             // Fall back to host memory type
             buf = ggml_vk_create_buffer(device, size, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         } else {
@@ -2198,6 +2201,9 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         device->physical_device = physical_devices[dev_num];
         const std::vector<vk::ExtensionProperties> ext_props = device->physical_device.enumerateDeviceExtensionProperties();
+
+        const char* GGML_VK_PREFER_HOST_MEMORY = getenv("GGML_VK_PREFER_HOST_MEMORY");
+        device->prefer_host_memory = GGML_VK_PREFER_HOST_MEMORY != nullptr;
 
         bool fp16_storage = false;
         bool fp16_compute = false;
