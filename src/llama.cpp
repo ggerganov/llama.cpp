@@ -6453,7 +6453,7 @@ struct llm_build_context {
                 struct ggml_tensor * Kcur = nullptr;
                 struct ggml_tensor * Vcur = nullptr;
 
-                if (model.type == LLM_TYPE_1_5B || model.type == LLM_TYPE_4B || model.type == LLM_TYPE_9B) {
+                if (model.layers[il].wqkv == nullptr) {
                     Qcur = build_lora_mm(model.layers[il].wq, cur);
                     if (model.layers[il].bq) {
                         Qcur = ggml_add(ctx0, Qcur, model.layers[il].bq);
@@ -8184,8 +8184,6 @@ static struct llama_model * llama_model_load_from_file_impl(
         struct llama_model_params params) {
     ggml_time_init();
 
-    llama_model * model = new llama_model(params);
-
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
         params.progress_callback_user_data = &cur_percentage;
@@ -8202,6 +8200,8 @@ static struct llama_model * llama_model_load_from_file_impl(
             return true;
         };
     }
+
+    llama_model * model = new llama_model(params);
 
     // create list of devices to use with this model
     if (params.devices) {
