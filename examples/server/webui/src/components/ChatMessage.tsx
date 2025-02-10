@@ -13,7 +13,7 @@ interface SplitMessage {
 
 export default function ChatMessage({
   msg,
-  siblingLastNodeIds,
+  siblingLeafNodeIds,
   siblingCurrIdx,
   id,
   onRegenerateMessage,
@@ -22,7 +22,7 @@ export default function ChatMessage({
   isPending,
 }: {
   msg: Message | PendingMessage;
-  siblingLastNodeIds: Message['id'][];
+  siblingLeafNodeIds: Message['id'][];
   siblingCurrIdx: number;
   id?: string;
   onRegenerateMessage(msg: Message): void;
@@ -45,8 +45,8 @@ export default function ChatMessage({
         : null,
     [msg.timings]
   );
-  const nextSibling = siblingLastNodeIds[siblingCurrIdx + 1];
-  const prevSibling = siblingLastNodeIds[siblingCurrIdx - 1];
+  const nextSibling = siblingLeafNodeIds[siblingCurrIdx + 1];
+  const prevSibling = siblingLeafNodeIds[siblingCurrIdx - 1];
 
   // for reasoning model, we split the message into content and thought
   // TODO: implement this as remark/rehype plugin in the future
@@ -203,7 +203,7 @@ export default function ChatMessage({
             'flex-row-reverse': msg.role === 'user',
           })}
         >
-          {siblingLastNodeIds && siblingLastNodeIds.length > 1 && (
+          {siblingLeafNodeIds && siblingLeafNodeIds.length > 1 && (
             <div className="flex gap-1 items-center opacity-60 text-sm">
               <button
                 className={classNames({
@@ -215,7 +215,7 @@ export default function ChatMessage({
                 <ChevronLeftIcon className="h-4 w-4" />
               </button>
               <span>
-                {siblingCurrIdx + 1} / {siblingLastNodeIds.length}
+                {siblingCurrIdx + 1} / {siblingLeafNodeIds.length}
               </span>
               <button
                 className={classNames({

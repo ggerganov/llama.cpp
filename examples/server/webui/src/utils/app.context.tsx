@@ -23,7 +23,7 @@ interface AppContextValue {
   isGenerating: (convId: string) => boolean;
   sendMessage: (
     convId: string | null,
-    lastNodeId: Message['id'] | null,
+    leafNodeId: Message['id'] | null,
     content: string,
     onChunk: CallbackGeneratedChunk
   ) => Promise<boolean>;
@@ -47,7 +47,7 @@ interface AppContextValue {
 }
 
 // this callback is used for scrolling to the bottom of the chat and switching to the last node
-export type CallbackGeneratedChunk = () => void;
+export type CallbackGeneratedChunk = (currLeafNodeId?: Message['id']) => void;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AppContext = createContext<AppContextValue>({} as any);
@@ -130,7 +130,7 @@ export const AppContextProvider = ({
 
   const generateMessage = async (
     convId: string,
-    lastNodeId: Message['id'],
+    leafNodeId: Message['id'],
     onChunk: CallbackGeneratedChunk
   ) => {
     if (isGenerating(convId)) return;
@@ -141,9 +141,9 @@ export const AppContextProvider = ({
       throw new Error('Current conversation is not found');
     }
 
-    const currMessages = StorageUtils.filterByLastNodeId(
+    const currMessages = StorageUtils.filterByLeafNodeId(
       await StorageUtils.getMessages(convId),
-      lastNodeId,
+      leafNodeId,
       false
     );
     const abortController = new AbortController();
@@ -161,7 +161,7 @@ export const AppContextProvider = ({
       timestamp: pendingId,
       role: 'assistant',
       content: null,
-      parent: lastNodeId,
+      parent: leafNodeId,
       children: [],
     };
     setPending(convId, pendingMsg);
@@ -264,26 +264,26 @@ export const AppContextProvider = ({
     }
 
     if (pendingMsg.content !== null) {
-      await StorageUtils.appendMsg(pendingMsg as Message, lastNodeId);
+      await StorageUtils.appendMsg(pendingMsg as Message, leafNodeId);
     }
     setPending(convId, null);
-    onChunk(); // trigger scroll to bottom and switch to the last node
+    onChunk(pendingId); // trigger scroll to bottom and switch to the last node
   };
 
   const sendMessage = async (
     convId: string | null,
-    lastNodeId: Message['id'] | null,
+    leafNodeId: Message['id'] | null,
     content: string,
     onChunk: CallbackGeneratedChunk
   ): Promise<boolean> => {
     if (isGenerating(convId ?? '') || content.trim().length === 0) return false;
 
-    if (convId === null || convId.length === 0 || lastNodeId === null) {
+    if (convId === null || convId.length === 0 || leafNodeId === null) {
       const conv = await StorageUtils.createConversation(
         content.substring(0, 256)
       );
       convId = conv.id;
-      lastNodeId = conv.currNode;
+      leafNodeId = conv.currNode;
       // if user is creating a new conversation, redirect to the new conversation
       navigate(`/chat/${convId}`);
     }
@@ -298,12 +298,12 @@ export const AppContextProvider = ({
         convId,
         role: 'user',
         content,
-        parent: lastNodeId,
+        parent: leafNodeId,
         children: [],
       },
-      lastNodeId
+      leafNodeId
     );
-    onChunk();
+    onChunk(currMsgId);
 
     try {
       await generateMessage(convId, currMsgId, onChunk);
@@ -346,8 +346,8 @@ export const AppContextProvider = ({
       );
       parentNodeId = currMsgId;
     }
+    onChunk(parentNodeId);
 
-    onChunk();
     await generateMessage(convId, parentNodeId, onChunk);
   };
 

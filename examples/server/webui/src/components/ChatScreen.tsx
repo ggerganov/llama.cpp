@@ -6,24 +6,29 @@ import { classNames, throttle } from '../utils/misc';
 import CanvasPyInterpreter from './CanvasPyInterpreter';
 import StorageUtils from '../utils/storage';
 
+/**
+ * A message display is a message node with additional information for rendering.
+ * For example, siblings of the message node are stored as their last node (aka leaf node).
+ */
 export interface MessageDisplay {
   msg: Message | PendingMessage;
-  siblingLastNodeIds: Message['id'][];
+  siblingLeafNodeIds: Message['id'][];
   siblingCurrIdx: number;
   isPending?: boolean;
 }
 
 function getListMessageDisplay(
   msgs: Readonly<Message[]>,
-  lastNodeId: Message['id']
+  leafNodeId: Message['id']
 ): MessageDisplay[] {
-  const currNodes = StorageUtils.filterByLastNodeId(msgs, lastNodeId, true);
+  const currNodes = StorageUtils.filterByLeafNodeId(msgs, leafNodeId, true);
   const res: MessageDisplay[] = [];
   const nodeMap = new Map<Message['id'], Message>();
   for (const msg of msgs) {
     nodeMap.set(msg.id, msg);
   }
-  const findLastNode = (msgId: Message['id']): Message['id'] => {
+  // find leaf node from a message node
+  const findLeafNode = (msgId: Message['id']): Message['id'] => {
     let currNode: Message | undefined = nodeMap.get(msgId);
     while (currNode) {
       if (currNode.children.length === 0) break;
@@ -39,7 +44,7 @@ function getListMessageDisplay(
     if (msg.type !== 'root') {
       res.push({
         msg,
-        siblingLastNodeIds: siblings.map(findLastNode),
+        siblingLeafNodeIds: siblings.map(findLeafNode),
         siblingCurrIdx: siblings.indexOf(msg.id),
       });
     }
@@ -77,11 +82,12 @@ export default function ChatScreen() {
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
 
+  // keep track of leaf node for rendering
   const [currNodeId, setCurrNodeId] = useState<number>(-1);
   const messages: MessageDisplay[] = useMemo(() => {
     if (!viewingChat) return [];
     else return getListMessageDisplay(viewingChat.messages, currNodeId);
-  }, [currNodeId, viewingChat?.messages]);
+  }, [currNodeId, viewingChat]);
 
   const currConvId = viewingChat?.conv.id ?? null;
   const pendingMsg: PendingMessage | undefined =
@@ -94,7 +100,10 @@ export default function ChatScreen() {
     scrollToBottom(false, 1);
   }, [currConvId]);
 
-  const onChunk: CallbackGeneratedChunk = () => {
+  const onChunk: CallbackGeneratedChunk = (currLeafNodeId?: Message['id']) => {
+    if (currLeafNodeId) {
+      setCurrNodeId(currLeafNodeId);
+    }
     scrollToBottom(true);
   };
 
@@ -141,12 +150,14 @@ export default function ChatScreen() {
   };
 
   const hasCanvas = !!canvasData;
+
+  // due to some timing issues of StorageUtils.appendMsg(), we need to make sure the pendingMsg is not duplicated upon rendering (i.e. appears once in the saved conversation and once in the pendingMsg)
   const pendingMsgDisplay: MessageDisplay[] =
     pendingMsg && messages.at(-1)?.msg.id !== pendingMsg.id
       ? [
           {
             msg: pendingMsg,
-            siblingLastNodeIds: [],
+            siblingLeafNodeIds: [],
             siblingCurrIdx: 0,
             isPending: true,
           },
@@ -178,7 +189,7 @@ export default function ChatScreen() {
             <ChatMessage
               key={msg.msg.id}
               msg={msg.msg}
-              siblingLastNodeIds={msg.siblingLastNodeIds}
+              siblingLeafNodeIds={msg.siblingLeafNodeIds}
               siblingCurrIdx={msg.siblingCurrIdx}
               onRegenerateMessage={handleRegenerateMessage}
               onEditMessage={handleEditMessage}

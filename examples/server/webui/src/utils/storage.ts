@@ -48,17 +48,17 @@ const StorageUtils = {
     return (await db.conversations.where('id').equals(convId).first()) ?? null;
   },
   /**
-   * get messages by convId and timeline
+   * get all message nodes in a conversation
    */
   async getMessages(convId: string): Promise<Message[]> {
     return await db.messages.where({ convId }).toArray();
   },
   /**
-   * use in conjunction with getMessages to filter messages by lastNodeId
+   * use in conjunction with getMessages to filter messages by leafNodeId
    */
-  filterByLastNodeId(
+  filterByLeafNodeId(
     msgs: Readonly<Message[]>,
-    lastNodeId: Message['id'],
+    leafNodeId: Message['id'],
     includeRoot: boolean
   ): Readonly<Message[]> {
     const res: Message[] = [];
@@ -66,7 +66,7 @@ const StorageUtils = {
     for (const msg of msgs) {
       nodeMap.set(msg.id, msg);
     }
-    let startNode: Message | undefined = nodeMap.get(lastNodeId);
+    let startNode: Message | undefined = nodeMap.get(leafNodeId);
     if (!startNode) {
       // if not found, we return the path with the latest timestamp
       let latestTime = -1;
@@ -77,7 +77,7 @@ const StorageUtils = {
         }
       }
     }
-    // traverse the path from lastNodeId to root
+    // traverse the path from leafNodeId to root
     // startNode can never be undefined here
     let currNode: Message | undefined = startNode;
     while (currNode) {
@@ -89,7 +89,7 @@ const StorageUtils = {
     return res;
   },
   /**
-   * create a new conversation with a default timeline number 0
+   * create a new conversation with a default root node
    */
   async createConversation(name: string): Promise<Conversation> {
     const now = Date.now();
