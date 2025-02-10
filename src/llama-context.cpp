@@ -9,6 +9,121 @@
 #include <stdexcept>
 #include <cinttypes>
 
+// llama output (TMP)
+
+// Make sure enough space is available for outputs.
+// Returns max number of outputs for which space was reserved.
+static size_t llama_output_reserve(struct llama_context & lctx, size_t n_outputs) {
+    const auto & cparams = lctx.cparams;
+    const auto & hparams = lctx.model.hparams;
+    const auto & vocab   = lctx.model.vocab;
+
+    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
+
+    const auto n_batch = cparams.n_batch;
+    const auto n_vocab = vocab.n_tokens();
+    const auto n_embd  = hparams.n_embd;
+
+    // TODO: use a per-batch flag for logits presence instead
+    const bool has_logits = !cparams.embeddings;
+    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+
+    const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
+    const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
+
+    if (lctx.output_ids.empty()) {
+        // init, never resized afterwards
+        lctx.output_ids.resize(n_batch);
+    }
+
+    const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
+    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
+
+    // alloc only when more than the current capacity is required
+    // TODO: also consider shrinking the buffer
+    if (!lctx.buf_output || prev_size < new_size) {
+        if (lctx.buf_output) {
+#ifndef NDEBUG
+            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
+            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
+#endif
+            lctx.buf_output = nullptr;
+            lctx.logits = nullptr;
+            lctx.embd = nullptr;
+        }
+
+        auto * buft = ggml_backend_cpu_buffer_type();
+        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
+        auto * output_dev = lctx.model.dev_output();
+        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
+        if (output_dev_host_buft) {
+            buft = output_dev_host_buft;
+        }
+        lctx.buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
+        if (lctx.buf_output == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            return 0;
+        }
+    }
+
+    float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output.get());
+
+    lctx.logits = has_logits ? output_base               : nullptr;
+    lctx.embd   = has_embd   ? output_base + logits_size : nullptr;
+
+    lctx.output_size = n_outputs_max;
+    lctx.logits_size = logits_size;
+    lctx.embd_size   = embd_size;
+
+    // set all ids as invalid (negative)
+    std::fill(lctx.output_ids.begin(), lctx.output_ids.end(), -1);
+
+    ggml_backend_buffer_clear(lctx.buf_output.get(), 0);
+
+    lctx.n_outputs = 0;
+
+    return n_outputs_max;
+}
+
+// make the outputs have the same order they had in the user-provided batch
+static void llama_output_reorder(struct llama_context & ctx) {
+    std::vector<size_t> & out_ids = ctx.sbatch.out_ids;
+    if (!out_ids.empty()) {
+        const uint32_t n_vocab = ctx.model.vocab.n_tokens();
+        const uint32_t n_embd  = ctx.model.hparams.n_embd;
+
+        const int32_t n_outputs = ctx.n_outputs;
+        GGML_ASSERT((size_t) n_outputs == out_ids.size());
+
+        // TODO: is there something more efficient which also minimizes swaps?
+        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
+        for (int32_t i = 0; i < n_outputs - 1; ++i) {
+            int32_t j_min = i;
+            for (int32_t j = i + 1; j < n_outputs; ++j) {
+                if (out_ids[j] < out_ids[j_min]) {
+                    j_min = j;
+                }
+            }
+            if (j_min == i) { continue; }
+            std::swap(out_ids[i], out_ids[j_min]);
+            if (ctx.logits_size > 0) {
+                for (uint32_t k = 0; k < n_vocab; k++) {
+                    std::swap(ctx.logits[i*n_vocab + k], ctx.logits[j_min*n_vocab + k]);
+                }
+            }
+            if (ctx.embd_size > 0) {
+                for (uint32_t k = 0; k < n_embd; k++) {
+                    std::swap(ctx.embd[i*n_embd + k], ctx.embd[j_min*n_embd + k]);
+                }
+            }
+        }
+        std::fill(ctx.output_ids.begin(), ctx.output_ids.end(), -1);
+        for (int32_t i = 0; i < n_outputs; ++i) {
+            ctx.output_ids[out_ids[i]] = i;
+        }
+        out_ids.clear();
+    }
+}
 static int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional) {
     // TODO move to hparams if a T5 variant appears that uses a different value
     const int64_t max_distance = 128;
@@ -340,6 +455,20 @@ llama_context::llama_context(
 
 }
 
+struct llama_batch_manager_i {
+    virtual ~llama_batch_manager_i() = default;
+
+    virtual bool is_done() const = 0;
+    virtual llama_ubatch next() = 0;
+    virtual bool prepare() = 0;
+    virtual void restore() = 0;
+    virtual void update() = 0;
+    virtual void finalize() = 0;
+
+    // TODO: might be temporary
+    int64_t n_outputs_all = 0;
+};
+
 struct llama_batch_manager : public llama_batch_manager_i {
     llama_batch_manager(llama_context & lctx, const llama_batch & batch) : lctx(lctx), batch(batch), kv_slot_restorer(lctx.kv_self) {
         const auto & model   = lctx.model;
@@ -396,6 +525,10 @@ struct llama_batch_manager : public llama_batch_manager_i {
     }
 
     ~llama_batch_manager() override {
+    }
+
+    virtual bool is_done() const override {
+        return lctx.sbatch.n_tokens == 0;
     }
 
     virtual llama_ubatch next() override {
@@ -556,6 +689,390 @@ struct llama_batch_manager : public llama_batch_manager_i {
 
 std::unique_ptr<llama_batch_manager_i> llama_context::prepare_batch(const llama_batch & batch) {
     return std::make_unique<llama_batch_manager>(*this, batch);
+}
+
+int llama_context::decode(llama_batch & inp_batch) {
+    is_encoding = false;
+
+    if (inp_batch.n_tokens == 0) {
+        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
+        return -1;
+    }
+
+    // temporary allocate memory for the input batch if needed
+    // TODO: this is incorrect for multiple sequences because pos_max() is the maximum across all sequences
+    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : pos_max() + 1);
+
+    const llama_batch & batch = batch_allocr.batch;
+
+    const auto & vocab   = model.vocab;
+    const auto & hparams = model.hparams;
+
+    const int32_t n_vocab = vocab.n_tokens();
+    const int64_t n_embd  = hparams.n_embd;
+
+    // TODO: try catch
+    auto bman = prepare_batch(batch);
+
+    const auto n_outputs_all = bman->n_outputs_all;
+
+    // reserve output buffer
+    // TODO: move to batch manager?
+    if (llama_output_reserve(*this, bman->n_outputs_all) < (size_t) n_outputs_all) {
+        LLAMA_LOG_ERROR("%s: could not reserve space for batch with %" PRId64 " outputs\n", __func__, n_outputs_all);
+        return -2;
+    };
+
+    int64_t n_outputs_prev = 0;
+
+    while (!bman->is_done()) {
+        llama_ubatch ubatch = bman->next();
+
+        if (!bman->prepare()) {
+            LLAMA_LOG_ERROR("%s: failed to prepare ubatch\n", __func__);
+            bman->restore();
+            return -3;
+        }
+
+        ggml_backend_sched_reset(sched.get());
+        ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
+
+        ggml_cgraph * gf = cb_build_graph(*this, ubatch, false);
+
+        // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
+
+        ggml_backend_sched_alloc_graph(sched.get(), gf);
+
+        set_inputs(ubatch);
+
+        // the output is always the last tensor in the graph
+        struct ggml_tensor * t_logits = ggml_graph_node(gf, -1);
+        struct ggml_tensor * t_embd   = ggml_graph_node(gf, -2);
+
+        if (n_outputs == 0) {
+            // no output
+            t_logits  = nullptr;
+            t_embd = nullptr;
+        } else if (cparams.embeddings) {
+            t_logits  = nullptr; // do not extract logits for embedding case
+            t_embd = nullptr;
+            for (int i = ggml_graph_n_nodes(gf) - 1; i >= 0; --i) {
+                if (strcmp(ggml_graph_node(gf, i)->name, "result_embd_pooled") == 0) {
+                    t_embd = ggml_graph_node(gf, i);
+                    break;
+                }
+            }
+            GGML_ASSERT(t_embd != nullptr && "missing embeddings tensor");
+        } else {
+            t_embd = nullptr; // do not extract embeddings when not needed
+            GGML_ASSERT(strcmp(t_logits->name, "result_output") == 0 && "missing result_output tensor");
+        }
+
+        const auto compute_status = compute_graph(gf, ubatch.n_tokens > 1);
+        if (compute_status != GGML_STATUS_SUCCESS) {
+            bman->restore();
+            switch (compute_status) {
+                case GGML_STATUS_ABORTED:
+                    return 2;
+                case GGML_STATUS_ALLOC_FAILED:
+                    return -2;
+                case GGML_STATUS_FAILED:
+                default:
+                    return -3;
+            }
+        }
+
+        bman->update();
+
+        // plot the computation graph in dot format (for debugging purposes)
+        //if (n_past%100 == 0) {
+        //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
+        //}
+
+        // extract logits
+        if (t_logits) {
+            ggml_backend_t backend_res = ggml_backend_sched_get_tensor_backend(sched.get(), t_logits);
+            GGML_ASSERT(backend_res != nullptr);
+            GGML_ASSERT(logits != nullptr);
+
+            float * logits_out = logits + n_outputs_prev*n_vocab;
+            const int32_t n_outputs_new = n_outputs;
+
+            if (n_outputs_new) {
+                GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs_all);
+                GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_vocab <= (int64_t) logits_size);
+                ggml_backend_tensor_get_async(backend_res, t_logits, logits_out, 0, n_outputs_new*n_vocab*sizeof(float));
+            }
+        }
+
+        // extract embeddings
+        if (t_embd) {
+            ggml_backend_t backend_embd = ggml_backend_sched_get_tensor_backend(sched.get(), t_embd);
+            GGML_ASSERT(backend_embd != nullptr);
+
+            switch (cparams.pooling_type) {
+                case LLAMA_POOLING_TYPE_NONE:
+                    {
+                        // extract token embeddings
+                        GGML_ASSERT(embd != nullptr);
+                        float * embd_out = embd + n_outputs_prev*n_embd;
+                        const int32_t n_outputs_new = n_outputs;
+
+                        if (n_outputs_new) {
+                            GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs_all);
+                            GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_embd <= (int64_t) embd_size);
+                            ggml_backend_tensor_get_async(backend_embd, t_embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
+                        }
+                    } break;
+                case LLAMA_POOLING_TYPE_MEAN:
+                case LLAMA_POOLING_TYPE_CLS:
+                case LLAMA_POOLING_TYPE_LAST:
+                    {
+                        // extract sequence embeddings (cleared before processing each batch)
+                        auto & embd_seq_out = embd_seq;
+
+                        for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
+                            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                            if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
+                                continue;
+                            }
+                            embd_seq_out[seq_id].resize(n_embd);
+                            ggml_backend_tensor_get_async(backend_embd, t_embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
+                        }
+                    } break;
+                case LLAMA_POOLING_TYPE_RANK:
+                    {
+                        // extract the rerank score - a single float per sequence
+                        auto & embd_seq_out = embd_seq;
+
+                        for (uint32_t s = 0; s < ubatch.n_seqs; ++s) {
+                            const llama_seq_id seq_id = ubatch.seq_id[s][0];
+                            if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
+                                continue;
+                            }
+                            embd_seq_out[seq_id].resize(1);
+                            ggml_backend_tensor_get_async(backend_embd, t_embd, embd_seq_out[seq_id].data(), (seq_id)*sizeof(float), sizeof(float));
+                        }
+                    } break;
+                case LLAMA_POOLING_TYPE_UNSPECIFIED:
+                    {
+                        GGML_ABORT("unknown pooling type");
+                    }
+            }
+        }
+
+        n_outputs_prev += n_outputs;
+    }
+
+    // set output mappings
+    {
+        bool sorted_output = true;
+
+        GGML_ASSERT(sbatch.out_ids.size() == (size_t) n_outputs_all);
+
+        for (size_t i = 0; i < (size_t) n_outputs_all; ++i) {
+            size_t out_id = sbatch.out_ids[i];
+            output_ids[out_id] = i;
+            if (out_id != i) {
+                sorted_output = false;
+            }
+        }
+
+        if (sorted_output) {
+            sbatch.out_ids.clear();
+        }
+    }
+
+    // set to total number of outputs in the batch, for use in llama_get_logits_ith
+    n_outputs = n_outputs_all;
+
+    // wait for the computation to finish (automatically done when obtaining the model output)
+    //llama_synchronize(&;
+
+    bman->finalize();
+
+    // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
+    // overlap with device computation.
+    ggml_backend_sched_reset(sched.get());
+
+    return 0;
+}
+
+int llama_context::encode(llama_batch & inp_batch) {
+    is_encoding = true;
+
+    if (inp_batch.n_tokens == 0) {
+        LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
+        return -1;
+    }
+
+    // temporary allocate memory for the input batch if needed
+    // TODO: this is incorrect for multiple sequences because pos_max() is the maximum across all sequences
+    llama_batch_allocr batch_allocr(inp_batch, inp_batch.pos ? -1 : pos_max() + 1);
+
+    const llama_batch & batch = batch_allocr.batch;
+    const uint32_t n_tokens = batch.n_tokens;
+
+    const auto & hparams = model.hparams;
+
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
+
+    if (batch.token) {
+        for (uint32_t i = 0; i < n_tokens; ++i) {
+            if (batch.token[i] < 0 || (uint32_t) batch.token[i] >= model.vocab.n_tokens()) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d\n", __func__, i, batch.token[i]);
+                return -1;
+            }
+        }
+    }
+
+    // micro-batching is not possible for non-causal encoding, so we process the batch in a single shot
+    GGML_ASSERT(cparams.n_ubatch >= n_tokens && "encoder requires n_ubatch >= n_tokens");
+
+    if (t_compute_start_us == 0) {
+        t_compute_start_us = ggml_time_us();
+    }
+
+    n_queued_tokens += n_tokens;
+
+    const int64_t n_embd = hparams.n_embd;
+
+    sbatch.from_batch(batch, n_embd, /* simple_split */ true, /* logits_all */ true);
+
+    const llama_ubatch ubatch = sbatch.split_simple(n_tokens);
+
+    // reserve output buffer
+    if (llama_output_reserve(*this, n_tokens) < n_tokens) {
+        LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_tokens);
+        return -2;
+    };
+
+    for (uint32_t i = 0; i < n_tokens; ++i) {
+        output_ids[i] = i;
+    }
+
+    inp_embd_enc = NULL;
+    n_outputs = n_tokens;
+
+    //batch_manager->prepare(ubatch);
+
+    // TODO: do reserve
+    GGML_ASSERT(need_reserve == false);
+
+    ggml_backend_sched_reset(sched.get());
+    ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
+
+    ggml_cgraph * gf = cb_build_graph(*this, ubatch, false);
+
+    ggml_backend_sched_alloc_graph(sched.get(), gf);
+
+    set_inputs(ubatch);
+
+    // the output embeddings after the final encoder normalization
+    struct ggml_tensor * t_embd = nullptr;
+
+    // there are two cases here
+    if (llama_model_has_decoder(&model)) {
+        // first case is an encoder-decoder T5 model where embeddings are passed to decoder
+        t_embd = ggml_graph_node(gf, -1);
+        GGML_ASSERT(strcmp(t_embd->name, "result_norm") == 0 && "missing result_output tensor");
+    } else {
+        // second case is an encoder-only T5 model
+        if (cparams.embeddings) {
+            // only output embeddings if required
+            t_embd = ggml_graph_node(gf, -1);
+            if (strcmp(t_embd->name, "result_embd_pooled") != 0) {
+                t_embd = ggml_graph_node(gf, -2);
+            }
+            GGML_ASSERT(strcmp(t_embd->name, "result_embd_pooled") == 0 && "missing embeddings tensor");
+        }
+    }
+
+    const auto compute_status = compute_graph(gf, n_tokens > 1);
+    switch (compute_status) {
+        case GGML_STATUS_SUCCESS:
+            break;
+        case GGML_STATUS_ABORTED:
+            return 2;
+        case GGML_STATUS_ALLOC_FAILED:
+            return -2;
+        case GGML_STATUS_FAILED:
+        default:
+            return -3;
+    }
+
+    // extract embeddings
+    if (t_embd) {
+        ggml_backend_t backend_embd = ggml_backend_sched_get_tensor_backend(sched.get(), t_embd);
+        GGML_ASSERT(backend_embd != nullptr);
+
+        if (llama_model_has_decoder(&model)) {
+            embd_enc.resize(n_tokens*n_embd);
+            float * embd_out = embd_enc.data();
+
+            ggml_backend_tensor_get_async(backend_embd, t_embd, embd_out, 0, n_tokens*n_embd*sizeof(float));
+            GGML_ASSERT(!ubatch.equal_seqs); // TODO: handle equal splits
+
+            // remember the sequence ids used during the encoding - needed for cross attention later
+            seq_ids_enc.resize(n_tokens);
+            for (uint32_t i = 0; i < n_tokens; i++) {
+                for (int s = 0; s < ubatch.n_seq_id[i]; s++) {
+                    llama_seq_id seq_id = ubatch.seq_id[i][s];
+                    seq_ids_enc[i].insert(seq_id);
+                }
+            }
+        } else {
+            GGML_ASSERT(embd != nullptr);
+
+            switch (cparams.pooling_type) {
+                case LLAMA_POOLING_TYPE_NONE:
+                    {
+                        // extract token embeddings
+                        GGML_ASSERT(embd != nullptr);
+                        float * embd_out = embd;
+
+                        GGML_ASSERT(n_tokens*n_embd <= (int64_t) embd_size);
+                        ggml_backend_tensor_get_async(backend_embd, t_embd, embd_out, 0, n_tokens*n_embd*sizeof(float));
+                    } break;
+                case LLAMA_POOLING_TYPE_MEAN:
+                case LLAMA_POOLING_TYPE_CLS:
+                case LLAMA_POOLING_TYPE_LAST:
+                    {
+                        // extract sequence embeddings
+                        auto & embd_seq_out = embd_seq;
+                        embd_seq_out.clear();
+
+                        GGML_ASSERT(!ubatch.equal_seqs); // TODO: handle equal splits
+
+                        for (uint32_t i = 0; i < n_tokens; i++) {
+                            const llama_seq_id seq_id = ubatch.seq_id[i][0];
+                            if (embd_seq_out.find(seq_id) != embd_seq_out.end()) {
+                                continue;
+                            }
+                            embd_seq_out[seq_id].resize(n_embd);
+                            ggml_backend_tensor_get_async(backend_embd, t_embd, embd_seq_out[seq_id].data(), (n_embd*seq_id)*sizeof(float), n_embd*sizeof(float));
+                        }
+                    } break;
+                case LLAMA_POOLING_TYPE_RANK:
+                    {
+                        // TODO: this likely should be the same logic as in llama_decoder_internal, but better to
+                        //       wait for an encoder model that requires this pooling type in order to test it
+                        //       https://github.com/ggerganov/llama.cpp/pull/9510
+                        GGML_ABORT("RANK pooling not implemented yet");
+                    }
+                case LLAMA_POOLING_TYPE_UNSPECIFIED:
+                    {
+                        GGML_ABORT("unknown pooling type");
+                    }
+            }
+        }
+    }
+
+    // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
+    // overlap with device computation.
+    ggml_backend_sched_reset(sched.get());
+
+    return 0;
 }
 
 enum ggml_status llama_context::compute_graph(
@@ -2192,119 +2709,6 @@ ggml_tensor * llama_context::build_rwkv6_time_mix(
     cur = build_lora_mm(ctx0, layer->time_mix_output, cur);
 
     return cur;
-}
-
-// llama output
-
-size_t llama_output_reserve(struct llama_context & lctx, size_t n_outputs) {
-    const auto & cparams = lctx.cparams;
-    const auto & hparams = lctx.model.hparams;
-    const auto & vocab   = lctx.model.vocab;
-
-    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
-
-    const auto n_batch = cparams.n_batch;
-    const auto n_vocab = vocab.n_tokens();
-    const auto n_embd  = hparams.n_embd;
-
-    // TODO: use a per-batch flag for logits presence instead
-    const bool has_logits = !cparams.embeddings;
-    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
-
-    const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
-    const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
-
-    if (lctx.output_ids.empty()) {
-        // init, never resized afterwards
-        lctx.output_ids.resize(n_batch);
-    }
-
-    const size_t prev_size = lctx.buf_output ? ggml_backend_buffer_get_size(lctx.buf_output.get()) : 0;
-    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
-
-    // alloc only when more than the current capacity is required
-    // TODO: also consider shrinking the buffer
-    if (!lctx.buf_output || prev_size < new_size) {
-        if (lctx.buf_output) {
-#ifndef NDEBUG
-            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
-            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
-#endif
-            lctx.buf_output = nullptr;
-            lctx.logits = nullptr;
-            lctx.embd = nullptr;
-        }
-
-        auto * buft = ggml_backend_cpu_buffer_type();
-        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
-        auto * output_dev = lctx.model.dev_output();
-        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
-        if (output_dev_host_buft) {
-            buft = output_dev_host_buft;
-        }
-        lctx.buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
-        if (lctx.buf_output == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
-            return 0;
-        }
-    }
-
-    float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output.get());
-
-    lctx.logits = has_logits ? output_base               : nullptr;
-    lctx.embd   = has_embd   ? output_base + logits_size : nullptr;
-
-    lctx.output_size = n_outputs_max;
-    lctx.logits_size = logits_size;
-    lctx.embd_size   = embd_size;
-
-    // set all ids as invalid (negative)
-    std::fill(lctx.output_ids.begin(), lctx.output_ids.end(), -1);
-
-    ggml_backend_buffer_clear(lctx.buf_output.get(), 0);
-
-    lctx.n_outputs = 0;
-
-    return n_outputs_max;
-}
-
-void llama_output_reorder(struct llama_context & ctx) {
-    std::vector<size_t> & out_ids = ctx.sbatch.out_ids;
-    if (!out_ids.empty()) {
-        const uint32_t n_vocab = ctx.model.vocab.n_tokens();
-        const uint32_t n_embd  = ctx.model.hparams.n_embd;
-
-        const int32_t n_outputs = ctx.n_outputs;
-        GGML_ASSERT((size_t) n_outputs == out_ids.size());
-
-        // TODO: is there something more efficient which also minimizes swaps?
-        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
-        for (int32_t i = 0; i < n_outputs - 1; ++i) {
-            int32_t j_min = i;
-            for (int32_t j = i + 1; j < n_outputs; ++j) {
-                if (out_ids[j] < out_ids[j_min]) {
-                    j_min = j;
-                }
-            }
-            if (j_min == i) { continue; }
-            std::swap(out_ids[i], out_ids[j_min]);
-            if (ctx.logits_size > 0) {
-                for (uint32_t k = 0; k < n_vocab; k++) {
-                    std::swap(ctx.logits[i*n_vocab + k], ctx.logits[j_min*n_vocab + k]);
-                }
-            }
-            if (ctx.embd_size > 0) {
-                for (uint32_t k = 0; k < n_embd; k++) {
-                    std::swap(ctx.embd[i*n_embd + k], ctx.embd[j_min*n_embd + k]);
-                }
-            }
-        }
-        std::fill(ctx.output_ids.begin(), ctx.output_ids.end(), -1);
-        for (int32_t i = 0; i < n_outputs; ++i) {
-            ctx.output_ids[out_ids[i]] = i;
-        }
-        out_ids.clear();
-    }
 }
 
 //
