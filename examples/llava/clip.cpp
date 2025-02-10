@@ -121,6 +121,7 @@ static std::string format(const char * fmt, ...) {
 #define KEY_IMAGE_STD           "clip.vision.image_std"
 #define KEY_PROJ_TYPE           "clip.projector_type"
 #define KEY_VISION_FEATURE_LAYER  "clip.vision.feature_layer"
+
 #define KEY_MM_PATCH_MERGE_TYPE   "clip.vision.mm_patch_merge_type"
 #define KEY_IMAGE_GRID_PINPOINTS  "clip.vision.image_grid_pinpoints"
 #define KEY_IMAGE_CROP_RESOLUTION "clip.vision.image_crop_resolution"
@@ -169,6 +170,7 @@ static std::string format(const char * fmt, ...) {
 #define TN_GLM_ADAPTER_D_4H_2_H "adapter.linear.dense_4h_to_h.%s"
 #define TN_GLM_BOI_W "adapter.boi"
 #define TN_GLM_EOI_W "adapter.eoi"
+
 
 enum projector_type {
     PROJECTOR_TYPE_MLP,
@@ -429,6 +431,7 @@ static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u
 //
 // clip layers
 //
+
 struct clip_hparams {
     int32_t image_size;
     int32_t patch_size;
@@ -614,7 +617,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         LOG_ERR("This gguf file seems to have no vision encoder\n");
         return nullptr;
     }
-    LOG_INF("In the graph builder...\n");
 
     const auto & model = ctx->vision_model;
     const auto & hparams = model.hparams;
@@ -666,11 +668,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
         /*.no_alloc   =*/ true,
     };
-    LOG_INF("Making the graph...\n");
 
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-    LOG_INF("Graph made...\n");
 
     struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 3, batch_size);
     ggml_set_name(inp_raw, "inp_raw");
@@ -753,7 +753,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
-    LOG_INF("About to iterate over layers...\n");
 
     // Check to see we have 1+ set vision feature layers set; otherwise it's the last layer
     std::vector<struct ggml_tensor *> embedding_stack;
@@ -771,7 +770,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     if(max_feature_layer < 0) {
         max_feature_layer = n_layer;
     }
-    LOG_INF("Number of feature layers: %d\n", max_feature_layer);
 
     // loop over layers
     for (int il = 0; il < max_feature_layer; il++) {
@@ -781,7 +779,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         // NOTE: 0 index here refers to the input to the encoder.
         for(int vf_layer_idx = 0; vf_layer_idx < 4; vf_layer_idx++) {
             if (il == ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx]) {
-                LOG_INF("Keeping vision feature layer: %d\n", il);
                 embedding_stack.push_back(embeddings);
                 break;
             }
@@ -878,7 +875,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
     // post-layernorm
     if (ctx->has_post_norm && max_feature_layer == n_layer) {
-        LOG_INF("POST NORMALIZING");
         embeddings = ggml_norm(ctx0, embeddings, eps);
         ggml_set_name(embeddings, "post_ln");
 
@@ -888,7 +884,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // final layer is a vision feature layer
     for(int vf_layer_idx = 0; vf_layer_idx < 4; vf_layer_idx++) {
         if (n_layer == ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx]) {
-            LOG_INF("Keeping vision feature layer : %d\n", n_layer);
             embedding_stack.push_back(embeddings);
             break;
         }
@@ -896,14 +891,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
     // If feature layers are explicitly set, stack them (if we have multiple)
     if(has_feature_layers && embedding_stack.size() > 0) {
-        LOG_INF("Stacking vision feature layers : %d\n", n_layer);
         embeddings = embedding_stack.at(0);
         for(unsigned long i=1; i < embedding_stack.size(); i++) {
             embeddings = ggml_concat(ctx0, embeddings, embedding_stack.at(i), 0);
         }
     }
 
-    LOG_INF("Layer loop over - trying to llava project...\n");
     // llava projector
     if (ctx->has_llava_projector) {
         embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
@@ -920,10 +913,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         // llava projector
         if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
-            LOG_INF("---- MLP projector ----");
-            LOG_INF("proj mlp: mm 0 shape: [%d, %d, %d, %d] | embedding shape: [%d, %d, %d, %d]\n", model.mm_0_w->ne[0], model.mm_0_w->ne[1], model.mm_0_w->ne[2], model.mm_0_w->ne[3], embeddings->ne[0], embeddings->ne[1], embeddings->ne[2], embeddings->ne[3]);
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
-            LOG_INF("proj mlp - first mulmat done\n");
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
 
             embeddings = ggml_gelu(ctx0, embeddings);
@@ -931,7 +921,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
         }
         else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
-            LOG_INF("proj mlp norm\n");
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
             // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
@@ -1203,14 +1192,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         embeddings = ggml_mul_mat(ctx0, model.mm_1_w, embeddings);
         embeddings = ggml_add(ctx0, embeddings, model.mm_1_b);
     }
-    LOG_INF("forward expanding\n");
 
     // build the graph
     ggml_build_forward_expand(gf, embeddings);
-    LOG_INF("forward expand done\n");
 
     ggml_free(ctx0);
-    LOG_INF("freeing it all\n");
 
     return gf;
 }
@@ -1478,7 +1464,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
         fin.close();
     }
-    LOG_INF("%s: We are up to the vision model\n", __func__);
+
     // vision model
     if (new_clip->has_vision_encoder) {
         // load vision model
@@ -1497,31 +1483,21 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
             const int32_t * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
-            LOG_INF("Grid pinpoints | max %d | actual %d  ", 64, n);
             for (int i = 0; i < 64 && i < n && pinpoints[i] != 0; ++i) {
-                LOG_INF(" %d  ", i);
                 hparams.image_grid_pinpoints[i] = pinpoints[i];
             }
-            LOG_INF("\n");
             if (n < 64)
                 hparams.image_grid_pinpoints[n] = 0;
         } catch (std::runtime_error & /*e*/) {
             hparams.image_grid_pinpoints[0]=0;
         }
 
-        // Load the vision feature layer indices; For most models, this will be
-        // an array of length one with value -1 (i.e., use last layer as visual features),
-        // but for IBM granite, we have multiple feature layers that get concatenated.
-        //
-        // Here, we should standardize all values to uint values so that we can use -1 as unset values.
+        // Load the vision feature layer indices if they are explicitly provided;
+        // if multiple vision feature layers are present, the values will be concatenated
+        // to form the final visual features.
         try {
-            LOG_INF("ABOUT TO GET VISION FEATURE LAYER KEYS\n");
             int idx = get_key_idx(ctx, KEY_VISION_FEATURE_LAYER);
-            LOG_INF("VISION FEATURE LAYER IDX %d\n", idx);
             int n = gguf_get_arr_n(ctx, idx);
-            LOG_INF("GETTING %d VISION FEATURE LAYERS \n", n);
-            // TODO - fix this
-            LOG_INF("n_layer in hparams is: %d\n", hparams.n_layer);
 
             const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
             // HACK - need to set a good invalid number here; or maybe not, I guess it could just
@@ -1529,12 +1505,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             // -1 is the sad one
             for (int i = 0; i < 4 && i < n && vision_feature_layer[i] != 0; ++i) {
                 hparams.vision_feature_layer[i] = vision_feature_layer[i];
-                LOG_INF("feature layer %d - %d | ", i, vision_feature_layer[i]);
             }
             if (n < 4)
                 hparams.vision_feature_layer[n] = -1;
         } catch (std::runtime_error & /*e*/) {
-            LOG_INF("VISION FEATURE LAYER RETRIEVAL FAILED");
             hparams.vision_feature_layer[0] = -1;
         }
 
@@ -1595,8 +1569,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             new_clip->has_class_embedding = false;
         }
 
-        LOG_INF("Has class embedding: %d", new_clip->has_class_embedding);
-
         try {
             vision_model.pre_ln_w  = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
             vision_model.pre_ln_b  = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
@@ -1631,7 +1603,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         } catch(const std::exception& /*e*/) {
             new_clip->has_qwen2vl_merger = false;
         }
-        LOG_INF("Loaded up to llava projection");
 
         // LLaVA projection
         if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
@@ -1769,7 +1740,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
     new_clip->ctx_gguf = ctx;
 
-    LOG_INF("About to measure memory and build graphs...\n");
     // measure mem requirement and allocate
     {
         new_clip->buf_compute_meta.resize(GGML_DEFAULT_GRAPH_SIZE * ggml_tensor_overhead() + ggml_graph_overhead());
@@ -1777,7 +1747,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         clip_image_f32_batch batch;
         batch.size = 1;
         batch.data = nullptr;
-        LOG_INF("Entering graph...\n");
         ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, nullptr, false);
         ggml_gallocr_reserve(new_clip->compute_alloc, gf);
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
@@ -2656,10 +2625,8 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 
     // build the inference graph
-    LOG_INF("Doing a batch encode\n");
     ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, ctx->load_image_size, true);
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
-    LOG_INF("did graph alloc\n");
 
     // set inputs
     const auto & model = ctx->vision_model;
@@ -2819,22 +2786,18 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             }
         }
     }
-    LOG_INF("about to do backend graph compute\n");
 
     if (ggml_backend_is_cpu(ctx->backend)) {
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
     }
-    LOG_INF("-----\n");
+
     ggml_backend_graph_compute(ctx->backend, gf);
-    LOG_INF("did backend graph compute\n");
 
     // the last node is the embedding tensor
     struct ggml_tensor * embeddings = ggml_graph_node(gf, -1);
-    LOG_INF("retrieved emb tensor\n");
 
     // copy the embeddings to the location passed by the user
     ggml_backend_tensor_get(embeddings, vec, 0, ggml_nbytes(embeddings));
-    LOG_INF("embeddings have been recopied\n");
 
     if (ctx->has_glm_projector) {
         //eoi

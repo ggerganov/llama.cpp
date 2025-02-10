@@ -342,7 +342,6 @@ fout.add_bool("clip.use_gelu", use_gelu)
 
 
 if has_llava_projector:
-    # model.vision_model.encoder.layers.pop(-1)
     projector = torch.load(args.llava_projector)
     for name, data in projector.items():
         name = get_tensor_name(name)
