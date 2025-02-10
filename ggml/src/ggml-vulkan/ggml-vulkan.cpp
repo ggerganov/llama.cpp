@@ -2793,13 +2793,11 @@ static void ggml_vk_print_gpu_info(size_t idx) {
 static bool ggml_vk_instance_validation_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions);
 static bool ggml_vk_instance_portability_enumeration_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions);
 
-void ggml_vk_instance_init() {
+static void ggml_vk_instance_init() {
     if (vk_instance_initialized) {
         return;
     }
     VK_LOG_DEBUG("ggml_vk_instance_init()");
-
-    vk_instance_initialized = true;
 
     uint32_t api_version = vk::enumerateInstanceVersion();
 
@@ -2851,6 +2849,7 @@ void ggml_vk_instance_init() {
         GGML_LOG_DEBUG("ggml_vulkan: Validation layers enabled\n");
     }
     vk_instance.instance = vk::createInstance(instance_create_info);
+    vk_instance_initialized = true;
 
     size_t num_available_devices = vk_instance.instance.enumeratePhysicalDevices().size();
 
@@ -2875,7 +2874,7 @@ void ggml_vk_instance_init() {
         // Make sure at least one device exists
         if (devices.empty()) {
             std::cerr << "ggml_vulkan: Error: No devices found." << std::endl;
-            GGML_ABORT("fatal error");
+            return;
         }
 
         // Default to using all dedicated GPUs
@@ -8350,8 +8349,13 @@ ggml_backend_reg_t ggml_backend_vk_reg() {
         /* .iface       = */ ggml_backend_vk_reg_i,
         /* .context     = */ nullptr,
     };
-
-    return &reg;
+    try {
+        ggml_vk_instance_init();
+        return &reg;
+    } catch (const vk::SystemError& e) {
+        VK_LOG_DEBUG("ggml_backend_vk_reg() -> Error: System error: " << e.what());
+        return nullptr;
+    }
 }
 
 // Extension availability
