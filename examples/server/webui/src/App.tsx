@@ -1,4 +1,4 @@
-import { HashRouter, Outlet, Route, Routes } from 'react-router';
+import { HashRouter, Outlet, Route, Routes, Navigate } from 'react-router';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import { AppContextProvider, useAppContext } from './utils/app.context';
