@@ -356,10 +356,10 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         endif()
 
         list(APPEND GGML_CPU_SOURCES
-            ggml-cpu/ggml-kleidiai/ggml-kleidiai.cpp
-            ggml-cpu/ggml-kleidiai/kleidiai_kernels.cpp
-            ggml-cpu/ggml-kleidiai/ggml-kleidiai.h
-            ggml-cpu/ggml-kleidiai/kleidiai_kernels.h
+            ggml-cpu/kleidiai/kleidiai.cpp
+            ggml-cpu/kleidiai/kernels.cpp
+            ggml-cpu/kleidiai/kleidiai.h
+            ggml-cpu/kleidiai/kernels.h
             )
 
         # KleidiAI

@@ -5,7 +5,6 @@
 #pragma once
 
 #include "ggml-cpu-traits.h"
-#include "ggml.h"
 
 #ifdef  __cplusplus
 extern "C" {

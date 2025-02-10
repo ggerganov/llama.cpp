@@ -16,7 +16,7 @@
 #include "kai_matmul_clamp_f32_qsi8d32p1x4_qsi4c32p4vlx4_1x4vl_sme2_sdot.h"
 #include "kai_common.h"
 
-#include "kleidiai_kernels.h"
+#include "kernels.h"
 
 #define NELEMS(x) sizeof(x) / sizeof(*x)
 static ggml_kleidiai_kernels gemm_gemv_kernels[] = {

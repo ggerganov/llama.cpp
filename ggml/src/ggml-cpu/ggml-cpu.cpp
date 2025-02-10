@@ -15,7 +15,7 @@
 #endif
 
 #ifdef GGML_USE_CPU_KLEIDIAI
-#include "ggml-kleidiai/ggml-kleidiai.h"
+#include "kleidiai/kleidiai.h"
 #endif
 
 #if defined(__APPLE__)

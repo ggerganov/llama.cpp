@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: MIT
 //
 
-#pragma once
-
-#include "ggml.h"
-
 enum cpu_feature {
     CPU_FEATURE_NONE    = 0,
     CPU_FEATURE_DOTPROD = 1,

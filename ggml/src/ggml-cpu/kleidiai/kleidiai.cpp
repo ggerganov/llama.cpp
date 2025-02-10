@@ -18,18 +18,19 @@
 #include <excpt.h>
 #endif
 
-#include "ggml-kleidiai.h"
+#include "kleidiai.h"
 
 #include "ggml-cpu.h"
 #include "ggml-impl.h"
 #include "ggml-backend-impl.h"
 #include "ggml-threading.h"
 
-#include "kleidiai_kernels.h"
+#include "kernels.h"
 
 #include "kai_common.h"
 
-static const size_t k_q4_0_block_size = 32;
+#define GGML_COMMON_DECL_CPP
+#include "ggml-common.h"
 
 struct ggml_kleidiai_context {
     ggml_kleidiai_kernels * kernels;
@@ -78,9 +79,8 @@ class tensor_traits : public ggml::cpu::tensor_traits {
         size_t mr = kernel->get_mr();
         size_t kr = kernel->get_kr();
         size_t sr = kernel->get_sr();
-        size_t bl = k_q4_0_block_size;
 
-        size = ctx.kernels->lhs_info.packed_size(m, k, bl, mr, kr, sr);
+        size = ctx.kernels->lhs_info.packed_size(m, k, QK4_0, mr, kr, sr);
 
         return true;
     }
@@ -121,7 +121,6 @@ class tensor_traits : public ggml::cpu::tensor_traits {
             size_t mr = kernel->get_mr();
             size_t kr = kernel->get_kr();
             size_t sr = kernel->get_sr();
-            size_t bl = k_q4_0_block_size;
 
             // Calculate number of columns to be processed per thread
             const size_t num_m_per_thread = kai_roundup(m, nth) / nth;
@@ -135,24 +134,24 @@ class tensor_traits : public ggml::cpu::tensor_traits {
                 // Transform LHS
                 const size_t src_stride        = src1->nb[1];
                 const float * src_ptr          = reinterpret_cast<const float *>(lhs + lhs_info->get_offset(0, dst->src[1]->nb[1]));
-                const size_t lhs_packed_offset = lhs_info->get_packed_offset(m_start, k, bl, mr, kr, sr);
+                const size_t lhs_packed_offset = lhs_info->get_packed_offset(m_start, k, QK4_0, mr, kr, sr);
                 void * lhs_packed_ptr          = static_cast<void *>(lhs_packed + lhs_packed_offset);
 
-                lhs_info->pack_func(m_to_process, k, bl, mr, kr, sr, m_start, src_ptr, src_stride, lhs_packed_ptr);
+                lhs_info->pack_func(m_to_process, k, QK4_0, mr, kr, sr, m_start, src_ptr, src_stride, lhs_packed_ptr);
             }
 
             ggml_barrier(params->threadpool);
 
             // Perform the operation
             const size_t dst_stride        = dst->nb[1];
-            const size_t lhs_packed_offset = lhs_info->get_packed_offset(0, k, k_q4_0_block_size, mr, kr, sr);
-            const size_t rhs_packed_offset = kernel->get_rhs_packed_offset(n_start, k, k_q4_0_block_size);
+            const size_t lhs_packed_offset = lhs_info->get_packed_offset(0, k, QK4_0, mr, kr, sr);
+            const size_t rhs_packed_offset = kernel->get_rhs_packed_offset(n_start, k, QK4_0);
             const size_t dst_offset        = kernel->get_dst_offset(0, n_start, dst_stride);
             const void * rhs_ptr           = static_cast<const void *>(rhs_packed + rhs_packed_offset);
             const void* lhs_ptr            = (const void*)((const char *)lhs_packed + lhs_packed_offset);
             float *dst_ptr                 = reinterpret_cast<float *>(static_cast<uint8_t *>(dst->data) + dst_offset);
 
-            kernel->run_kernel(m, n_to_process, k, k_q4_0_block_size, lhs_ptr, rhs_ptr, dst_ptr,
+            kernel->run_kernel(m, n_to_process, k, QK4_0, lhs_ptr, rhs_ptr, dst_ptr,
                                dst_stride, sizeof(float), -FLT_MAX, FLT_MAX);
             return true;
         }
@@ -169,13 +168,13 @@ public:
         size_t sr      = ctx.kernels->gemm.get_sr();
 
 #ifndef NDEBUG
-        const size_t repacked_size = ctx.kernels->rhs_info.packed_size(n, k, nr, kr, k_q4_0_block_size);
+        const size_t repacked_size = ctx.kernels->rhs_info.packed_size(n, k, nr, kr, QK4_0);
         GGML_ASSERT(repacked_size <= data_size && "repacked size larger than the packed size!");
 #endif
         struct kai_rhs_pack_qs4cxs1s0_param params;
         params.lhs_zero_point = 1;
         params.rhs_zero_point = 8;
-        ctx.kernels->rhs_info.pack_func(1, n, k, nr, kr, sr, k_q4_0_block_size, (const uint8_t *)data, NULL, tensor->data, 0, &params);
+        ctx.kernels->rhs_info.pack_func(1, n, k, nr, kr, sr, QK4_0, (const uint8_t *)data, NULL, tensor->data, 0, &params);
 
         return 0;
 
