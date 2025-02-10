@@ -36,6 +36,7 @@ const StorageUtils = {
    * manage conversations
    */
   async getAllConversations(): Promise<Conversation[]> {
+    await migrationLStoIDB().catch(console.error); // noop if already migrated
     return (await db.conversations.toArray()).sort(
       (a, b) => b.lastModified - a.lastModified
     );
@@ -211,7 +212,6 @@ interface LSConversation {
   id: string; // format: `conv-{timestamp}`
   lastModified: number; // timestamp from Date.now()
   messages: LSMessage[];
-  migrated?: boolean; // additionally, we add a flag to prevent duplicate migration
 }
 interface LSMessage {
   id: number;
@@ -220,6 +220,7 @@ interface LSMessage {
   timings?: TimingReport;
 }
 async function migrationLStoIDB() {
+  if (localStorage.getItem('migratedToIDB')) return;
   const res: LSConversation[] = [];
   for (const key in localStorage) {
     if (key.startsWith('conv-')) {
@@ -233,10 +234,6 @@ async function migrationLStoIDB() {
       const { id: convId, lastModified, messages } = conv;
       const firstMsg = messages[0];
       const lastMsg = messages.at(-1);
-      if (conv.migrated) {
-        console.log(`Skipping conversation ${convId} already migrated`);
-        continue;
-      }
       if (messages.length < 2 || !firstMsg || !lastMsg) {
         console.log(
           `Skipping conversation ${convId} with ${messages.length} messages`
@@ -250,12 +247,12 @@ async function migrationLStoIDB() {
         currNode: lastMsg.id,
         name,
       });
-      const rootId = Date.now();
+      const rootId = messages[0].id - 2;
       await db.messages.add({
         id: rootId,
         convId: convId,
         type: 'root',
-        timestamp: lastModified,
+        timestamp: rootId,
         role: 'system',
         content: '',
         parent: -1,
@@ -272,7 +269,6 @@ async function migrationLStoIDB() {
           children: i === messages.length - 1 ? [] : [messages[i + 1].id],
         });
       }
-      localStorage.setItem(convId, JSON.stringify({ ...conv, migrated: true }));
       migratedCount++;
       console.log(
         `Migrated conversation ${convId} with ${messages.length} messages`
@@ -281,7 +277,6 @@ async function migrationLStoIDB() {
     console.log(
       `Migrated ${migratedCount} conversations from localStorage to IndexedDB`
     );
+    localStorage.setItem('migratedToIDB', '1');
   });
 }
-
-migrationLStoIDB();
