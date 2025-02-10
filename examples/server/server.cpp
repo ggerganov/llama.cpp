@@ -1600,6 +1600,10 @@ struct server_queue {
 
             while (true) {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (!running) {
+                    QUE_DBG("%s", "terminate\n");
+                    return;
+                }
                 if (queue_tasks.empty()) {
                     lock.unlock();
                     break;
@@ -1620,11 +1624,11 @@ struct server_queue {
             QUE_DBG("%s", "waiting for new tasks\n");
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (!running) {
+                    QUE_DBG("%s", "terminate\n");
+                    return;
+                }
                 if (queue_tasks.empty()) {
-                    if (!running) {
-                        QUE_DBG("%s", "terminate\n");
-                        return;
-                    }
                     condition_tasks.wait(lock, [&]{
                         return (!queue_tasks.empty() || !running);
                     });
@@ -4430,6 +4434,7 @@ int main(int argc, char ** argv) {
 
     // clean up function, to be called before exit
     auto clean_up = [&svr]() {
+        SRV_INF("%s: cleaning up before exit...\n", __func__);
         svr->stop();
         llama_backend_free();
     };
@@ -4446,10 +4451,6 @@ int main(int argc, char ** argv) {
     }
 
     if (!was_bound) {
-        //LOG_ERROR("couldn't bind HTTP server socket", {
-        //    {"hostname", params.hostname},
-        //    {"port", params.port},
-        //});
         LOG_ERR("%s: couldn't bind HTTP server socket, hostname: %s, port: %d\n", __func__, params.hostname.c_str(), params.port);
         clean_up();
         return 1;
@@ -4466,7 +4467,7 @@ int main(int argc, char ** argv) {
 
     if (!ctx_server.load_model(params)) {
         clean_up();
-        t.join();
+        // t.join(); // FIXME: see below
         LOG_ERR("%s: exiting due to model loading error\n", __func__);
         return 1;
     }
@@ -4490,12 +4491,9 @@ int main(int argc, char ** argv) {
     });
 
     shutdown_handler = [&](int) {
+        // this will unblock start_loop()
         ctx_server.queue_tasks.terminate();
     };
-
-    LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
-
-    ctx_server.queue_tasks.start_loop();
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;
@@ -4511,8 +4509,13 @@ int main(int argc, char ** argv) {
     SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
+    LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
+
+    // this call blocks the main thread until queue_tasks.terminate() is called
+    ctx_server.queue_tasks.start_loop();
+
     clean_up();
-    t.join();
+    // t.join(); // FIXME: http thread may stuck if there is an on-going request. we don't need to care about this for now as the HTTP connection will already be closed at this point, but it's better to fix this
 
     return 0;
 }
