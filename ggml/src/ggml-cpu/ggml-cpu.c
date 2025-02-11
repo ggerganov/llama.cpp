@@ -7800,12 +7800,12 @@ static void ggml_compute_forward_mul_mat_id(
                 matrix_row_counts[i02] += 1;
             }
         }
-    } else {
-        // reset current_chunk
-        for (int cur_a = ith - 1; cur_a < n_as; cur_a += (nth - 1)) {
-            atomic_int * current_chunk_ctr = (atomic_int *)(atomic_current_chunk + cur_a);
-            *current_chunk_ctr = nth;
-        }
+    }
+
+    // reset current_chunk
+    for (int cur_a = ith; cur_a < n_as; cur_a += nth) {
+        atomic_int * current_chunk_ctr = (atomic_int *)(atomic_current_chunk + cur_a);
+        *current_chunk_ctr = nth;
     }
 
     ggml_barrier(params->threadpool);
