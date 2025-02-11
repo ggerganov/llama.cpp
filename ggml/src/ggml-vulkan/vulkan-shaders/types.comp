@@ -462,6 +462,7 @@ const uint[1024] iq1s_grid_const = {
 
 shared uint16_t iq1s_grid[2048];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -560,6 +561,7 @@ const uvec2[256] iq2xxs_grid_const = {
 
 shared uvec2 iq2xxs_grid[256];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -727,6 +729,7 @@ const uvec2 iq2xs_grid_const[512] = {
 
 shared uvec2 iq2xs_grid[512];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -1016,6 +1019,7 @@ const uvec2 iq2s_grid_const[1024] = {
 
 shared uvec2 iq2s_grid[1024];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -1084,6 +1088,7 @@ const uint32_t iq3xxs_grid_const[256] = {
 
 shared uint32_t iq3xxs_grid[256];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -1191,6 +1196,7 @@ const uint32_t iq3s_grid_const[512] = {
 
 shared uint32_t iq3s_grid[512];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
@@ -1253,6 +1259,7 @@ const int8_t kvalues_iq4nl_const[16] = {
 
 shared FLOAT_TYPE kvalues_iq4nl[16];
 
+#define NEEDS_INIT_IQ_SHMEM
 void init_iq_shmem(uvec3 wgsize)
 {
     // copy the table into shared memory and sync
