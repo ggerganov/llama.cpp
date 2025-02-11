@@ -16,38 +16,245 @@
 
 using llama_loras = std::unordered_map<struct llama_adapter_lora *, float>;
 
-struct llama_batch_manager_i;
-
-// TODO: make implementation details private
-// TODO: become abstract base class, split the current implementation into different child classes
 struct llama_context {
-    // TODO: tmp until llama-model starts implementing the graph build function
-    typedef std::function<ggml_cgraph *(llama_context &, const llama_ubatch &, bool worst_case)> build_graph_callback;
+    llama_context(const llama_model & model);
+    virtual ~llama_context();
 
-    llama_context(
-            const llama_model & model,
-            const llama_context_params & params,
-            build_graph_callback && cb_build_graph);
+    virtual void synchronize();
 
-    virtual ~llama_context() = default;
+    virtual uint32_t n_ctx()     const = 0;
+    virtual uint32_t n_batch()   const = 0;
+    virtual uint32_t n_ubatch()  const = 0;
+    virtual uint32_t n_seq_max() const = 0;
 
-    const struct llama_model & model;
+    virtual       llama_kv_cache * get_kv_self()       = 0;
+    virtual const llama_kv_cache * get_kv_self() const = 0;
+
+    virtual void kv_self_update() = 0;
+
+    virtual enum llama_pooling_type pooling_type() const = 0;
+
+    virtual float * get_logits()              = 0;
+    virtual float * get_logits_ith(int32_t i) = 0;
+
+    virtual float * get_embeddings()                        = 0;
+    virtual float * get_embeddings_ith(int32_t i)           = 0;
+    virtual float * get_embeddings_seq(llama_seq_id seq_id) = 0;
+
+    int64_t n_pos_per_token() const; // vision
+
+    virtual ggml_context_ptr init();
+
+    virtual int decode(llama_batch & inp_batch) = 0;
+    virtual int encode(llama_batch & inp_batch) = 0;
+
+    // graph build API (generic)
+
+    // do mat_mul, while optionally apply lora
+    virtual ggml_tensor * build_lora_mm(
+            ggml_context * ctx0,
+             ggml_tensor * w,
+             ggml_tensor * cur);
+
+    // do mat_mul_id, while optionally apply lora
+    virtual ggml_tensor * build_lora_mm_id(
+            ggml_context * ctx0,
+             ggml_tensor * w,   // struct ggml_tensor * as
+             ggml_tensor * cur, // struct ggml_tensor * b
+             ggml_tensor * ids);
+
+    // graph build API (context-specific)
+
+    virtual ggml_tensor * build_inp_embd(
+            ggml_context * ctx0,
+             ggml_tensor * tok_embd,
+      const llama_ubatch & ubatch) = 0;
+
+    virtual ggml_tensor * build_inp_pos(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) = 0;
+
+    virtual ggml_tensor * build_inp_out_ids(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_inp_mean(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) = 0;
+
+    virtual ggml_tensor * build_inp_cls(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) = 0;
+
+    virtual void build_attn_inp(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   causal,
+                    bool   swa,
+                    bool   worst_case) = 0;
+
+    virtual void build_attn_kv_store(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * k_cur,
+             ggml_tensor * v_cur,
+                 int32_t   n_tokens,
+                 int64_t   il,
+                 bool      worst_case) = 0;
+
+    virtual ggml_tensor * build_attn_qkv(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * wo,
+             ggml_tensor * wo_b,
+             ggml_tensor * q_cur,
+                 int32_t   n_tokens,
+                 float     kq_scale,
+                 int       il,
+                 bool      worst_case) = 0;
+
+    virtual ggml_tensor * build_soft_max_ext(
+            ggml_context * ctx0,
+             ggml_tensor * kq,
+                 float     kq_scale) = 0;
+
+    virtual ggml_tensor * get_rope_factors(int il) = 0;
+
+    virtual void build_k_shift(
+            ggml_context * ctx0,
+             ggml_cgraph * graph) = 0;
+
+    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
+    virtual void build_defrag(
+            ggml_context * ctx0,
+             ggml_cgraph * graph) = 0;
+
+    virtual ggml_tensor * build_inp_embd_enc(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_inp_KQ_mask_cross(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_inp_s_copy(
+            ggml_context * ctx0,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_inp_s_mask(
+            ggml_context * ctx0,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_copy_mask_state(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * s,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+                 int32_t   n_tokens,
+                 int32_t   n_state,
+                 int32_t   n_seqs,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_mamba_layer(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * cur,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_rwkv_token_shift_load(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_rwkv_token_shift_store(
+            ggml_context * ctx0,
+             ggml_tensor * token_shift,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case) = 0;
+
+    virtual ggml_tensor * build_rwkv6_time_mix(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * cur,
+             ggml_tensor * x_prev,
+             ggml_tensor * state_copy,
+             ggml_tensor * state_mask,
+      const llama_ubatch & ubatch,
+                     int   il,
+                    bool   worst_case) = 0;
+
+    // state save/load
+
+    virtual size_t state_get_size() = 0;
+    virtual size_t state_get_data(      uint8_t * dst, size_t size) = 0;
+    virtual size_t state_set_data(const uint8_t * src, size_t size) = 0;
+
+    virtual size_t state_seq_get_size(llama_seq_id seq_id) = 0;
+    virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size) = 0;
+    virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size) = 0;
+
+    virtual bool state_load_file(
+            const char * filepath,
+           llama_token * tokens_out,
+                size_t   n_token_capacity,
+                size_t * n_token_count_out) = 0;
+
+    virtual bool state_save_file(
+            const char * filepath,
+     const llama_token * tokens,
+                size_t   n_token_count) = 0;
+
+    virtual size_t state_seq_load_file(
+          llama_seq_id   seq_id,
+            const char * filepath,
+           llama_token * tokens_out,
+                size_t   n_token_capacity,
+                size_t * n_token_count_out) = 0;
+
+    virtual size_t state_seq_save_file(
+          llama_seq_id   seq_id,
+            const char * filepath,
+     const llama_token * tokens,
+                size_t   n_token_count) = 0;
+
+    // members
+
+    const llama_model & model;
 
     llama_cparams      cparams;
-    llama_sbatch       sbatch;  // TODO: revisit if needed
     llama_adapter_cvec cvec;
     llama_loras        loras;
 
-    build_graph_callback cb_build_graph;
+    ggml_threadpool_t threadpool       = nullptr;
+    ggml_threadpool_t threadpool_batch = nullptr;
+
+    ggml_abort_callback abort_callback      = nullptr;
+    void *              abort_callback_data = nullptr;
 
     std::vector<ggml_backend_ptr> backends;
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
 
     ggml_backend_t backend_cpu = nullptr;
 
-    ggml_threadpool_t threadpool       = nullptr;
-    ggml_threadpool_t threadpool_batch = nullptr;
+    ggml_backend_sched_ptr sched;
 
+    // memory buffers used to evaluate the model
+    std::vector<uint8_t> buf_compute_meta;
+
+    // perf
     bool has_evaluated_once = false;
 
     mutable int64_t t_start_us;
@@ -60,6 +267,49 @@ struct llama_context {
 
     mutable int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
     mutable int32_t n_eval   = 0; // number of eval calls
+};
+
+// TODO: make implementation details private
+struct llama_context_unified : public llama_context {
+    struct batch_manager;
+
+    // TODO: tmp until llama-model starts implementing the graph build function
+    typedef std::function<ggml_cgraph *(llama_context &, const llama_ubatch &, bool worst_case)> build_graph_callback;
+
+    llama_context_unified(
+            const llama_model & model,
+            const llama_context_params & params,
+            build_graph_callback && cb_build_graph);
+
+    virtual ~llama_context_unified();
+
+    virtual uint32_t n_ctx()     const override;
+    virtual uint32_t n_batch()   const override;
+    virtual uint32_t n_ubatch()  const override;
+    virtual uint32_t n_seq_max() const override;
+
+    virtual       llama_kv_cache * get_kv_self()       override;
+    virtual const llama_kv_cache * get_kv_self() const override;
+
+    virtual void kv_self_update() override;
+
+    virtual enum llama_pooling_type pooling_type() const override;
+
+    virtual float * get_logits()              override;
+    virtual float * get_logits_ith(int32_t i) override;
+
+    virtual float * get_embeddings()                        override;
+    virtual float * get_embeddings_ith(int32_t i)           override;
+    virtual float * get_embeddings_seq(llama_seq_id seq_id) override;
+
+    virtual ggml_context_ptr init() override;
+
+    virtual int decode(llama_batch & inp_batch) override;
+    virtual int encode(llama_batch & inp_batch) override;
+
+    llama_sbatch sbatch;
+
+    build_graph_callback cb_build_graph;
 
     // host buffer for the model output (logits and embeddings)
     ggml_backend_buffer_ptr buf_output;
@@ -72,7 +322,7 @@ struct llama_context {
     size_t  output_size = 0; // capacity (of tokens positions) for the output buffers
     int32_t n_outputs   = 0; // number of actually-used outputs in the current ubatch or last logical batch
 
-    bool logits_all = false;
+    bool logits_all   = false;
     bool need_reserve = false;
 
     // embeddings output (2-dimensional array: [n_outputs][n_embd])
@@ -84,17 +334,7 @@ struct llama_context {
     // populated only when pooling_type != LLAMA_POOLING_TYPE_NONE
     std::map<llama_seq_id, std::vector<float>> embd_seq;
 
-    // memory buffers used to evaluate the model
-    std::vector<uint8_t> buf_compute_meta;
-    ggml_backend_sched_ptr sched;
-
-    ggml_abort_callback abort_callback      = nullptr;
-    void *              abort_callback_data = nullptr;
-
-    virtual std::unique_ptr<llama_batch_manager_i> prepare_batch(const llama_batch & batch);
-
-    virtual int decode(llama_batch & inp_batch);
-    virtual int encode(llama_batch & inp_batch);
+    virtual std::unique_ptr<batch_manager> prepare_batch(const llama_batch & batch);
 
     // returns the result of ggml_backend_sched_graph_compute_async execution
     enum ggml_status compute_graph(
@@ -107,31 +347,18 @@ struct llama_context {
     // certain implementations could require a padding for the context size
     uint32_t get_ctx_padding(const llama_cparams & cparams) const;
 
-    void reset();
-
     void prepare_k_shift();
     void prepare_defrag();
 
     void set_inputs(const llama_ubatch & ubatch);
 
     // make the outputs have the same order they had in the user-provided batch
-    // TODO: maybe deprecate this
+    // TODO: maybe remove this
     void reorder_outputs();
 
     // Make sure enough space is available for outputs.
     // Returns max number of outputs for which space was reserved.
     size_t reserve_outputs(size_t n_outputs);
-
-    ggml_tensor * build_lora_mm(
-            ggml_context * ctx0,
-             ggml_tensor * w,
-             ggml_tensor * cur);
-
-    ggml_tensor * build_lora_mm_id(
-            ggml_context * ctx0,
-             ggml_tensor * w,   // struct ggml_tensor * as
-             ggml_tensor * cur, // struct ggml_tensor * b
-             ggml_tensor * ids);
 
     // input tensors
     struct ggml_tensor * inp_tokens;        // I32 [n_batch]
@@ -140,6 +367,81 @@ struct llama_context {
     struct ggml_tensor * inp_out_ids;       // I32 [n_outputs]
     struct ggml_tensor * inp_mean;          // F32 [n_batch, n_batch]
     struct ggml_tensor * inp_cls;           // I32 [n_batch]
+
+    // === unified KV cache ===
+
+    llama_kv_cache kv_self;
+
+    struct ggml_tensor * inp_KQ_mask;         // F32 [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_cnv;     //     [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
+    struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
+    struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
+
+    virtual ggml_tensor * build_inp_embd(
+            ggml_context * ctx0,
+             ggml_tensor * tok_embd,
+      const llama_ubatch & ubatch) override;
+
+    virtual ggml_tensor * build_inp_pos(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) override;
+
+    virtual ggml_tensor * build_inp_out_ids(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   worst_case) override;
+
+    virtual ggml_tensor * build_inp_mean(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) override;
+
+    virtual ggml_tensor * build_inp_cls(
+            ggml_context * ctx0,
+                 int32_t   n_tokens) override;
+
+    virtual void build_attn_inp(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   causal,
+                    bool   swa,
+                    bool   worst_case) override;
+
+    virtual void build_attn_kv_store(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * k_cur,
+             ggml_tensor * v_cur,
+                 int32_t   n_tokens,
+                 int64_t   il,
+                 bool      worst_case) override;
+
+    virtual ggml_tensor * build_attn_qkv(
+            ggml_context * ctx0,
+             ggml_cgraph * graph,
+             ggml_tensor * wo,
+             ggml_tensor * wo_b,
+             ggml_tensor * q_cur,
+                 int32_t   n_tokens,
+                 float     kq_scale,
+                 int       il,
+                 bool      worst_case) override;
+
+    virtual ggml_tensor * build_soft_max_ext(
+            ggml_context * ctx0,
+             ggml_tensor * kq,
+                 float     kq_scale) override;
+
+    virtual ggml_tensor * get_rope_factors(int il) override;
+
+    virtual void build_k_shift(
+            ggml_context * ctx0,
+             ggml_cgraph * graph) override;
+
+    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
+    virtual void build_defrag(
+            ggml_context * ctx0,
+             ggml_cgraph * graph) override;
 
     // === encoder-decoder ===
 
@@ -152,79 +454,36 @@ struct llama_context {
 
     struct ggml_tensor * inp_embd_enc;      // F32 [n_embd, n_outputs_enc]
     struct ggml_tensor * inp_pos_bucket;    // I32 [n_batch|n_kv, n_batch]
+    struct ggml_tensor * inp_KQ_mask_cross; // F32 [n_outputs_enc, n_batch]
 
-    // === unified KV cache ===
-
-    llama_kv_cache     kv_self;
-
-    struct ggml_tensor * inp_KQ_mask;         // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_cnv;     //     [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_cross;   // F32 [n_outputs_enc, n_batch]
-    struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
-
-    // return true if need to reserve new worst-case graph
-    void kv_self_update();
-
-    void build_attn_inp(
+    virtual ggml_tensor * build_inp_embd_enc(
             ggml_context * ctx0,
                  int32_t   n_tokens,
-                    bool   causal,
-                    bool   swa,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    void build_attn_kv_store(
+    virtual ggml_tensor * build_inp_KQ_mask_cross(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
-             ggml_tensor * k_cur,
-             ggml_tensor * v_cur,
                  int32_t   n_tokens,
-                 int64_t   il,
-                 bool      worst_case);
-
-    ggml_tensor * build_attn_qkv(
-            ggml_context * ctx0,
-             ggml_cgraph * graph,
-             ggml_tensor * wo,
-             ggml_tensor * wo_b,
-             ggml_tensor * q_cur,
-                 int32_t   n_tokens,
-                 float     kq_scale,
-                 int       il,
-                 bool      worst_case);
-
-    ggml_tensor * build_soft_max_ext(
-            ggml_context * ctx0,
-             ggml_tensor * kq,
-                 float     kq_scale);
-
-    ggml_tensor * get_rope_factors(int il);
-
-    void build_k_shift(
-            ggml_context * ctx0,
-             ggml_cgraph * graph);
-
-    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-    void build_defrag(
-            ggml_context * ctx0,
-             ggml_cgraph * graph);
+                    bool   worst_case) override;
 
     // === recurrent ===
+
+    struct ggml_tensor * inp_s_copy;        // I32 [kv_size]
+    struct ggml_tensor * inp_s_mask;        // F32 [1, n_kv]
 
     // TODO: add recurrent cache
     // TODO: add mamba-specific llama_context
 
     // TODO: change these to build_mamba_inp and hide `state_copy` and `state_mask` inside the llama_context impl
-    ggml_tensor * build_inp_s_copy(
+    virtual ggml_tensor * build_inp_s_copy(
             ggml_context * ctx0,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_inp_s_mask(
+    virtual ggml_tensor * build_inp_s_mask(
             ggml_context * ctx0,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_copy_mask_state(
+    virtual ggml_tensor * build_copy_mask_state(
             ggml_context * ctx0,
              ggml_cgraph * graph,
              ggml_tensor * s,
@@ -233,9 +492,9 @@ struct llama_context {
                  int32_t   n_tokens,
                  int32_t   n_state,
                  int32_t   n_seqs,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_mamba_layer(
+    virtual ggml_tensor * build_mamba_layer(
             ggml_context * ctx0,
              ggml_cgraph * graph,
              ggml_tensor * cur,
@@ -243,25 +502,25 @@ struct llama_context {
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_rwkv_token_shift_load(
+    virtual ggml_tensor * build_rwkv_token_shift_load(
             ggml_context * ctx0,
              ggml_cgraph * graph,
              ggml_tensor * state_copy,
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_rwkv_token_shift_store(
+    virtual ggml_tensor * build_rwkv_token_shift_store(
             ggml_context * ctx0,
              ggml_tensor * token_shift,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    ggml_tensor * build_rwkv6_time_mix(
+    virtual ggml_tensor * build_rwkv6_time_mix(
             ggml_context * ctx0,
              ggml_cgraph * graph,
              ggml_tensor * cur,
@@ -270,17 +529,48 @@ struct llama_context {
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case);
+                    bool   worst_case) override;
 
-    struct ggml_tensor * inp_s_copy;        // I32 [kv_size]
-    struct ggml_tensor * inp_s_mask;        // F32 [1, n_kv]
+    // state save/load
 
-    // === vision ===
+    virtual size_t state_get_size()                                 override;
+    virtual size_t state_get_data(      uint8_t * dst, size_t size) override;
+    virtual size_t state_set_data(const uint8_t * src, size_t size) override;
 
-    // TODO: find a better way to accommodate mutli-dimension position encoding methods
-    // number of position id each token get, 1 for each token in most cases.
-    // when using m-rope, it will be 3 position ids per token to representing 3 dimension coordinate.
-    int n_pos_per_token = 1;
+    virtual size_t state_seq_get_size(llama_seq_id seq_id)                                  override;
+    virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size) override;
+    virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size) override;
+
+    virtual bool state_load_file(
+            const char * filepath,
+           llama_token * tokens_out,
+                size_t   n_token_capacity,
+                size_t * n_token_count_out) override;
+
+    virtual bool state_save_file(
+            const char * filepath,
+     const llama_token * tokens,
+                size_t   n_token_count) override;
+
+    virtual size_t state_seq_load_file(
+          llama_seq_id   seq_id,
+            const char * filepath,
+           llama_token * tokens_out,
+                size_t   n_token_capacity,
+                size_t * n_token_count_out) override;
+
+    virtual size_t state_seq_save_file(
+          llama_seq_id   seq_id,
+            const char * filepath,
+     const llama_token * tokens,
+                size_t   n_token_count) override;
+
+private:
+    size_t state_get_data(struct llama_data_write & data_ctx);
+    size_t state_set_data(struct llama_data_read  & data_ctx);
+
+    size_t state_seq_get_data(struct llama_data_write & data_ctx, llama_seq_id seq_id);
+    size_t state_seq_set_data(struct llama_data_read  & data_ctx, llama_seq_id seq_id);
 };
 
 // For internal test use
