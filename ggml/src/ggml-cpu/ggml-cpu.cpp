@@ -283,15 +283,15 @@ struct ggml_backend_cpu_device_context {
                         KEY_READ,
                         &hKey) == ERROR_SUCCESS) {
             DWORD cpu_brand_size = 0;
-            if (RegQueryValueEx(hKey,
-                                TEXT("ProcessorNameString"),
+            if (RegQueryValueExA(hKey,
+                                "ProcessorNameString",
                                 NULL,
                                 NULL,
                                 NULL,
                                 &cpu_brand_size) == ERROR_SUCCESS) {
                 description.resize(cpu_brand_size);
-                if (RegQueryValueEx(hKey,
-                                    TEXT("ProcessorNameString"),
+                if (RegQueryValueExA(hKey,
+                                    "ProcessorNameString",
                                     NULL,
                                     NULL,
                                     (LPBYTE)&description[0], // NOLINT
