@@ -193,6 +193,47 @@ bool llama_context::apply_adapter_cvec(
     return cvec.apply(model, data, len, n_embd, il_start, il_end);
 }
 
+void llama_context::build_cb(
+         ggml_tensor * cur,
+          const char * name,
+                 int   il) {
+    if (il >= 0) {
+        ggml_format_name(cur, "%s-%d", name, il);
+    } else {
+        ggml_set_name(cur, name);
+    }
+
+    if (!cparams.offload_kqv) {
+        if (strcmp(name, "kqv_merged_cont") == 0) {
+            // all nodes between the KV store and the attention output are run on the CPU
+            ggml_backend_sched_set_tensor_backend(sched.get(), cur, backend_cpu);
+        }
+    }
+
+    // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
+    // FIXME: fix in ggml_backend_sched
+    const bool full_offload = model.params.n_gpu_layers > (int) model.hparams.n_layer;
+    // TODO: during #11213, the requirement for ubatch.n_tokens < 32 was removed to simplify
+    //       not sure if this is still needed, but it can be brought back if needed
+    //if (ubatch.n_tokens < 32 || full_offload) {
+    if (full_offload) {
+        if (il != -1 && strcmp(name, "norm") == 0) {
+            const auto & dev_layer = model.dev_layer(il);
+            for (auto & backend : backends) {
+                if (ggml_backend_get_device(backend.get()) == dev_layer) {
+                    if (ggml_backend_supports_op(backend.get(), cur)) {
+                        ggml_backend_sched_set_tensor_backend(sched.get(), cur, backend.get());
+                    }
+                }
+            }
+        }
+    }
+}
+
+ggml_cgraph * llama_context::build_graph(const llama_ubatch & ubatch, bool worst_case) {
+    return model.build_graph(*this, cparams, ubatch, init(), worst_case);
+}
+
 llama_perf_context_data llama_context::perf_get_data() const {
     llama_perf_context_data data = {};
 
@@ -298,11 +339,7 @@ void llama_context::perf_reset() {
 
 llama_context_unified::llama_context_unified(
         const llama_model & model,
-        const llama_context_params & params,
-        build_graph_callback && cb_build_graph) :
-    llama_context(model),
-    cb_build_graph(std::move(cb_build_graph)) {
-
+        const llama_context_params & params) : llama_context(model) {
     const auto & hparams = model.hparams;
 
     cparams.n_seq_max        = std::max(1u, params.n_seq_max);
@@ -555,7 +592,7 @@ llama_context_unified::llama_context_unified(
             llama_token token = model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
 
             llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-            ggml_cgraph * gf_pp = this->cb_build_graph(*this, ubatch_pp, true);
+            ggml_cgraph * gf_pp = build_graph(ubatch_pp, true);
 
             // reserve pp graph first so that buffers are only allocated once
             ggml_backend_sched_reserve(sched.get(), gf_pp);
@@ -564,13 +601,13 @@ llama_context_unified::llama_context_unified(
 
             // reserve with tg graph to get the number of splits and nodes
             llama_ubatch ubatch_tg = { true, 1, 1, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-            ggml_cgraph * gf_tg = this->cb_build_graph(*this, ubatch_tg, true);
+            ggml_cgraph * gf_tg = build_graph(ubatch_tg, true);
             ggml_backend_sched_reserve(sched.get(), gf_tg);
             int n_splits_tg = ggml_backend_sched_get_n_splits(sched.get());
             int n_nodes_tg = ggml_graph_n_nodes(gf_tg);
 
             // reserve again with pp graph to avoid ggml-alloc reallocations during inference
-            gf_pp = this->cb_build_graph(*this, ubatch_pp, true);
+            gf_pp = build_graph(ubatch_pp, true);
             if (!ggml_backend_sched_reserve(sched.get(), gf_pp)) {
                 LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
                 throw std::runtime_error("failed to allocate compute buffers");
@@ -893,7 +930,7 @@ struct llama_context_unified::batch_manager {
             llama_token token = model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             llama_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
 
-            ggml_cgraph * gf = lctx.cb_build_graph(lctx, ubatch, true);
+            ggml_cgraph * gf = lctx.build_graph(ubatch, true);
 
             // initialize scheduler with the worst-case graph
             ggml_backend_sched_reset(lctx.sched.get());
@@ -1004,7 +1041,7 @@ int llama_context_unified::decode(llama_batch & inp_batch) {
         ggml_backend_sched_reset(sched.get());
         ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
 
-        ggml_cgraph * gf = cb_build_graph(*this, ubatch, false);
+        ggml_cgraph * gf = build_graph(ubatch, false);
 
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
@@ -1227,7 +1264,7 @@ int llama_context_unified::encode(llama_batch & inp_batch) {
     ggml_backend_sched_reset(sched.get());
     ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
 
-    ggml_cgraph * gf = cb_build_graph(*this, ubatch, false);
+    ggml_cgraph * gf = build_graph(ubatch, false);
 
     ggml_backend_sched_alloc_graph(sched.get(), gf);
 

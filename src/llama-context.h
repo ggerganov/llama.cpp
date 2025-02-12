@@ -82,6 +82,14 @@ struct llama_context : public llama_graph_i {
                 int32_t   il_start,
                 int32_t   il_end);
 
+    virtual void build_cb(
+             ggml_tensor * cur,
+              const char * name,
+                     int   il);
+
+    // TODO: add encode/decode graphs
+    virtual ggml_cgraph * build_graph(const llama_ubatch & ubatch, bool worst_case);
+
     // decode a batch of tokens by evaluating the transformer
     // in case of unsuccessful decoding (error or warning),
     // the kv_cache state will be returned to its original state
@@ -171,11 +179,6 @@ struct llama_context : public llama_graph_i {
 
     // members
 
-    // TODO: temporary public until llama_context implements the graph build function
-    std::vector<ggml_backend_ptr> backends;
-    ggml_backend_t backend_cpu = nullptr;
-    ggml_backend_sched_ptr sched;
-
 protected:
     const llama_model & model;
 
@@ -189,7 +192,12 @@ protected:
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
+    ggml_backend_t backend_cpu = nullptr;
+    std::vector<ggml_backend_ptr> backends;
+
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
+
+    ggml_backend_sched_ptr sched;
 
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
@@ -213,13 +221,9 @@ class llama_context_unified : public llama_context {
 public:
     struct batch_manager;
 
-    // TODO: tmp until llama_model starts implementing the graph build function
-    typedef std::function<ggml_cgraph *(llama_context &, const llama_ubatch &, bool worst_case)> build_graph_callback;
-
     llama_context_unified(
             const llama_model & model,
-            const llama_context_params & params,
-            build_graph_callback && cb_build_graph);
+            const llama_context_params & params);
 
     virtual ~llama_context_unified();
 
@@ -243,8 +247,6 @@ public:
     virtual int encode(llama_batch & inp_batch) override;
 
     llama_sbatch sbatch;
-
-    build_graph_callback cb_build_graph;
 
     // host buffer for the model output (logits and embeddings)
     ggml_backend_buffer_ptr buf_output;

@@ -7,9 +7,15 @@ struct ggml_context;
 struct ggml_tensor;
 struct llama_ubatch;
 
-// TODO: pass to llama_model graph build
+// TODO: can become more granular in the future
 class llama_graph_i {
 public:
+    // callback that allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
+    virtual void build_cb(
+             ggml_tensor * cur,
+              const char * name,
+                     int   il) = 0;
+
     // apply control vector for layer il
     virtual ggml_tensor * build_cvec(
             ggml_context * ctx0,
