@@ -229,7 +229,7 @@ if has_text_encoder:
 
 
 
-def get_unsigned_vision_feature_layers(v_hparams):
+def get_non_negative_vision_feature_layers(v_hparams):
     """
     Determine the vision feature layer(s) for the llava model, which are indices into the
     hidden states of the visual encoder. Note that the hidden states array generally takes the
@@ -237,9 +237,9 @@ def get_unsigned_vision_feature_layers(v_hparams):
 
         [<emb input>, <output of enc block 0>, ... <output of enc block num_hidden_layers>]
     
-    so positive feature indices should be offset as n+1 to get the output of encoder block n.
-    We convert all vision feature layers to unsigned ints so that -1 can be used in the model
-    as an unset value. If no vision feature layer is found, we leave it unset.
+    so feature indices should be offset as n+1 to get the output of encoder block n.
+    We convert all vision feature layers to non-negative so that -1 can be used in
+    the model as an unset value. If no vision feature layer is found, we leave it unset.
     """
     num_hidden_layers = v_hparams["num_hidden_layers"]
     to_uint = lambda layer_idx: layer_idx  if layer_idx >= 0 else num_hidden_layers + layer_idx + 1
@@ -257,7 +257,7 @@ def get_unsigned_vision_feature_layers(v_hparams):
         return [to_uint(feature_layer) for feature_layer in feature_layers]
 
 if has_vision_encoder:
-    feature_layers = get_unsigned_vision_feature_layers(v_hparams)
+    feature_layers = get_non_negative_vision_feature_layers(v_hparams)
 
     # Siglip does not have a visual projector; set projection dim to 0
     if args.clip_model_is_siglip:
