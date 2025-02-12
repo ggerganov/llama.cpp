@@ -254,12 +254,12 @@ export default function ChatMessage({
                   🔄 Regenerate
                 </button>
               )}
-              <CopyButton
-                className="badge btn-mini show-on-hover mr-2"
-                content={msg.content}
-              />
             </>
           )}
+          <CopyButton
+            className="badge btn-mini show-on-hover mr-2"
+            content={msg.content}
+          />
         </div>
       )}
     </div>
