@@ -691,13 +691,8 @@ static inline __m256 mul_sum_us8_pairs_float(const __m256i ax, const __m256i sy)
 
 // multiply int8_t, add results pairwise twice and return as float vector
 static inline __m256 mul_sum_i8_pairs_float(const __m256i x, const __m256i y) {
-
-    // Get absolute values of x vectors
-    const __m256i ax = __lasx_xvsigncov_b(x, x);
-    // Sign the values of the y vectors
-    const __m256i sy = __lasx_xvsigncov_b(x, y);
-
-    return mul_sum_us8_pairs_float(ax, sy);
+    const __m256i dot = lasx_madd_h_b(x, y);
+    return sum_i16_pairs_float(dot);
 }
 
 static inline __m128i packNibbles( __m256i bytes ) {
