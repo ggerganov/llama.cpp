@@ -297,6 +297,90 @@ static const uint64_t table_b2b_0[1 << 8] = { B8(00, 10) }; // ( b) << 4
 static const uint64_t table_b2b_1[1 << 8] = { B8(10, 00) }; // (!b) << 4
 #endif
 
+#if defined(__loongarch_sx)
+
+static __m128i lsx_packs_w(__m128i a, __m128i b) {
+    __m128i tmp, tmp1;
+    tmp = __lsx_vsat_w(a, 15);
+    tmp1 = __lsx_vsat_w(b, 15);
+    return __lsx_vpickev_h(tmp1, tmp);
+}
+
+static __m128i lsx_packs_h(__m128i a, __m128i b) {
+    __m128i tmp, tmp1;
+    tmp = __lsx_vsat_h(a, 7);
+    tmp1 = __lsx_vsat_h(b, 7);
+    return __lsx_vpickev_b(tmp1, tmp);
+}
+
+static __m128i lsx_packus_h(__m128i a, __m128i b) {
+    __m128i tmp, tmp1;
+    tmp = __lsx_vsat_hu(a, 7);
+    tmp1 = __lsx_vsat_hu(b, 7);
+    return __lsx_vpickev_b(tmp1, tmp);
+}
+
+static __m128i lsx_maddubs_h(__m128i a, __m128i b) {
+    __m128i tmp1, tmp2;
+    tmp1 = __lsx_vmulwev_h_b(a, b);
+    tmp2 = __lsx_vmulwod_h_b(a, b);
+    return __lsx_vsadd_h(tmp1, tmp2);
+}
+
+static __m128i lsx_madd_h(__m128i a, __m128i b) {
+    __m128i tmp1, tmp2;
+    tmp1 = __lsx_vmulwev_w_h(a, b);
+    tmp2 = __lsx_vmulwod_w_h(a, b);
+    return __lsx_vadd_w(tmp1, tmp2);
+}
+
+static __m128i lsx_set_w(int32_t a, int32_t b, int32_t c, int32_t d) {
+    v4i32 __ret = {d, c, b, a};
+    return (__m128i)__ret;
+}
+
+static __m128i lsx_shuffle_b(__m128i a, __m128i b) {
+    __m128i mask_f, zero, tmp0, tmp2, mask;
+    int f = 0x8f;
+    mask_f = __lsx_vreplgr2vr_b(f);
+    zero = __lsx_vldi(0);
+    tmp0 = __lsx_vand_v(b, mask_f); // get mask with low 4 bit and sign bits
+    tmp0 = __lsx_vori_b(tmp0, 0x10); // make each mask or  with 0x10 prepare for positive
+    mask = __lsx_vsle_b(zero, tmp0); // if mask >= 0, set mask
+    tmp2 = __lsx_vand_v(tmp0, mask); // maskout the in2 < ones
+    return __lsx_vshuf_b(a, zero, tmp2);
+}
+
+static __m128i lsx_hadd_h(__m128i a, __m128i b) {
+    __m128i tmp1 = __lsx_vpickev_h(b, a);
+    __m128i tmp2 = __lsx_vpickod_h(b, a);
+    return __lsx_vadd_h(tmp1, tmp2);
+}
+
+static __m128i lsx_hadd_w(__m128i a, __m128i b) {
+    __m128i tmp1 = __lsx_vpickev_w(b, a);
+    __m128i tmp2 = __lsx_vpickod_w(b, a);
+    return __lsx_vadd_w(tmp1, tmp2);
+}
+
+static __m128 lsx_hadd_s(__m128 a, __m128 b) {
+    __m128 tmp1 = (__m128)__lsx_vpickev_w((__m128i)b, (__m128i)a);
+    __m128 tmp2 = (__m128)__lsx_vpickod_w((__m128i)b, (__m128i)a);
+
+    return __lsx_vfadd_s(tmp1, tmp2);
+}
+
+static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 c, const __m128 d) {
+    __m128 res_0 =lsx_hadd_s(a, b);
+    __m128 res_1 =lsx_hadd_s(c, d);
+    __m128 res =lsx_hadd_s(res_0, res_1);
+    res =lsx_hadd_s(res, res);
+    res =lsx_hadd_s(res, res);
+
+    return ((v4f32)res)[0];
+}
+#endif
+
 #if defined(__loongarch_asx)
 
 #ifdef __clang__
@@ -395,11 +479,6 @@ static __m256i lasx_set_w(int e7, int e6, int e5, int e4, int e3, int e2, int e1
     return (__m256i)__ret;
 }
 
-static __m128i lsx_set_w(int32_t a, int32_t b, int32_t c, int32_t d) {
-    v4i32 __ret = {d, c, b, a};
-    return (__m128i)__ret;
-}
-
 static __m256i lasx_set_d(int64_t a, int64_t b, int64_t c, int64_t d) {
     v4i64 __ret = {d, c, b, a};
     return (__m256i)__ret;
@@ -407,18 +486,6 @@ static __m256i lasx_set_d(int64_t a, int64_t b, int64_t c, int64_t d) {
 
 static __m256i lasx_insertf128( __m128i x, __m128i y) {
     return lasx_set_q(x, y);
-}
-
-static __m128i lsx_shuffle_b(__m128i a, __m128i b) {
-    __m128i mask_f, zero, tmp0, tmp2, mask;
-    int f = 0x8f;
-    mask_f = __lsx_vreplgr2vr_b(f);
-    zero = __lsx_vldi(0);
-    tmp0 = __lsx_vand_v(b, mask_f); // get mask with low 4 bit and sign bits
-    tmp0 = __lsx_vori_b(tmp0, 0x10); // make each mask or  with 0x10 prepare for positive
-    mask = __lsx_vsle_b(zero, tmp0); // if mask >= 0, set mask
-    tmp2 = __lsx_vand_v(tmp0, mask); // maskout the in2 < ones
-    return __lsx_vshuf_b(a, zero, tmp2);
 }
 
 static __m256i lasx_shuffle_b(__m256i a, __m256i b) {
@@ -434,30 +501,15 @@ static __m256i lasx_shuffle_b(__m256i a, __m256i b) {
 }
 
 static __m256i lasx_extu8_16(__m128i a) {
-    __m128i zero = __lsx_vldi(0);
-    __m128i vlo = __lsx_vilvl_b(zero, a);
-    __m128i vhi = __lsx_vilvh_b(zero, a);
-    return lasx_set_q(vhi, vlo);
+    return __lasx_vext2xv_hu_bu(____m256i(a));
 }
 
 static __m256i lasx_ext8_16(__m128i a) {
-     __m128i sign = __lsx_vslti_b(a, 0);
-     __m128i vlo = __lsx_vilvl_b(sign, a);
-     __m128i vhi = __lsx_vilvh_b(sign, a);
-     return lasx_set_q(vhi, vlo);
+    return __lasx_vext2xv_h_b(____m256i(a));
 }
 
 static __m256i lasx_ext16_32(__m128i a) {
-    __m256i tmp1;
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 0), 0);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 1), 1);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 2), 2);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 3), 3);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 4), 4);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 5), 5);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 6), 6);
-    tmp1 = __lasx_xvinsgr2vr_w(tmp1, __lsx_vpickve2gr_h(a, 7), 7);
-    return tmp1;
+    return __lasx_vext2xv_w_h(____m256i(a));
 }
 
 static __m128i lasx_extracti128( __m256i a, int pos) {
@@ -480,25 +532,6 @@ static __m128 lasx_extractf128( __m256 a, int pos) {
        ret = (__m128)lasx_extracti128_hi((__m256i)a);
     }
     return ret;
-}
-
-static __m128i lsx_hadd_h(__m128i a, __m128i b) {
-    __m128i tmp1 = __lsx_vpickev_h(b, a);
-    __m128i tmp2 = __lsx_vpickod_h(b, a);
-    return __lsx_vadd_h(tmp1, tmp2);
-}
-
-static __m128i lsx_hadd_w(__m128i a, __m128i b) {
-    __m128i tmp1 = __lsx_vpickev_w(b, a);
-    __m128i tmp2 = __lsx_vpickod_w(b, a);
-    return __lsx_vadd_w(tmp1, tmp2);
-}
-
-static __m128 lsx_hadd_s(__m128 a, __m128 b) {
-    __m128 tmp1 = (__m128)__lsx_vpickev_w((__m128i)b, (__m128i)a);
-    __m128 tmp2 = (__m128)__lsx_vpickod_w((__m128i)b, (__m128i)a);
-
-    return __lsx_vfadd_s(tmp1, tmp2);
 }
 
 static __m256i lasx_maddubs_h(__m256i a, __m256i b) {
@@ -529,42 +562,6 @@ static __m256i lasx_packs_h(__m256i a, __m256i b) {
     return __lasx_xvpickev_b(tmp1, tmp);
 }
 
-static __m128i lsx_packs_w(__m128i a, __m128i b) {
-    __m128i tmp, tmp1;
-    tmp = __lsx_vsat_w(a, 15);
-    tmp1 = __lsx_vsat_w(b, 15);
-    return __lsx_vpickev_h(tmp1, tmp);
-}
-
-static __m128i lsx_packs_h(__m128i a, __m128i b) {
-    __m128i tmp, tmp1;
-    tmp = __lsx_vsat_h(a, 7);
-    tmp1 = __lsx_vsat_h(b, 7);
-    return __lsx_vpickev_b(tmp1, tmp);
-}
-
-static __m128i lsx_packus_h(__m128i a, __m128i b) {
-    __m128i tmp, tmp1;
-    tmp = __lsx_vsat_hu(a, 7);
-    tmp1 = __lsx_vsat_hu(b, 7);
-    return __lsx_vpickev_b(tmp1, tmp);
-}
-
-
-static __m128i lsx_maddubs_h(__m128i a, __m128i b) {
-    __m128i tmp1, tmp2;
-    tmp1 = __lsx_vmulwev_h_b(a, b);
-    tmp2 = __lsx_vmulwod_h_b(a, b);
-    return __lsx_vsadd_h(tmp1, tmp2);
-}
-
-static __m128i lsx_madd_h(__m128i a, __m128i b) {
-    __m128i tmp1, tmp2;
-    tmp1 = __lsx_vmulwev_w_h(a, b);
-    tmp2 = __lsx_vmulwod_w_h(a, b);
-    return __lsx_vadd_w(tmp1, tmp2);
-}
-
 // multiply int8_t, add results pairwise twice
 static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     // Get absolute values of x vectors
@@ -580,12 +577,10 @@ static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
 // horizontally add 8 floats
 static inline float hsum_float_8(const __m256 x) {
     __m128 res = lasx_extractf128(x, 1);
-    ft_union tmp;
     res = __lsx_vfadd_s(res, lasx_extractf128(x, 0));
     res = __lsx_vfadd_s(res, (__m128)__lsx_vpickod_d((__m128i)res, (__m128i)res));
     res = __lsx_vfadd_s(res, (__m128)__lsx_vinsgr2vr_w(__lsx_vldi(0), __lsx_vpickve2gr_w(res, 1), 0));
-    tmp.i = __lsx_vpickve2gr_w(res, 0);
-    return tmp.f;
+    return ((v4f32)res)[0];
 }
 
 // horizontally add 8 int32_t
@@ -927,7 +922,6 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
 
 #elif defined(__loongarch_asx)
     for (int i = 0; i < nb; i++) {
-        ft_union fi;
         __m256 v0 = (__m256)__lasx_xvld( x , 0);
         __m256 v1 = (__m256)__lasx_xvld( x , 32);
         __m256 v2 = (__m256)__lasx_xvld( x , 64);
@@ -945,8 +939,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) 
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vpickod_d((__m128i) max4, (__m128i)max4 ) );
         __m128 tmp = max4;
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vinsgr2vr_w(tmp, __lsx_vpickve2gr_w( max4, 1 ), 0 ));
-        fi.i = __lsx_vpickve2gr_w( (__m128i)max4, 0 );
-        const float max_scalar = fi.f;
+        const float max_scalar = ((v4f32)max4)[0];
 
         // Quantize these floats
         const float d = max_scalar / 127.f;
@@ -1251,7 +1244,6 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) 
 
 #elif defined(__loongarch_asx)
     for (int i = 0; i < nb; i++) {
-        ft_union ft;
         __m256 v0 = (__m256)__lasx_xvld( x , 0 );
         __m256 v1 = (__m256)__lasx_xvld( x , 32 );
         __m256 v2 = (__m256)__lasx_xvld( x , 64 );
@@ -1269,8 +1261,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) 
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vpickod_d((__m128i) max4, (__m128i)max4 ) );
         __m128 tmp = max4;
         max4 = __lsx_vfmax_s( max4, (__m128)__lsx_vextrins_w((__m128i)tmp, (__m128i)max4, 0x10 ));
-        ft.i = __lsx_vpickve2gr_w( (__m128i)max4, 0 );
-        const float max_scalar = ft.f;
+        const float max_scalar = ((v4f32)max4)[0];
 
         // Quantize these floats
         const float d = max_scalar / 127.f;
@@ -2232,21 +2223,22 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     }
 
     sumf = hsum_float_8(acc);
+
 #elif defined(__loongarch_sx)
     // set constants
     const __m128i low_mask = __lsx_vreplgr2vr_b(0xF);
     const __m128i off = __lsx_vreplgr2vr_b(8);
 
     // Initialize accumulator with zeros
-    __m128 acc_0 = __lsx_vldi(0);
-    __m128 acc_1 = __lsx_vldi(0);
-    __m128 acc_2 = __lsx_vldi(0);
-    __m128 acc_3 = __lsx_vldi(0);
+    __m128 acc_0 = (__m128)__lsx_vldi(0);
+    __m128 acc_1 = (__m128)__lsx_vldi(0);
+    __m128 acc_2 = (__m128)__lsx_vldi(0);
+    __m128 acc_3 = (__m128)__lsx_vldi(0);
 
     for (; ib + 1 < nb; ib += 2) {
 
         // Compute combined scale for the block 0 and 1
-        const __m128 d_0_1 = __lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d) );
+        const __m128 d_0_1 = (__m128)__lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[ib].d) * GGML_FP16_TO_FP32(y[ib].d) );
 
         const __m128i tmp_0_1 = __lsx_vld((const __m128i *)x[ib].qs, 0);
 
@@ -2264,7 +2256,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         //_mm_prefetch(&y[ib] + 2 * sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 2 and 3
-        const __m128 d_2_3 = __lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[ib + 1].d) * GGML_FP16_TO_FP32(y[ib + 1].d) );
+        const __m128 d_2_3 = (__m128)__lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[ib + 1].d) * GGML_FP16_TO_FP32(y[ib + 1].d) );
 
         const __m128i tmp_2_3 = __lsx_vld((const __m128i *)x[ib + 1].qs, 0);
 
@@ -6141,9 +6133,7 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     acc_m = __lsx_vfadd_s(acc_m, (__m128)tmp1);
 
 
-    ft_union fi;
-    fi.i = __lsx_vpickve2gr_w(acc_m, 0);
-    *s = hsum_float_8(acc) + fi.f ;
+    *s = hsum_float_8(acc) + ((v4f32)acc_m)[0];
 #else
 
     const uint8_t * scales = (const uint8_t*)&utmp[0];
