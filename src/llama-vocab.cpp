@@ -439,7 +439,7 @@ struct llm_tokenizer_bpe_session {
                 "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
-        if (vocab.get_add_bos() && output.size() >= 2 && *(output.end()-2) == vocab.token_eos()) {
+        if (vocab.get_add_eos() && output.size() >= 2 && *(output.end()-2) == vocab.token_eos()) {
             LLAMA_LOG_WARN(
                 "%s: Added a EOS token to the prompt as specified by the model but the prompt "
                 "also ends with a EOS token. So now the final prompt ends with 2 EOS tokens. "
@@ -1245,8 +1245,13 @@ struct llama_vocab::impl {
 
     std::vector<llama_token> cache_special_tokens;
     std::vector<std::string> cache_token_to_piece; // llama_token_to_piece(special = true);
-
-    std::map<std::pair<std::string, std::string>, int> bpe_ranks;
+    struct pair_hash {
+        size_t operator()(const std::pair<std::string, std::string> & p) const {
+            return std::hash<std::string>{}(p.first) ^  //create some hash for pair
+                   (std::hash<std::string>{}(p.second) << 1);
+        }
+    };
+    std::unordered_map<std::pair<std::string, std::string>, int, pair_hash> bpe_ranks;
 
     // set of all tokens that cause "end of generation"
     std::set<llama_token> special_eog_ids;
@@ -1356,8 +1361,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
 
             // read vocab size from metadata
             uint32_t n_tokens = 0;
-            if (!ml.get_key(LLM_KV_VOCAB_SIZE, n_tokens, false)) {
-                LLAMA_LOG_WARN("%s: there is no vocab_size in metadata\n", __func__);
+            if (ml.get_key(LLM_KV_VOCAB_SIZE, n_tokens, false)) {
+                LLAMA_LOG_WARN("%s: adding %u dummy tokens\n", __func__, n_tokens);
+                id_to_token.resize(n_tokens);
             }
 
             return;
@@ -1522,7 +1528,8 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
                 clean_spaces = false;
             } else if (
-                tokenizer_pre == "qwen2") {
+                    tokenizer_pre == "qwen2" ||
+                    tokenizer_pre == "deepseek-r1-qwen") {
                 pre_type = LLAMA_VOCAB_PRE_TYPE_QWEN2;
                 clean_spaces = false;
             } else if (
@@ -1685,7 +1692,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         linefeed_id = ids[0];
     } else {
-        const std::vector<int> ids = tokenize("\xC4\x8A", false); // U+010A
+        const std::vector<int> ids = tokenize("\n", false);
 
         //GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
         if (ids.empty()) {

@@ -216,7 +216,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     return true;
 }
 
-static clip_image_f32 * only_v2_5_reshape_by_patch(clip_image_f32 * image, int patch_size) {
+static clip_image_f32 * reshape_by_patch(clip_image_f32 * image, int patch_size) {
     int width = image->nx;
     int height = image->ny;
     int num_patches = (height / patch_size) * (width / patch_size);
@@ -277,13 +277,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
                 encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
             }
             else {
-                int has_minicpmv_projector = clip_is_minicpmv(ctx_clip);
-                if (has_minicpmv_projector == 2) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, only_v2_5_reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
-                }
-                else if (has_minicpmv_projector == 3) {
-                    encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
-                }
+                encoded = clip_image_encode(ctx_clip, n_threads, reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]);
             }
 
             if (!encoded) {
@@ -313,6 +307,23 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         load_image_size->height = img->ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
         LOG_INF("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+        delete[] img_res_v.data;
+        img_res_v.size = 0;
+        img_res_v.data = nullptr;
+    }
+    else if (clip_is_glm(ctx_clip)){
+        struct clip_image_size * load_image_size = clip_image_size_init();
+        load_image_size->width = img_res_v.data[0].nx;
+        load_image_size->height = img_res_v.data[0].ny;
+        clip_add_load_image_size(ctx_clip, load_image_size);
+
+        bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd);
+        int pos = int(load_image_size->width/clip_patch_size(ctx_clip)/2);
+        *n_img_pos = (pos * pos + 2);
+        if (!encoded){
+            LOG_ERR("Unable to encode image \n");
+            return false;
+        }
     }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
         // flat / default llava-1.5 type embedding
@@ -397,6 +408,9 @@ bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, co
     int num_max_patches = 6;
     if (clip_is_minicpmv(ctx_clip)) {
         num_max_patches = 10;
+    }
+    if (clip_is_glm(ctx_clip)) {
+        num_max_patches = 1;
     }
     float * image_embd;
     if (clip_is_qwen2vl(ctx_clip)) {

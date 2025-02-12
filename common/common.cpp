@@ -12,6 +12,8 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat.hpp"
+#include "chat-template.hpp"
 
 #include <algorithm>
 #include <cinttypes>
@@ -481,6 +483,48 @@ void string_replace_all(std::string & s, const std::string & search, const std::
     }
     builder.append(s, last_pos, std::string::npos);
     s = std::move(builder);
+}
+
+std::string string_join(const std::vector<std::string> & values, const std::string & separator) {
+    std::ostringstream result;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) {
+            result << separator;
+        }
+        result << values[i];
+    }
+    return result.str();
+}
+
+std::vector<std::string> string_split(const std::string & str, const std::string & delimiter) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    size_t end = str.find(delimiter);
+
+    while (end != std::string::npos) {
+        parts.push_back(str.substr(start, end - start));
+        start = end + delimiter.length();
+        end = str.find(delimiter, start);
+    }
+
+    parts.push_back(str.substr(start));
+
+    return parts;
+}
+
+std::string string_repeat(const std::string & str, size_t n) {
+    if (n == 0) {
+        return "";
+    }
+
+    std::string result;
+    result.reserve(str.length() * n);
+
+    for (size_t i = 0; i < n; ++i) {
+        result += str;
+    }
+
+    return result;
 }
 
 std::string string_from(bool value) {
@@ -1043,7 +1087,6 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     if (params.n_gpu_layers != -1) {
         mparams.n_gpu_layers = params.n_gpu_layers;
     }
-    mparams.rpc_servers     = params.rpc_servers.c_str();
     mparams.main_gpu        = params.main_gpu;
     mparams.split_mode      = params.split_mode;
     mparams.tensor_split    = params.tensor_split;
@@ -1729,67 +1772,80 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
 // Chat template utils
 //
 
-std::string common_get_builtin_chat_template(const struct llama_model * model) {
-    const char * ptr_tmpl = llama_model_chat_template(model);
-    return ptr_tmpl == nullptr ? "" : ptr_tmpl;
-}
-
-bool common_chat_verify_template(const std::string & tmpl) {
+bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
+    if (use_jinja) {
+        try {
+            auto chat_template = common_chat_template(tmpl, "<s>", "</s>");
+            common_chat_inputs inputs;
+            inputs.messages = json::array({{
+                {"role", "user"},
+                {"content", "test"},
+            }});
+            common_chat_params_init(chat_template, inputs);
+            return true;
+        } catch (const std::exception & e) {
+            LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
+            return false;
+        }
+    }
     llama_chat_message chat[] = {{"user", "test"}};
     const int res = llama_chat_apply_template(tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
 }
 
-std::string common_chat_apply_template(const struct llama_model * model,
-        const std::string & tmpl,
+std::string common_chat_apply_template(
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & msgs,
-        bool add_ass) {
+        bool add_ass,
+        bool use_jinja) {
+    if (use_jinja) {
+        auto messages = json::array();
+        for (const auto & msg : msgs) {
+            messages.push_back({{"role", msg.role}, {"content", msg.content}});
+        }
+        common_chat_inputs inputs;
+        inputs.messages = messages;
+        inputs.add_generation_prompt = add_ass;
+        return common_chat_params_init(tmpl, inputs).prompt;
+    }
+
     int alloc_size = 0;
-    bool fallback = false; // indicate if we must fallback to default chatml
     std::vector<llama_chat_message> chat;
     for (const auto & msg : msgs) {
         chat.push_back({msg.role.c_str(), msg.content.c_str()});
         alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
     }
 
-    const char * ptr_tmpl = tmpl.empty() ? llama_model_chat_template(model) : tmpl.c_str();
     std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    int32_t res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
 
     // error: chat template is not supported
     if (res < 0) {
-        if (ptr_tmpl != nullptr) {
-            // if the custom "tmpl" is not supported, we throw an error
-            // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
-            throw std::runtime_error("this custom template is not supported");
-        }
-
-        // If the built-in template is not supported, we default to chatml
-        res = llama_chat_apply_template("chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
-        fallback = true;
+        // if the custom "tmpl" is not supported, we throw an error
+        // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
+        throw std::runtime_error("this custom template is not supported");
     }
 
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
-        res = llama_chat_apply_template(
-            fallback ? "chatml" : ptr_tmpl,
-            chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+        res = llama_chat_apply_template(tmpl.source().c_str(), chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }
 
     std::string formatted_chat(buf.data(), res);
     return formatted_chat;
 }
 
-std::string common_chat_format_single(const struct llama_model * model,
-        const std::string & tmpl,
+std::string common_chat_format_single(
+        const common_chat_template & tmpl,
         const std::vector<common_chat_msg> & past_msg,
         const common_chat_msg & new_msg,
-        bool add_ass) {
+        bool add_ass,
+        bool use_jinja) {
     std::ostringstream ss;
-    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(model, tmpl, past_msg, false);
+    auto fmt_past_msg = past_msg.empty() ? "" : common_chat_apply_template(tmpl, past_msg, false, use_jinja);
     std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
@@ -1797,21 +1853,87 @@ std::string common_chat_format_single(const struct llama_model * model,
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = common_chat_apply_template(model, tmpl, chat_new, add_ass);
+    auto fmt_new_msg = common_chat_apply_template(tmpl, chat_new, add_ass, use_jinja);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();
 }
 
-std::string common_chat_format_example(const struct llama_model * model,
-        const std::string & tmpl) {
+std::string common_chat_format_example(const common_chat_template & tmpl, bool use_jinja) {
     std::vector<common_chat_msg> msgs = {
-        {"system",    "You are a helpful assistant"},
-        {"user",      "Hello"},
-        {"assistant", "Hi there"},
-        {"user",      "How are you?"},
+        {"system",    "You are a helpful assistant", {}},
+        {"user",      "Hello", {}},
+        {"assistant", "Hi there", {}},
+        {"user",      "How are you?", {}},
     };
-    return common_chat_apply_template(model, tmpl, msgs, true);
+    return common_chat_apply_template(tmpl, msgs, true, use_jinja);
+}
+
+#define CHATML_TEMPLATE_SRC \
+    "{%- for message in messages -%}\n" \
+    "  {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n' -}}\n" \
+    "{%- endfor -%}\n" \
+    "{%- if add_generation_prompt -%}\n" \
+    "  {{- '<|im_start|>assistant\n' -}}\n" \
+    "{%- endif -%}"
+
+common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override)
+{
+    std::string default_template_src;
+    std::string template_tool_use_src;
+
+    bool has_explicit_template = !chat_template_override.empty();
+    if (chat_template_override.empty()) {
+        auto str = llama_model_chat_template(model, /* name */ nullptr);
+        if (str) {
+            default_template_src = str;
+            has_explicit_template = true;
+        }
+        str = llama_model_chat_template(model, /* name */ "tool_use");
+        if (str) {
+            template_tool_use_src = str;
+            has_explicit_template = true;
+        }
+    } else {
+        default_template_src = chat_template_override;
+    }
+    if (default_template_src.empty() || default_template_src == "chatml") {
+        if (!template_tool_use_src.empty()) {
+            default_template_src = template_tool_use_src;
+        } else {
+            default_template_src = CHATML_TEMPLATE_SRC;
+        }
+    }
+    auto vocab = llama_model_get_vocab(model);
+    const auto get_token = [&](llama_token token, const char * name, const char * jinja_variable_name) {
+        if (token == LLAMA_TOKEN_NULL) {
+            if (default_template_src.find(jinja_variable_name) != std::string::npos
+                || template_tool_use_src.find(jinja_variable_name) != std::string::npos) {
+                LOG_WRN("%s: warning: vocab does not have a %s token, jinja template won't work as intended.\n", __func__, name);
+            }
+            return std::string();
+        } else {
+            return common_token_to_piece(vocab, token, true);
+        }
+    };
+    auto token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
+    auto token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
+    try {
+        return {
+            has_explicit_template,
+            std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos),
+            template_tool_use_src.empty()
+                ? nullptr
+                : std::make_unique<minja::chat_template>(template_tool_use_src, token_bos, token_eos),
+        };
+    } catch (const std::exception & e) {
+        LOG_ERR("%s: failed to parse chat template: %s\n", __func__, e.what());
+        return {
+            has_explicit_template,
+            std::make_unique<minja::chat_template>(CHATML_TEMPLATE_SRC, token_bos, token_eos),
+            nullptr,
+        };
+    }
 }
 
 //

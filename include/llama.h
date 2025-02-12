@@ -288,9 +288,6 @@ extern "C" {
         // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         const float * tensor_split;
 
-        // comma separated list of RPC servers to use for offloading
-        const char * rpc_servers;
-
         // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
         // If the provided progress_callback returns true, model loading continues.
         // If it returns false, model loading is immediately aborted.
@@ -418,9 +415,19 @@ extern "C" {
               struct llama_model_params   params),
             "use llama_model_load_from_file instead");
 
+    // Load the model from a file
+    // If the file is split into multiple parts, the file name must follow this pattern: <name>-%05d-of-%05d.gguf
+    // If the split file name does not follow this pattern, use llama_model_load_from_splits
     LLAMA_API struct llama_model * llama_model_load_from_file(
                              const char * path_model,
               struct llama_model_params   params);
+
+    // Load the model from multiple splits (support custom naming scheme)
+    // The paths must be in the correct order
+    LLAMA_API struct llama_model * llama_model_load_from_splits(
+                             const char ** paths,
+                                 size_t    n_paths,
+              struct llama_model_params    params);
 
     DEPRECATED(LLAMA_API void llama_free_model(struct llama_model * model),
             "use llama_model_free instead");
@@ -503,7 +510,8 @@ extern "C" {
     LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
 
     // Get the default chat template. Returns nullptr if not available
-    LLAMA_API const char * llama_model_chat_template(const struct llama_model * model);
+    // If name is NULL, returns the default chat template
+    LLAMA_API const char * llama_model_chat_template(const struct llama_model * model, const char * name);
 
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
@@ -951,7 +959,7 @@ extern "C" {
     LLAMA_API llama_token llama_vocab_fim_rep(const struct llama_vocab * vocab);
     LLAMA_API llama_token llama_vocab_fim_sep(const struct llama_vocab * vocab);
 
-    DEPRECATED(LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token), "use llama_vocabable_get_text instead");
+    DEPRECATED(LLAMA_API const char * llama_token_get_text(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_text instead");
     DEPRECATED(LLAMA_API float llama_token_get_score(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_score instead");
     DEPRECATED(LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_get_attr instead");
     DEPRECATED(LLAMA_API bool llama_token_is_eog(const struct llama_vocab * vocab, llama_token token), "use llama_vocab_is_eog instead");
@@ -1106,11 +1114,12 @@ extern "C" {
     };
 
     struct llama_sampler {
-        struct llama_sampler_i  * iface;
-        llama_sampler_context_t   ctx;
+        const struct llama_sampler_i * iface;
+        llama_sampler_context_t        ctx;
     };
 
     // mirror of llama_sampler_i:
+    LLAMA_API struct llama_sampler * llama_sampler_init  (const struct llama_sampler_i * iface, llama_sampler_context_t ctx);
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
@@ -1193,6 +1202,18 @@ extern "C" {
             const struct llama_vocab * vocab,
                           const char * grammar_str,
                           const char * grammar_root);
+
+    /// @details Lazy grammar sampler, introduced in https://github.com/ggerganov/llama.cpp/pull/9639
+    /// @param trigger_words A list of words that will trigger the grammar sampler. This may be updated to a loose regex syntax (w/ ^) in a near future.
+    /// @param trigger_tokens A list of tokens that will trigger the grammar sampler.
+    LLAMA_API struct llama_sampler * llama_sampler_init_grammar_lazy(
+            const struct llama_vocab * vocab,
+                          const char * grammar_str,
+                          const char * grammar_root,
+                         const char ** trigger_words,
+                                size_t num_trigger_words,
+                   const llama_token * trigger_tokens,
+                                size_t num_trigger_tokens);
 
     /// NOTE: Avoid using on the full vocabulary as searching for repeated tokens can become slow. For example, apply top-k or top-p sampling first.
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(

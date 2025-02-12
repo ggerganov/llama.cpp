@@ -133,7 +133,8 @@ static void common_params_handle_model_default(
         const std::string & model_url,
         std::string & hf_repo,
         std::string & hf_file,
-        const std::string & hf_token) {
+        const std::string & hf_token,
+        const std::string & model_default) {
     if (!hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
         if (hf_file.empty()) {
@@ -163,7 +164,7 @@ static void common_params_handle_model_default(
             model = fs_get_cache_file(string_split<std::string>(f, '/').back());
         }
     } else if (model.empty()) {
-        model = DEFAULT_MODEL_PATH;
+        model = model_default;
     }
 }
 
@@ -299,8 +300,9 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
     }
 
     // TODO: refactor model params in a common struct
-    common_params_handle_model_default(params.model,         params.model_url,         params.hf_repo,         params.hf_file,         params.hf_token);
-    common_params_handle_model_default(params.vocoder.model, params.vocoder.model_url, params.vocoder.hf_repo, params.vocoder.hf_file, params.hf_token);
+    common_params_handle_model_default(params.model,             params.model_url,             params.hf_repo,             params.hf_file,             params.hf_token, DEFAULT_MODEL_PATH);
+    common_params_handle_model_default(params.speculative.model, params.speculative.model_url, params.speculative.hf_repo, params.speculative.hf_file, params.hf_token, "");
+    common_params_handle_model_default(params.vocoder.model,     params.vocoder.model_url,     params.vocoder.hf_repo,     params.vocoder.hf_file,     params.hf_token, "");
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -321,6 +323,14 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
 
     if (params.reranking && params.embedding) {
         throw std::invalid_argument("error: either --embedding or --reranking can be specified, but not both");
+    }
+
+    if (!params.chat_template.empty() && !common_chat_verify_template(params.chat_template, params.use_jinja)) {
+        throw std::runtime_error(string_format(
+            "error: the supplied chat template is not supported: %s%s\n",
+            params.chat_template.c_str(),
+            params.use_jinja ? "" : "\nnote: llama.cpp was started without --jinja, we only support commonly used templates"
+        ));
     }
 
     return true;
@@ -374,6 +384,30 @@ static std::vector<ggml_backend_dev_t> parse_device_list(const std::string & val
         devices.push_back(nullptr);
     }
     return devices;
+}
+
+static void add_rpc_devices(std::string servers) {
+    auto rpc_servers = string_split<std::string>(servers, ',');
+    if (rpc_servers.empty()) {
+        throw std::invalid_argument("no RPC servers specified");
+    }
+    ggml_backend_reg_t rpc_reg = ggml_backend_reg_by_name("RPC");
+    if (!rpc_reg) {
+        throw std::invalid_argument("failed to find RPC backend");
+    }
+    typedef ggml_backend_dev_t (*ggml_backend_rpc_add_device_t)(const char * endpoint);
+    ggml_backend_rpc_add_device_t ggml_backend_rpc_add_device_fn = (ggml_backend_rpc_add_device_t) ggml_backend_reg_get_proc_address(rpc_reg, "ggml_backend_rpc_add_device");
+    if (!ggml_backend_rpc_add_device_fn) {
+        throw std::invalid_argument("failed to find RPC device add function");
+    }
+    for (const auto & server : rpc_servers) {
+        ggml_backend_dev_t dev = ggml_backend_rpc_add_device_fn(server.c_str());
+        if (dev) {
+            ggml_backend_device_register(dev);
+        } else {
+            throw std::invalid_argument("failed to register RPC device");
+        }
+    }
 }
 
 bool common_params_parse(int argc, char ** argv, common_params & params, llama_example ex, void(*print_usage)(int, char **)) {
@@ -640,7 +674,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--no-context-shift"},
-        string_format("disables context shift on inifinite text generation (default: %s)", params.ctx_shift ? "disabled" : "enabled"),
+        string_format("disables context shift on infinite text generation (default: %s)", params.ctx_shift ? "disabled" : "enabled"),
         [](common_params & params) {
             params.ctx_shift = false;
         }
@@ -843,7 +877,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params) {
             params.warmup = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(common_arg(
         {"--spm-infill"},
         string_format(
@@ -1392,7 +1426,8 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             {"--rpc"}, "SERVERS",
             "comma separated list of RPC servers",
             [](common_params & params, const std::string & value) {
-                params.rpc_servers = value;
+                add_rpc_devices(value);
+                GGML_UNUSED(params);
             }
         ).set_env("LLAMA_ARG_RPC"));
     }
@@ -1437,14 +1472,27 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         {"--list-devices"},
         "print list of available devices and exit",
         [](common_params &) {
-            printf("Available devices:\n");
+            std::vector<ggml_backend_dev_t> rpc_devices;
+            std::vector<ggml_backend_dev_t> all_devices;
             for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
                 auto * dev = ggml_backend_dev_get(i);
                 if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
-                    size_t free, total;
-                    ggml_backend_dev_memory(dev, &free, &total);
-                    printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
+                    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+                    if (ggml_backend_reg_name(reg) == std::string("RPC")) {
+                        rpc_devices.push_back(dev);
+                    } else {
+                        all_devices.push_back(dev);
+                    }
                 }
+            }
+            // insert RPC devices in front
+            all_devices.insert(all_devices.begin(), rpc_devices.begin(), rpc_devices.end());
+            printf("Available devices:\n");
+            for (size_t i = 0; i < all_devices.size(); ++i) {
+                auto * dev = all_devices[i];
+                size_t free, total;
+                ggml_backend_dev_memory(dev, &free, &total);
+                printf("  %s: %s (%zu MiB, %zu MiB free)\n", ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), total / 1024 / 1024, free / 1024 / 1024);
             }
             exit(0);
         }
@@ -1611,6 +1659,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.hf_repo = value;
         }
     ).set_env("LLAMA_ARG_HF_REPO"));
+    add_opt(common_arg(
+        {"-hfd", "-hfrd", "--hf-repo-draft"}, "<user>/<model>[:quant]",
+        "Same as --hf-repo, but for the draft model (default: unused)",
+        [](common_params & params, const std::string & value) {
+            params.speculative.hf_repo = value;
+        }
+    ).set_env("LLAMA_ARG_HFD_REPO"));
     add_opt(common_arg(
         {"-hff", "--hf-file"}, "FILE",
         "Hugging Face model file. If specified, it will override the quant in --hf-repo (default: unused)",
@@ -1921,23 +1976,43 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
+        {"--jinja"},
+        "use jinja template for chat (default: disabled)",
+        [](common_params & params) {
+            params.use_jinja = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_JINJA"));
+    add_opt(common_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
         string_format(
             "set custom jinja chat template (default: template taken from model's metadata)\n"
             "if suffix/prefix are specified, template will be disabled\n"
+            "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
             "list of built-in templates:\n%s", list_builtin_chat_templates().c_str()
         ),
         [](common_params & params, const std::string & value) {
-            if (!common_chat_verify_template(value)) {
-                throw std::runtime_error(string_format(
-                    "error: the supplied chat template is not supported: %s\n"
-                    "note: llama.cpp does not use jinja parser, we only support commonly used templates\n",
-                    value.c_str()
-                ));
-            }
             params.chat_template = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
+    add_opt(common_arg(
+        {"--chat-template-file"}, "JINJA_TEMPLATE_FILE",
+        string_format(
+            "set custom jinja chat template file (default: template taken from model's metadata)\n"
+            "if suffix/prefix are specified, template will be disabled\n"
+            "only commonly used templates are accepted (unless --jinja is set before this flag):\n"
+            "list of built-in templates:\n%s", list_builtin_chat_templates().c_str()
+        ),
+        [](common_params & params, const std::string & value) {
+            std::ifstream file(value);
+            if (!file) {
+                throw std::runtime_error(string_format("error: failed to open file '%s'\n", value.c_str()));
+            }
+            std::copy(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>(),
+                std::back_inserter(params.chat_template));
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
     add_opt(common_arg(
         {"-sps", "--slot-prompt-similarity"}, "SIMILARITY",
         string_format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),
@@ -2236,6 +2311,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.vocoder.model = value;
         }
     ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
+     add_opt(common_arg(
+        {"--tts-use-guide-tokens"},
+        "Use guide tokens to improve TTS word recall",
+        [](common_params & params) {
+            params.vocoder.use_guide_tokens = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTS, LLAMA_EXAMPLE_SERVER}));
 
     // model-specific
     add_opt(common_arg(
@@ -2248,6 +2330,48 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.vocoder.hf_file = "WavTokenizer-Large-75-F16.gguf";
         }
     ).set_examples({LLAMA_EXAMPLE_TTS}));
+
+    add_opt(common_arg(
+        {"--embd-bge-small-en-default"},
+        string_format("use default bge-small-en-v1.5 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/bge-small-en-v1.5-Q8_0-GGUF";
+            params.hf_file = "bge-small-en-v1.5-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-e5-small-en-default"},
+        string_format("use default e5-small-v2 model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/e5-small-v2-Q8_0-GGUF";
+            params.hf_file = "e5-small-v2-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
+
+    add_opt(common_arg(
+        {"--embd-gte-small-default"},
+        string_format("use default gte-small model (note: can download weights from the internet)"),
+        [](common_params & params) {
+            params.hf_repo = "ggml-org/gte-small-Q8_0-GGUF";
+            params.hf_file = "gte-small-q8_0.gguf";
+            params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+            params.embd_normalize = 2;
+            params.n_ctx = 512;
+            params.verbose_prompt = true;
+            params.embedding = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_EMBEDDING, LLAMA_EXAMPLE_SERVER}));
 
     return ctx_arg;
 }
