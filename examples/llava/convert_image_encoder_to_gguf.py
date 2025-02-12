@@ -242,7 +242,7 @@ def get_non_negative_vision_feature_layers(v_hparams):
     the model as an unset value. If no vision feature layer is found, we leave it unset.
     """
     num_hidden_layers = v_hparams["num_hidden_layers"]
-    to_uint = lambda layer_idx: layer_idx  if layer_idx >= 0 else num_hidden_layers + layer_idx + 1
+    to_non_negative = lambda layer_idx: layer_idx  if layer_idx >= 0 else num_hidden_layers + layer_idx + 1
     feature_layers_key = None
     # Key used for llava models in transformers
     if "vision_feature_layer" in config:
@@ -254,11 +254,12 @@ def get_non_negative_vision_feature_layers(v_hparams):
         feature_layers = config[feature_layers_key]
         if isinstance(feature_layers, int):
             feature_layers = [feature_layers]
-        return [to_uint(feature_layer) for feature_layer in feature_layers]
+        return [to_non_negative(feature_layer) for feature_layer in feature_layers]
+
+# Determine if we have explicitly specified vision feature layers in our config
+feature_layers = get_non_negative_vision_feature_layers(v_hparams)
 
 if has_vision_encoder:
-    feature_layers = get_non_negative_vision_feature_layers(v_hparams)
-
     # Siglip does not have a visual projector; set projection dim to 0
     if args.clip_model_is_siglip:
         visual_projection_dim = 0
@@ -273,7 +274,10 @@ if has_vision_encoder:
     fout.add_uint32("clip.vision.projection_dim", visual_projection_dim)
     fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), v_hparams["num_attention_heads"])
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), v_hparams["layer_norm_eps"])
-    block_count = v_hparams["num_hidden_layers"]
+    if feature_layers:
+        block_count = max(feature_layers)
+    else:
+        block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
                             #     /**
                             #      "image_grid_pinpoints": [
@@ -342,6 +346,13 @@ fout.add_bool("clip.use_gelu", use_gelu)
 
 
 if has_llava_projector:
+    # By default, we drop the last layer for llava projector
+    # models unless we have explicitly set vision feature layers
+    if feature_layers is None:
+        model.vision_model.encoder.layers.pop(-1)
+    else:
+        model.vision_model.encoder.layers = model.vision_model.encoder.layers[:max(feature_layers)]
+
     projector = torch.load(args.llava_projector)
     for name, data in projector.items():
         name = get_tensor_name(name)
