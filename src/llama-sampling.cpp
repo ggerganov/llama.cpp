@@ -1688,7 +1688,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
     llama_sampler_softmax_impl(cur_p);
 }
 
-static struct llama_sampler * llama_sampler_top_n_sigma_clone(const struct llama_sampler * smpl){
+static struct llama_sampler * llama_sampler_top_n_sigma_clone(const struct llama_sampler * smpl) {
     const auto * ctx = (const llama_sampler_top_n_sigma *) smpl->ctx;
     return llama_sampler_init_top_n_sigma(ctx->n);
 }
