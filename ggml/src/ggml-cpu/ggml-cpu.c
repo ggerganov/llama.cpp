@@ -9079,6 +9079,9 @@ static void ggml_compute_forward_clamp_f32(
     memcpy(&min, (float *) dst->op_params + 0, sizeof(float));
     memcpy(&max, (float *) dst->op_params + 1, sizeof(float));
 
+    const int ith = params->ith;
+    const int nth = params->nth;
+
     const int n  = ggml_nrows(src0);
     const int nc = src0->ne[0];
 
