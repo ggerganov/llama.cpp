@@ -7292,19 +7292,11 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     *s = vec_extract(vsumf0, 0);
 
 #elif defined __loongarch_asx
-    GGML_UNUSED(kmask1);
-    GGML_UNUSED(kmask2);
-    GGML_UNUSED(kmask3);
-
-    const __m256i m4 = __lasx_xvreplgr2vr_b(0xF);
-    const __m128i mzero = __lsx_vldi(0);
-    const __m256i mone  = __lasx_xvreplgr2vr_b(1);
 
     __m256 acc = (__m256)__lasx_xvldi(0);
+    __m128 acc_m = (__m128)__lsx_vldi(0);
 
-    float summs = 0.f;
-
-   for (int i = 0; i < nb; ++i) {
+    for (int i = 0; i < nb; ++i) {
 
         const uint8_t * restrict q5 = x[i].qs;
         const int8_t  * restrict q8 = y[i].qs;
@@ -7319,49 +7311,40 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         utmp[2] = uaux;
         utmp[0] &= kmask1;
 
-        const __m256i mins_and_scales = lasx_extu8_16(lsx_set_w(utmp[3], utmp[2], utmp[1], utmp[0]));
+        const __m128i mins_and_scales128 = lsx_set_w(utmp[3], utmp[2], utmp[1], utmp[0]);
+        const __m128i mins128 = __lsx_vexth_h_b(mins_and_scales128);
+        const __m128i scales128 = __lsx_vsllwil_h_b(mins_and_scales128, 0);
 
         const __m256i q8sums = __lasx_xvld((const __m256i*)y[i].bsums, 0);
         const __m128i q8s = lsx_hadd_h(lasx_extracti128(q8sums, 0), lasx_extracti128(q8sums, 1));
-        const __m128i prod = lsx_madd_h(lasx_extracti128(mins_and_scales, 1), q8s);
-        const __m128i hsum = lsx_hadd_w(lsx_hadd_w(prod, mzero), mzero);
-        summs += dmin * __lsx_vpickve2gr_w(hsum, 0);    //TODO check
+        const __m128i prod = lsx_madd_h(mins128, q8s);
+        acc_m = __lsx_vfmadd_s(__lsx_vreplfr2vr_s(dmin), __lsx_vffint_s_w(prod), acc_m);
 
-        const __m128i sc128  = lasx_extracti128(mins_and_scales, 0);
-        const __m256i scales = lasx_insertf128(sc128, sc128);
+        const __m256i scales = lasx_insertf128(scales128, scales128);
 
         const __m256i hbits = __lasx_xvld((const __m256i*)x[i].qh, 0);
-        __m256i hmask = mone;
 
         __m256i sumi = __lasx_xvldi(0);
 
-        int bit = 0;
-        __m256i xvbit;
-
         for (int j = 0; j < QK_K/64; ++j) {
 
-            const __m256i scale_0 = lasx_shuffle_b(scales, get_scale_shuffle_k4(2*j+0));
-            const __m256i scale_1 = lasx_shuffle_b(scales, get_scale_shuffle_k4(2*j+1));
+            const __m256i scale_0 = lasx_xvrepl128vei_h(scales, 2 * j + 0);
+            const __m256i scale_1 = lasx_xvrepl128vei_h(scales, 2 * j + 1);
 
             const __m256i q5bits = __lasx_xvld((const __m256i*)q5, 0); q5 += 32;
 
-            xvbit = __lasx_xvreplgr2vr_h(bit++);
-            const __m256i q5l_0 = __lasx_xvand_v(q5bits, m4);
-            const __m256i q5h_0 = __lasx_xvslli_h(__lasx_xvsrl_h(__lasx_xvand_v(hbits, hmask), xvbit), 4);
-            const __m256i q5_0  = __lasx_xvadd_b(q5l_0, q5h_0);
-            hmask = __lasx_xvslli_h(hmask, 1);
-
-            xvbit = __lasx_xvreplgr2vr_h(bit++);
-            const __m256i q5l_1 = __lasx_xvand_v(__lasx_xvsrli_h(q5bits, 4), m4);
-            const __m256i q5h_1 = __lasx_xvslli_h(__lasx_xvsrl_h(__lasx_xvand_v(hbits, hmask), xvbit), 4);
-            const __m256i q5_1  = __lasx_xvadd_b(q5l_1, q5h_1);
-            hmask = __lasx_xvslli_h(hmask, 1);
+            const __m256i q5l_0 = __lasx_xvandi_b(q5bits, 0xf);
+            const __m256i q5l_1 = __lasx_xvsrli_b(q5bits, 4);
+            const __m256i q5h_0 = __lasx_xvnori_b(__lasx_xvseqi_b(lasx_xvandi_b_bit(hbits, 2 * j + 0), 0), 0xef);
+            const __m256i q5h_1 = __lasx_xvnori_b(__lasx_xvseqi_b(lasx_xvandi_b_bit(hbits, 2 * j + 1), 0), 0xef);
+            const __m256i q5_0  = __lasx_xvor_v(q5l_0, q5h_0);
+            const __m256i q5_1  = __lasx_xvor_v(q5l_1, q5h_1);
 
             const __m256i q8_0 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
             const __m256i q8_1 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
 
-            __m256i p16_0 = lasx_maddubs_h(q5_0, q8_0);
-            __m256i p16_1 = lasx_maddubs_h(q5_1, q8_1);
+            __m256i p16_0 = lasx_madd_h_b(q5_0, q8_0);
+            __m256i p16_1 = lasx_madd_h_b(q5_1, q8_1);
 
             p16_0 = lasx_madd_h(scale_0, p16_0);
             p16_1 = lasx_madd_h(scale_1, p16_1);
@@ -7375,7 +7358,10 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     }
 
-    *s = hsum_float_8(acc) + summs;
+    acc_m = __lsx_vfadd_s(acc_m, (__m128)__lsx_vbsrl_v(acc_m, 8));
+    acc_m = __lsx_vfadd_s(acc_m, (__m128)__lsx_vbsrl_v(acc_m, 4));
+
+    *s = hsum_float_8(acc) + ((v4f32)acc_m)[0];
 
 #else
 
