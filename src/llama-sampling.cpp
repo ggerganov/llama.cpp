@@ -1757,12 +1757,12 @@ static struct llama_sampler_i llama_sampler_top_n_sigma_i = {
 };
 
 struct llama_sampler * llama_sampler_init_top_n_sigma(float n) {
-    return new llama_sampler {
+    return llama_sampler_init(
         /* .iface = */ &llama_sampler_top_n_sigma_i,
         /* .ctx   = */ new llama_sampler_top_n_sigma {
             /* .n = */ n,
-                        },
-    };
+        }
+    );
 }
 
 // DRY
