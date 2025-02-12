@@ -167,7 +167,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                 params.logit_bias.data()));
 
     if (params.mirostat == 0) {
-        if(params.top_n_sigma >= 0) {
+        if (params.top_n_sigma >= 0) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_top_k        (params.top_k));
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp         (params.temp));
             llama_sampler_chain_add(result->chain, llama_sampler_init_top_n_sigma  (params.top_n_sigma));
