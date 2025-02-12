@@ -14,6 +14,7 @@ public:
     virtual void build_cb(
              ggml_tensor * cur,
               const char * name,
+      const llama_ubatch & ubatch,
                      int   il) = 0;
 
     // apply control vector for layer il

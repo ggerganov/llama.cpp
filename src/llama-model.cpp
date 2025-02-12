@@ -248,6 +248,7 @@ static ggml_backend_buffer_type_t select_weight_buft(const llama_hparams & hpara
             return cur_buft;
         }
     }
+
     return nullptr;
 }
 
@@ -3888,7 +3889,7 @@ struct llm_build_context {
 
     // TODO: tmp
     void cb(struct ggml_tensor * cur, const char * name, int il) {
-        lgf.build_cb(cur, name, il);
+        lgf.build_cb(cur, name, ubatch, il);
     }
 
     // TODO: tmp

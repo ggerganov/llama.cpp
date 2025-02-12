@@ -85,6 +85,7 @@ struct llama_context : public llama_graph_i {
     virtual void build_cb(
              ggml_tensor * cur,
               const char * name,
+      const llama_ubatch & ubatch,
                      int   il);
 
     // TODO: add encode/decode graphs

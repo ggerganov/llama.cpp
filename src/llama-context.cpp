@@ -196,6 +196,7 @@ bool llama_context::apply_adapter_cvec(
 void llama_context::build_cb(
          ggml_tensor * cur,
           const char * name,
+  const llama_ubatch & ubatch,
                  int   il) {
     if (il >= 0) {
         ggml_format_name(cur, "%s-%d", name, il);
@@ -213,10 +214,7 @@ void llama_context::build_cb(
     // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
     // FIXME: fix in ggml_backend_sched
     const bool full_offload = model.params.n_gpu_layers > (int) model.hparams.n_layer;
-    // TODO: during #11213, the requirement for ubatch.n_tokens < 32 was removed to simplify
-    //       not sure if this is still needed, but it can be brought back if needed
-    //if (ubatch.n_tokens < 32 || full_offload) {
-    if (full_offload) {
+    if (ubatch.n_tokens < 32 || full_offload) {
         if (il != -1 && strcmp(name, "norm") == 0) {
             const auto & dev_layer = model.dev_layer(il);
             for (auto & backend : backends) {
