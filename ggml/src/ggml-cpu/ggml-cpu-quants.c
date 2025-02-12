@@ -8036,8 +8036,6 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
 #elif defined __loongarch_asx
 
-    const __m256i m4 = __lasx_xvreplgr2vr_b(0xF);
-    const __m256i m2 = __lasx_xvreplgr2vr_b(3);
     const __m256i m32s = __lasx_xvreplgr2vr_b(32);
 
     __m256 acc = (__m256)__lasx_xvldi(0);
@@ -8050,58 +8048,42 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         const uint8_t * restrict qh = x[i].qh;
         const int8_t  * restrict q8 = y[i].qs;
 
-        const __m128i scales = __lsx_vld((const __m128i*)x[i].scales, 0);
+        const __m128i scales128 = __lsx_vld((const __m128i*)x[i].scales, 0);
+        const v16i8 shuffle_mask = {0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15};
+        const __m256i scales_shuffled = lasx_ext8_16(__lsx_vshuf_b(scales128, scales128, (__m128i)shuffle_mask));
 
         __m256i sumi = __lasx_xvldi(0);
 
-        int is = 0;
-
         for (int j = 0; j < QK_K/128; ++j) {
-
-            const __m128i scale_0 = lsx_shuffle_b(scales, get_scale_shuffle(is + 0));
-            const __m128i scale_1 = lsx_shuffle_b(scales, get_scale_shuffle(is + 1));
-            const __m128i scale_2 = lsx_shuffle_b(scales, get_scale_shuffle(is + 2));
-            const __m128i scale_3 = lsx_shuffle_b(scales, get_scale_shuffle(is + 3));
-            is += 4;
 
             const __m256i q4bits1 = __lasx_xvld((const __m256i*)q4, 0); q4 += 32;
             const __m256i q4bits2 = __lasx_xvld((const __m256i*)q4, 0); q4 += 32;
             const __m256i q4bitsH = __lasx_xvld((const __m256i*)qh, 0); qh += 32;
 
-            const __m256i q4h_0 = __lasx_xvslli_h(__lasx_xvand_v(q4bitsH, m2), 4);
-            const __m256i q4h_1 = __lasx_xvslli_h(__lasx_xvand_v(__lasx_xvsrli_h(q4bitsH, 2), m2), 4);
-            const __m256i q4h_2 = __lasx_xvslli_h(__lasx_xvand_v(__lasx_xvsrli_h(q4bitsH, 4), m2), 4);
-            const __m256i q4h_3 = __lasx_xvslli_h(__lasx_xvand_v(__lasx_xvsrli_h(q4bitsH, 6), m2), 4);
+            const __m256i q4h_0 = __lasx_xvslli_b(__lasx_xvandi_b(q4bitsH, 3), 4);
+            const __m256i q4h_1 = __lasx_xvslli_b(__lasx_xvandi_b(q4bitsH, 3 << 2), 2);
+            const __m256i q4h_2 = __lasx_xvandi_b(q4bitsH, 3 << 4);
+            const __m256i q4h_3 = __lasx_xvsrli_b(__lasx_xvandi_b(q4bitsH, 3 << 6), 2);
 
-            const __m256i q4_0 = __lasx_xvor_v(__lasx_xvand_v(q4bits1, m4), q4h_0);
-            const __m256i q4_1 = __lasx_xvor_v(__lasx_xvand_v(q4bits2, m4), q4h_1);
-            const __m256i q4_2 = __lasx_xvor_v(__lasx_xvand_v(__lasx_xvsrli_h(q4bits1, 4), m4), q4h_2);
-            const __m256i q4_3 = __lasx_xvor_v(__lasx_xvand_v(__lasx_xvsrli_h(q4bits2, 4), m4), q4h_3);
+            const __m256i q4_0 = __lasx_xvor_v(__lasx_xvandi_b(q4bits1, 0xf), q4h_0);
+            const __m256i q4_1 = __lasx_xvor_v(__lasx_xvandi_b(q4bits2, 0xf), q4h_1);
+            const __m256i q4_2 = __lasx_xvor_v(__lasx_xvsrli_b(q4bits1, 4), q4h_2);
+            const __m256i q4_3 = __lasx_xvor_v(__lasx_xvsrli_b(q4bits2, 4), q4h_3);
 
             const __m256i q8_0 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
             const __m256i q8_1 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
             const __m256i q8_2 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
             const __m256i q8_3 = __lasx_xvld((const __m256i*)q8, 0); q8 += 32;
 
-            __m256i q8s_0 = lasx_maddubs_h(m32s, q8_0);
-            __m256i q8s_1 = lasx_maddubs_h(m32s, q8_1);
-            __m256i q8s_2 = lasx_maddubs_h(m32s, q8_2);
-            __m256i q8s_3 = lasx_maddubs_h(m32s, q8_3);
+            __m256i p16_0 = lasx_madd_h_b(__lasx_xvsub_b(q4_0, m32s), q8_0);
+            __m256i p16_1 = lasx_madd_h_b(__lasx_xvsub_b(q4_1, m32s), q8_1);
+            __m256i p16_2 = lasx_madd_h_b(__lasx_xvsub_b(q4_2, m32s), q8_2);
+            __m256i p16_3 = lasx_madd_h_b(__lasx_xvsub_b(q4_3, m32s), q8_3);
 
-            __m256i p16_0 = lasx_maddubs_h(q4_0, q8_0);
-            __m256i p16_1 = lasx_maddubs_h(q4_1, q8_1);
-            __m256i p16_2 = lasx_maddubs_h(q4_2, q8_2);
-            __m256i p16_3 = lasx_maddubs_h(q4_3, q8_3);
-
-            p16_0 = __lasx_xvsub_h(p16_0, q8s_0);
-            p16_1 = __lasx_xvsub_h(p16_1, q8s_1);
-            p16_2 = __lasx_xvsub_h(p16_2, q8s_2);
-            p16_3 = __lasx_xvsub_h(p16_3, q8s_3);
-
-            p16_0 = lasx_madd_h(lasx_ext8_16(scale_0), p16_0);
-            p16_1 = lasx_madd_h(lasx_ext8_16(scale_1), p16_1);
-            p16_2 = lasx_madd_h(lasx_ext8_16(scale_2), p16_2);
-            p16_3 = lasx_madd_h(lasx_ext8_16(scale_3), p16_3);
+            p16_0 = lasx_madd_h(lasx_xvrepl128vei_h(scales_shuffled, 4 * j + 0), p16_0);
+            p16_1 = lasx_madd_h(lasx_xvrepl128vei_h(scales_shuffled, 4 * j + 1), p16_1);
+            p16_2 = lasx_madd_h(lasx_xvrepl128vei_h(scales_shuffled, 4 * j + 2), p16_2);
+            p16_3 = lasx_madd_h(lasx_xvrepl128vei_h(scales_shuffled, 4 * j + 3), p16_3);
 
             sumi = __lasx_xvadd_w(sumi, __lasx_xvadd_w(p16_0, p16_1));
             sumi = __lasx_xvadd_w(sumi, __lasx_xvadd_w(p16_2, p16_3));
