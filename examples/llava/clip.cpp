@@ -1496,7 +1496,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
             const int32_t * vision_feature_layer = (const int32_t *)gguf_get_arr_data(ctx, idx);
 
-            for (int i = 0; i < MAX_IMAGE_FEATURE_LAYERS && i < n && vision_feature_layer[i] != 0; ++i) {
+            for (int i = 0; i < MAX_IMAGE_FEATURE_LAYERS && i < n && vision_feature_layer[i] >= 0; ++i) {
                 hparams.vision_feature_layer[i] = vision_feature_layer[i];
             }
             if (n < MAX_IMAGE_FEATURE_LAYERS)
