@@ -54,7 +54,7 @@ enum llm_norm_type {
 };
 
 struct llm_build_context {
-          llama_context & lctx;
+          llama_graph_i & lgf;
     const llama_model   & model;
     const llama_hparams & hparams;
     const llama_cparams & cparams;
@@ -98,14 +98,17 @@ struct llm_build_context {
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-            llama_context & lctx,
-       const llama_ubatch & ubatch,
-       const llm_build_cb & cb,
+             llama_graph_i &  lgf,
+       const llama_model   &  model,
+       const llama_cparams &  cparams,
+       const llama_ubatch  &  ubatch,
+             llm_build_cb  && cb,
+          ggml_context_ptr && ctx,
                      bool   worst_case) :
-        lctx             (lctx),
-        model            (lctx.get_model()),
+        lgf              (lgf),
+        model            (model),
         hparams          (model.hparams),
-        cparams          (lctx.get_cparams()),
+        cparams          (cparams),
         ubatch           (ubatch),
         n_embd           (hparams.n_embd),
         n_layer          (hparams.n_layer),
@@ -133,14 +136,14 @@ struct llm_build_context {
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
-        cb               (cb),
-        ctx              (lctx.init()),
-        ctx0             (ctx.get()) {
+        cb               (std::move(cb)),
+        ctx              (std::move(ctx)),
+        ctx0             (this->ctx.get()) {
         }
 
     // TODO: tmp
     struct ggml_tensor * build_inp_embd(struct ggml_tensor * tok_embd) {
-        struct ggml_tensor * inpL = lctx.build_inp_embd(ctx0, tok_embd, ubatch);
+        struct ggml_tensor * inpL = lgf.build_inp_embd(ctx0, tok_embd, ubatch);
         cb(inpL, "inp_embd", -1);
 
         return inpL;
@@ -150,7 +153,7 @@ struct llm_build_context {
     struct ggml_tensor * build_lora_mm(
               struct ggml_tensor * w,
               struct ggml_tensor * cur) {
-        return lctx.build_lora_mm(ctx0, w, cur);
+        return lgf.build_lora_mm(ctx0, w, cur);
     }
 
     // TODO: tmp
@@ -158,7 +161,7 @@ struct llm_build_context {
               struct ggml_tensor * w,   // struct ggml_tensor * as
               struct ggml_tensor * cur, // struct ggml_tensor * b
               struct ggml_tensor * ids) {
-        return lctx.build_lora_mm_id(ctx0, w, cur, ids);
+        return lgf.build_lora_mm_id(ctx0, w, cur, ids);
     }
 
     struct ggml_tensor * build_norm(
@@ -460,12 +463,12 @@ struct llm_build_context {
         ggml_build_forward_expand(graph, v_cur);
 
         //build_kv_store(graph, k_cur, v_cur, il);
-        lctx.build_attn_kv_store(ctx0, graph, k_cur, v_cur, n_tokens, il, worst_case);
+        lgf.build_attn_kv_store(ctx0, graph, k_cur, v_cur, n_tokens, il, worst_case);
 
         struct ggml_tensor * cur;
 
         //cur = build_kqv(graph, wo, wo_b, q_cur, kq_mask, kq_scale, il);
-        cur = lctx.build_attn_qkv(ctx0, graph, wo, wo_b, q_cur, n_tokens, kq_scale, il, worst_case);
+        cur = lgf.build_attn_qkv(ctx0, graph, wo, wo_b, q_cur, n_tokens, kq_scale, il, worst_case);
         cb(cur, "kqv_out", il);
 
         return cur;
@@ -503,7 +506,7 @@ struct llm_build_context {
     struct ggml_cgraph * build_k_shift() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        lctx.build_k_shift(ctx0, gf);
+        lgf.build_k_shift(ctx0, gf);
 
         return gf;
     }
@@ -511,34 +514,34 @@ struct llm_build_context {
     struct ggml_cgraph * build_defrag() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        lctx.build_defrag(ctx0, gf);
+        lgf.build_defrag(ctx0, gf);
 
         return gf;
     }
 
     struct ggml_tensor * build_inp_pos() {
-        ggml_tensor * cur = lctx.build_inp_pos(ctx0, n_tokens);
+        ggml_tensor * cur = lgf.build_inp_pos(ctx0, n_tokens);
         cb(cur, "inp_pos", -1);
 
         return cur;
     }
 
     struct ggml_tensor * build_inp_out_ids() {
-        ggml_tensor * cur = lctx.build_inp_out_ids(ctx0, n_tokens, worst_case);
+        ggml_tensor * cur = lgf.build_inp_out_ids(ctx0, n_tokens, worst_case);
         cb(cur, "inp_out_ids", -1);
 
         return cur;
     }
 
     struct ggml_tensor * build_inp_mean() {
-        ggml_tensor * cur = lctx.build_inp_mean(ctx0, n_tokens);
+        ggml_tensor * cur = lgf.build_inp_mean(ctx0, n_tokens);
         cb(cur, "inp_mean", -1);
 
         return cur;
     }
 
     struct ggml_tensor * build_inp_cls() {
-        ggml_tensor * cur = lctx.build_inp_cls(ctx0, n_tokens);
+        ggml_tensor * cur = lgf.build_inp_cls(ctx0, n_tokens);
         cb(cur, "inp_cls", -1);
 
         return cur;
@@ -642,14 +645,14 @@ struct llm_build_context {
     //}
 
     struct ggml_tensor * build_inp_embd_enc() {
-        ggml_tensor * cur = lctx.build_inp_embd_enc(ctx0, n_tokens, worst_case);
+        ggml_tensor * cur = lgf.build_inp_embd_enc(ctx0, n_tokens, worst_case);
         cb(cur, "embd_enc", -1);
 
         return cur;
     }
 
     struct ggml_tensor * build_inp_KQ_mask_cross() {
-        ggml_tensor * cur = lctx.build_inp_KQ_mask_cross(ctx0, n_tokens, worst_case);
+        ggml_tensor * cur = lgf.build_inp_KQ_mask_cross(ctx0, n_tokens, worst_case);
         cb(cur, "KQ_mask_cross", -1);
 
         return cur;
@@ -670,7 +673,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
@@ -685,7 +688,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -787,7 +790,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -831,7 +834,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         for (int il = 0; il < n_layer; ++il) {
@@ -857,7 +860,7 @@ struct llm_build_context {
             } else if (n_head > 0) {
                 // self-attention
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -943,7 +946,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -987,7 +990,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = model.type == LLM_TYPE_7B ? build_inp_pos() : nullptr;
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -1064,7 +1067,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1102,7 +1105,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -1169,7 +1172,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1206,7 +1209,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * attn_norm;
@@ -1286,7 +1289,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cur = ggml_add(ctx0, cur, inpL);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1328,7 +1331,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -1435,7 +1438,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1480,7 +1483,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -1563,7 +1566,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1602,7 +1605,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         struct ggml_tensor * pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos);
         cb(pos, "pos_embd", -1);
@@ -1670,7 +1673,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1702,7 +1705,7 @@ struct llm_build_context {
 
         inpL = build_inp_embd(model.tok_embd);
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -1762,7 +1765,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1816,7 +1819,7 @@ struct llm_build_context {
         inpL = build_norm(inpL, model.tok_norm, model.tok_norm_b, LLM_NORM, -1);
         cb(inpL, "inp_norm", -1);
 
-        lctx.build_attn_inp(ctx0, n_tokens, false, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, false, false, worst_case);
 
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
@@ -1887,7 +1890,7 @@ struct llm_build_context {
             cb(kq, "kq", il);
 
             //kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, 1.0f/sqrtf(float(n_embd_head)), hparams.f_max_alibi_bias);
-            kq = lctx.build_soft_max_ext(ctx0, kq, 1.0f/sqrtf(float(n_embd_head)));
+            kq = lgf.build_soft_max_ext(ctx0, kq, 1.0f/sqrtf(float(n_embd_head)));
             cb(kq, "kq_soft_max_ext", il);
 
             struct ggml_tensor * v = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens)));
@@ -1991,7 +1994,7 @@ struct llm_build_context {
 
         inpL = build_inp_embd(model.tok_embd);
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         inpL = build_norm(inpL,
                 model.tok_norm,
@@ -2059,7 +2062,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2093,7 +2096,7 @@ struct llm_build_context {
 
         inpL = build_inp_embd(model.tok_embd);
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         if (model.pos_embd) {
             // inp_pos - contains the positions
@@ -2197,7 +2200,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2234,7 +2237,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
 
@@ -2346,7 +2349,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2384,7 +2387,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -2459,7 +2462,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2497,7 +2500,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -2571,7 +2574,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2608,7 +2611,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         int sections[4];
         std::copy(std::begin(hparams.rope_sections), std::begin(hparams.rope_sections) + 4, sections);
@@ -2687,7 +2690,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2725,7 +2728,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -2831,7 +2834,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2871,7 +2874,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             attn_norm_output = build_norm(inpL,
@@ -2953,7 +2956,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_output);
             cur = ggml_add(ctx0, cur, inpL);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2991,7 +2994,7 @@ struct llm_build_context {
         struct ggml_tensor * inp_pos = build_inp_pos();
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        lctx.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             auto residual = inpL;
@@ -2999,7 +3002,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for 128k context
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 struct ggml_tensor* attn_norm_output = build_norm(inpL,
                     model.layers[il].attn_norm,
@@ -3093,7 +3096,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, residual, cur);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3135,7 +3138,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
 
@@ -3201,7 +3204,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, sa_out);
             cur = ggml_add(ctx0, cur, inpL);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3240,7 +3243,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos);
         cb(pos, "pos_embd", -1);
@@ -3308,7 +3311,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3345,7 +3348,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             cur = build_norm(inpL,
@@ -3419,7 +3422,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3455,7 +3458,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -3535,7 +3538,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3573,7 +3576,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -3653,7 +3656,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3701,12 +3704,12 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
-            struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+            struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
             // norm
             cur = build_norm(inpL,
                     model.layers[il].attn_norm, NULL,
@@ -3858,7 +3861,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3902,7 +3905,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             // norm
@@ -3971,7 +3974,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, sa_out);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4010,7 +4013,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             // norm
@@ -4095,7 +4098,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, sa_out);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4140,7 +4143,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -4221,7 +4224,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4253,8 +4256,8 @@ struct llm_build_context {
         // {n_embd, n_tokens}
         inpL = build_inp_embd(model.tok_embd);
 
-        struct ggml_tensor * state_copy = lctx.build_inp_s_copy(ctx0, worst_case);
-        struct ggml_tensor * state_mask = lctx.build_inp_s_mask(ctx0, worst_case);
+        struct ggml_tensor * state_copy = lgf.build_inp_s_copy(ctx0, worst_case);
+        struct ggml_tensor * state_mask = lgf.build_inp_s_mask(ctx0, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             // norm
@@ -4264,7 +4267,7 @@ struct llm_build_context {
             cb(cur, "attn_norm", il);
 
             //cur = build_mamba_layer(gf, cur, state_copy, state_mask, il);
-            cur = lctx.build_mamba_layer(ctx0, gf, cur, state_copy, state_mask, ubatch, il, worst_case);
+            cur = lgf.build_mamba_layer(ctx0, gf, cur, state_copy, state_mask, ubatch, il, worst_case);
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
@@ -4276,7 +4279,7 @@ struct llm_build_context {
             // residual
             cur = ggml_add(ctx0, cur, inpL);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4314,7 +4317,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
 
@@ -4418,7 +4421,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4462,7 +4465,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
 
         // sliding window switch pattern
         const int32_t sliding_window_pattern = 4;
@@ -4480,7 +4483,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for 128k context
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -4549,7 +4552,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4596,7 +4599,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -4677,7 +4680,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4715,7 +4718,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -4796,7 +4799,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4838,7 +4841,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -4922,7 +4925,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4958,7 +4961,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             const int64_t n_head    = hparams.n_head(il);
@@ -5048,7 +5051,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             inpL = cur;
@@ -5085,7 +5088,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             cur = build_norm(inpL,
@@ -5162,7 +5165,7 @@ struct llm_build_context {
 
                 cur = ggml_add(ctx0, cur, attn_out);
 
-                cur = lctx.build_cvec(ctx0, cur, il);
+                cur = lgf.build_cvec(ctx0, cur, il);
                 cb(cur, "l_out", il);
 
                 // input for next layer
@@ -5191,7 +5194,7 @@ struct llm_build_context {
 
                 cur = ggml_add(ctx0, cur, ffn_inp);
 
-                cur = lctx.build_cvec(ctx0, cur, il);
+                cur = lgf.build_cvec(ctx0, cur, il);
                 cb(cur, "l_out", il);
 
                 // input for next layer
@@ -5228,7 +5231,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -5319,7 +5322,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_out);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5357,7 +5360,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
 
@@ -5373,7 +5376,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -5473,7 +5476,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5521,7 +5524,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -5701,7 +5704,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5738,7 +5741,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6215,7 +6218,7 @@ struct llm_build_context {
 
         inpL = build_inp_embd(model.tok_embd);
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             cur = build_norm(inpL,
@@ -6309,7 +6312,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6438,7 +6441,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6520,7 +6523,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6558,7 +6561,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6572,7 +6575,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
+                struct ggml_tensor * rope_factors = lgf.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -6642,7 +6645,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6676,8 +6679,8 @@ struct llm_build_context {
         inpL = build_inp_embd(model.tok_embd);
         inpL = build_norm(inpL, model.tok_norm, model.tok_norm_b, LLM_NORM, -1);
 
-        struct ggml_tensor * state_copy = lctx.build_inp_s_copy(ctx0, worst_case);
-        struct ggml_tensor * state_mask = lctx.build_inp_s_mask(ctx0, worst_case);
+        struct ggml_tensor * state_copy = lgf.build_inp_s_copy(ctx0, worst_case);
+        struct ggml_tensor * state_mask = lgf.build_inp_s_mask(ctx0, worst_case);
 
         const auto n_embd = hparams.n_embd;
         const auto n_seq_tokens = ubatch.n_seq_tokens;
@@ -6686,7 +6689,7 @@ struct llm_build_context {
         for (int il = 0; il < n_layer; ++il) {
             const llama_layer * layer = &model.layers[il];
 
-            struct ggml_tensor * token_shift = lctx.build_rwkv_token_shift_load(
+            struct ggml_tensor * token_shift = lgf.build_rwkv_token_shift_load(
                 ctx0, gf, state_copy, state_mask, ubatch, il, worst_case
             );
 
@@ -6703,7 +6706,7 @@ struct llm_build_context {
                 1
             );
 
-            cur = lctx.build_rwkv6_time_mix(ctx0, gf, att_norm, x_prev, state_copy, state_mask, ubatch, il, worst_case);
+            cur = lgf.build_rwkv6_time_mix(ctx0, gf, att_norm, x_prev, state_copy, state_mask, ubatch, il, worst_case);
 
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
             cb(ffn_inp, "ffn_inp", il);
@@ -6726,13 +6729,13 @@ struct llm_build_context {
                 ggml_view_3d(ctx0, ffn_norm, n_embd, 1, n_seqs, ffn_norm->nb[1], ffn_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(ffn_norm)),
                 1
             );
-            ggml_build_forward_expand(gf, lctx.build_rwkv_token_shift_store(ctx0, token_shift, ubatch, il, worst_case));
+            ggml_build_forward_expand(gf, lgf.build_rwkv_token_shift_store(ctx0, token_shift, ubatch, il, worst_case));
 
             if (hparams.rescale_every_n_layers != 0 && (il + 1) % hparams.rescale_every_n_layers == 0) {
                 cur = ggml_scale(ctx0, cur, 0.5F);
             }
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6766,8 +6769,8 @@ struct llm_build_context {
 
         inpL = build_inp_embd(model.tok_embd);
 
-        struct ggml_tensor * state_copy = lctx.build_inp_s_copy(ctx0, worst_case);
-        struct ggml_tensor * state_mask = lctx.build_inp_s_mask(ctx0, worst_case);
+        struct ggml_tensor * state_copy = lgf.build_inp_s_copy(ctx0, worst_case);
+        struct ggml_tensor * state_mask = lgf.build_inp_s_mask(ctx0, worst_case);
 
         const auto n_embd = hparams.n_embd;
         const auto n_seq_tokens = ubatch.n_seq_tokens;
@@ -6778,7 +6781,7 @@ struct llm_build_context {
         for (int il = 0; il < n_layer; ++il) {
             const llama_layer * layer = &model.layers[il];
 
-            struct ggml_tensor * token_shift = lctx.build_rwkv_token_shift_load(
+            struct ggml_tensor * token_shift = lgf.build_rwkv_token_shift_load(
                 ctx0, gf, state_copy, state_mask, ubatch, il, worst_case
             );
 
@@ -6792,10 +6795,10 @@ struct llm_build_context {
                 1
             );
 
-            cur = lctx.build_rwkv6_time_mix(ctx0, gf, att_norm, x_prev, state_copy, state_mask, ubatch, il, worst_case);
+            cur = lgf.build_rwkv6_time_mix(ctx0, gf, att_norm, x_prev, state_copy, state_mask, ubatch, il, worst_case);
 
             token_shift = ggml_view_3d(ctx0, att_norm, n_embd, 1, n_seqs, att_norm->nb[1], att_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(att_norm));
-            ggml_build_forward_expand(gf, lctx.build_rwkv_token_shift_store(ctx0, token_shift, ubatch, il, worst_case));
+            ggml_build_forward_expand(gf, lgf.build_rwkv_token_shift_store(ctx0, token_shift, ubatch, il, worst_case));
 
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
             cb(ffn_inp, "ffn_inp", il);
@@ -6816,7 +6819,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6860,7 +6863,7 @@ struct llm_build_context {
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = build_inp_pos();
 
-        lctx.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
+        lgf.build_attn_inp(ctx0, n_tokens, true, false, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
@@ -6976,7 +6979,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.build_cvec(ctx0, cur, il);
+            cur = lgf.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -7206,7 +7209,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_cgraph * result = NULL;
 
-    struct llm_build_context llm(lctx, ubatch, cb, worst_case);
+    struct llm_build_context llm(lctx, lctx.get_model(), lctx.get_cparams(), ubatch, std::move(cb), lctx.init(), worst_case);
 
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
