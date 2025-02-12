@@ -2988,7 +2988,7 @@ size_t get_max_image_grid_pinpoints() {
 }
 
 // Determine the number of encoder layers to iterate over
-CLIP_API int get_deepest_feature_layer(const struct clip_ctx * ctx) {
+int get_deepest_feature_layer(const struct clip_ctx * ctx) {
     // Get the index of the second to last layer; this is the
     // default for models that have a llava projector
     int n_layer = ctx->vision_model.hparams.n_layer - 1;
