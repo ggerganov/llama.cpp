@@ -7401,39 +7401,6 @@ static struct ggml_cgraph * llama_build_graph(
     return result;
 }
 
-// decode a batch of tokens by evaluating the transformer
-// in case of unsuccessful decoding (error or warning),
-// the kv_cache state will be returned to its original state
-// (for non-recurrent models) or cleaned (for recurrent models)
-//
-//   - lctx:      llama context
-//   - inp_batch: batch to evaluate
-//
-// return 0 on success
-// return positive int on warning
-// return negative int on error
-//
-static int llama_decode_impl(
-         llama_context & lctx,
-           llama_batch   inp_batch) {
-    return lctx.decode(inp_batch);
-}
-
-// encode a batch of tokens by evaluating the encoder part of the transformer
-//
-//   - lctx:      llama context
-//   - batch:     batch to evaluate
-//
-// return 0 on success
-// return positive int on warning
-// return negative int on error
-//
-static int llama_encode_impl(
-         llama_context & lctx,
-           llama_batch   inp_batch) {
-    return lctx.encode(inp_batch);
-}
-
 //
 // interface implementation
 //
@@ -7757,30 +7724,6 @@ struct llama_context * llama_new_context_with_model(
                  struct llama_model * model,
         struct llama_context_params   params) {
     return llama_init_from_model(model, params);
-}
-
-///
-
-int32_t llama_encode(
-        struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_encode_impl(*ctx, batch);
-    if (ret != 0) {
-        LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
-    }
-
-    return ret;
-}
-
-int32_t llama_decode(
-        struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_decode_impl(*ctx, batch);
-    if (ret != 0) {
-        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-    }
-
-    return ret;
 }
 
 //

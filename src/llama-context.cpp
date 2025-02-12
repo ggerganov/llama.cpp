@@ -3980,6 +3980,31 @@ size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepa
     }
 }
 
+///
+
+int32_t llama_encode(
+        struct llama_context * ctx,
+          struct llama_batch   batch) {
+    const int ret = ctx->encode(batch);
+    if (ret != 0) {
+        LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
+    }
+
+    return ret;
+}
+
+int32_t llama_decode(
+        struct llama_context * ctx,
+          struct llama_batch   batch) {
+    const int ret = ctx->decode(batch);
+    if (ret != 0) {
+        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+    }
+
+    return ret;
+}
+
+
 const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
     struct llama_context * ctx
 ) {

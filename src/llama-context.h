@@ -45,7 +45,30 @@ struct llama_context {
 
     virtual ggml_context_ptr init();
 
+    // decode a batch of tokens by evaluating the transformer
+    // in case of unsuccessful decoding (error or warning),
+    // the kv_cache state will be returned to its original state
+    // (for non-recurrent models) or cleaned (for recurrent models)
+    //
+    //   - lctx:      llama context
+    //   - inp_batch: batch to evaluate
+    //
+    // return 0 on success
+    // return positive int on warning
+    // return negative int on error
+    //
     virtual int decode(llama_batch & inp_batch) = 0;
+
+
+    // encode a batch of tokens by evaluating the encoder part of the transformer
+    //
+    //   - lctx:      llama context
+    //   - batch:     batch to evaluate
+    //
+    // return 0 on success
+    // return positive int on warning
+    // return negative int on error
+    //
     virtual int encode(llama_batch & inp_batch) = 0;
 
     // graph build API (generic)
