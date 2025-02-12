@@ -20,19 +20,23 @@ struct llama_context {
     llama_context(const llama_model & model);
     virtual ~llama_context();
 
-    virtual void synchronize();
+    const llama_model   & get_model()   const;
+    const llama_cparams & get_cparams() const;
 
-    virtual uint32_t n_ctx()     const = 0;
-    virtual uint32_t n_batch()   const = 0;
-    virtual uint32_t n_ubatch()  const = 0;
+    virtual uint32_t n_ctx()     const;
+    virtual uint32_t n_batch()   const;
+    virtual uint32_t n_ubatch()  const;
     virtual uint32_t n_seq_max() const = 0;
+
+    virtual uint32_t n_threads()       const;
+    virtual uint32_t n_threads_batch() const;
 
     virtual       llama_kv_cache * get_kv_self()       = 0;
     virtual const llama_kv_cache * get_kv_self() const = 0;
 
     virtual void kv_self_update() = 0;
 
-    virtual enum llama_pooling_type pooling_type() const = 0;
+    virtual enum llama_pooling_type pooling_type() const;
 
     virtual float * get_logits()              = 0;
     virtual float * get_logits_ith(int32_t i) = 0;
@@ -41,9 +45,40 @@ struct llama_context {
     virtual float * get_embeddings_ith(int32_t i)           = 0;
     virtual float * get_embeddings_seq(llama_seq_id seq_id) = 0;
 
-    int64_t n_pos_per_token() const; // vision
+    virtual int64_t n_pos_per_token() const; // vision
 
     virtual ggml_context_ptr init();
+
+    virtual void synchronize();
+
+    virtual void attach_threadpool(
+            ggml_threadpool_t   threadpool,
+            ggml_threadpool_t   threadpool_batch);
+
+    virtual void detach_threadpool();
+
+    virtual void set_n_threads(int32_t n_threads, int32_t n_threads_batch);
+
+    virtual void set_abort_callback(bool (*abort_callback)(void * data), void * abort_callback_data);
+
+    virtual void set_embeddings (bool value);
+    virtual void set_causal_attn(bool value);
+
+    virtual void set_adapter_lora(
+            struct llama_adapter_lora * adapter,
+            float scale);
+
+    virtual bool rm_adapter_lora(
+            struct llama_adapter_lora * adapter);
+
+    virtual void clear_adapter_lora();
+
+    virtual bool apply_adapter_cvec(
+            const float * data,
+                 size_t   len,
+                int32_t   n_embd,
+                int32_t   il_start,
+                int32_t   il_end);
 
     // decode a batch of tokens by evaluating the transformer
     // in case of unsuccessful decoding (error or warning),
@@ -72,6 +107,12 @@ struct llama_context {
     virtual int encode(llama_batch & inp_batch) = 0;
 
     // graph build API (generic)
+
+    // apply control vector for layer il
+    virtual ggml_tensor * build_cvec(
+            ggml_context * ctx0,
+             ggml_tensor * cur,
+                     int   il);
 
     // do mat_mul, while optionally apply lora
     virtual ggml_tensor * build_lora_mm(
@@ -221,11 +262,11 @@ struct llama_context {
 
     // state save/load
 
-    virtual size_t state_get_size() = 0;
+    virtual size_t state_get_size()                                 = 0;
     virtual size_t state_get_data(      uint8_t * dst, size_t size) = 0;
     virtual size_t state_set_data(const uint8_t * src, size_t size) = 0;
 
-    virtual size_t state_seq_get_size(llama_seq_id seq_id) = 0;
+    virtual size_t state_seq_get_size(llama_seq_id seq_id)                                   = 0;
     virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size) = 0;
     virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size) = 0;
 
@@ -253,8 +294,19 @@ struct llama_context {
      const llama_token * tokens,
                 size_t   n_token_count) = 0;
 
+    // perf
+
+    virtual llama_perf_context_data get_perf() const;
+    virtual void perf_reset();
+
     // members
 
+    // TODO: temporary public until llama_context implements the graph build function
+    std::vector<ggml_backend_ptr> backends;
+    ggml_backend_t backend_cpu = nullptr;
+    ggml_backend_sched_ptr sched;
+
+protected:
     const llama_model & model;
 
     llama_cparams      cparams;
@@ -267,17 +319,11 @@ struct llama_context {
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
-    std::vector<ggml_backend_ptr> backends;
     std::vector<std::pair<ggml_backend_t, ggml_backend_set_n_threads_t>> set_n_threads_fns;
-
-    ggml_backend_t backend_cpu = nullptr;
-
-    ggml_backend_sched_ptr sched;
 
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
 
-    // perf
     bool has_evaluated_once = false;
 
     mutable int64_t t_start_us;
@@ -306,17 +352,12 @@ struct llama_context_unified : public llama_context {
 
     virtual ~llama_context_unified();
 
-    virtual uint32_t n_ctx()     const override;
-    virtual uint32_t n_batch()   const override;
-    virtual uint32_t n_ubatch()  const override;
     virtual uint32_t n_seq_max() const override;
 
     virtual       llama_kv_cache * get_kv_self()       override;
     virtual const llama_kv_cache * get_kv_self() const override;
 
     virtual void kv_self_update() override;
-
-    virtual enum llama_pooling_type pooling_type() const override;
 
     virtual float * get_logits()              override;
     virtual float * get_logits_ith(int32_t i) override;

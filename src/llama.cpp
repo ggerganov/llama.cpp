@@ -59,8 +59,6 @@ struct llm_build_context {
     const llama_hparams      & hparams;
     const llama_cparams      & cparams;
     const llama_ubatch       & ubatch;
-    const llama_adapter_cvec & cvec;
-    const llama_loras        & loras;
 
     const int64_t n_embd;
     const int64_t n_layer;
@@ -105,12 +103,10 @@ struct llm_build_context {
        const llm_build_cb & cb,
                      bool   worst_case) :
         lctx             (lctx),
-        model            (lctx.model),
+        model            (lctx.get_model()),
         hparams          (model.hparams),
-        cparams          (lctx.cparams),
+        cparams          (lctx.get_cparams()),
         ubatch           (ubatch),
-        cvec             (lctx.cvec),
-        loras            (lctx.loras),
         n_embd           (hparams.n_embd),
         n_layer          (hparams.n_layer),
         n_rot            (hparams.n_rot),
@@ -791,7 +787,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -947,7 +943,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1067,7 +1063,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1171,7 +1168,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1287,7 +1285,8 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cur = ggml_add(ctx0, cur, inpL);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1436,7 +1435,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1564,7 +1563,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1670,7 +1669,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -1761,7 +1761,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2057,7 +2058,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2194,7 +2196,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2342,7 +2345,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2454,7 +2458,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2565,7 +2570,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2680,7 +2686,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2823,7 +2830,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -2944,7 +2952,8 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_output);
             cur = ggml_add(ctx0, cur, inpL);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3083,7 +3092,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, residual, cur);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3190,7 +3200,8 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, sa_out);
             cur = ggml_add(ctx0, cur, inpL);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3296,7 +3307,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3406,7 +3418,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3521,7 +3534,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3638,7 +3652,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3842,7 +3857,8 @@ struct llm_build_context {
             cb(cur, "hidden_scaled_ffn", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -3954,7 +3970,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, sa_out);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4077,7 +4094,8 @@ struct llm_build_context {
             cb(cur, "ffn_post_norm", -1);
 
             cur = ggml_add(ctx0, cur, sa_out);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4202,7 +4220,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4256,7 +4275,8 @@ struct llm_build_context {
 
             // residual
             cur = ggml_add(ctx0, cur, inpL);
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4397,7 +4417,8 @@ struct llm_build_context {
             // add together residual + FFN + self-attention
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4527,7 +4548,8 @@ struct llm_build_context {
             // add together residual + FFN + self-attention
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4655,7 +4677,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4774,7 +4796,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -4899,7 +4921,8 @@ struct llm_build_context {
             cb(cur, "ffn_moe_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5024,7 +5047,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             inpL = cur;
@@ -5137,7 +5161,8 @@ struct llm_build_context {
                 cb(cur, "ffn_out", il);
 
                 cur = ggml_add(ctx0, cur, attn_out);
-                cur = cvec.apply_to(ctx0, cur, il);
+
+                cur = lctx.build_cvec(ctx0, cur, il);
                 cb(cur, "l_out", il);
 
                 // input for next layer
@@ -5165,7 +5190,8 @@ struct llm_build_context {
                 cb(cur, "ffn_out", il);
 
                 cur = ggml_add(ctx0, cur, ffn_inp);
-                cur = cvec.apply_to(ctx0, cur, il);
+
+                cur = lctx.build_cvec(ctx0, cur, il);
                 cb(cur, "l_out", il);
 
                 // input for next layer
@@ -5293,7 +5319,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_out);
             cb(cur, "ffn_out", il);
 
-            cur = cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5446,7 +5472,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -5673,7 +5700,8 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6492,7 +6520,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6614,7 +6642,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6704,7 +6732,7 @@ struct llm_build_context {
                 cur = ggml_scale(ctx0, cur, 0.5F);
             }
 
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6787,7 +6815,8 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -6947,7 +6976,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            cur = lctx.cvec.apply_to(ctx0, cur, il);
+            cur = lctx.build_cvec(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -7140,7 +7169,8 @@ static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
     const llama_ubatch & ubatch,
                   bool   worst_case) {
-    const auto & model = lctx.model;
+    const auto & model   = lctx.get_model();
+    const auto & cparams = lctx.get_cparams();
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -7150,7 +7180,7 @@ static struct ggml_cgraph * llama_build_graph(
             ggml_set_name(cur, name);
         }
 
-        if (!lctx.cparams.offload_kqv) {
+        if (!cparams.offload_kqv) {
             if (strcmp(name, "kqv_merged_cont") == 0) {
                 // all nodes between the KV store and the attention output are run on the CPU
                 ggml_backend_sched_set_tensor_backend(lctx.sched.get(), cur, lctx.backend_cpu);
@@ -7159,10 +7189,10 @@ static struct ggml_cgraph * llama_build_graph(
 
         // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
         // FIXME: fix in ggml_backend_sched
-        const bool full_offload = lctx.model.params.n_gpu_layers > (int) lctx.model.hparams.n_layer;
+        const bool full_offload = model.params.n_gpu_layers > (int) model.hparams.n_layer;
         if (ubatch.n_tokens < 32 || full_offload) {
             if (il != -1 && strcmp(name, "norm") == 0) {
-                const auto & dev_layer = lctx.model.dev_layer(il);
+                const auto & dev_layer = model.dev_layer(il);
                 for (auto & backend : lctx.backends) {
                     if (ggml_backend_get_device(backend.get()) == dev_layer) {
                         if (ggml_backend_supports_op(backend.get(), cur)) {
@@ -7394,7 +7424,7 @@ static struct ggml_cgraph * llama_build_graph(
     }
 
     // add on pooling layer
-    if (lctx.cparams.embeddings) {
+    if (cparams.embeddings) {
         result = llm.append_pooling(result);
     }
 
@@ -7824,12 +7854,7 @@ struct llama_perf_context_data llama_perf_context(const struct llama_context * c
         return data;
     }
 
-    data.t_start_ms  = 1e-3 * ctx->t_start_us;
-    data.t_load_ms   = 1e-3 * ctx->t_load_us;
-    data.t_p_eval_ms = 1e-3 * ctx->t_p_eval_us;
-    data.t_eval_ms   = 1e-3 * ctx->t_eval_us;
-    data.n_p_eval    = std::max(1, ctx->n_p_eval);
-    data.n_eval      = std::max(1, ctx->n_eval);
+    data = ctx->get_perf();
 
     return data;
 }
@@ -7848,7 +7873,5 @@ void llama_perf_context_print(const struct llama_context * ctx) {
 }
 
 void llama_perf_context_reset(struct llama_context * ctx) {
-    ctx->t_start_us  = ggml_time_us();
-    ctx->t_eval_us   = ctx->n_eval = 0;
-    ctx->t_p_eval_us = ctx->n_p_eval = 0;
+    ctx->perf_reset();
 }
