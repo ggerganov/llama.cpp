@@ -57,6 +57,10 @@ uint32_t llama_context::n_ctx() const {
     return cparams.n_ctx;
 }
 
+uint32_t llama_context::n_ctx_per_seq() const {
+    return cparams.n_ctx / cparams.n_seq_max;
+}
+
 uint32_t llama_context::n_batch() const {
     return cparams.n_batch;
 }
@@ -122,8 +126,8 @@ void llama_context::synchronize() {
 }
 
 void llama_context::attach_threadpool(
-           ggml_threadpool_t   threadpool,
-           ggml_threadpool_t   threadpool_batch) {
+           ggml_threadpool_t threadpool,
+           ggml_threadpool_t threadpool_batch) {
     this->threadpool       = threadpool;
     this->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
 }
@@ -202,6 +206,86 @@ llama_perf_context_data llama_context::perf_get_data() const {
     return data;
 }
 
+ggml_tensor * llama_context::build_cvec(
+        ggml_context * ctx0,
+         ggml_tensor * cur,
+                 int   il) {
+    return cvec.apply_to(ctx0, cur, il);
+}
+
+ggml_tensor * llama_context::build_lora_mm(
+        ggml_context * ctx0,
+         ggml_tensor * w,
+         ggml_tensor * cur) {
+    struct ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
+
+    for (const auto & lora : loras) {
+        struct llama_adapter_lora_weight * lw = lora.first->get_weight(w);
+        if (lw == nullptr) {
+            continue;
+        }
+
+        const float adapter_scale = lora.second;
+        const float scale = lw->get_scale(lora.first->alpha, adapter_scale);
+
+        struct ggml_tensor * ab_cur = ggml_mul_mat(
+            ctx0, lw->b,
+            ggml_mul_mat(ctx0, lw->a, cur)
+        );
+
+        ab_cur = ggml_scale(ctx0, ab_cur, scale);
+        res = ggml_add(ctx0, res, ab_cur);
+    }
+
+    return res;
+}
+
+ggml_tensor * llama_context::build_lora_mm_id(
+        ggml_context * ctx0,
+         ggml_tensor * w,
+         ggml_tensor * cur,
+         ggml_tensor * ids) {
+    struct ggml_tensor * res = ggml_mul_mat_id(ctx0, w, cur, ids);
+    for (const auto & lora : loras) {
+        struct llama_adapter_lora_weight * lw = lora.first->get_weight(w);
+        if (lw == nullptr) {
+            continue;
+        }
+
+        const float alpha = lora.first->alpha;
+        const float rank  = (float) lw->b->ne[0];
+        const float scale = alpha ? lora.second * alpha / rank : lora.second;
+
+        struct ggml_tensor * ab_cur = ggml_mul_mat_id(
+            ctx0, lw->b,
+            ggml_mul_mat_id(ctx0, lw->a, cur, ids),
+            ids
+        );
+
+        ab_cur = ggml_scale(ctx0, ab_cur, scale);
+        res = ggml_add(ctx0, res, ab_cur);
+    }
+
+    return res;
+}
+
+ggml_tensor * llama_context::build_rope_factors(int il) {
+    const auto & hparams = model.hparams;
+
+    // choose long/short freq factors based on the context size
+    const auto n_ctx_per_seq = cparams.n_ctx / cparams.n_seq_max;
+
+    if (model.layers[il].rope_freqs != nullptr) {
+        return model.layers[il].rope_freqs;
+    }
+
+    if (n_ctx_per_seq > hparams.n_ctx_orig_yarn) {
+        return model.layers[il].rope_long;
+    }
+
+    return model.layers[il].rope_short;
+}
+
 void llama_context::perf_reset() {
     t_start_us  = ggml_time_us();
     t_eval_us   = n_eval = 0;
@@ -217,7 +301,7 @@ llama_context_unified::llama_context_unified(
         const llama_context_params & params,
         build_graph_callback && cb_build_graph) :
     llama_context(model),
-    cb_build_graph(std::move(cb_build_graph)){
+    cb_build_graph(std::move(cb_build_graph)) {
 
     const auto & hparams = model.hparams;
 
@@ -1825,69 +1909,6 @@ size_t llama_context_unified::reserve_outputs(size_t n_outputs) {
     return n_outputs_max;
 }
 
-ggml_tensor * llama_context::build_cvec(
-        ggml_context * ctx0,
-         ggml_tensor * cur,
-                 int   il) {
-    return cvec.apply_to(ctx0, cur, il);
-}
-
-ggml_tensor * llama_context::build_lora_mm(
-        ggml_context * ctx0,
-         ggml_tensor * w,
-         ggml_tensor * cur) {
-    struct ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
-
-    for (const auto & lora : loras) {
-        struct llama_adapter_lora_weight * lw = lora.first->get_weight(w);
-        if (lw == nullptr) {
-            continue;
-        }
-
-        const float adapter_scale = lora.second;
-        const float scale = lw->get_scale(lora.first->alpha, adapter_scale);
-
-        struct ggml_tensor * ab_cur = ggml_mul_mat(
-            ctx0, lw->b,
-            ggml_mul_mat(ctx0, lw->a, cur)
-        );
-
-        ab_cur = ggml_scale(ctx0, ab_cur, scale);
-        res = ggml_add(ctx0, res, ab_cur);
-    }
-
-    return res;
-}
-
-ggml_tensor * llama_context::build_lora_mm_id(
-        ggml_context * ctx0,
-         ggml_tensor * w,
-         ggml_tensor * cur,
-         ggml_tensor * ids) {
-    struct ggml_tensor * res = ggml_mul_mat_id(ctx0, w, cur, ids);
-    for (const auto & lora : loras) {
-        struct llama_adapter_lora_weight * lw = lora.first->get_weight(w);
-        if (lw == nullptr) {
-            continue;
-        }
-
-        const float alpha = lora.first->alpha;
-        const float rank  = (float) lw->b->ne[0];
-        const float scale = alpha ? lora.second * alpha / rank : lora.second;
-
-        struct ggml_tensor * ab_cur = ggml_mul_mat_id(
-            ctx0, lw->b,
-            ggml_mul_mat_id(ctx0, lw->a, cur, ids),
-            ids
-        );
-
-        ab_cur = ggml_scale(ctx0, ab_cur, scale);
-        res = ggml_add(ctx0, res, ab_cur);
-    }
-
-    return res;
-}
-
 void llama_context_unified::kv_self_update() {
     auto & kv = kv_self;
 
@@ -2189,23 +2210,6 @@ ggml_tensor * llama_context_unified::build_soft_max_ext(
     return ggml_soft_max_ext(ctx0, kq, inp_KQ_mask_cnv, kq_scale, hparams.f_max_alibi_bias);
 }
 
-ggml_tensor * llama_context_unified::get_rope_factors(int il) {
-    const auto & hparams = model.hparams;
-
-    // choose long/short freq factors based on the context size
-    const auto n_ctx_pre_seq = cparams.n_ctx / cparams.n_seq_max;
-
-    if (model.layers[il].rope_freqs != nullptr) {
-        return model.layers[il].rope_freqs;
-    }
-
-    if (n_ctx_pre_seq > hparams.n_ctx_orig_yarn) {
-        return model.layers[il].rope_long;
-    }
-
-    return model.layers[il].rope_short;
-}
-
 ggml_tensor * llama_context_unified::build_inp_embd(
         ggml_context * ctx0,
          ggml_tensor * tok_embd,
@@ -2327,7 +2331,7 @@ void llama_context_unified::build_k_shift(
         const int64_t n_head_kv    = hparams.n_head_kv(il);
         const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
 
-        struct ggml_tensor * rope_factors = get_rope_factors(il);
+        struct ggml_tensor * rope_factors = build_rope_factors(il);
 
         struct ggml_tensor * k =
             ggml_view_3d(ctx0, kv_self.k_l[il],

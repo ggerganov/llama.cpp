@@ -685,7 +685,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -857,7 +857,7 @@ struct llm_build_context {
             } else if (n_head > 0) {
                 // self-attention
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -2999,7 +2999,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for 128k context
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 struct ggml_tensor* attn_norm_output = build_norm(inpL,
                     model.layers[il].attn_norm,
@@ -3706,7 +3706,7 @@ struct llm_build_context {
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
-            struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+            struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
             // norm
             cur = build_norm(inpL,
                     model.layers[il].attn_norm, NULL,
@@ -4480,7 +4480,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for 128k context
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -5373,7 +5373,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
@@ -6572,7 +6572,7 @@ struct llm_build_context {
             // self-attention
             {
                 // rope freq factors for llama3; may return nullptr for llama2 and other models
-                struct ggml_tensor * rope_factors = lctx.get_rope_factors(il);
+                struct ggml_tensor * rope_factors = lctx.build_rope_factors(il);
 
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = build_lora_mm(model.layers[il].wq, cur);
