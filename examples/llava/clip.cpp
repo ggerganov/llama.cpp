@@ -1488,8 +1488,8 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // Load the vision feature layer indices if they are explicitly provided;
         // if multiple vision feature layers are present, the values will be concatenated
         // to form the final visual features.
-        // NOTE: gguf conversions should standardize the values of the vision feature layer to uints,
-        // since we use -1 as an unset value here.
+        // NOTE: gguf conversions should standardize the values of the vision feature layer to
+        // be non-negative, since we use -1 to mark values as unset here.
         try {
             int idx = get_key_idx(ctx, KEY_FEATURE_LAYER);
             int n = gguf_get_arr_n(ctx, idx);
