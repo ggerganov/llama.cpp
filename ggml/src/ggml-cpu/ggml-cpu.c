@@ -9074,10 +9074,6 @@ static void ggml_compute_forward_clamp_f32(
 
     const struct ggml_tensor * src0 = dst->src[0];
 
-    if (params->ith != 0) {
-        return;
-    }
-
     float min;
     float max;
     memcpy(&min, (float *) dst->op_params + 0, sizeof(float));
@@ -9095,7 +9091,7 @@ static void ggml_compute_forward_clamp_f32(
     GGML_ASSERT( nb0 == sizeof(float));
     GGML_ASSERT(nb00 == sizeof(float));
 
-    for (int j = 0; j < n; j++) {
+    for (int j = ith; j < n; j += nth) {
         float * dst_ptr  = (float *) ((char *)  dst->data + j*nb1);
         float * src0_ptr = (float *) ((char *) src0->data + j*nb01);
 
