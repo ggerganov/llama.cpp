@@ -94,7 +94,6 @@ struct llama_context {
     //
     virtual int decode(llama_batch & inp_batch) = 0;
 
-
     // encode a batch of tokens by evaluating the encoder part of the transformer
     //
     //   - lctx:      llama context
@@ -296,7 +295,7 @@ struct llama_context {
 
     // perf
 
-    virtual llama_perf_context_data get_perf() const;
+    virtual llama_perf_context_data perf_get_data() const;
     virtual void perf_reset();
 
     // members
@@ -326,20 +325,21 @@ protected:
 
     bool has_evaluated_once = false;
 
-    mutable int64_t t_start_us;
-    mutable int64_t t_load_us;
+    mutable int64_t t_start_us  = 0;
+    mutable int64_t t_load_us   = 0;
     mutable int64_t t_p_eval_us = 0;
     mutable int64_t t_eval_us   = 0;
 
     mutable int64_t t_compute_start_us = 0;
-    mutable int64_t n_queued_tokens = 0;
+    mutable int64_t n_queued_tokens    = 0;
 
     mutable int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
     mutable int32_t n_eval   = 0; // number of eval calls
 };
 
 // TODO: make implementation details private
-struct llama_context_unified : public llama_context {
+class llama_context_unified : public llama_context {
+public:
     struct batch_manager;
 
     // TODO: tmp until llama-model starts implementing the graph build function

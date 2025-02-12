@@ -189,7 +189,7 @@ bool llama_context::apply_adapter_cvec(
     return cvec.apply(model, data, len, n_embd, il_start, il_end);
 }
 
-llama_perf_context_data llama_context::get_perf() const {
+llama_perf_context_data llama_context::perf_get_data() const {
     llama_perf_context_data data = {};
 
     data.t_start_ms  = 1e-3 * t_start_us;

@@ -54,11 +54,11 @@ enum llm_norm_type {
 };
 
 struct llm_build_context {
-          llama_context      & lctx;
-    const llama_model        & model;
-    const llama_hparams      & hparams;
-    const llama_cparams      & cparams;
-    const llama_ubatch       & ubatch;
+          llama_context & lctx;
+    const llama_model   & model;
+    const llama_hparams & hparams;
+    const llama_cparams & cparams;
+    const llama_ubatch  & ubatch;
 
     const int64_t n_embd;
     const int64_t n_layer;
@@ -7854,7 +7854,7 @@ struct llama_perf_context_data llama_perf_context(const struct llama_context * c
         return data;
     }
 
-    data = ctx->get_perf();
+    data = ctx->perf_get_data();
 
     return data;
 }
