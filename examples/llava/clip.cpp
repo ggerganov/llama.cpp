@@ -754,22 +754,10 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
 
-    // Check to see we have 1+ set vision feature layers set; otherwise it's the last layer
     std::vector<struct ggml_tensor *> embedding_stack;
-    bool has_feature_layers = ctx->vision_model.hparams.vision_feature_layer[0] > 0;
-    // Determine how many encoder layers we need to process; if we have explicit vision feature
-    // layers, only process what we need, otherwise process all of the visual encoder layers.
-    int max_feature_layer = -1;
-    if(has_feature_layers) {
-        for(int vf_layer_idx = 0; vf_layer_idx < 4; vf_layer_idx++) {
-            if(ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx] > max_feature_layer) {
-                max_feature_layer = ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx];
-            }
-        }
-    }
-    if(max_feature_layer < 0) {
-        max_feature_layer = n_layer;
-    }
+    // Check to see we have 1+ set vision feature layers set; otherwise it's determined
+    // by the type of projector that this model has (usually last or second to last layer).
+    int max_feature_layer = get_deepest_feature_layer(ctx);
 
     // loop over layers
     for (int il = 0; il < max_feature_layer; il++) {
@@ -890,7 +878,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // If feature layers are explicitly set, stack them (if we have multiple)
-    if(has_feature_layers && embedding_stack.size() > 0) {
+    if(embedding_stack.size() > 0) {
         embeddings = embedding_stack.at(0);
         for(unsigned long i=1; i < embedding_stack.size(); i++) {
             embeddings = ggml_concat(ctx0, embeddings, embedding_stack.at(i), 0);
@@ -2990,6 +2978,27 @@ bool clip_is_qwen2vl(const struct clip_ctx * ctx) {
     return ctx->has_qwen2vl_merger;
 }
 
+// Determine the number of encoder layers to iterate over
+CLIP_API int get_deepest_feature_layer(const struct clip_ctx * ctx) {
+    // Get the index of the second to last layer; this is the
+    // default for models that have a llava projector
+    int n_layer = ctx->vision_model.hparams.n_layer - 1;
+    int deepest_feature_layer = -1;
+
+    // Handle other projectors; incrementing here indicates that we
+    // should use the last encoder layer for the vision features.
+    if (ctx->has_minicpmv_projector || ctx->has_glm_projector || ctx->has_qwen2vl_merger) {
+        n_layer += 1;
+    }
+
+    // If we set explicit vision feature layers, only go up to the deepest one
+    for(int i = 0; i < 4; i++) {
+        if(ctx->vision_model.hparams.vision_feature_layer[i] > deepest_feature_layer) {
+            deepest_feature_layer = ctx->vision_model.hparams.vision_feature_layer[i];
+        }
+    }
+    return deepest_feature_layer < 0 ? n_layer: deepest_feature_layer;
+}
 
 bool clip_encode_float_image (struct clip_ctx * ctx, int n_threads, float * img, int h, int w, float * vec) {
     clip_image_f32 clip_img;
