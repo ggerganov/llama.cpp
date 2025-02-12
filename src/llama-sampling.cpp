@@ -1665,7 +1665,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
     float max = cur_p->data[0].logit;
     float logits_sum = 0;
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if(cur_p->data[i].logit > max){
+        if (cur_p->data[i].logit > max) {
             max = cur_p->data[i].logit;
         }
         logits_sum += cur_p->data[i].logit;
