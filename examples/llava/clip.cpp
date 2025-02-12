@@ -3001,7 +3001,7 @@ int get_deepest_feature_layer(const struct clip_ctx * ctx) {
     }
 
     // If we set explicit vision feature layers, only go up to the deepest one
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < MAX_IMAGE_FEATURE_LAYERS; i++) {
         if (ctx->vision_model.hparams.vision_feature_layer[i] > deepest_feature_layer) {
             deepest_feature_layer = ctx->vision_model.hparams.vision_feature_layer[i];
         }
