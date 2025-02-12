@@ -41,33 +41,36 @@ void main() {
     const uint ic = gl_GlobalInvocationID.z % p.IC;
 
     const uint ksize = p.OW * (p.KH > 1 ? p.KW : 1);
+    const int oh_s1 = int(oh) * p.s1;
+    const uint base_linear_idx = gidx * NUM_ITER;
     const uint src_base = ic * p.offset_delta + batch * p.batch_offset;
     const uint dst_base = ((batch * p.OH + oh) * p.OW) * p.CHW + ic * (p.KW * p.KH);
-    const int oh_s1 = int(oh) * p.s1;
-    const uint base_idx = gidx * NUM_ITER;
+
+    uint current_kx = base_linear_idx / ksize;
+    uint rem = base_linear_idx - (current_kx * ksize); // equivalent to init_val % ksize
+    uint current_ky = rem / p.OW;
+    uint current_ix = rem % p.OW;
 
     [[unroll]] for (uint idx = 0; idx < NUM_ITER; ++idx) {
-
-        const uint i = base_idx + idx;
-
-        if (i >= p.pelements) {
-            break;
+        uint linear_idx = base_linear_idx + idx;
+        if (linear_idx >= p.pelements) {
+            continue;
         }
 
-        const uint kx  = i / ksize;
-        const uint rem = i % ksize;
-        const uint ky  = rem / p.OW;
-        const uint ix  = rem % p.OW;
+        int iiw = int(current_ix) * p.s0 + int(current_kx) * p.d0 - p.p0;
+        int iih = oh_s1 + int(current_ky) * p.d1 - p.p1;
+        uint dst_offset = dst_base + current_ix * p.CHW + current_ky * p.KW + current_kx;
 
-        const int iiw = int(ix) * p.s0 + int(kx) * p.d0 - p.p0;
-        const int iih = oh_s1 + int(ky) * p.d1 - p.p1;
+        bool valid = (iih >= 0 && iih < int(p.IH) && iiw >= 0 && iiw < int(p.IW));
+        data_d[dst_offset] = D_TYPE(valid ? data_a[src_base + uint(iih) * p.IW + uint(iiw)] : 0);
 
-        const uint dst_offset = dst_base + ix * p.CHW + ky * p.KW + kx;
-
-        data_d[dst_offset] = D_TYPE((iih >= 0 && iih < int(p.IH) &&
-                                     iiw >= 0 && iiw < int(p.IW))
-                              ? data_a[src_base + uint(iih) * p.IW + uint(iiw)]
-                              : 0);
+        if (++current_ix == p.OW) {
+            current_ix = 0;
+            if (++current_ky == (ksize / p.OW)) {
+                current_ky = 0;
+                current_kx++;
+            }
+        }
     }
 
 }
