@@ -1,8 +1,9 @@
 import { HashRouter, Outlet, Route, Routes } from 'react-router';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import { AppContextProvider } from './utils/app.context';
+import { AppContextProvider, useAppContext } from './utils/app.context';
 import ChatScreen from './components/ChatScreen';
+import SettingDialog from './components/SettingDialog';
 
 function App() {
   return (
@@ -22,13 +23,23 @@ function App() {
 }
 
 function AppLayout() {
+  const { showSettings, setShowSettings } = useAppContext();
   return (
     <>
       <Sidebar />
-      <div className="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4">
+      <div
+        className="drawer-content grow flex flex-col h-screen w-screen mx-auto px-4 overflow-auto"
+        id="main-scroll"
+      >
         <Header />
         <Outlet />
       </div>
+      {
+        <SettingDialog
+          show={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      }
     </>
   );
 }

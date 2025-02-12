@@ -10,6 +10,7 @@ export const BASE_URL = new URL('.', document.baseURI).href
 
 export const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
+  // Do not use nested objects, keep it single level. Prefix the key if you need to group them.
   apiKey: '',
   systemMessage: 'You are a helpful assistant.',
   showTokensPerSecond: false,
@@ -36,6 +37,8 @@ export const CONFIG_DEFAULT = {
   dry_penalty_last_n: -1,
   max_tokens: -1,
   custom: '', // custom json-stringified object
+  // experimental features
+  pyIntepreterEnabled: false,
 };
 export const CONFIG_INFO: Record<string, string> = {
   apiKey: 'Set the API Key if you are using --api-key option for the server.',

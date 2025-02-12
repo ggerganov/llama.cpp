@@ -45,6 +45,9 @@
 /* Highlight.js */
 [data-color-scheme='light'] {
   @include meta.load-css('highlight.js/styles/stackoverflow-light');
+  .dark-color {
+    @apply bg-base-content text-base-100;
+  }
 }
 [data-color-scheme='dark'] {
   @include meta.load-css('highlight.js/styles/stackoverflow-dark');
@@ -52,6 +55,9 @@
 [data-color-scheme='auto'] {
   @media (prefers-color-scheme: light) {
     @include meta.load-css('highlight.js/styles/stackoverflow-light');
+    .dark-color {
+      @apply bg-base-content text-base-100;
+    }
   }
   @media (prefers-color-scheme: dark) {
     @include meta.load-css('highlight.js/styles/stackoverflow-dark');
