@@ -327,7 +327,7 @@ struct llama_context * llama_init_from_model(
 
     try {
         // TODO: add logic which llama_context implementation to construct
-        ctx = new llama_context_unified(*model, params);
+        ctx = new llama_context_kv_self(*model, params);
     } catch (const std::exception & e) {
         LLAMA_LOG_ERROR("%s: failed to initialize context: %s\n", __func__, e.what());
         return nullptr;

@@ -2,6 +2,9 @@
 
 #include <cstdint>
 
+// note: do not add high-level objects here, such as llama_context, llama_kv_cache, etc.
+//       not sure about llama_batch/llama_sbatch yet
+
 struct ggml_cgraph;
 struct ggml_context;
 struct ggml_tensor;

@@ -82,6 +82,8 @@ struct llama_context : public llama_graph_i {
                 int32_t   il_start,
                 int32_t   il_end);
 
+    // graph build API (generic)
+
     virtual void build_cb(
              ggml_tensor * cur,
               const char * name,
@@ -90,6 +92,27 @@ struct llama_context : public llama_graph_i {
 
     // TODO: add encode/decode graphs
     virtual ggml_cgraph * build_graph(const llama_ubatch & ubatch, bool worst_case);
+
+    // apply control vector for layer il
+    virtual ggml_tensor * build_cvec(
+            ggml_context * ctx0,
+             ggml_tensor * cur,
+                     int   il);
+
+    // do mat_mul, while optionally apply lora
+    virtual ggml_tensor * build_lora_mm(
+            ggml_context * ctx0,
+             ggml_tensor * w,
+             ggml_tensor * cur);
+
+    // do mat_mul_id, while optionally apply lora
+    virtual ggml_tensor * build_lora_mm_id(
+            ggml_context * ctx0,
+             ggml_tensor * w,   // struct ggml_tensor * as
+             ggml_tensor * cur, // struct ggml_tensor * b
+             ggml_tensor * ids);
+
+    virtual ggml_tensor * build_rope_factors(int il);
 
     // decode a batch of tokens by evaluating the transformer
     // in case of unsuccessful decoding (error or warning),
@@ -115,29 +138,6 @@ struct llama_context : public llama_graph_i {
     // return negative int on error
     //
     virtual int encode(llama_batch & inp_batch) = 0;
-
-    // graph build API (generic)
-
-    // apply control vector for layer il
-    virtual ggml_tensor * build_cvec(
-            ggml_context * ctx0,
-             ggml_tensor * cur,
-                     int   il);
-
-    // do mat_mul, while optionally apply lora
-    virtual ggml_tensor * build_lora_mm(
-            ggml_context * ctx0,
-             ggml_tensor * w,
-             ggml_tensor * cur);
-
-    // do mat_mul_id, while optionally apply lora
-    virtual ggml_tensor * build_lora_mm_id(
-            ggml_context * ctx0,
-             ggml_tensor * w,   // struct ggml_tensor * as
-             ggml_tensor * cur, // struct ggml_tensor * b
-             ggml_tensor * ids);
-
-    virtual ggml_tensor * build_rope_factors(int il);
 
     // state save/load
 
@@ -217,16 +217,16 @@ protected:
     mutable int32_t n_eval   = 0; // number of eval calls
 };
 
-// TODO: make implementation details private
-class llama_context_unified : public llama_context {
+// transformer with a self-attention KV cache
+class llama_context_kv_self : public llama_context {
 public:
     struct batch_manager;
 
-    llama_context_unified(
+    llama_context_kv_self(
             const llama_model & model,
             const llama_context_params & params);
 
-    virtual ~llama_context_unified();
+    virtual ~llama_context_kv_self();
 
     virtual uint32_t n_seq_max() const override;
 
