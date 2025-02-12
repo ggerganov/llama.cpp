@@ -679,6 +679,9 @@ kernel void kernel_diag_mask_inf_8(
 //------------------------------------------------------------------------------
 // softmax
 //------------------------------------------------------------------------------
+#ifdef ADRENO_GPU
+REQD_SUBGROUP_SIZE_64
+#endif
 kernel void kernel_soft_max(
         global float * src0,
         ulong offset0,
@@ -811,6 +814,9 @@ kernel void kernel_soft_max_4(
     }
 }
 
+#ifdef ADRENO_GPU
+REQD_SUBGROUP_SIZE_64
+#endif
 kernel void kernel_soft_max_f16(
         global float * src0,
         ulong offset0,
