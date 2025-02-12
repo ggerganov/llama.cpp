@@ -403,8 +403,8 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         endif()
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_CPU_KLEIDIAI)
-        set_source_files_properties("${GGML_KLEIDIAI_SOURCES}" PROPERTIES COMPILE_OPTIONS "${PRIVATE_ARCH_FLAGS}")
-        list(APPEND GGML_CPU_SOURCES "${GGML_KLEIDIAI_SOURCES}")
+        set_source_files_properties(${GGML_KLEIDIAI_SOURCES} PROPERTIES COMPILE_OPTIONS "${PRIVATE_ARCH_FLAGS}")
+        list(APPEND GGML_CPU_SOURCES ${GGML_KLEIDIAI_SOURCES})
     endif()
 
     message(STATUS "Adding CPU backend variant ${GGML_CPU_NAME}: ${ARCH_FLAGS} ${ARCH_DEFINITIONS}")

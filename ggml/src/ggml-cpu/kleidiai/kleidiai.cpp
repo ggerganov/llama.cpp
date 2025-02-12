@@ -124,7 +124,8 @@ class tensor_traits : public ggml::cpu::tensor_traits {
             size_t sr = kernel->get_sr();
 
             // Calculate number of columns to be processed per thread
-            const size_t num_m_per_thread = kai_roundup(m, nth) / nth;
+            const bool use_multithread = lhs_info->require_aligned_m_idx && m <= mr ? false : true;
+            const size_t num_m_per_thread = use_multithread ? kai_roundup(m, nth) / nth : m;
             const size_t m_start = ith * num_m_per_thread;
             size_t m_to_process = num_m_per_thread;
             if ((m_start + m_to_process) > m) {
