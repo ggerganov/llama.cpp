@@ -1674,7 +1674,7 @@ static void llama_sampler_top_n_sigma_apply(struct llama_sampler * smpl, llama_t
 
     // calculate standard deviation
     float acc = 0;
-    for(size_t i = 0; i < cur_p->size; ++i){
+    for (size_t i = 0; i < cur_p->size; ++i) {
         acc += pow(cur_p->data[i].logit - mean, 2);
     }
     float std = sqrt(acc/cur_p->size);
