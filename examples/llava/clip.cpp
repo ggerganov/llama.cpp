@@ -770,8 +770,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         // If this is an embedding feature layer, save the output.
         // NOTE: 0 index here refers to the input to the encoder.
-        for (int vf_layer_idx = 0; vf_layer_idx < MAX_IMAGE_FEATURE_LAYERS; vf_layer_idx++) {
-            if (il == ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx]) {
+        for (int vl_idx = 0; vl_idx < MAX_IMAGE_FEATURE_LAYERS && (hparams.vision_feature_layer[vl_idx] > 0); vl_idx++) {
+            if (il == ctx->vision_model.hparams.vision_feature_layer[vl_idx]) {
                 embedding_stack.push_back(embeddings);
                 break;
             }
@@ -875,8 +875,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // final layer is a vision feature layer
-    for (int vf_layer_idx = 0; vf_layer_idx < MAX_IMAGE_FEATURE_LAYERS; vf_layer_idx++) {
-        if (n_layer == ctx->vision_model.hparams.vision_feature_layer[vf_layer_idx]) {
+    for (int vl_idx = 0; vl_idx < MAX_IMAGE_FEATURE_LAYERS && (hparams.vision_feature_layer[vl_idx] > 0); vl_idx++) {
+        if (n_layer == ctx->vision_model.hparams.vision_feature_layer[vl_idx]) {
             embedding_stack.push_back(embeddings);
             break;
         }
@@ -2991,7 +2991,8 @@ size_t get_max_image_grid_pinpoints() {
 int get_deepest_feature_layer(const struct clip_ctx * ctx) {
     // Get the index of the second to last layer; this is the
     // default for models that have a llava projector
-    int n_layer = ctx->vision_model.hparams.n_layer - 1;
+    const auto & hparams = ctx->vision_model.hparams;
+    int n_layer = hparams.n_layer - 1;
     int deepest_feature_layer = -1;
 
     // Handle other projectors; incrementing here indicates that we
@@ -3001,9 +3002,9 @@ int get_deepest_feature_layer(const struct clip_ctx * ctx) {
     }
 
     // If we set explicit vision feature layers, only go up to the deepest one
-    for (int i = 0; i < MAX_IMAGE_FEATURE_LAYERS; i++) {
-        if (ctx->vision_model.hparams.vision_feature_layer[i] > deepest_feature_layer) {
-            deepest_feature_layer = ctx->vision_model.hparams.vision_feature_layer[i];
+    for (int i = 0; i < MAX_IMAGE_FEATURE_LAYERS && (hparams.vision_feature_layer[i] > 0); i++) {
+        if (hparams.vision_feature_layer[i] > deepest_feature_layer) {
+            deepest_feature_layer = hparams.vision_feature_layer[i];
         }
     }
     return deepest_feature_layer < 0 ? n_layer: deepest_feature_layer;
