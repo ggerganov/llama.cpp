@@ -2073,8 +2073,8 @@ struct server_context {
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
+            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.params.n_predict, slot.n_predict);
             slot.params.n_predict = slot.n_predict;
-            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.n_predict, slot.n_predict);
         }
 
         if (slot.params.ignore_eos && has_eos_token) {
