@@ -144,37 +144,37 @@ struct llama_context : public llama_graph_i {
 
     // state save/load
 
-    virtual size_t state_get_size()                                 = 0;
-    virtual size_t state_get_data(      uint8_t * dst, size_t size) = 0;
-    virtual size_t state_set_data(const uint8_t * src, size_t size) = 0;
+    virtual size_t state_get_size();
+    virtual size_t state_get_data(      uint8_t * dst, size_t size);
+    virtual size_t state_set_data(const uint8_t * src, size_t size);
 
-    virtual size_t state_seq_get_size(llama_seq_id seq_id)                                   = 0;
-    virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size) = 0;
-    virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size) = 0;
+    virtual size_t state_seq_get_size(llama_seq_id seq_id);
+    virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size);
+    virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size);
 
     virtual bool state_load_file(
             const char * filepath,
            llama_token * tokens_out,
                 size_t   n_token_capacity,
-                size_t * n_token_count_out) = 0;
+                size_t * n_token_count_out);
 
     virtual bool state_save_file(
             const char * filepath,
      const llama_token * tokens,
-                size_t   n_token_count) = 0;
+                size_t   n_token_count);
 
     virtual size_t state_seq_load_file(
           llama_seq_id   seq_id,
             const char * filepath,
            llama_token * tokens_out,
                 size_t   n_token_capacity,
-                size_t * n_token_count_out) = 0;
+                size_t * n_token_count_out);
 
     virtual size_t state_seq_save_file(
           llama_seq_id   seq_id,
             const char * filepath,
      const llama_token * tokens,
-                size_t   n_token_count) = 0;
+                size_t   n_token_count);
 
     // perf
 
@@ -182,6 +182,14 @@ struct llama_context : public llama_graph_i {
     virtual void perf_reset();
 
 protected:
+
+    // state save/load
+
+    virtual size_t state_get_data(llama_io_write_i & io);
+    virtual size_t state_set_data(llama_io_read_i  & io);
+
+    virtual size_t state_seq_get_data(llama_io_write_i & io, llama_seq_id seq_id);
+    virtual size_t state_seq_set_data(llama_io_read_i  & io, llama_seq_id seq_id);
 
     // members
 
@@ -471,46 +479,12 @@ public:
                      int   il,
                     bool   worst_case) override;
 
-    // state save/load
+protected:
+    virtual size_t state_get_data(llama_io_write_i & io) override;
+    virtual size_t state_set_data(llama_io_read_i  & io) override;
 
-    virtual size_t state_get_size()                                 override;
-    virtual size_t state_get_data(      uint8_t * dst, size_t size) override;
-    virtual size_t state_set_data(const uint8_t * src, size_t size) override;
-
-    virtual size_t state_seq_get_size(llama_seq_id seq_id)                                   override;
-    virtual size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size) override;
-    virtual size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size) override;
-
-    virtual bool state_load_file(
-            const char * filepath,
-           llama_token * tokens_out,
-                size_t   n_token_capacity,
-                size_t * n_token_count_out) override;
-
-    virtual bool state_save_file(
-            const char * filepath,
-     const llama_token * tokens,
-                size_t   n_token_count) override;
-
-    virtual size_t state_seq_load_file(
-          llama_seq_id   seq_id,
-            const char * filepath,
-           llama_token * tokens_out,
-                size_t   n_token_capacity,
-                size_t * n_token_count_out) override;
-
-    virtual size_t state_seq_save_file(
-          llama_seq_id   seq_id,
-            const char * filepath,
-     const llama_token * tokens,
-                size_t   n_token_count) override;
-
-private:
-    size_t state_get_data(llama_io_write_i & io);
-    size_t state_set_data(llama_io_read_i  & io);
-
-    size_t state_seq_get_data(llama_io_write_i & io, llama_seq_id seq_id);
-    size_t state_seq_set_data(llama_io_read_i  & io, llama_seq_id seq_id);
+    virtual size_t state_seq_get_data(llama_io_write_i & io, llama_seq_id seq_id) override;
+    virtual size_t state_seq_set_data(llama_io_read_i  & io, llama_seq_id seq_id) override;
 };
 
 // For internal test use
