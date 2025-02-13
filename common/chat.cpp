@@ -127,7 +127,7 @@ static common_chat_msg parse_json_tool_calls(
 
     if (!result.tool_calls.empty()) {
         if (!string_strip(result.content).empty()) {
-            LOG_WRN("Content found with tool calls: %s", result.content.c_str());
+            LOG_WRN("Content found with tool calls: %s\n", result.content.c_str());
         }
         result.content = "";
     }
@@ -982,7 +982,7 @@ common_chat_params common_chat_params_init(const common_chat_template & tmpl, co
             throw std::runtime_error("Cannot specify grammar with tools");
         }
         if (caps.supports_tool_calls && !caps.supports_tools) {
-            LOG_WRN("Template supports tool calls but does not natively describe tools. The fallback behaviour used may produce bad results, inspect prompt w/ --verbose & consider overriding the template.");
+            LOG_WRN("Template supports tool calls but does not natively describe tools. The fallback behaviour used may produce bad results, inspect prompt w/ --verbose & consider overriding the template.\n");
         }
     }
 

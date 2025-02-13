@@ -731,7 +731,7 @@ struct server_task_result_cmpl_final : server_task_result {
         if (!msg.reasoning_content.empty()) {
             message["reasoning_content"] = msg.reasoning_content;
         }
-        if (msg.content == "" && !msg.tool_calls.empty()) {
+        if (msg.content.empty() && !msg.tool_calls.empty()) {
             message["content"] = json();
         } else {
             message["content"] = msg.content;
