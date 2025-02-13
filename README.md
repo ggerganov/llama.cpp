@@ -235,6 +235,7 @@ Instructions for adding support for new models: [HOWTO-add-model.md](docs/develo
 | [HIP](docs/build.md#hip) | AMD GPU |
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [CANN](docs/build.md#cann) | Ascend NPU |
+| [OpenCL](docs/backend/OPENCL.md) | Adreno GPU |
 
 ## Building the project
 
@@ -518,5 +519,18 @@ If your issue is with model generation quality, then please at least scan the fo
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
-#### References
+## Completions
+Command-line completion is available for some environments.
 
+#### Bash Completion
+```bash
+$ build/bin/llama-cli --completion-bash > ~/.llama-completion.bash
+$ source ~/.llama-completion.bash
+```
+Optionally this can be added to your `.bashrc` or `.bash_profile` to load it
+automatically. For example:
+```console
+$ echo "source ~/.llama-completion.bash" >> ~/.bashrc
+```
+
+## References

@@ -5,12 +5,11 @@ import { classNames } from '../utils/misc';
 import daisyuiThemes from 'daisyui/src/theming/themes';
 import { THEMES } from '../Config';
 import { useNavigate } from 'react-router';
-import SettingDialog from './SettingDialog';
 
 export default function Header() {
   const navigate = useNavigate();
   const [selectedTheme, setSelectedTheme] = useState(StorageUtils.getTheme());
-  const [showSettingDialog, setShowSettingDialog] = useState(false);
+  const { setShowSettings } = useAppContext();
 
   const setTheme = (theme: string) => {
     StorageUtils.setTheme(theme);
@@ -26,12 +25,12 @@ export default function Header() {
     );
   }, [selectedTheme]);
 
-  const { isGenerating, viewingConversation } = useAppContext();
-  const isCurrConvGenerating = isGenerating(viewingConversation?.id ?? '');
+  const { isGenerating, viewingChat } = useAppContext();
+  const isCurrConvGenerating = isGenerating(viewingChat?.conv.id ?? '');
 
   const removeConversation = () => {
-    if (isCurrConvGenerating || !viewingConversation) return;
-    const convId = viewingConversation.id;
+    if (isCurrConvGenerating || !viewingChat) return;
+    const convId = viewingChat?.conv.id;
     if (window.confirm('Are you sure to delete this conversation?')) {
       StorageUtils.remove(convId);
       navigate('/');
@@ -39,9 +38,9 @@ export default function Header() {
   };
 
   const downloadConversation = () => {
-    if (isCurrConvGenerating || !viewingConversation) return;
-    const convId = viewingConversation.id;
-    const conversationJson = JSON.stringify(viewingConversation, null, 2);
+    if (isCurrConvGenerating || !viewingChat) return;
+    const convId = viewingChat?.conv.id;
+    const conversationJson = JSON.stringify(viewingChat, null, 2);
     const blob = new Blob([conversationJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -54,7 +53,7 @@ export default function Header() {
   };
 
   return (
-    <div className="flex flex-row items-center mt-6 mb-6">
+    <div className="flex flex-row items-center pt-6 pb-6 sticky top-0 z-10 bg-base-100">
       {/* open sidebar button */}
       <label htmlFor="toggle-drawer" className="btn btn-ghost lg:hidden">
         <svg
@@ -76,40 +75,43 @@ export default function Header() {
 
       {/* action buttons (top right) */}
       <div className="flex items-center">
-        <div v-if="messages.length > 0" className="dropdown dropdown-end">
-          {/* "..." button */}
-          <button
-            tabIndex={0}
-            role="button"
-            className="btn m-1"
-            disabled={isCurrConvGenerating}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              fill="currentColor"
-              className="bi bi-three-dots-vertical"
-              viewBox="0 0 16 16"
+        {viewingChat && (
+          <div className="dropdown dropdown-end">
+            {/* "..." button */}
+            <button
+              tabIndex={0}
+              role="button"
+              className="btn m-1"
+              disabled={isCurrConvGenerating}
             >
-              <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0" />
-            </svg>
-          </button>
-          {/* dropdown menu */}
-          <ul
-            tabIndex={0}
-            className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
-          >
-            <li onClick={downloadConversation}>
-              <a>Download</a>
-            </li>
-            <li className="text-error" onClick={removeConversation}>
-              <a>Delete</a>
-            </li>
-          </ul>
-        </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                fill="currentColor"
+                className="bi bi-three-dots-vertical"
+                viewBox="0 0 16 16"
+              >
+                <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0" />
+              </svg>
+            </button>
+            {/* dropdown menu */}
+            <ul
+              tabIndex={0}
+              className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
+            >
+              <li onClick={downloadConversation}>
+                <a>Download</a>
+              </li>
+              <li className="text-error" onClick={removeConversation}>
+                <a>Delete</a>
+              </li>
+            </ul>
+          </div>
+        )}
+
         <div className="tooltip tooltip-bottom" data-tip="Settings">
-          <button className="btn" onClick={() => setShowSettingDialog(true)}>
+          <button className="btn" onClick={() => setShowSettings(true)}>
             {/* settings button */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -172,11 +174,6 @@ export default function Header() {
           </div>
         </div>
       </div>
-
-      <SettingDialog
-        show={showSettingDialog}
-        onClose={() => setShowSettingDialog(false)}
-      />
     </div>
   );
 }

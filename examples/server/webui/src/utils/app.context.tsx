@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { APIMessage, Conversation, Message, PendingMessage } from './types';
+import {
+  APIMessage,
+  CanvasData,
+  Conversation,
+  Message,
+  PendingMessage,
+  ViewingChat,
+} from './types';
 import StorageUtils from './storage';
 import {
   filterThoughtFromMsgs,
@@ -7,34 +14,53 @@ import {
   getSSEStreamAsync,
 } from './misc';
 import { BASE_URL, CONFIG_DEFAULT, isDev } from '../Config';
-import { matchPath, useLocation } from 'react-router';
+import { matchPath, useLocation, useNavigate } from 'react-router';
 
 interface AppContextValue {
-  viewingConversation: Conversation | null;
+  // conversations and messages
+  viewingChat: ViewingChat | null;
   pendingMessages: Record<Conversation['id'], PendingMessage>;
   isGenerating: (convId: string) => boolean;
   sendMessage: (
-    convId: string,
+    convId: string | null,
+    leafNodeId: Message['id'] | null,
     content: string,
-    onChunk?: CallbackGeneratedChunk
+    onChunk: CallbackGeneratedChunk
   ) => Promise<boolean>;
   stopGenerating: (convId: string) => void;
   replaceMessageAndGenerate: (
     convId: string,
-    origMsgId: Message['id'],
-    content?: string,
-    onChunk?: CallbackGeneratedChunk
+    parentNodeId: Message['id'], // the parent node of the message to be replaced
+    content: string | null,
+    onChunk: CallbackGeneratedChunk
   ) => Promise<void>;
 
+  // canvas
+  canvasData: CanvasData | null;
+  setCanvasData: (data: CanvasData | null) => void;
+
+  // config
   config: typeof CONFIG_DEFAULT;
   saveConfig: (config: typeof CONFIG_DEFAULT) => void;
+  showSettings: boolean;
+  setShowSettings: (show: boolean) => void;
 }
 
-// for now, this callback is only used for scrolling to the bottom of the chat
-type CallbackGeneratedChunk = () => void;
+// this callback is used for scrolling to the bottom of the chat and switching to the last node
+export type CallbackGeneratedChunk = (currLeafNodeId?: Message['id']) => void;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AppContext = createContext<AppContextValue>({} as any);
+
+const getViewingChat = async (convId: string): Promise<ViewingChat | null> => {
+  const conv = await StorageUtils.getOneConversation(convId);
+  if (!conv) return null;
+  return {
+    conv: conv,
+    // all messages from all branches, not filtered by last node
+    messages: await StorageUtils.getMessages(convId),
+  };
+};
 
 export const AppContextProvider = ({
   children,
@@ -42,11 +68,11 @@ export const AppContextProvider = ({
   children: React.ReactElement;
 }) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const params = matchPath('/chat/:convId', pathname);
   const convId = params?.params?.convId;
 
-  const [viewingConversation, setViewingConversation] =
-    useState<Conversation | null>(null);
+  const [viewingChat, setViewingChat] = useState<ViewingChat | null>(null);
   const [pendingMessages, setPendingMessages] = useState<
     Record<Conversation['id'], PendingMessage>
   >({});
@@ -54,14 +80,19 @@ export const AppContextProvider = ({
     Record<Conversation['id'], AbortController>
   >({});
   const [config, setConfig] = useState(StorageUtils.getConfig());
+  const [canvasData, setCanvasData] = useState<CanvasData | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
+  // handle change when the convId from URL is changed
   useEffect(() => {
-    const handleConversationChange = (changedConvId: string) => {
+    // also reset the canvas data
+    setCanvasData(null);
+    const handleConversationChange = async (changedConvId: string) => {
       if (changedConvId !== convId) return;
-      setViewingConversation(StorageUtils.getOneConversation(convId));
+      setViewingChat(await getViewingChat(changedConvId));
     };
     StorageUtils.onConversationChanged(handleConversationChange);
-    setViewingConversation(StorageUtils.getOneConversation(convId ?? ''));
+    getViewingChat(convId ?? '').then(setViewingChat);
     return () => {
       StorageUtils.offConversationChanged(handleConversationChange);
     };
@@ -99,23 +130,39 @@ export const AppContextProvider = ({
 
   const generateMessage = async (
     convId: string,
-    onChunk?: CallbackGeneratedChunk
+    leafNodeId: Message['id'],
+    onChunk: CallbackGeneratedChunk
   ) => {
     if (isGenerating(convId)) return;
 
     const config = StorageUtils.getConfig();
-    const currConversation = StorageUtils.getOneConversation(convId);
+    const currConversation = await StorageUtils.getOneConversation(convId);
     if (!currConversation) {
       throw new Error('Current conversation is not found');
     }
 
+    const currMessages = StorageUtils.filterByLeafNodeId(
+      await StorageUtils.getMessages(convId),
+      leafNodeId,
+      false
+    );
     const abortController = new AbortController();
     setAbort(convId, abortController);
 
+    if (!currMessages) {
+      throw new Error('Current messages are not found');
+    }
+
+    const pendingId = Date.now() + 1;
     let pendingMsg: PendingMessage = {
-      id: Date.now() + 1,
+      id: pendingId,
+      convId,
+      type: 'text',
+      timestamp: pendingId,
       role: 'assistant',
       content: null,
+      parent: leafNodeId,
+      children: [],
     };
     setPending(convId, pendingMsg);
 
@@ -125,7 +172,7 @@ export const AppContextProvider = ({
         ...(config.systemMessage.length === 0
           ? []
           : [{ role: 'system', content: config.systemMessage } as APIMessage]),
-        ...normalizeMsgsForAPI(currConversation?.messages ?? []),
+        ...normalizeMsgsForAPI(currMessages),
       ];
       if (config.excludeThoughtOnReq) {
         messages = filterThoughtFromMsgs(messages);
@@ -186,8 +233,7 @@ export const AppContextProvider = ({
         const lastContent = pendingMsg.content || '';
         if (addedContent) {
           pendingMsg = {
-            id: pendingMsg.id,
-            role: 'assistant',
+            ...pendingMsg,
             content: lastContent + addedContent,
           };
         }
@@ -202,7 +248,7 @@ export const AppContextProvider = ({
           };
         }
         setPending(convId, pendingMsg);
-        onChunk?.();
+        onChunk(); // don't need to switch node for pending message
       }
     } catch (err) {
       setPending(convId, null);
@@ -217,37 +263,53 @@ export const AppContextProvider = ({
       }
     }
 
-    if (pendingMsg.content) {
-      StorageUtils.appendMsg(currConversation.id, {
-        id: pendingMsg.id,
-        content: pendingMsg.content,
-        role: pendingMsg.role,
-        timings: pendingMsg.timings,
-      });
+    if (pendingMsg.content !== null) {
+      await StorageUtils.appendMsg(pendingMsg as Message, leafNodeId);
     }
     setPending(convId, null);
-    onChunk?.(); // trigger scroll to bottom
+    onChunk(pendingId); // trigger scroll to bottom and switch to the last node
   };
 
   const sendMessage = async (
-    convId: string,
+    convId: string | null,
+    leafNodeId: Message['id'] | null,
     content: string,
-    onChunk?: CallbackGeneratedChunk
+    onChunk: CallbackGeneratedChunk
   ): Promise<boolean> => {
-    if (isGenerating(convId) || content.trim().length === 0) return false;
+    if (isGenerating(convId ?? '') || content.trim().length === 0) return false;
 
-    StorageUtils.appendMsg(convId, {
-      id: Date.now(),
-      role: 'user',
-      content,
-    });
+    if (convId === null || convId.length === 0 || leafNodeId === null) {
+      const conv = await StorageUtils.createConversation(
+        content.substring(0, 256)
+      );
+      convId = conv.id;
+      leafNodeId = conv.currNode;
+      // if user is creating a new conversation, redirect to the new conversation
+      navigate(`/chat/${convId}`);
+    }
+
+    const now = Date.now();
+    const currMsgId = now;
+    StorageUtils.appendMsg(
+      {
+        id: currMsgId,
+        timestamp: now,
+        type: 'text',
+        convId,
+        role: 'user',
+        content,
+        parent: leafNodeId,
+        children: [],
+      },
+      leafNodeId
+    );
+    onChunk(currMsgId);
 
     try {
-      await generateMessage(convId, onChunk);
+      await generateMessage(convId, currMsgId, onChunk);
       return true;
     } catch (_) {
-      // rollback
-      StorageUtils.popMsg(convId);
+      // TODO: rollback
     }
     return false;
   };
@@ -260,22 +322,33 @@ export const AppContextProvider = ({
   // if content is undefined, we remove last assistant message
   const replaceMessageAndGenerate = async (
     convId: string,
-    origMsgId: Message['id'],
-    content?: string,
-    onChunk?: CallbackGeneratedChunk
+    parentNodeId: Message['id'], // the parent node of the message to be replaced
+    content: string | null,
+    onChunk: CallbackGeneratedChunk
   ) => {
     if (isGenerating(convId)) return;
 
-    StorageUtils.filterAndKeepMsgs(convId, (msg) => msg.id < origMsgId);
-    if (content) {
-      StorageUtils.appendMsg(convId, {
-        id: Date.now(),
-        role: 'user',
-        content,
-      });
+    if (content !== null) {
+      const now = Date.now();
+      const currMsgId = now;
+      StorageUtils.appendMsg(
+        {
+          id: currMsgId,
+          timestamp: now,
+          type: 'text',
+          convId,
+          role: 'user',
+          content,
+          parent: parentNodeId,
+          children: [],
+        },
+        parentNodeId
+      );
+      parentNodeId = currMsgId;
     }
+    onChunk(parentNodeId);
 
-    await generateMessage(convId, onChunk);
+    await generateMessage(convId, parentNodeId, onChunk);
   };
 
   const saveConfig = (config: typeof CONFIG_DEFAULT) => {
@@ -287,13 +360,17 @@ export const AppContextProvider = ({
     <AppContext.Provider
       value={{
         isGenerating,
-        viewingConversation,
+        viewingChat,
         pendingMessages,
         sendMessage,
         stopGenerating,
         replaceMessageAndGenerate,
+        canvasData,
+        setCanvasData,
         config,
         saveConfig,
+        showSettings,
+        setShowSettings,
       }}
     >
       {children}

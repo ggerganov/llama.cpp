@@ -104,7 +104,7 @@ You may want to pass in some different `ARGS`, depending on the MUSA environment
 
 The defaults are:
 
-- `MUSA_VERSION` set to `rc3.1.0`
+- `MUSA_VERSION` set to `rc3.1.1`
 
 The resulting images, are essentially the same as the non-MUSA images:
 

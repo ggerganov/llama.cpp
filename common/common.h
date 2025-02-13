@@ -140,6 +140,7 @@ struct common_params_sampling {
     int32_t dry_allowed_length = 2;     // tokens extending repetitions beyond this receive penalty
     int32_t dry_penalty_last_n = -1;    // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
     int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    float   top_n_sigma        = -1.00f;// -1.0 = disabled
     float   mirostat_tau       = 5.00f; // target entropy
     float   mirostat_eta       = 0.10f; // learning rate
     bool    ignore_eos         = false;
@@ -200,6 +201,11 @@ struct common_params_vocoder {
     std::string model_url = ""; // model url to download                                     // NOLINT
 
     bool use_guide_tokens = false; // enable guide tokens to improve TTS accuracy            // NOLINT
+};
+
+enum common_reasoning_format {
+    COMMON_REASONING_FORMAT_NONE,
+    COMMON_REASONING_FORMAT_DEEPSEEK, // Extract thinking tag contents and return as `message.reasoning_content`
 };
 
 struct common_params {
@@ -292,6 +298,7 @@ struct common_params {
     bool   kl_divergence    = false; // compute KL divergence
 
     bool usage             = false; // print usage
+    bool completion        = false; // print source-able completion script
     bool use_color         = false; // use color to distinguish generations and inputs
     bool special           = false; // enable special token output
     bool interactive       = false; // interactive mode
@@ -346,6 +353,7 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
+    common_reasoning_format reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
 
     std::vector<std::string> api_keys;
 
@@ -424,13 +432,13 @@ bool set_process_priority(enum ggml_sched_priority prio);
 //
 
 #ifdef __GNUC__
-#ifdef __MINGW32__
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#    if defined(__MINGW32__) && !defined(__clang__)
+#        define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#    else
+#        define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#    endif
 #else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
-#endif
-#else
-#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
+#    define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
 #endif
 
 LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
@@ -623,7 +631,7 @@ struct common_chat_msg {
     std::string role;
     std::string content;
     std::vector<common_tool_call> tool_calls;
-    std::string tool_plan = "";
+    std::string reasoning_content = "";
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
