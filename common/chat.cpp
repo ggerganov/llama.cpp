@@ -142,11 +142,11 @@ static common_chat_msg parse_prefixed_json_tool_call_array(const std::string& in
     result.role = "assistant";
     const auto process_tool_calls = [&](const json & tool_calls) {
         for (const auto & tool_call : tool_calls) {
-            const auto & arguments = tool_call["arguments"];
+            const auto & arguments = tool_call.at("arguments");
             result.tool_calls.push_back({
-                tool_call["name"],
+                tool_call.at("name"),
                 arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
-                tool_call.contains("id") ? tool_call["id"] : "",
+                tool_call.contains("id") ? tool_call.at("id") : "",
             });
         }
     };
@@ -163,7 +163,7 @@ static common_chat_msg parse_prefixed_json_tool_call_array(const std::string& in
 
 static void foreach_function(const json & tools, const std::function<void(const json &)> & fn) {
     for (const auto & tool : tools) {
-        if (!tool.contains("type") || tool["type"] != "function" || !tool.contains("function")) {
+        if (!tool.contains("type") || tool.at("type") != "function" || !tool.contains("function")) {
             LOG_INF("Skipping tool without function: %s", tool.dump(2).c_str());
             continue;
         }
@@ -198,27 +198,27 @@ static common_chat_params common_chat_params_init_generic(const common_chat_temp
 
     auto tool_call_schemas = json::array();
     foreach_function(inputs.tools, [&](const json & tool) {
-        const auto & function = tool["function"];
+        const auto & function = tool.at("function");
         auto tool_schema = json {
             {"type", "object"},
             {"properties", {
                 {"name", {
                     {"type", "string"},
-                    {"const", function["name"]},
+                    {"const", function.at("name")},
                 }},
-                {"arguments", function["parameters"]},
+                {"arguments", function.at("parameters")},
             }},
             {"required", json::array({"name", "arguments"})},
         };
         if (function.contains("description")) {
-            tool_schema["description"] = function["description"];
+            tool_schema["description"] = function.at("description");
         }
         if (inputs.parallel_tool_calls) {
-            tool_schema["properties"]["id"] = {
+            tool_schema.at("properties")["id"] = {
                 {"type", "string"},
                 {"minLength", 4},
             };
-            tool_schema["required"].push_back("id");
+            tool_schema.at("required").push_back("id");
         }
         tool_call_schemas.emplace_back(tool_schema);
     });
@@ -283,21 +283,21 @@ static common_chat_msg common_chat_parse_generic(const std::string & input) {
     common_chat_msg result;
     result.role = "assistant";
     if (data.contains("tool_calls")) {
-        for (const auto & tool_call : data["tool_calls"]) {
+        for (const auto & tool_call : data.at("tool_calls")) {
             result.tool_calls.push_back({
-                tool_call["name"],
-                tool_call["arguments"].dump(),
-                tool_call.contains("id") ? tool_call["id"] : "",
+                tool_call.at("name"),
+                tool_call.at("arguments").dump(),
+                tool_call.contains("id") ? tool_call.at("id") : "",
             });
         }
     } else if (data.contains("tool_call")) {
         result.tool_calls.push_back({
-            data["tool_call"]["name"],
-            data["tool_call"]["arguments"].dump(),
+            data.at("tool_call").at("name"),
+            data.at("tool_call").at("arguments").dump(),
             /* id= */ "",
         });
     } else if (data.contains("response")) {
-        const auto & response = data["response"];
+        const auto & response = data.at("response");
         result.content = response.is_string() ? response.get<std::string>() : response.dump(2);
     }
     return result;
@@ -309,7 +309,7 @@ static common_chat_params common_chat_params_init_mistral_nemo(const common_chat
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         auto schemas = json::array();
         foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
+            const auto & function = tool.at("function");
             schemas.push_back({
                 {"type", "object"},
                 {"properties", {
@@ -317,9 +317,9 @@ static common_chat_params common_chat_params_init_mistral_nemo(const common_chat
                     // It's hard to constrain that for now (while reusing the JSON schema conversion), so we're just expecting a plain object.
                     {"name", {
                         {"type", "string"},
-                        {"const", function["name"]},
+                        {"const", function.at("name")},
                     }},
-                    {"arguments", function["parameters"]},
+                    {"arguments", function.at("parameters")},
                     {"id", {
                         {"type", "string"},
                         // Nemo's template expects a 9-character alphanumeric ID.
@@ -354,7 +354,7 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         auto schemas = json::array();
         foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
+            const auto & function = tool.at("function");
             schemas.push_back({
                 {"type", "object"},
                 {"properties", {
@@ -365,9 +365,9 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
                     }},
                     {"tool_name", {
                         {"type", "string"},
-                        {"const", function["name"]},
+                        {"const", function.at("name")},
                     }},
-                    {"parameters", function["parameters"]},
+                    {"parameters", function.at("parameters")},
                 }},
                 {"required", json::array({"tool_call_id", "tool_name", "parameters"})},
             });
@@ -392,11 +392,11 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
     };
     auto adjusted_messages = json::array();
     for (const auto & msg : inputs.messages) {
-        auto has_reasoning_content = msg.contains("reasoning_content") && msg["reasoning_content"].is_string();
-        auto has_tool_calls = msg.contains("tool_calls") && msg["tool_calls"].is_array();
+        auto has_reasoning_content = msg.contains("reasoning_content") && msg.at("reasoning_content").is_string();
+        auto has_tool_calls = msg.contains("tool_calls") && msg.at("tool_calls").is_array();
         if (has_reasoning_content && has_tool_calls) {
             auto adjusted_message = msg;
-            adjusted_message["tool_plan"] = msg["reasoning_content"];
+            adjusted_message["tool_plan"] = msg.at("reasoning_content");
             adjusted_message.erase("reasoning_content");
             adjusted_messages.push_back(adjusted_message);
         } else {
@@ -433,9 +433,9 @@ static common_chat_msg common_chat_parse_command_r7b(const std::string & input, 
         auto actions = json::parse(actions_str);
         for (const auto & action : actions) {
             result.tool_calls.push_back({
-                /* .name = */      action["tool_name"],
-                /* .arguments = */ action["parameters"].dump(),
-                /* .id = */        action["tool_call_id"],
+                /* .name = */      action.at("tool_name"),
+                /* .arguments = */ action.at("parameters").dump(),
+                /* .id = */        action.at("tool_call_id"),
             });
         }
     } else if (std::regex_match(rest, match, response_regex)) {
@@ -448,7 +448,7 @@ static common_chat_msg common_chat_parse_command_r7b(const std::string & input, 
 }
 
 static void expect_tool_parameters(const std::string & name, const json & parameters, const std::vector<std::string> & expected_properties) {
-    if (!parameters.is_object() || !parameters.contains("type") || parameters["type"] != "object" || !parameters.contains("properties") || !parameters.contains("required")) {
+    if (!parameters.is_object() || !parameters.contains("type") || parameters.at("type") != "object" || !parameters.contains("properties") || !parameters.contains("required")) {
         throw std::runtime_error("Parameters of tool " + name + " must be an object w/ required properties");
     }
     const auto & parameters_properties = parameters.at("properties");
@@ -502,9 +502,9 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
         };
 
         foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            std::string name = function["name"];
-            auto parameters = function["parameters"];
+            const auto & function = tool.at("function");
+            std::string name = function.at("name");
+            auto parameters = function.at("parameters");
             builder.resolve_refs(parameters);
 
             // https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/remote/tool_runtime
@@ -585,9 +585,9 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             std::vector<std::string> tool_rules;
             foreach_function(inputs.tools, [&](const json & tool) {
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
+                const auto & function = tool.at("function");
+                std::string name = function.at("name");
+                auto parameters = function.at("parameters");
                 auto args_rule = builder.add_schema(name + "-args", parameters);
                 tool_rules.push_back(builder.add_rule(name + "-call",
                     "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n"
@@ -678,15 +678,15 @@ static common_chat_params common_chat_params_init_firefunction_v2(const common_c
         data.grammar = build_grammar([&](const common_grammar_builder & builder) {
             auto schemas = json::array();
             foreach_function(inputs.tools, [&](const json & tool) {
-                const auto & function = tool["function"];
+                const auto & function = tool.at("function");
                 schemas.push_back({
                     {"type", "object"},
                     {"properties", {
                         {"name", {
                             {"type", "string"},
-                            {"const", function["name"]},
+                            {"const", function.at("name")},
                         }},
-                        {"arguments", function["parameters"]},
+                        {"arguments", function.at("parameters")},
                     }},
                     {"required", json::array({"name", "arguments", "id"})},
                 });
@@ -724,9 +724,9 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
             std::vector<std::string> first_tool_rules;
             std::vector<std::string> subsequent_tool_rules;
             foreach_function(inputs.tools, [&](const json & tool) {
-                const auto & function = tool["function"];
-                std::string name = function["name"];
-                auto parameters = function["parameters"];
+                const auto & function = tool.at("function");
+                std::string name = function.at("name");
+                auto parameters = function.at("parameters");
                 auto args_rule = builder.add_schema(name + "-args", parameters);
                 first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
                 subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
@@ -806,9 +806,9 @@ static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(con
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         std::vector<std::string> tool_rules;
         foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            const auto & parameters = function["parameters"];
-            std::string name = function["name"];
+            const auto & function = tool.at("function");
+            const auto & parameters = function.at("parameters");
+            std::string name = function.at("name");
             if (name == "python" || name == "ipython") {
                 if (!parameters.contains("type")) {
                     throw std::runtime_error("Missing type in python tool");
@@ -879,9 +879,9 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         std::vector<std::string> tool_rules;
         foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool["function"];
-            std::string name = function["name"];
-            auto parameters = function["parameters"];
+            const auto & function = tool.at("function");
+            std::string name = function.at("name");
+            auto parameters = function.at("parameters");
             builder.resolve_refs(parameters);
             tool_rules.push_back(builder.add_schema(name + "-call", {
                 {"type", "object"},
@@ -929,9 +929,9 @@ static common_chat_msg common_chat_parse_hermes_2_pro(const std::string & input)
             if (!parse_json(it, end, call)) {
                 throw std::runtime_error("Failed to parse json tool call");
             }
-            const auto & arguments = call["arguments"];
+            const auto & arguments = call.at("arguments");
             result.tool_calls.push_back({
-                call["name"],
+                call.at("name"),
                 arguments.dump(),
                 // arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
                 /* id= */ "",
