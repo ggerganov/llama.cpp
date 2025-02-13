@@ -173,6 +173,7 @@ struct slot_params {
             {"grammar_trigger_words",     grammar_trigger_words},
             {"grammar_trigger_tokens",    sampling.grammar_trigger_tokens},
             {"preserved_tokens",          sampling.preserved_tokens},
+            {"chat_format",               common_chat_format_name(oaicompat_chat_format)},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
@@ -724,9 +725,19 @@ struct server_task_result_cmpl_final : server_task_result {
             msg.content = content;
         }
 
-        json tool_calls;
+        json message {
+            {"role", "assistant"},
+        };
+        if (!msg.reasoning_content.empty()) {
+            message["reasoning_content"] = msg.reasoning_content;
+        }
+        if (msg.content.empty() && !msg.tool_calls.empty()) {
+            message["content"] = json();
+        } else {
+            message["content"] = msg.content;
+        }
         if (!msg.tool_calls.empty()) {
-            tool_calls = json::array();
+            auto tool_calls = json::array();
             for (const auto & tc : msg.tool_calls) {
                 tool_calls.push_back({
                     {"type", "function"},
@@ -737,15 +748,7 @@ struct server_task_result_cmpl_final : server_task_result {
                     {"id", tc.id},
                 });
             }
-        }
-
-        json message {
-            {"content", msg.content},
-            {"tool_calls", tool_calls},
-            {"role", "assistant"},
-        };
-        if (!msg.tool_plan.empty()) {
-            message["tool_plan"] = msg.tool_plan;
+            message["tool_calls"] = tool_calls;
         }
 
         json choice {
@@ -2073,8 +2076,8 @@ struct server_context {
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
+            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.params.n_predict, slot.n_predict);
             slot.params.n_predict = slot.n_predict;
-            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.n_predict, slot.n_predict);
         }
 
         if (slot.params.ignore_eos && has_eos_token) {
@@ -4060,7 +4063,7 @@ int main(int argc, char ** argv) {
         }
 
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, params.reasoning_format, ctx_server.chat_templates);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
@@ -4073,7 +4076,7 @@ int main(int argc, char ** argv) {
     // same with handle_chat_completions, but without inference part
     const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, params.reasoning_format, ctx_server.chat_templates);
         res_ok(res, {{ "prompt", std::move(data.at("prompt")) }});
     };
 

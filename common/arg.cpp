@@ -365,6 +365,108 @@ static void common_params_print_usage(common_params_context & ctx_arg) {
     print_options(specific_options);
 }
 
+static void common_params_print_completion(common_params_context & ctx_arg) {
+    std::vector<common_arg *> common_options;
+    std::vector<common_arg *> sparam_options;
+    std::vector<common_arg *> specific_options;
+
+    for (auto & opt : ctx_arg.options) {
+        if (opt.is_sparam) {
+            sparam_options.push_back(&opt);
+        } else if (opt.in_example(ctx_arg.ex)) {
+            specific_options.push_back(&opt);
+        } else {
+            common_options.push_back(&opt);
+        }
+    }
+
+    printf("_llama_completions() {\n");
+    printf("    local cur prev opts\n");
+    printf("    COMPREPLY=()\n");
+    printf("    cur=\"${COMP_WORDS[COMP_CWORD]}\"\n");
+    printf("    prev=\"${COMP_WORDS[COMP_CWORD-1]}\"\n\n");
+
+    printf("    opts=\"");
+    auto print_options = [](const std::vector<common_arg *> & options) {
+        for (const common_arg * opt : options) {
+            for (const char * arg : opt->args) {
+                printf("%s ", arg);
+            }
+        }
+    };
+
+    print_options(common_options);
+    print_options(sparam_options);
+    print_options(specific_options);
+    printf("\"\n\n");
+
+    printf("    case \"$prev\" in\n");
+    printf("        --model)\n");
+    printf("            COMPREPLY=( $(compgen -f -X '!*.gguf' -- \"$cur\") $(compgen -d -- \"$cur\") )\n");
+    printf("            return 0\n");
+    printf("            ;;\n");
+    printf("        --grammar-file)\n");
+    printf("            COMPREPLY=( $(compgen -f -X '!*.gbnf' -- \"$cur\") $(compgen -d -- \"$cur\") )\n");
+    printf("            return 0\n");
+    printf("            ;;\n");
+    printf("        *)\n");
+    printf("            COMPREPLY=( $(compgen -W \"${opts}\" -- \"$cur\") )\n");
+    printf("            return 0\n");
+    printf("            ;;\n");
+    printf("    esac\n");
+    printf("}\n\n");
+
+    std::set<std::string> executables = {
+        "llama-batched",
+        "llama-batched-bench",
+        "llama-bench",
+        "llama-cli",
+        "llama-convert-llama2c-to-ggml",
+        "llama-cvector-generator",
+        "llama-embedding",
+        "llama-eval-callback",
+        "llama-export-lora",
+        "llama-gbnf-validator",
+        "llama-gen-docs",
+        "llama-gguf",
+        "llama-gguf-hash",
+        "llama-gguf-split",
+        "llama-gritlm",
+        "llama-imatrix",
+        "llama-infill",
+        "llama-llava-cli",
+        "llama-llava-clip-quantize-cli",
+        "llama-lookahead",
+        "llama-lookup",
+        "llama-lookup-create",
+        "llama-lookup-merge",
+        "llama-lookup-stats",
+        "llama-minicpmv-cli",
+        "llama-parallel",
+        "llama-passkey",
+        "llama-perplexity",
+        "llama-q8dot",
+        "llama-quantize",
+        "llama-quantize-stats",
+        "llama-qwen2vl-cli",
+        "llama-retrieval",
+        "llama-run",
+        "llama-save-load-state",
+        "llama-server",
+        "llama-simple",
+        "llama-simple-chat",
+        "llama-speculative",
+        "llama-speculative-simple",
+        "llama-tokenize",
+        "llama-tts",
+        "llama-vdot"
+    };
+
+    for (const auto& exe : executables) {
+        printf("complete -F _llama_completions %s\n", exe.c_str());
+    }
+}
+
 static std::vector<ggml_backend_dev_t> parse_device_list(const std::string & value) {
     std::vector<ggml_backend_dev_t> devices;
     auto dev_names = string_split<std::string>(value, ',');
@@ -424,6 +526,10 @@ bool common_params_parse(int argc, char ** argv, common_params & params, llama_e
             if (ctx_arg.print_usage) {
                 ctx_arg.print_usage(argc, argv);
             }
+            exit(0);
+        }
+        if (ctx_arg.params.completion) {
+            common_params_print_completion(ctx_arg);
             exit(0);
         }
     } catch (const std::invalid_argument & ex) {
@@ -492,6 +598,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
+        }
+    ));
+    add_opt(common_arg(
+        {"--completion-bash"},
+        "print source-able bash completion script for llama.cpp",
+        [](common_params & params) {
+            params.completion = true;
         }
     ));
     add_opt(common_arg(
@@ -946,6 +1059,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.sampling.min_p = std::stof(value);
         }
     ).set_sparam());
+    add_opt(common_arg(
+        {"--top-nsigma"}, "N",
+        string_format("top-n-sigma sampling (default: %.1f, -1.0 = disabled)", params.sampling.top_n_sigma),
+        [](common_params & params, const std::string & value) {
+            params.sampling.top_n_sigma = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN}).set_sparam());
     add_opt(common_arg(
         {"--xtc-probability"}, "N",
         string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sampling.xtc_probability),
@@ -1975,6 +2095,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.use_jinja = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_JINJA"));
+    add_opt(common_arg(
+        {"--reasoning-format"}, "FORMAT",
+        "reasoning format (default: deepseek; allowed values: deepseek, none)\n"
+        "controls whether thought tags are extracted from the response, and in which format they're returned. 'none' leaves thoughts unparsed in `message.content`, 'deepseek' puts them in `message.reasoning_content` (for DeepSeek R1 & Command R7B only).\n"
+        "only supported for non-streamed responses",
+        [](common_params & params, const std::string & value) {
+            /**/ if (value == "deepseek") { params.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK; }
+            else if (value == "none") {     params.reasoning_format = COMMON_REASONING_FORMAT_NONE; }
+            else { std::invalid_argument("invalid value"); }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_THINK"));
     add_opt(common_arg(
         {"--chat-template"}, "JINJA_TEMPLATE",
         string_format(
