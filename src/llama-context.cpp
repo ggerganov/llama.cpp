@@ -58,6 +58,105 @@ enum llama_pooling_type llama_context::pooling_type() const {
     return cparams.pooling_type;
 }
 
+float * llama_context::get_logits() {
+    // reorder logits for backward compatibility
+    output_reorder();
+
+    return logits;
+}
+
+float * llama_context::get_logits_ith(int32_t i) {
+    int32_t j = -1;
+
+    try {
+        if (logits == nullptr) {
+            throw std::runtime_error("no logits");
+        }
+
+        if (i < 0) {
+            j = n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", n_outputs));
+            }
+        } else if ((size_t) i >= output_ids.size()) {
+            throw std::runtime_error(format("out of range [0, %zu)", output_ids.size()));
+        } else {
+            j = output_ids[i];
+        }
+
+        if (j < 0) {
+            throw std::runtime_error(format("batch.logits[%d] != true", i));
+        }
+        if (j >= n_outputs) {
+            // This should not happen
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, n_outputs));
+        }
+
+        return logits + j*model.vocab.n_tokens();
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
+#ifndef NDEBUG
+        GGML_ABORT("fatal error");
+#else
+        return nullptr;
+#endif
+    }
+}
+
+float * llama_context::get_embeddings() {
+    // reorder embeddings for backward compatibility
+    output_reorder();
+
+    return embd;
+}
+
+float * llama_context::get_embeddings_ith(int32_t i) {
+    int32_t j = -1;
+
+    try {
+        if (embd == nullptr) {
+            throw std::runtime_error("no embeddings");
+        }
+
+        if (i < 0) {
+            j = n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", n_outputs));
+            }
+        } else if ((size_t) i >= output_ids.size()) {
+            throw std::runtime_error(format("out of range [0, %zu)", output_ids.size()));
+        } else {
+            j = output_ids[i];
+        }
+
+        if (j < 0) {
+            throw std::runtime_error(format("batch.logits[%d] != true", i));
+        }
+        if (j >= n_outputs) {
+            // This should not happen
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, n_outputs));
+        }
+
+        return embd + j*model.hparams.n_embd;
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
+#ifndef NDEBUG
+        GGML_ABORT("fatal error");
+#else
+        return nullptr;
+#endif
+    }
+}
+
+float * llama_context::get_embeddings_seq(llama_seq_id seq_id) {
+    auto it = embd_seq.find(seq_id);
+    if (it == embd_seq.end()) {
+        return nullptr;
+    }
+
+    return it->second.data();
+}
+
 int64_t llama_context::n_pos_per_token() const {
     return model.arch == LLM_ARCH_QWEN2VL ? 4 : 1;
 }
@@ -631,6 +730,58 @@ size_t llama_context::state_get_data(llama_io_write_i & io) {
         // TODO: add more model-specific info which should prevent loading the session file if not identical
     }
 
+    // write output ids
+    {
+        output_reorder();
+
+        const uint32_t n_outputs = this->n_outputs;
+        const auto & output_ids  = this->output_ids;
+
+        std::vector<int32_t> w_output_pos;
+
+        GGML_ASSERT(n_outputs <= output_size);
+
+        w_output_pos.resize(n_outputs);
+
+        // build a more compact representation of the output ids
+        for (size_t i = 0; i < n_batch(); ++i) {
+            // map an output id to a position in the batch
+            int32_t pos = output_ids[i];
+            if (pos >= 0) {
+                GGML_ASSERT((uint32_t) pos < n_outputs);
+                w_output_pos[pos] = i;
+            }
+        }
+
+        io.write(&n_outputs, sizeof(n_outputs));
+
+        if (n_outputs) {
+            io.write(w_output_pos.data(), n_outputs * sizeof(int32_t));
+        }
+    }
+
+    // write logits
+    {
+        const uint64_t logits_size = std::min((uint64_t) this->logits_size, (uint64_t) n_outputs * model.vocab.n_tokens());
+
+        io.write(&logits_size, sizeof(logits_size));
+
+        if (logits_size) {
+            io.write(logits, logits_size * sizeof(float));
+        }
+    }
+
+    // write embeddings
+    {
+        const uint64_t embd_size = std::min((uint64_t) this->embd_size, (uint64_t) n_outputs * model.hparams.n_embd);
+
+        io.write(&embd_size, sizeof(embd_size));
+
+        if (embd_size) {
+            io.write(embd, embd_size * sizeof(float));
+        }
+    }
+
     return io.n_bytes();
 }
 
@@ -645,6 +796,61 @@ size_t llama_context::state_set_data(llama_io_read_i & io) {
             throw std::runtime_error(format("wrong model arch: '%s' instead of '%s'", arch_str.c_str(), cur_arch_str.c_str()));
         }
         // TODO: add more info which needs to be identical but which is not verified otherwise
+    }
+
+    // read output ids
+    {
+        std::vector<int32_t> output_pos;
+
+        uint32_t n_outputs;
+        io.read_to(&n_outputs, sizeof(n_outputs));
+
+        if (n_outputs > output_reserve(n_outputs)) {
+            throw std::runtime_error("could not reserve outputs");
+        }
+
+        if (n_outputs) {
+            output_pos.resize(n_outputs);
+            io.read_to(output_pos.data(), n_outputs * sizeof(int32_t));
+
+            for (int32_t i = 0; i < (int32_t) output_pos.size(); ++i) {
+                int32_t id = output_pos[i];
+                if ((uint32_t) id >= n_batch()) {
+                    throw std::runtime_error(format("invalid output id, %d does not fit in batch size of %u", id, n_batch()));
+                }
+                this->output_ids[id] = i;
+            }
+
+            this->n_outputs = n_outputs;
+        }
+    }
+
+    // read logits
+    {
+        uint64_t logits_size;
+        io.read_to(&logits_size, sizeof(logits_size));
+
+        if (this->logits_size < logits_size) {
+            throw std::runtime_error("logits buffer too small");
+        }
+
+        if (logits_size) {
+            io.read_to(this->logits, logits_size * sizeof(float));
+        }
+    }
+
+    // read embeddings
+    {
+        uint64_t embd_size;
+        io.read_to(&embd_size, sizeof(embd_size));
+
+        if (this->embd_size < embd_size) {
+            throw std::runtime_error("embeddings buffer too small");
+        }
+
+        if (embd_size) {
+            io.read_to(this->embd, embd_size * sizeof(float));
+        }
     }
 
     return io.n_bytes();
@@ -852,7 +1058,7 @@ llama_context_kv_self::llama_context_kv_self(
         // graph outputs buffer
         {
             // resized during inference when a batch uses more outputs
-            if (reserve_outputs(params.n_seq_max) < params.n_seq_max) {
+            if (output_reserve(params.n_seq_max) < params.n_seq_max) {
                 LLAMA_LOG_ERROR("%s: failed to reserve initial output buffer\n", __func__);
                 throw std::runtime_error("failed to reserve initial output buffer");
             }
@@ -986,105 +1192,6 @@ llama_kv_cache * llama_context_kv_self::get_kv_self() {
 
 const llama_kv_cache * llama_context_kv_self::get_kv_self() const {
     return &kv_self;
-}
-
-float * llama_context_kv_self::get_logits() {
-    // reorder logits for backward compatibility
-    reorder_outputs();
-
-    return logits;
-}
-
-float * llama_context_kv_self::get_logits_ith(int32_t i) {
-    int32_t j = -1;
-
-    try {
-        if (logits == nullptr) {
-            throw std::runtime_error("no logits");
-        }
-
-        if (i < 0) {
-            j = n_outputs + i;
-            if (j < 0) {
-                throw std::runtime_error(format("negative index out of range [0, %d)", n_outputs));
-            }
-        } else if ((size_t) i >= output_ids.size()) {
-            throw std::runtime_error(format("out of range [0, %zu)", output_ids.size()));
-        } else {
-            j = output_ids[i];
-        }
-
-        if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
-        }
-        if (j >= n_outputs) {
-            // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, n_outputs));
-        }
-
-        return logits + j*model.vocab.n_tokens();
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ABORT("fatal error");
-#else
-        return nullptr;
-#endif
-    }
-}
-
-float * llama_context_kv_self::get_embeddings() {
-    // reorder embeddings for backward compatibility
-    reorder_outputs();
-
-    return embd;
-}
-
-float * llama_context_kv_self::get_embeddings_ith(int32_t i) {
-    int32_t j = -1;
-
-    try {
-        if (embd == nullptr) {
-            throw std::runtime_error("no embeddings");
-        }
-
-        if (i < 0) {
-            j = n_outputs + i;
-            if (j < 0) {
-                throw std::runtime_error(format("negative index out of range [0, %d)", n_outputs));
-            }
-        } else if ((size_t) i >= output_ids.size()) {
-            throw std::runtime_error(format("out of range [0, %zu)", output_ids.size()));
-        } else {
-            j = output_ids[i];
-        }
-
-        if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
-        }
-        if (j >= n_outputs) {
-            // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, n_outputs));
-        }
-
-        return embd + j*model.hparams.n_embd;
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ABORT("fatal error");
-#else
-        return nullptr;
-#endif
-    }
-}
-
-float * llama_context_kv_self::get_embeddings_seq(llama_seq_id seq_id) {
-    auto it = embd_seq.find(seq_id);
-    if (it == embd_seq.end()) {
-        return nullptr;
-    }
-
-    return it->second.data();
 }
 
 ggml_context_ptr llama_context_kv_self::init() {
@@ -1357,7 +1464,7 @@ int llama_context_kv_self::decode(llama_batch & inp_batch) {
 
     // reserve output buffer
     // TODO: move to batch manager?
-    if (reserve_outputs(bman->n_outputs_all) < (size_t) n_outputs_all) {
+    if (output_reserve(bman->n_outputs_all) < (size_t) n_outputs_all) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %" PRId64 " outputs\n", __func__, n_outputs_all);
         return -2;
     };
@@ -1579,7 +1686,7 @@ int llama_context_kv_self::encode(llama_batch & inp_batch) {
     const llama_ubatch ubatch = sbatch.split_simple(n_tokens);
 
     // reserve output buffer
-    if (reserve_outputs(n_tokens) < n_tokens) {
+    if (output_reserve(n_tokens) < n_tokens) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_tokens);
         return -2;
     };
@@ -1712,45 +1819,12 @@ int llama_context_kv_self::encode(llama_batch & inp_batch) {
     return 0;
 }
 
-enum ggml_status llama_context_kv_self::compute_graph(
-            ggml_cgraph * graph,
-                   bool   batched) {
-    int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
-    ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;
-
-    if (backend_cpu != nullptr) {
-        auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend_cpu));
-        auto * set_threadpool_fn = (decltype(ggml_backend_cpu_set_threadpool) *) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cpu_set_threadpool");
-        set_threadpool_fn(backend_cpu, tp);
-    }
-
-    // set the number of threads for all the backends
-    for (const auto & set_n_threads_fn : set_n_threads_fns) {
-        set_n_threads_fn.second(set_n_threads_fn.first, n_threads);
-    }
-
-    auto status = ggml_backend_sched_graph_compute_async(sched.get(), graph);
-    if (status != GGML_STATUS_SUCCESS) {
-        LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, status);
-    }
-
-    // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(sched));
-
-    return status;
-}
-
 llama_pos llama_context_kv_self::pos_max() const {
     return kv_self.pos_max();
 }
 
 uint32_t llama_context_kv_self::get_ctx_padding(const llama_cparams & cparams) const {
     return kv_self.get_padding(cparams);
-}
-
-void llama_context_kv_self::prepare_k_shift() {
-}
-
-void llama_context_kv_self::prepare_defrag() {
 }
 
 // llama input
@@ -2198,113 +2272,6 @@ void llama_context_kv_self::set_inputs(const llama_ubatch & ubatch) {
     }
 }
 
-void llama_context_kv_self::reorder_outputs() {
-    std::vector<size_t> & out_ids = sbatch.out_ids;
-    if (!out_ids.empty()) {
-        const uint32_t n_vocab = model.vocab.n_tokens();
-        const uint32_t n_embd  = model.hparams.n_embd;
-
-        GGML_ASSERT((size_t) n_outputs == out_ids.size());
-
-        // TODO: is there something more efficient which also minimizes swaps?
-        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
-        for (int32_t i = 0; i < n_outputs - 1; ++i) {
-            int32_t j_min = i;
-            for (int32_t j = i + 1; j < n_outputs; ++j) {
-                if (out_ids[j] < out_ids[j_min]) {
-                    j_min = j;
-                }
-            }
-            if (j_min == i) { continue; }
-            std::swap(out_ids[i], out_ids[j_min]);
-            if (logits_size > 0) {
-                for (uint32_t k = 0; k < n_vocab; k++) {
-                    std::swap(logits[i*n_vocab + k], logits[j_min*n_vocab + k]);
-                }
-            }
-            if (embd_size > 0) {
-                for (uint32_t k = 0; k < n_embd; k++) {
-                    std::swap(embd[i*n_embd + k], embd[j_min*n_embd + k]);
-                }
-            }
-        }
-        std::fill(output_ids.begin(), output_ids.end(), -1);
-        for (int32_t i = 0; i < n_outputs; ++i) {
-            output_ids[out_ids[i]] = i;
-        }
-        out_ids.clear();
-    }
-}
-
-size_t llama_context_kv_self::reserve_outputs(size_t n_outputs) {
-    const auto & hparams = model.hparams;
-    const auto & vocab   = model.vocab;
-
-    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
-
-    const auto n_batch = cparams.n_batch;
-    const auto n_vocab = vocab.n_tokens();
-    const auto n_embd  = hparams.n_embd;
-
-    // TODO: use a per-batch flag for logits presence instead
-    const bool has_logits = !cparams.embeddings;
-    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
-
-    logits_size = has_logits ? n_vocab*n_outputs_max : 0;
-    embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
-
-    if (output_ids.empty()) {
-        // init, never resized afterwards
-        output_ids.resize(n_batch);
-    }
-
-    const size_t prev_size = buf_output ? ggml_backend_buffer_get_size(buf_output.get()) : 0;
-    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
-
-    // alloc only when more than the current capacity is required
-    // TODO: also consider shrinking the buffer
-    if (!buf_output || prev_size < new_size) {
-        if (buf_output) {
-#ifndef NDEBUG
-            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
-            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
-#endif
-            buf_output = nullptr;
-            logits = nullptr;
-            embd = nullptr;
-        }
-
-        auto * buft = ggml_backend_cpu_buffer_type();
-        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
-        auto * output_dev = model.dev_output();
-        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
-        if (output_dev_host_buft) {
-            buft = output_dev_host_buft;
-        }
-        buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
-        if (buf_output == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
-            return 0;
-        }
-    }
-
-    float * output_base = (float *) ggml_backend_buffer_get_base(buf_output.get());
-
-    logits = has_logits ? output_base               : nullptr;
-    embd   = has_embd   ? output_base + logits_size : nullptr;
-
-    output_size = n_outputs_max;
-
-    // set all ids as invalid (negative)
-    std::fill(output_ids.begin(), output_ids.end(), -1);
-
-    ggml_backend_buffer_clear(buf_output.get(), 0);
-
-    n_outputs = 0;
-
-    return n_outputs_max;
-}
-
 void llama_context_kv_self::kv_self_update() {
     auto & kv = kv_self;
 
@@ -2315,8 +2282,6 @@ void llama_context_kv_self::kv_self_update() {
 
         // apply K-shift if needed
         if (model.hparams.rope_type != LLAMA_ROPE_TYPE_NONE) {
-            prepare_k_shift();
-
             ggml_backend_sched_reset(sched.get());
 
             auto ctx = init();
@@ -2346,8 +2311,6 @@ void llama_context_kv_self::kv_self_update() {
 
     // defragment the KV cache if needed
     if (kv.do_defrag) {
-        prepare_defrag();
-
         ggml_backend_sched_reset(sched.get());
 
         auto ctx = init();
@@ -3333,20 +3296,20 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
 
     const auto kv_head = worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head;
 
-    const auto layer = &model.layers[il];
+    const auto & layer = model.layers[il];
 
-    bool is_qrwkv = layer->time_mix_first == nullptr;
+    bool is_qrwkv = layer.time_mix_first == nullptr;
 
     struct ggml_tensor * sx = ggml_sub(ctx0, x_prev, cur);
-    struct ggml_tensor * xxx = ggml_add(ctx0, ggml_mul(ctx0, sx, layer->time_mix_lerp_x), cur);
+    struct ggml_tensor * xxx = ggml_add(ctx0, ggml_mul(ctx0, sx, layer.time_mix_lerp_x), cur);
 
     xxx = ggml_reshape_4d(
         ctx0,
         ggml_tanh(
             ctx0,
-            ggml_mul_mat(ctx0, layer->time_mix_w1, xxx)
+            ggml_mul_mat(ctx0, layer.time_mix_w1, xxx)
         ),
-        layer->time_mix_w1->ne[1] / 5, 1, 5, n_tokens
+        layer.time_mix_w1->ne[1] / 5, 1, 5, n_tokens
     );
 
     xxx = ggml_cont(ctx0, ggml_permute(ctx0, xxx, 0, 1, 3, 2));
@@ -3355,18 +3318,18 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
         ctx0,
         ggml_reshape_4d(
             ctx0,
-            layer->time_mix_w2,
-            layer->time_mix_w2->ne[0], layer->time_mix_w2->ne[1], 1, 5
+            layer.time_mix_w2,
+            layer.time_mix_w2->ne[0], layer.time_mix_w2->ne[1], 1, 5
         ),
         xxx
     );
 
     struct ggml_tensor *xw, *xk, *xv, *xr, *xg;
-    if (layer->time_mix_lerp_fused) {
+    if (layer.time_mix_lerp_fused) {
         // fusing these weights makes some performance improvement
         sx  = ggml_reshape_3d(ctx0, sx,  n_embd, 1, n_tokens);
         cur = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
-        xxx = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xxx, layer->time_mix_lerp_fused), sx), cur);
+        xxx = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xxx, layer.time_mix_lerp_fused), sx), cur);
         xw = ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], 0);
         xk = ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], n_embd * n_tokens * sizeof(float));
         xv = ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], n_embd * n_tokens * 2 * sizeof(float));
@@ -3380,27 +3343,27 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
         xr = ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], n_embd * n_tokens * 3 * sizeof(float));
         xg = ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], n_embd * n_tokens * 4 * sizeof(float));
 
-        xw = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xw, layer->time_mix_lerp_w), sx), cur);
-        xk = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xk, layer->time_mix_lerp_k), sx), cur);
-        xv = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xv, layer->time_mix_lerp_v), sx), cur);
-        xr = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xr, layer->time_mix_lerp_r), sx), cur);
-        xg = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xg, layer->time_mix_lerp_g), sx), cur);
+        xw = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xw, layer.time_mix_lerp_w), sx), cur);
+        xk = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xk, layer.time_mix_lerp_k), sx), cur);
+        xv = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xv, layer.time_mix_lerp_v), sx), cur);
+        xr = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xr, layer.time_mix_lerp_r), sx), cur);
+        xg = ggml_add(ctx0, ggml_mul(ctx0, ggml_add(ctx0, xg, layer.time_mix_lerp_g), sx), cur);
     }
 
-    struct ggml_tensor * r = build_lora_mm(ctx0, layer->time_mix_receptance, xr);
-    struct ggml_tensor * k = build_lora_mm(ctx0, layer->time_mix_key,        xk);
-    struct ggml_tensor * v = build_lora_mm(ctx0, layer->time_mix_value,      xv);
-    if (layer->time_mix_receptance_b) {
-        r = ggml_add(ctx0, r, layer->time_mix_receptance_b);
+    struct ggml_tensor * r = build_lora_mm(ctx0, layer.time_mix_receptance, xr);
+    struct ggml_tensor * k = build_lora_mm(ctx0, layer.time_mix_key,        xk);
+    struct ggml_tensor * v = build_lora_mm(ctx0, layer.time_mix_value,      xv);
+    if (layer.time_mix_receptance_b) {
+        r = ggml_add(ctx0, r, layer.time_mix_receptance_b);
     }
-    if (layer->time_mix_key_b) {
-        k = ggml_add(ctx0, k, layer->time_mix_key_b);
+    if (layer.time_mix_key_b) {
+        k = ggml_add(ctx0, k, layer.time_mix_key_b);
     }
-    if (layer->time_mix_value_b) {
-        v = ggml_add(ctx0, v, layer->time_mix_value_b);
+    if (layer.time_mix_value_b) {
+        v = ggml_add(ctx0, v, layer.time_mix_value_b);
     }
 
-    struct ggml_tensor * g = build_lora_mm(ctx0, layer->time_mix_gate, xg);
+    struct ggml_tensor * g = build_lora_mm(ctx0, layer.time_mix_gate, xg);
     if (is_qrwkv) {
         g = ggml_sigmoid(ctx0, g);
     } else {
@@ -3422,14 +3385,14 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
 
     struct ggml_tensor * w = ggml_mul_mat(
         ctx0,
-        layer->time_mix_decay_w2,
+        layer.time_mix_decay_w2,
         ggml_tanh(
             ctx0,
-            ggml_mul_mat(ctx0, layer->time_mix_decay_w1, xw)
+            ggml_mul_mat(ctx0, layer.time_mix_decay_w1, xw)
         )
     );
 
-    w = ggml_add(ctx0, w, layer->time_mix_decay);
+    w = ggml_add(ctx0, w, layer.time_mix_decay);
     w = ggml_exp(ctx0, ggml_neg(ctx0, ggml_exp(ctx0, w)));
     w = ggml_reshape_3d(ctx0, w, head_size, n_head, n_tokens);
 
@@ -3446,7 +3409,7 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
     if (is_qrwkv) {
         wkv_output = ggml_gated_linear_attn(ctx0, k, v, r, w, wkv_state, pow(head_size, -0.5f));
     } else {
-        wkv_output = ggml_rwkv_wkv6(ctx0, k, v, r, layer->time_mix_first, w, wkv_state);
+        wkv_output = ggml_rwkv_wkv6(ctx0, k, v, r, layer.time_mix_first, w, wkv_state);
     }
     cur = ggml_view_1d(ctx0, wkv_output, n_embd * n_tokens, 0);
     wkv_state = ggml_view_1d(ctx0, wkv_output, n_embd * head_size * n_seqs, n_embd * n_tokens * sizeof(float));
@@ -3472,13 +3435,13 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
 
         // Convert back to regular vectors.
         cur = ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
-        cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer->time_mix_ln), layer->time_mix_ln_b);
+        cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.time_mix_ln), layer.time_mix_ln_b);
     } else {
         cur = ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
     }
 
     cur = ggml_mul(ctx0, cur, g);
-    cur = build_lora_mm(ctx0, layer->time_mix_output, cur);
+    cur = build_lora_mm(ctx0, layer.time_mix_output, cur);
 
     return cur;
 }
@@ -3488,58 +3451,6 @@ ggml_tensor * llama_context_kv_self::build_rwkv6_time_mix(
 size_t llama_context_kv_self::state_get_data(llama_io_write_i & io) {
     llama_context::state_get_data(io);
 
-    // write output ids
-    {
-        reorder_outputs();
-
-        const uint32_t n_outputs = this->n_outputs;
-        const auto & output_ids  = this->output_ids;
-
-        std::vector<int32_t> w_output_pos;
-
-        GGML_ASSERT(n_outputs <= output_size);
-
-        w_output_pos.resize(n_outputs);
-
-        // build a more compact representation of the output ids
-        for (size_t i = 0; i < n_batch(); ++i) {
-            // map an output id to a position in the batch
-            int32_t pos = output_ids[i];
-            if (pos >= 0) {
-                GGML_ASSERT((uint32_t) pos < n_outputs);
-                w_output_pos[pos] = i;
-            }
-        }
-
-        io.write(&n_outputs, sizeof(n_outputs));
-
-        if (n_outputs) {
-            io.write(w_output_pos.data(), n_outputs * sizeof(int32_t));
-        }
-    }
-
-    // write logits
-    {
-        const uint64_t logits_size = std::min((uint64_t) this->logits_size, (uint64_t) n_outputs * model.vocab.n_tokens());
-
-        io.write(&logits_size, sizeof(logits_size));
-
-        if (logits_size) {
-            io.write(logits, logits_size * sizeof(float));
-        }
-    }
-
-    // write embeddings
-    {
-        const uint64_t embd_size = std::min((uint64_t) this->embd_size, (uint64_t) n_outputs * model.hparams.n_embd);
-
-        io.write(&embd_size, sizeof(embd_size));
-
-        if (embd_size) {
-            io.write(embd, embd_size * sizeof(float));
-        }
-    }
-
     kv_self.state_write(io, model.hparams);
 
     return io.n_bytes();
@@ -3547,61 +3458,6 @@ size_t llama_context_kv_self::state_get_data(llama_io_write_i & io) {
 
 size_t llama_context_kv_self::state_set_data(llama_io_read_i & io) {
     llama_context::state_set_data(io);
-
-    // read output ids
-    {
-        std::vector<int32_t> output_pos;
-
-        uint32_t n_outputs;
-        io.read_to(&n_outputs, sizeof(n_outputs));
-
-        if (n_outputs > reserve_outputs(n_outputs)) {
-            throw std::runtime_error("could not reserve outputs");
-        }
-
-        if (n_outputs) {
-            output_pos.resize(n_outputs);
-            io.read_to(output_pos.data(), n_outputs * sizeof(int32_t));
-
-            for (int32_t i = 0; i < (int32_t) output_pos.size(); ++i) {
-                int32_t id = output_pos[i];
-                if ((uint32_t) id >= n_batch()) {
-                    throw std::runtime_error(format("invalid output id, %d does not fit in batch size of %u", id, n_batch()));
-                }
-                this->output_ids[id] = i;
-            }
-
-            this->n_outputs = n_outputs;
-        }
-    }
-
-    // read logits
-    {
-        uint64_t logits_size;
-        io.read_to(&logits_size, sizeof(logits_size));
-
-        if (this->logits_size < logits_size) {
-            throw std::runtime_error("logits buffer too small");
-        }
-
-        if (logits_size) {
-            io.read_to(this->logits, logits_size * sizeof(float));
-        }
-    }
-
-    // read embeddings
-    {
-        uint64_t embd_size;
-        io.read_to(&embd_size, sizeof(embd_size));
-
-        if (this->embd_size < embd_size) {
-            throw std::runtime_error("embeddings buffer too small");
-        }
-
-        if (embd_size) {
-            io.read_to(this->embd, embd_size * sizeof(float));
-        }
-    }
 
     kv_self.state_read(io, model.hparams);
 
@@ -3766,6 +3622,140 @@ int32_t llama_apply_adapter_cvec(
     bool res = ctx->apply_adapter_cvec(data, len, n_embd, il_start, il_end);
 
     return res ? 0 : -1;
+}
+
+enum ggml_status llama_context::compute_graph(
+            ggml_cgraph * graph,
+                   bool   batched) {
+    int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
+    ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;
+
+    if (backend_cpu != nullptr) {
+        auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend_cpu));
+        auto * set_threadpool_fn = (decltype(ggml_backend_cpu_set_threadpool) *) ggml_backend_reg_get_proc_address(reg, "ggml_backend_cpu_set_threadpool");
+        set_threadpool_fn(backend_cpu, tp);
+    }
+
+    // set the number of threads for all the backends
+    for (const auto & set_n_threads_fn : set_n_threads_fns) {
+        set_n_threads_fn.second(set_n_threads_fn.first, n_threads);
+    }
+
+    auto status = ggml_backend_sched_graph_compute_async(sched.get(), graph);
+    if (status != GGML_STATUS_SUCCESS) {
+        LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, status);
+    }
+
+    // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(sched));
+
+    return status;
+}
+
+size_t llama_context::output_reserve(size_t n_outputs) {
+    const auto & hparams = model.hparams;
+    const auto & vocab   = model.vocab;
+
+    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
+
+    const auto n_batch = cparams.n_batch;
+    const auto n_vocab = vocab.n_tokens();
+    const auto n_embd  = hparams.n_embd;
+
+    // TODO: use a per-batch flag for logits presence instead
+    const bool has_logits = !cparams.embeddings;
+    const bool has_embd   =  cparams.embeddings && (cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+
+    logits_size = has_logits ? n_vocab*n_outputs_max : 0;
+    embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
+
+    if (output_ids.empty()) {
+        // init, never resized afterwards
+        output_ids.resize(n_batch);
+    }
+
+    const size_t prev_size = buf_output ? ggml_backend_buffer_get_size(buf_output.get()) : 0;
+    const size_t new_size  = (logits_size + embd_size) * sizeof(float);
+
+    // alloc only when more than the current capacity is required
+    // TODO: also consider shrinking the buffer
+    if (!buf_output || prev_size < new_size) {
+        if (buf_output) {
+#ifndef NDEBUG
+            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
+            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
+#endif
+            buf_output = nullptr;
+            logits = nullptr;
+            embd = nullptr;
+        }
+
+        auto * buft = ggml_backend_cpu_buffer_type();
+        // try to use the host buffer of the device where the output tensor is allocated for faster transfer to system memory
+        auto * output_dev = model.dev_output();
+        auto * output_dev_host_buft = output_dev ? ggml_backend_dev_host_buffer_type(output_dev) : nullptr;
+        if (output_dev_host_buft) {
+            buft = output_dev_host_buft;
+        }
+        buf_output.reset(ggml_backend_buft_alloc_buffer(buft, new_size));
+        if (buf_output == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            return 0;
+        }
+    }
+
+    float * output_base = (float *) ggml_backend_buffer_get_base(buf_output.get());
+
+    logits = has_logits ? output_base               : nullptr;
+    embd   = has_embd   ? output_base + logits_size : nullptr;
+
+    output_size = n_outputs_max;
+
+    // set all ids as invalid (negative)
+    std::fill(output_ids.begin(), output_ids.end(), -1);
+
+    ggml_backend_buffer_clear(buf_output.get(), 0);
+
+    n_outputs = 0;
+
+    return n_outputs_max;
+}
+
+void llama_context::output_reorder() {
+    std::vector<size_t> & out_ids = sbatch.out_ids;
+    if (!out_ids.empty()) {
+        const uint32_t n_vocab = model.vocab.n_tokens();
+        const uint32_t n_embd  = model.hparams.n_embd;
+
+        GGML_ASSERT((size_t) n_outputs == out_ids.size());
+
+        // TODO: is there something more efficient which also minimizes swaps?
+        // selection sort, to minimize swaps (from https://en.wikipedia.org/wiki/Selection_sort)
+        for (int32_t i = 0; i < n_outputs - 1; ++i) {
+            int32_t j_min = i;
+            for (int32_t j = i + 1; j < n_outputs; ++j) {
+                if (out_ids[j] < out_ids[j_min]) {
+                    j_min = j;
+                }
+            }
+            if (j_min == i) { continue; }
+            std::swap(out_ids[i], out_ids[j_min]);
+            if (logits_size > 0) {
+                for (uint32_t k = 0; k < n_vocab; k++) {
+                    std::swap(logits[i*n_vocab + k], logits[j_min*n_vocab + k]);
+                }
+            }
+            if (embd_size > 0) {
+                for (uint32_t k = 0; k < n_embd; k++) {
+                    std::swap(embd[i*n_embd + k], embd[j_min*n_embd + k]);
+                }
+            }
+        }
+        std::fill(output_ids.begin(), output_ids.end(), -1);
+        for (int32_t i = 0; i < n_outputs; ++i) {
+            output_ids[out_ids[i]] = i;
+        }
+        out_ids.clear();
+    }
 }
 
 //
