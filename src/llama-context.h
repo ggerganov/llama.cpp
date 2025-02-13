@@ -21,8 +21,15 @@ class llama_io_write_i;
 using llama_loras = std::unordered_map<struct llama_adapter_lora *, float>;
 
 struct llama_context : public llama_graph_i {
-    llama_context(const llama_model & model);
+    llama_context(
+            const llama_model & model,
+            const llama_context_params & params);
+
     virtual ~llama_context();
+
+    // init scheduler and compute buffers
+    // call once after the context is constructed
+    virtual void init();
 
     const llama_model   & get_model()   const;
     const llama_cparams & get_cparams() const;
@@ -51,10 +58,6 @@ struct llama_context : public llama_graph_i {
     virtual float * get_embeddings_seq(llama_seq_id seq_id);
 
     virtual int64_t n_pos_per_token() const; // vision
-
-    virtual ggml_context_ptr init();
-
-    virtual void synchronize();
 
     virtual void attach_threadpool(
             ggml_threadpool_t   threadpool,
@@ -85,8 +88,14 @@ struct llama_context : public llama_graph_i {
                 int32_t   il_start,
                 int32_t   il_end);
 
+    ////
+
+    virtual void synchronize();
+
+    virtual ggml_context_ptr graph_init();
+
     // returns the result of ggml_backend_sched_graph_compute_async execution
-    virtual enum ggml_status compute_graph(
+    virtual enum ggml_status graph_compute(
                 ggml_cgraph * graph,
                        bool   batched);
 
@@ -297,7 +306,7 @@ public:
 
     virtual void kv_self_update() override;
 
-    virtual ggml_context_ptr init() override;
+    virtual ggml_context_ptr graph_init() override;
 
     virtual void input_set(const llama_ubatch & ubatch) override;
 
@@ -312,7 +321,7 @@ public:
     // certain implementations could require a padding for the context size
     uint32_t get_ctx_padding(const llama_cparams & cparams) const;
 
-    // === unified KV cache ===
+    // === KV cache ===
 
     llama_kv_cache kv_self;
 
