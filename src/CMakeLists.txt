@@ -18,6 +18,7 @@ add_library(llama
             llama-graph.cpp
             llama-hparams.cpp
             llama-impl.cpp
+            llama-io.cpp
             llama-kv-cache.cpp
             llama-mmap.cpp
             llama-model-loader.cpp

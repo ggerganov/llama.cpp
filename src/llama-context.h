@@ -15,6 +15,9 @@
 #include <vector>
 #include <set>
 
+class llama_io_read_i;
+class llama_io_write_i;
+
 using llama_loras = std::unordered_map<struct llama_adapter_lora *, float>;
 
 struct llama_context : public llama_graph_i {
@@ -178,9 +181,10 @@ struct llama_context : public llama_graph_i {
     virtual llama_perf_context_data perf_get_data() const;
     virtual void perf_reset();
 
+protected:
+
     // members
 
-protected:
     const llama_model & model;
 
     llama_cparams      cparams;
@@ -502,11 +506,11 @@ public:
                 size_t   n_token_count) override;
 
 private:
-    size_t state_get_data(struct llama_data_write & data_ctx);
-    size_t state_set_data(struct llama_data_read  & data_ctx);
+    size_t state_get_data(llama_io_write_i & io);
+    size_t state_set_data(llama_io_read_i  & io);
 
-    size_t state_seq_get_data(struct llama_data_write & data_ctx, llama_seq_id seq_id);
-    size_t state_seq_set_data(struct llama_data_read  & data_ctx, llama_seq_id seq_id);
+    size_t state_seq_get_data(llama_io_write_i & io, llama_seq_id seq_id);
+    size_t state_seq_set_data(llama_io_read_i  & io, llama_seq_id seq_id);
 };
 
 // For internal test use
