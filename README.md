@@ -519,10 +519,7 @@ If your issue is with model generation quality, then please at least scan the fo
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
 
-#### References
-
-
-### Completions
+## Completions
 Command-line completion is available for some environments.
 
 #### Bash Completion
@@ -535,3 +532,5 @@ automatically. For example:
 ```console
 $ echo "source ~/.llama-completion.bash" >> ~/.bashrc
 ```
+
+## References
