@@ -95,7 +95,7 @@ toolcall::action toolcall::handler::last_action() const {
     return last_action_;
 }
 
-toolcall::mcp_impl::mcp_impl(std::string server_uri, tool_choice_t tool_choice)
+toolcall::mcp_impl::mcp_impl(std::string /*server_uri*/, tool_choice_t tool_choice)
     : handler_impl(tool_choice)
 {
     // TODO
@@ -105,6 +105,6 @@ json toolcall::mcp_impl::tool_list() {
     return json{};// TODO
 }
 
-toolcall::action toolcall::mcp_impl::call(const json & request, json & response) {
+toolcall::action toolcall::mcp_impl::call(const json & /*request*/, json & /*response*/) {
     return toolcall::ACCEPT; // TODO
 }
