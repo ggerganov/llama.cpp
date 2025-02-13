@@ -5,6 +5,30 @@
 #include <array>
 #include <vector>
 
+// Input data for llama_decode
+// A llama_batch object can contain input about one or many sequences
+// The provided arrays (i.e. token, embd, pos, etc.) must have size of n_tokens
+//
+// - token  : the token ids of the input (used when embd is NULL)
+// - embd   : token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
+// - pos    : the positions of the respective token in the sequence
+//            (if set to NULL, the token position will be tracked automatically by llama_decode)
+// - seq_id : the sequence to which the respective token belongs
+//            (if set to NULL, the sequence ID will be assumed to be 0)
+// - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
+//            (if set to NULL, only the logits for last token will be returned)
+//
+struct llama_batch {
+    int32_t n_tokens;
+
+    llama_token  *  token;
+    float        *  embd;
+    llama_pos    *  pos;
+    int32_t      *  n_seq_id;
+    llama_seq_id ** seq_id;
+    int8_t       *  logits; // TODO: rename this to "output"
+};
+
 // very similar to llama_batch,
 // but has more metadata about sequences
 struct llama_ubatch {
