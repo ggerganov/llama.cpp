@@ -653,8 +653,8 @@ struct common_chat_templates {
 
 namespace toolcall {
     struct sampling_updater {
-	common_params_sampling * sparams;
-	const llama_vocab      * vocab;
+        common_params_sampling * sparams;
+        const llama_vocab      * vocab;
     };
 }
 
