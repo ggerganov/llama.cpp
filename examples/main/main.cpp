@@ -263,18 +263,20 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
+    auto toolcall_handler = toolcall::create_handler(params.jinja_tools);
+
     auto chat_add_and_format = [&chat_msgs, &chat_templates, &sparams, vocab](
         const std::string & role, const std::string & content,
-        const common_params_tools & tools = common_params_tools())
+        toolcall::handler::ptr handler = nullptr)
     {
         bool add_ass = (role == "user");
 
         common_chat_msg new_msg{role, content, {}};
 
-        common_chat_sampling_updater updater{&sparams, vocab};
+        toolcall::sampling_updater updater{&sparams, vocab};
         auto formatted =
             common_chat_format_single(chat_templates, chat_msgs, new_msg, add_ass, g_params->use_jinja,
-                                      tools, &updater);
+                                      handler, &updater);
 
         chat_msgs.push_back({role, content, {}});
         LOG_DBG("formatted: '%s'\n", formatted.c_str());
@@ -285,7 +287,7 @@ int main(int argc, char ** argv) {
         std::string system_prompt (params.prompt.empty() ? DEFAULT_SYSTEM_MESSAGE : params.prompt);
         bool use_conversation_prompt (params.conversation_mode && params.enable_chat_template);
         auto prompt = use_conversation_prompt ?
-            chat_add_and_format("system", system_prompt, params.jinja_tools)
+            chat_add_and_format("system", system_prompt, toolcall_handler)
             : params.prompt;
 
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
@@ -791,10 +793,19 @@ int main(int argc, char ** argv) {
                     }
 
                     if (params.enable_chat_template) {
-                        chat_add_and_format("assistant", assistant_ss.str());
+                        chat_add_and_format("assistant", assistant_ss.str(), toolcall_handler);
                     }
-                    is_interacting = true;
-                    LOG("\n");
+                    if (toolcall_handler != nullptr) {
+                        auto action = toolcall_handler->last_action();
+                        if (action == toolcall::PENDING || action == toolcall::DEFER) {
+                            is_interacting = true;
+                            LOG("\n");
+                        }
+
+                    } else {
+                        is_interacting = true;
+                        LOG("\n");
+                    }
                 }
             }
 

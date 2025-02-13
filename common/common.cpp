@@ -7,6 +7,9 @@
 
 #include "common.h"
 #include "log.h"
+// Change JSON_ASSERT from assert() to GGML_ASSERT:
+#define JSON_ASSERT GGML_ASSERT
+#include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
 #include "chat.hpp"
@@ -1769,46 +1772,6 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
 // Chat template utils
 //
 
-common_params_tools::common_params_tools(std::string tools, std::string choice) {
-    this->tools(tools);
-    this->choice(choice);
-}
-
-void common_params_tools::tools(std::string tools) {
-    if (tools.empty()) {
-        tools_.reset();
-        return;
-    }
-    try {
-        tools_ = std::make_shared<json>(json::parse(tools));
-        if (! tools_->is_array()) {
-            throw std::invalid_argument("tools must be a valid JSON array");
-        }
-
-    } catch (const json::exception & err) {
-        throw std::invalid_argument(err.what());
-    }
-}
-
-void common_params_tools::choice(std::string choice) {
-    try {
-        if (choice == "auto" || choice == "required" || choice == "none") {
-            tool_choice_ = std::move(choice);
-
-        } else {
-            auto choice_ptr = std::make_shared<json>(json::parse(choice));
-            tool_choice_ = choice_ptr;
-            if (! choice_ptr->is_object()) {
-                throw std::invalid_argument(
-                    "tool choice must be a valid JSON object, \"auto\", \"required\", or \"none\"");
-            }
-        }
-
-    } catch (const json::exception & err) {
-        throw std::invalid_argument(err.what());
-    }
-}
-
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {
@@ -1830,7 +1793,7 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     return res >= 0;
 }
 
-static void copy_chat_params(const common_chat_params & src, common_chat_sampling_updater * update_sparams)
+static void copy_chat_params(const common_chat_params & src, toolcall::sampling_updater * update_sparams)
 {
     GGML_ASSERT(update_sparams && update_sparams->sparams && update_sparams->vocab);
 
@@ -1873,11 +1836,11 @@ std::string common_chat_apply_template(
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja,
-        const common_params_tools & tools,
-        common_chat_sampling_updater * update_sparams)
+        toolcall::handler::ptr handler,
+        toolcall::sampling_updater * update_sparams)
 {
     const auto & tmpl_selected =
-        tools.tools() && tmpl.template_tool_use ? *tmpl.template_tool_use : *tmpl.template_default;
+        handler != nullptr && tmpl.template_tool_use ? *tmpl.template_tool_use : *tmpl.template_default;
 
     if (use_jinja) {
         common_chat_inputs inputs;
@@ -1886,29 +1849,38 @@ std::string common_chat_apply_template(
         for (const auto & msg : msgs) {
             messages.push_back({{"role", msg.role}, {"content", msg.content}});
         }
-
-        if (tools.tools() != nullptr) {
-            inputs.tools = *tools.tools();
-        }
-
-        auto choice = tools.choice();
-        if (std::holds_alternative<std::string>(choice)) {
-            inputs.tool_choice = std::get<std::string>(choice);
-
-        } else {
-            auto choice_ptr = std::get<common_params_tools::json_ptr>(choice);
-            if (choice_ptr != nullptr) {
-                inputs.tool_choice = *choice_ptr;
-            }
-        }
-
         inputs.messages = messages;
         inputs.add_generation_prompt = add_ass;
+
+        if (handler != nullptr) {
+            auto choice = handler->tool_choice();
+            if (std::holds_alternative<std::string>(choice)) {
+                inputs.tool_choice = std::get<std::string>(choice);
+
+            } else {
+                auto choice_ptr = std::get<toolcall::json_ptr>(choice);
+                if (choice_ptr != nullptr) {
+                    inputs.tool_choice = *choice_ptr;
+                }
+            }
+
+            inputs.tools = handler->tool_list();
+        }
+
         auto chat_params = common_chat_params_init(tmpl_selected, inputs);
         if (update_sparams) {
             copy_chat_params(chat_params, update_sparams);
         }
-        return chat_params.prompt;
+
+        auto prompt = chat_params.prompt;
+        if (handler != nullptr) {
+            json response;
+            handler->call(prompt, response);
+            return response; // Caller will determine what to do based upon last_action
+
+        } else {
+            return prompt;
+        }
     }
 
     int alloc_size = 0;
@@ -1946,12 +1918,12 @@ std::string common_chat_format_single(
         const common_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        const common_params_tools & tools,
-        common_chat_sampling_updater * update_sparams)
+        toolcall::handler::ptr handler,
+        toolcall::sampling_updater * update_sparams)
 {
     std::ostringstream ss;
     auto fmt_past_msg = past_msg.empty() ? ""
-        : common_chat_apply_template(tmpl, past_msg, false, use_jinja, tools, update_sparams);
+        : common_chat_apply_template(tmpl, past_msg, false, use_jinja, handler, update_sparams);
 
     std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
@@ -1960,7 +1932,7 @@ std::string common_chat_format_single(
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = common_chat_apply_template(tmpl, chat_new, add_ass, use_jinja, tools, update_sparams);
+    auto fmt_new_msg = common_chat_apply_template(tmpl, chat_new, add_ass, use_jinja, handler, update_sparams);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();
