@@ -203,6 +203,11 @@ struct common_params_vocoder {
     bool use_guide_tokens = false; // enable guide tokens to improve TTS accuracy            // NOLINT
 };
 
+enum common_reasoning_format {
+    COMMON_REASONING_FORMAT_NONE,
+    COMMON_REASONING_FORMAT_DEEPSEEK, // Extract thinking tag contents and return as `message.reasoning_content`
+};
+
 struct common_params {
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =  4096; // context size
@@ -347,6 +352,7 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
+    common_reasoning_format reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
 
     std::vector<std::string> api_keys;
 
@@ -624,7 +630,7 @@ struct common_chat_msg {
     std::string role;
     std::string content;
     std::vector<common_tool_call> tool_calls;
-    std::string tool_plan = "";
+    std::string reasoning_content = "";
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
