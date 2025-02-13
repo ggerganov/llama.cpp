@@ -2413,13 +2413,19 @@ static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
     GGML_UNUSED(backend);
 }
 
+// groups cgraph->nodes offsets per cuda_graph
+struct cgraph_offset {
+    int begin;
+    int end;
+};
+
 #ifdef USE_CUDA_GRAPH
 static bool check_node_graph_compatibility_and_refresh_copy_ops(std::unique_ptr<ggml_cuda_graph> & cuda_graph, ggml_cgraph * cgraph,
-    std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool use_cuda_graph) {
+    std::vector<void *> & ggml_cuda_cpy_fn_ptrs, bool use_cuda_graph, cgraph_offset & offset) {
 
     // Loop over nodes in GGML graph to obtain info needed for CUDA graph
     cuda_graph->updated_kernel_arg.clear();
-    for (int i = 0; i < cgraph->n_nodes; i++) {
+    for (int i = offset.begin; i < offset.end; i++) {
         ggml_tensor * node = cgraph->nodes[i];
 
         if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
@@ -2572,7 +2578,8 @@ static void maintain_cuda_graph(std::unique_ptr<ggml_cuda_graph> & cuda_graph, s
     }
 }
 
-static bool is_cuda_graph_update_required(std::unique_ptr<ggml_cuda_graph> & cuda_graph, ggml_cgraph * cgraph) {
+static bool is_cuda_graph_update_required(std::unique_ptr<ggml_cuda_graph> & cuda_graph, ggml_cgraph * cgraph,
+    cgraph_offset & offset) {
 
     bool cuda_graph_update_required = false;
 
@@ -2581,22 +2588,22 @@ static bool is_cuda_graph_update_required(std::unique_ptr<ggml_cuda_graph> & cud
     }
 
     // Check if the graph size has changed
-    if (cuda_graph->ggml_graph_properties.size() != (size_t)cgraph->n_nodes) {
+    if (cuda_graph->ggml_graph_properties.size() != (size_t)(offset.end - offset.begin)) {
         cuda_graph_update_required = true;
-        cuda_graph->ggml_graph_properties.resize(cgraph->n_nodes);
+        cuda_graph->ggml_graph_properties.resize((offset.end - offset.begin));
     }
 
     // Loop over nodes in GGML graph to determine if CUDA graph update is required
     // and store properties to allow this comparison for the next token
-    for (int i = 0; i < cgraph->n_nodes; i++) {
+    for (int i = offset.begin; i < offset.end; i++) {
         bool has_matching_properties = true;
         if (!cuda_graph_update_required) {
-            has_matching_properties = ggml_graph_node_has_matching_properties(cgraph->nodes[i], &cuda_graph->ggml_graph_properties[i]);
+            has_matching_properties = ggml_graph_node_has_matching_properties(cgraph->nodes[i], &cuda_graph->ggml_graph_properties[i - offset.begin]);
         }
         if (!has_matching_properties) {
             cuda_graph_update_required = true;
         }
-        set_ggml_graph_node_properties(cgraph->nodes[i], &cuda_graph->ggml_graph_properties[i]);
+        set_ggml_graph_node_properties(cgraph->nodes[i], &cuda_graph->ggml_graph_properties[i - offset.begin]);
     }
 
     return cuda_graph_update_required;
@@ -2628,15 +2635,15 @@ static void update_cuda_graph_executable(std::unique_ptr<ggml_cuda_graph> & cuda
 }
 #endif
 
-static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx, std::unique_ptr<ggml_cuda_graph> & cuda_graph,
+static void evaluate_and_capture_cuda_graph(ggml_backend_cuda_context * cuda_ctx, [[maybe_unused]] std::unique_ptr<ggml_cuda_graph> & cuda_graph,
     ggml_cgraph * cgraph, [[maybe_unused]] std::vector<void *> & ggml_cuda_cpy_fn_ptrs,
-    bool & graph_evaluated_or_captured, bool & use_cuda_graph, bool & cuda_graph_update_required) {
+    bool & graph_evaluated_or_captured, bool & use_cuda_graph, bool & cuda_graph_update_required, cgraph_offset & offset) {
 
     while (!graph_evaluated_or_captured) {
         // Only perform the graph execution if CUDA graphs are not enabled, or we are capturing the graph.
         // With the use of CUDA graphs, the execution will be performed by the graph launch.
         if (!use_cuda_graph || cuda_graph_update_required) {
-            for (int i = 0; i < cgraph->n_nodes; i++) {
+            for (int i = offset.begin; i < offset.end; i++) {
                 ggml_tensor * node = cgraph->nodes[i];
 
                 if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
@@ -2703,9 +2710,18 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     // vector of pointers to CUDA cpy kernels, which are required to identify
     // kernel parameters which need updated in the graph for each token
     std::vector<void *> ggml_cuda_cpy_fn_ptrs;
-    cuda_ctx->cuda_graphs.resize(cuda_ctx->NUM_CUDA_GRAPHS);
+    cuda_ctx->cuda_graphs.resize(2);
+    cgraph_offset offset {1,0};
 
     for (auto & cuda_graph : cuda_ctx->cuda_graphs) {
+        // hard-coded test for 2 graphs
+       if (offset.begin == 1) { // first subset
+            offset.begin = 0;
+           offset.end = 400;
+       } else { // second subset
+           offset.begin = offset.end;
+           offset.end   = cgraph->n_nodes;
+       }
 #ifdef USE_CUDA_GRAPH
         static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
 
@@ -2737,10 +2753,10 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
         }
 
         if (use_cuda_graph) {
-            cuda_graph_update_required = is_cuda_graph_update_required(cuda_graph, cgraph);
+            cuda_graph_update_required = is_cuda_graph_update_required(cuda_graph, cgraph, offset);
 
             use_cuda_graph = check_node_graph_compatibility_and_refresh_copy_ops(cuda_graph, cgraph,
-                                 ggml_cuda_cpy_fn_ptrs, use_cuda_graph);
+                                 ggml_cuda_cpy_fn_ptrs, use_cuda_graph, offset);
 
             // Disable CUDA graphs (from the next token) if the use-case is demanding too many consecutive graph updates.
             if (use_cuda_graph && cuda_graph_update_required) {
@@ -2769,7 +2785,7 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
         bool graph_evaluated_or_captured = false;
 
         evaluate_and_capture_cuda_graph(cuda_ctx, cuda_graph, cgraph, ggml_cuda_cpy_fn_ptrs,
-         graph_evaluated_or_captured, use_cuda_graph, cuda_graph_update_required);
+         graph_evaluated_or_captured, use_cuda_graph, cuda_graph_update_required, offset);
     }
     return GGML_STATUS_SUCCESS;
 }
