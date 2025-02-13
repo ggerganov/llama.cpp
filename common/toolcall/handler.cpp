@@ -21,7 +21,9 @@ std::shared_ptr<toolcall::handler> toolcall::create_handler(const toolcall::para
     bool has_uri = std::holds_alternative<std::string>(tools);
     if (has_uri) {
         auto tools_str = std::get<std::string>(tools);
-        result.reset(new toolcall::handler(std::make_unique<toolcall::mcp_impl>(tools_str, choice)));
+        if (! tools_str.empty()) {
+            result.reset(new toolcall::handler(std::make_unique<toolcall::mcp_impl>(tools_str, choice)));
+        }
 
     } else {
         auto tools_ptr = std::get<toolcall::json_ptr>(tools);

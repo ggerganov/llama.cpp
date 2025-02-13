@@ -1839,8 +1839,8 @@ std::string common_chat_apply_template(
         toolcall::handler::ptr handler,
         toolcall::sampling_updater * update_sparams)
 {
-    const auto & tmpl_selected =
-        handler != nullptr && tmpl.template_tool_use ? *tmpl.template_tool_use : *tmpl.template_default;
+    bool use_tool_template = (use_jinja && handler != nullptr) && tmpl.template_tool_use;
+    const auto & tmpl_selected = use_tool_template ? *tmpl.template_tool_use : *tmpl.template_default;
 
     if (use_jinja) {
         common_chat_inputs inputs;
