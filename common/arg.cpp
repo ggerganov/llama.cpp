@@ -947,6 +947,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sparam());
     add_opt(common_arg(
+        {"--top-nsigma"}, "N",
+        string_format("top-n-sigma sampling (default: %.1f, -1.0 = disabled)", params.sampling.top_n_sigma),
+        [](common_params & params, const std::string & value) {
+            params.sampling.top_n_sigma = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN}).set_sparam());
+    add_opt(common_arg(
         {"--xtc-probability"}, "N",
         string_format("xtc probability (default: %.1f, 0.0 = disabled)", (double)params.sampling.xtc_probability),
         [](common_params & params, const std::string & value) {
