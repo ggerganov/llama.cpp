@@ -2710,18 +2710,36 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
     // vector of pointers to CUDA cpy kernels, which are required to identify
     // kernel parameters which need updated in the graph for each token
     std::vector<void *> ggml_cuda_cpy_fn_ptrs;
-    cuda_ctx->cuda_graphs.resize(2);
-    cgraph_offset offset {1,0};
 
-    for (auto & cuda_graph : cuda_ctx->cuda_graphs) {
-        // hard-coded test for 2 graphs
-       if (offset.begin == 1) { // first subset
-            offset.begin = 0;
-           offset.end = 400;
-       } else { // second subset
-           offset.begin = offset.end;
-           offset.end   = cgraph->n_nodes;
-       }
+    // Heuristic to minimize GPU idle time. Work is split over several CUDA graphs,
+    //  to overlap graph building (CPU) and graph execution (GPU).
+    // The first graphs are small to minimize the time in which the CPU prepares work and the GPU is idle.
+    // After that, graph building (CPU) is done in parallel to the execution of another previously built graph (GPU).
+    int first_graph_subset = 20;
+    int second_graph_subset = 50;
+    int remaining_graph_subset = 100;
+    int remaining_nodes = (cgraph->n_nodes - first_graph_subset) - second_graph_subset;
+    int num_cuda_graphs_required = 2 + (remaining_nodes / remaining_graph_subset);
+    cuda_ctx->cuda_graphs.resize(num_cuda_graphs_required);
+    cgraph_offset offset {0,0};
+
+    for (size_t i = 0; i < cuda_ctx->cuda_graphs.size(); i++) {
+        auto & cuda_graph = cuda_ctx->cuda_graphs[i];
+
+        offset.begin = offset.end;
+        if (i == 0) offset.end += first_graph_subset;
+        if (i == 1) offset.end += second_graph_subset;
+        if (i >= 2) offset.end += remaining_graph_subset;
+
+        // last graph does the rest
+        if ((i + 1) == cuda_ctx->cuda_graphs.size()) offset.end = cgraph->n_nodes;
+
+        // special case for graphs smaller than the ramp-up heuristic
+        if (cgraph->n_nodes <= first_graph_subset + second_graph_subset) {
+            offset.end = cgraph->n_nodes;
+            if (i > 0) break;
+        }
+
 #ifdef USE_CUDA_GRAPH
         static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
 
