@@ -9,7 +9,7 @@ namespace toolcall
 {
     class mcp_stdio_transport : public mcp_transport {
     public:
-	mcp_stdio_transport(std::vector<std::string> argv);
+        mcp_stdio_transport(std::vector<std::string> argv);
 
         virtual void start() override;
         virtual void stop()  override;
