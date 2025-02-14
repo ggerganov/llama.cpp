@@ -1,6 +1,10 @@
 
 #include "handler.hpp"
-#include "mcp_sse_transport.hpp"
+
+#ifdef LLAMA_USE_CURL
+#    include "mcp_sse_transport.hpp"
+#endif
+
 #include "mcp_stdio_transport.hpp"
 
 using json = toolcall::json;
@@ -22,11 +26,12 @@ std::shared_ptr<toolcall::handler> toolcall::create_handler(const toolcall::para
     auto choice = params.choice();
     bool has_uri = std::holds_alternative<std::string>(tools);
     if (has_uri) {
+#ifdef LLAMA_USE_CURL
         auto tools_str = std::get<std::string>(tools);
         if (! tools_str.empty()) {
             result.reset(new toolcall::handler(std::make_unique<toolcall::mcp_impl>(tools_str, choice)));
         }
-
+#endif
     } else {
         auto tools_ptr = std::get<toolcall::json_ptr>(tools);
         if (tools_ptr != nullptr) {
@@ -39,14 +44,24 @@ std::shared_ptr<toolcall::handler> toolcall::create_handler(const toolcall::para
 
 void toolcall::params::tools(std::string tools) {
     try {
-        if (tools.empty() || starts_with(tools, "mcp+http")) {
+
+        if (tools.empty()) {
             tools_ = std::move(tools);
 
+        } else if (starts_with(tools, "mcp+http")) {
+#ifdef LLAMA_USE_CURL
+            tools_ = std::move(tools);
+#else
+            throw std::invalid_argument(
+                "Model Context Protocol (MCP) only works when llama.cpp is compiled with libcurl");
+#endif
         } else {
             tools_ = std::make_shared<json>(json::parse(tools));
             auto tools_ptr = std::get<std::shared_ptr<json>>(tools_);
             if (! tools_ptr->is_array()) {
-                throw std::invalid_argument("tools must be a valid JSON array");
+                throw std::invalid_argument(
+                    "tools must be a URL of the form \"mcp+http(s)://hostname[:port]/\""
+                    ", or a valid JSON array containing tool definitions");
             }
         }
 
@@ -99,12 +114,19 @@ toolcall::action toolcall::handler::last_action() const {
     return last_action_;
 }
 
+#ifdef LLAMA_USE_CURL
 toolcall::mcp_impl::mcp_impl(std::string server_uri, tool_choice_t tool_choice)
     : handler_impl(tool_choice),
       transport_(new mcp_sse_transport(server_uri))
 {
     transport_->start();
 }
+#else
+toolcall::mcp_impl::mcp_impl(std::string /*server_uri*/, tool_choice_t tool_choice)
+    : handler_impl(tool_choice)
+{
+}
+#endif
 
 toolcall::mcp_impl::mcp_impl(std::vector<std::string> argv, tool_choice_t tool_choice)
     : handler_impl(tool_choice),
