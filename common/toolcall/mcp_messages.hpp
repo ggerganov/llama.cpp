@@ -10,43 +10,52 @@ namespace mcp
     extern const std::string ClientVersion;
     extern const std::string ClientName;
 
+    template <typename Derived>
     class message {
     public:
-        message(std::optional<nlohmann::json> id = std::nullopt);
+        message(std::optional<nlohmann::json> id = std::nullopt)
+            : id_(std::move(id)) {}
 
-        virtual ~message() = default;
-        virtual nlohmann::json toJson() const = 0;
+        nlohmann::json toJson() const {
+            return static_cast<Derived*>(this)->toJson();
+        }
 
-        void id(std::optional<nlohmann::json> id);
-        const std::optional<nlohmann::json> & id() const;
+        void id(std::optional<nlohmann::json> id) {
+            id_ = std::move(id);
+        }
+
+        const std::optional<nlohmann::json> & id() const {
+            return id_;
+        }
 
     private:
         std::optional<nlohmann::json> id_;
     };
 
-
-    class request : public message {
+    class request : public message<request> {
     public:
         request(std::optional<nlohmann::json> id,
                 std::string method,
-                std::optional<nlohmann::json> params = std::nullopt);
+                std::optional<nlohmann::json> params = std::nullopt)
 
-        virtual ~request() = default;
-        nlohmann::json toJson() const override;
+            : message(id),
+              method_(std::move(method)),
+              params_(std::move(params)) {}
 
-        void method(std::string method);
-        const std::string & method() const;
+        void method(std::string method) { method_ = std::move(method); }
+        const std::string & method() const { return method_; }
 
-        void params(std::optional<nlohmann::json> params);
-        const std::optional<nlohmann::json> & params() const;
+        void params(std::optional<nlohmann::json> params) { params_ = std::move(params); }
+        const std::optional<nlohmann::json> & params() const { return params_; }
+
+        nlohmann::json toJson() const;
 
     private:
         std::string method_;
         std::optional<nlohmann::json> params_;
     };
 
-
-    class response : public message {
+    class response : public message<response> {
     public:
         struct error {
             int code;
@@ -57,42 +66,46 @@ namespace mcp
 
         response(std::optional<nlohmann::json> id,
                  std::optional<nlohmann::json> result = std::nullopt,
-                 std::optional<error> error = std::nullopt);
+                 std::optional<error> error = std::nullopt)
 
-        virtual ~response() = default;
-        virtual nlohmann::json toJson() const override;
+            : message(id),
+              result_(std::move(result)),
+              error_(std::move(error)) {}
 
-        void result(std::optional<nlohmann::json> result);
-        const std::optional<nlohmann::json> & result() const;
+        void result(std::optional<nlohmann::json> result) { result_ = std::move(result); }
+        const std::optional<nlohmann::json> & result() const { return result_; }
 
-        void setError(std::optional<error> error);
-        const std::optional<error> & getError() const;
+        void setError(std::optional<error> error) { error_ = std::move(error); }
+        const std::optional<error> & getError() const { return error_; }
+
+        nlohmann::json toJson() const;
 
     private:
         std::optional<nlohmann::json> result_;
         std::optional<error> error_;
     };
 
-
-    class notification : public message {
+    class notification : public message<notification> {
     public:
         notification(std::string method,
-                     std::optional<nlohmann::json> params = std::nullopt);
+                     std::optional<nlohmann::json> params = std::nullopt)
 
-        virtual ~notification() = default;
-        virtual nlohmann::json toJson() const override;
+            : message(),
+              method_(method),
+              params_(params) {}
 
-        void method(std::string method);
-        const std::string & method() const;
+        void method(std::string method) { method_ = std::move(method); }
+        const std::string & method() const { return method_; }
 
-        void params(std::optional<nlohmann::json> params);
-        const std::optional<nlohmann::json> & params() const;
+        void params(std::optional<nlohmann::json> params) { params_ = std::move(params); }
+        const std::optional<nlohmann::json> & params() const { return params_; }
+
+        nlohmann::json toJson() const;
 
     private:
         std::string method_;
         std::optional<nlohmann::json> params_;
     };
-
 
     struct capability {
         std::string name;
@@ -118,7 +131,6 @@ namespace mcp
 
         mcp::capabilities caps_;
     };
-
 
     class initialize_response : public response {
     public:
@@ -151,10 +163,8 @@ namespace mcp
         mcp::capabilities caps_;
     };
 
-
     class initialized_notification : public notification {
     public:
-        initialized_notification();
+        initialized_notification() : notification("notifications/initialized") {}
     };
 }
-
