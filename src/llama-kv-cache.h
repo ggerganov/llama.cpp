@@ -150,7 +150,9 @@ struct llama_kv_slot_restorer {
 
     bool do_restore = false;
 
-    explicit llama_kv_slot_restorer(const struct llama_kv_cache & cache) {
+    llama_kv_cache & cache;
+
+    explicit llama_kv_slot_restorer(llama_kv_cache & cache) : cache(cache) {
         old_state.head = cache.head;
         old_state.n    = cache.n;
     }
@@ -167,7 +169,7 @@ struct llama_kv_slot_restorer {
 
     // must be explicitly called to restore the kv_cache state
     // and rollback changes from all llama_kv_cache_find_slot calls
-    void restore(struct llama_kv_cache & cache) {
+    void restore() {
         if (do_restore) {
             cache.head = old_state.head;
             cache.n    = old_state.n;
