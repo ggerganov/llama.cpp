@@ -2745,7 +2745,7 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
 
         // Objects required for CUDA Graph
         if (cuda_graph == nullptr) {
-            cuda_graph.reset(new ggml_cuda_graph());
+            cuda_graph = std::make_unique<ggml_cuda_graph>();
         }
 
         bool use_cuda_graph = true;
