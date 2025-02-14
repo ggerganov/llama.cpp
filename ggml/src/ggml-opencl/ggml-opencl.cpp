@@ -443,19 +443,8 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         backend_ctx->gpu_family = GPU_FAMILY::ADRENO;
         backend_ctx->adreno_gen = get_adreno_gpu_gen(default_device->name);
 
-        // Default wave size is 128, A8x uses 64.
-        if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A7X ||
-            backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X) {
-            backend_ctx->adreno_wave_size = 64;
-        } else if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X1E) {
-            backend_ctx->adreno_wave_size = 128;
-        } else {
-            backend_ctx->adreno_wave_size = 128;
-            GGML_LOG_WARN("ggml_opencl: Unsupported Adreno GPU: %s, "
-                "using wave size %d, "
-                "may not work as expected\n",
-                backend_ctx->device_name.c_str(), backend_ctx->adreno_wave_size);
-        }
+        // Use wave size of 64 for all Adreno GPUs.
+        backend_ctx->adreno_wave_size = 64;
     } else if (strstr(default_device->name, "Intel")) {
         backend_ctx->gpu_family = GPU_FAMILY::INTEL;
     } else {
