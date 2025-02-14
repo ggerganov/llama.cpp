@@ -1357,6 +1357,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             LOG_INF("%s: vision_encoder: %d\n", __func__, new_clip->has_vision_encoder);
             LOG_INF("%s: llava_projector:  %d\n", __func__, new_clip->has_llava_projector);
             LOG_INF("%s: minicpmv_projector:  %d\n", __func__, new_clip->has_minicpmv_projector);
+            LOG_INF("%s: minicpmv_version:  %d\n", __func__, new_clip->minicpmv_version);
             LOG_INF("%s: glm_projector:  %d\n", __func__, new_clip->has_glm_projector);
             LOG_INF("%s: model size:     %.2f MB\n", __func__, model_size / 1024.0 / 1024.0);
             LOG_INF("%s: metadata size:  %.2f MB\n", __func__, ggml_get_mem_size(meta) / 1024.0 / 1024.0);
