@@ -165,6 +165,19 @@ namespace mcp
 
     class initialized_notification : public notification {
     public:
-        initialized_notification() : notification("notifications/initialized") {}
+        initialized_notification()
+            : notification("notifications/initialized") {}
+    };
+
+    class tools_list_request : public request {
+    public:
+        tools_list_request(std::optional<nlohmann::json> id, std::string cursor = "");
+
+        void cursor(std::string cursor);
+        const std::string & cursor() { return cursor_; }
+
+    private:
+        void refreshParams();
+        std::string cursor_;
     };
 }

@@ -179,3 +179,23 @@ mcp::initialize_response mcp::initialize_response::fromJson(const nlohmann::json
 
     return initialize_response(j["id"], name, version, protoVersion, caps);
 }
+
+mcp::tools_list_request::tools_list_request(std::optional<nlohmann::json> id, std::string cursor)
+    : request(id, "tools/list"),
+      cursor_(std::move(cursor))
+{
+    refreshParams();
+}
+
+void mcp::tools_list_request::cursor(std::string cursor) {
+    cursor_ = std::move(cursor);
+    refreshParams();
+}
+
+void mcp::tools_list_request::refreshParams() {
+    if (! cursor_.empty()) {
+        json params;
+        params["cursor"] = cursor_;
+        this->params(params);
+    }
+}
