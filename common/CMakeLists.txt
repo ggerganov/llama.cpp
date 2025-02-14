@@ -79,6 +79,11 @@ add_library(${TARGET} STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_stdio_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_stdio_transport.hpp
     )
 
 if (BUILD_SHARED_LIBS)

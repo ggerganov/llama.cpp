@@ -93,11 +93,16 @@ namespace toolcall
         json tools_;
     };
 
+    class mcp_transport;
     class mcp_impl : public handler_impl {
     public:
         mcp_impl(std::string server_uri, tool_choice_t tool_choice);
+        mcp_impl(std::vector<std::string> argv, tool_choice_t tool_choice);
 
         virtual json tool_list() override;
         virtual action call(const json & request, json & response) override;
+
+    private:
+        std::unique_ptr<mcp_transport> transport_;
     };
 }

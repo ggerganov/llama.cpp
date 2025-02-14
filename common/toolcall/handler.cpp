@@ -1,5 +1,7 @@
 
 #include "handler.hpp"
+#include "mcp_sse_transport.hpp"
+#include "mcp_stdio_transport.hpp"
 
 using json = toolcall::json;
 
@@ -97,16 +99,26 @@ toolcall::action toolcall::handler::last_action() const {
     return last_action_;
 }
 
-toolcall::mcp_impl::mcp_impl(std::string /*server_uri*/, tool_choice_t tool_choice)
-    : handler_impl(tool_choice)
+toolcall::mcp_impl::mcp_impl(std::string server_uri, tool_choice_t tool_choice)
+    : handler_impl(tool_choice),
+      transport_(new mcp_sse_transport(server_uri))
 {
-    // TODO
+    transport_->start();
+}
+
+toolcall::mcp_impl::mcp_impl(std::vector<std::string> argv, tool_choice_t tool_choice)
+    : handler_impl(tool_choice),
+      transport_(new mcp_stdio_transport(argv))
+{
+    transport_->start();
 }
 
 json toolcall::mcp_impl::tool_list() {
+    // Construct tools/list call and send to transport
     return json{};// TODO
 }
 
 toolcall::action toolcall::mcp_impl::call(const json & /*request*/, json & /*response*/) {
+    // Construct tool call and send to transport
     return toolcall::ACCEPT; // TODO
 }

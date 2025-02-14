@@ -1,6 +1,7 @@
 #include <string>
 #include <optional>
 #include <vector>
+#include <variant>
 #include "../json.hpp"
 
 namespace mcp
@@ -212,4 +213,8 @@ namespace mcp
         tools_list tools_;
         std::string next_cursor_;
     };
+
+    using message_variant = std::variant<
+        initialize_request, initialize_response, initialized_notification,
+        tools_list_request, tools_list_response>;
 }
