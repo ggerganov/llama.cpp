@@ -20,6 +20,8 @@
 //
 struct llama_batch {
     int32_t n_tokens;
+    int32_t max_tokens;
+    bool is_view;
 
     llama_token  *  token;
     float        *  embd;

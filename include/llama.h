@@ -233,6 +233,14 @@ extern "C" {
 
     struct llama_batch;
 
+    struct llama_batch_token_info {
+        llama_token    token;
+        llama_pos      pos;
+        int32_t        n_seq_id;
+        llama_seq_id * seq_id;
+        int8_t         logits;
+    };
+
     enum llama_model_kv_override_type {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
@@ -837,34 +845,44 @@ extern "C" {
             int32_t   pos0,
             int32_t   seq_id);
 
+    // Get the number of tokens in the batch
+    LLAMA_API int32_t llama_batch_get_n_tokens(const struct llama_batch * batch);
+
+    LLAMA_API struct llama_batch_token_info llama_batch_get_token_info(
+            struct llama_batch * batch,
+                       int32_t   i);
+
     // Add text tokens to the batch
-    // First token in the list starts at position pos0
     // Return values:
     //  0 : success
     // -1 : not enough space in the batch
     // -2 : embd is already set, cannot add text tokens
-    LLAMA_API int32_t llama_batch_add_text(
+    LLAMA_API int32_t llama_batch_add_text_token(
             struct llama_batch * batch,
-                   llama_token * tokens,
-                       size_t    n_tokens,
-                       int32_t   pos0,
-                       int32_t   seq_id);
-
-    // Same as llama_batch_add_text, but accepts multiple sequences
-    LLAMA_API int32_t llama_batch_add_text(
-            struct llama_batch * batch,
-                   llama_token * tokens,
-                       size_t    n_tokens,
-                       int32_t   pos0,
-                       int32_t * seq_ids,
-                       size_t    n_seq_ids);
+                   llama_token   token,
+                     llama_pos   pos,
+            const llama_seq_id * seq_ids,
+                        size_t   n_seq_ids,
+                         float   logits);
 
     // Set logits for the token in the ith sequence
     // If pos == -1, logits will be set for the all tokens
+    // Returns -1 if the token is not in the batch
     LLAMA_API int32_t llama_batch_set_logits(
             struct llama_batch * batch,
-                       int32_t   pos,
-                       int32_t   seq_id);
+                     llama_pos   pos,
+                  llama_seq_id   seq_id);
+
+    // Set logits for the last added token
+    // Returns -1 if there is no tokens in the batch
+    LLAMA_API int32_t llama_batch_set_logits_last(struct llama_batch * batch);
+
+    // Get a "view" from a number of tokens offset
+    // Return returned batch must be freed with llama_batch_free()
+    LLAMA_API struct llama_batch * llama_batch_get_view(
+            struct llama_batch * batch,
+                       int32_t   offset,
+                       int32_t   n_tokens);
 
     // Remove everything from the batch
     LLAMA_API void llama_batch_clear(struct llama_batch * batch);
@@ -878,7 +896,7 @@ extern "C" {
     // < 0 - error. the KV cache state is restored to the state before this call
     LLAMA_API int32_t llama_encode(
             struct llama_context * ctx,
-              struct llama_batch   batch);
+              struct llama_batch * batch);
 
     // Positive return values does not mean a fatal error, but rather a warning.
     //   0 - success
@@ -886,7 +904,7 @@ extern "C" {
     // < 0 - error. the KV cache state is restored to the state before this call
     LLAMA_API int32_t llama_decode(
             struct llama_context * ctx,
-              struct llama_batch   batch);
+              struct llama_batch * batch);
 
     // Set the number of threads used for decoding
     // n_threads is the number of threads used for generation (single token)

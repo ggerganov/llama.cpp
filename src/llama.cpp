@@ -9978,8 +9978,8 @@ bool llama_kv_cache_can_shift(struct llama_context * ctx) {
 
 int32_t llama_encode(
         struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_encode_impl(*ctx, batch);
+          struct llama_batch * batch) {
+    const int ret = llama_encode_impl(*ctx, *batch);
     if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to encode, ret = %d\n", __func__, ret);
     }
@@ -9989,8 +9989,8 @@ int32_t llama_encode(
 
 int32_t llama_decode(
         struct llama_context * ctx,
-          struct llama_batch   batch) {
-    const int ret = llama_decode_impl(*ctx, batch);
+          struct llama_batch * batch) {
+    const int ret = llama_decode_impl(*ctx, *batch);
     if (ret != 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
