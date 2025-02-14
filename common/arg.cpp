@@ -409,6 +409,10 @@ static void common_params_print_completion(common_params_context & ctx_arg) {
     printf("            COMPREPLY=( $(compgen -f -X '!*.gbnf' -- \"$cur\") $(compgen -d -- \"$cur\") )\n");
     printf("            return 0\n");
     printf("            ;;\n");
+    printf("        --chat-template-file)\n");
+    printf("            COMPREPLY=( $(compgen -f -X '!*.jinja' -- \"$cur\") $(compgen -d -- \"$cur\") )\n");
+    printf("            return 0\n");
+    printf("            ;;\n");
     printf("        *)\n");
     printf("            COMPREPLY=( $(compgen -W \"${opts}\" -- \"$cur\") )\n");
     printf("            return 0\n");
