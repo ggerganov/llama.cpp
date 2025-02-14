@@ -1428,12 +1428,12 @@ static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vec
 // Inner map: key is pipeline name; value is the subgroup size.
 static std::unordered_map<std::string, std::unordered_map<std::string, uint32_t>> gpu_pipeline_config = {
     {"RX 5700", {
-        {"im2col_f32", 64},
-        {"im2col_f32_f16", 64}
+        {"soft_max_f32", 64}, {"soft_max_f32_wg512", 64},
+        {"soft_max_f32_f16", 64}, {"soft_max_f32_f16_wg512", 64},
+        {"im2col_f32", 64}, {"im2col_f32_f16", 64},
     }}
 };
 
-// Helper function defined at namespace scope.
 static uint32_t get_subgroup_size(const std::string &pipeline_name, const std::string &device_name) {
     std::string foundKey;
     for (const auto &entry : gpu_pipeline_config) {
