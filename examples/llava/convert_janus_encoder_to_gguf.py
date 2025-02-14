@@ -130,13 +130,15 @@ ap.add_argument("--clip-model-is-vision", action="store_true", required=False,
 ap.add_argument("--clip-model-is-openclip", action="store_true", required=False,
                 help="The clip model is from openclip (for ViT-SO400M type))")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
-ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp, ldpv2", choices=["mlp", "ldp", "ldpv2"], default="mlp")
+ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp, ldpv2", choices=["mlp", "ldp", "ldpv2", "janus_attn_pool"], default="janus_attn_pool")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
 # Example --image_mean 0.48145466 0.4578275 0.40821073 --image_std 0.26862954 0.26130258 0.27577711
 # Example --image_mean 0.5 0.5 0.5 --image_std 0.5 0.5 0.5
 # TODO: Double check these two values
-default_image_mean = [0.48145466, 0.4578275, 0.40821073]
-default_image_std = [0.26862954, 0.26130258, 0.27577711]
+# It seems like Janus does not normalize the images
+# https://github.com/deepseek-ai/Janus/blob/main/janus/models/clip_encoder.py#L39-L40
+default_image_mean = [0.0, 0.0, 0.0]
+default_image_std = [0.0, 0.0, 0.0]
 ap.add_argument('--image-mean', type=float, nargs='+', help='Mean of the images for normalization (overrides processor) ', default=None)
 ap.add_argument('--image-std', type=float, nargs='+', help='Standard deviation of the images for normalization (overrides processor)', default=None)
 
@@ -194,6 +196,7 @@ if args.use_f32:
 fname_middle = None
 has_text_encoder = False
 has_vision_encoder = True
+has_janus_attn_pool = True
 has_llava_projector = False
 
 fname_middle = ""
@@ -206,12 +209,11 @@ fout = GGUFWriter(path=fname_out, arch="clip")
 
 fout.add_bool("clip.has_text_encoder", has_text_encoder)
 fout.add_bool("clip.has_vision_encoder", has_vision_encoder)
-fout.add_bool("clip.has_llava_projector", has_llava_projector)
+fout.add_bool("clip.has_janus_attn_pool", has_janus_attn_pool)
 fout.add_file_type(ftype)
-model_name = model_config["model_name"] if "model_name" in model_config else os.path.basename(dir_model)
+model_name = vision_config["model_name"] if "model_name" in vision_config else os.path.basename(dir_model)
 fout.add_name(model_name)
-# TODO: Add more information in the description
-fout.add_description("vision-only CLIP model")
+fout.add_description("CLIPVisionTower for Janus Pro")
 
 if has_vision_encoder:
     # vision_model hparams
@@ -310,15 +312,29 @@ for name, data in state_dict.items():
 
     name = get_tensor_name_from_janus(name)
 
-    # Handle the qkv projection weights and biases
+    # Handle special cases for attention weights/biases
     if "qkv" in name:
+        # Split concatenated QKV tensor in the attn block into individual Q, K, V tensors
         q_tensor, k_tensor, v_tensor = torch.chunk(data, 3, dim=0)
-
-        process_and_save_tensor(q_tensor, name.replace("qkv", "q"), ftype, fout)
-        process_and_save_tensor(k_tensor, name.replace("qkv", "k"), ftype, fout)
-        process_and_save_tensor(v_tensor, name.replace("qkv", "v"), ftype, fout)
+        
+        # Process and save Q, K, V tensors separately
+        for tensor, tensor_type in [(q_tensor, "q"), (k_tensor, "k"), (v_tensor, "v")]:
+            new_name = name.replace("qkv", tensor_type)
+            process_and_save_tensor(tensor, new_name, ftype, fout)
+            
+    elif "attn_pool" in name and "kv" in name:
+        # Split concatenated KV tensor in the attn_pool into individual K, V tensors
+        k_tensor, v_tensor = torch.chunk(data, 2, dim=0)
+        
+        # Process and save K, V tensors separately
+        for tensor, tensor_type in [(k_tensor, "k"), (v_tensor, "v")]:
+            new_name = name.replace("kv", tensor_type)
+            process_and_save_tensor(tensor, new_name, ftype, fout)
+            
     else:
+        # Handle regular tensor
         process_and_save_tensor(data, name, ftype, fout)
+        
 
 fout.write_header_to_file()
 fout.write_kv_data_to_file()
