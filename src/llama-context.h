@@ -169,6 +169,28 @@ struct llama_context : public llama_graph_i {
 
     virtual ggml_tensor * build_rope_factors(int il);
 
+    virtual ggml_tensor * build_inp_embd(
+            ggml_context * ctx0,
+             ggml_tensor * tok_embd,
+      const llama_ubatch & ubatch);
+
+    virtual ggml_tensor * build_inp_pos(
+            ggml_context * ctx0,
+                 int32_t   n_tokens);
+
+    virtual ggml_tensor * build_inp_out_ids(
+            ggml_context * ctx0,
+                 int32_t   n_tokens,
+                    bool   worst_case);
+
+    virtual ggml_tensor * build_inp_mean(
+            ggml_context * ctx0,
+                 int32_t   n_tokens);
+
+    virtual ggml_tensor * build_inp_cls(
+            ggml_context * ctx0,
+                 int32_t   n_tokens);
+
     // state save/load
 
     virtual size_t state_get_size();
@@ -329,28 +351,6 @@ public:
     struct ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
     struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
     struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
-
-    virtual ggml_tensor * build_inp_embd(
-            ggml_context * ctx0,
-             ggml_tensor * tok_embd,
-      const llama_ubatch & ubatch) override;
-
-    virtual ggml_tensor * build_inp_pos(
-            ggml_context * ctx0,
-                 int32_t   n_tokens) override;
-
-    virtual ggml_tensor * build_inp_out_ids(
-            ggml_context * ctx0,
-                 int32_t   n_tokens,
-                    bool   worst_case) override;
-
-    virtual ggml_tensor * build_inp_mean(
-            ggml_context * ctx0,
-                 int32_t   n_tokens) override;
-
-    virtual ggml_tensor * build_inp_cls(
-            ggml_context * ctx0,
-                 int32_t   n_tokens) override;
 
     virtual void build_attn_inp(
             ggml_context * ctx0,
