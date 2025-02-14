@@ -793,18 +793,23 @@ int main(int argc, char ** argv) {
                     }
 
                     if (params.enable_chat_template) {
-                        chat_add_and_format("assistant", assistant_ss.str(), toolcall_handler);
-                    }
-                    if (toolcall_handler != nullptr) {
-                        auto action = toolcall_handler->last_action();
-                        if (action == toolcall::PENDING || action == toolcall::DEFER) {
+                        auto output = chat_add_and_format("assistant", assistant_ss.str(), toolcall_handler);
+                        if (toolcall_handler != nullptr) {
+                            auto action = toolcall_handler->last_action();
+                            if (action == toolcall::ACCEPT) {
+                                LOG_DBG("tokenizing toolcall response");
+                                auto response = common_tokenize(ctx, output, false, true);
+                                embd_inp.insert(embd_inp.end(), response.begin(), response.end());
+
+                            } else {
+                                is_interacting = true;
+                                LOG("\n");
+                            }
+
+                        } else {
                             is_interacting = true;
                             LOG("\n");
                         }
-
-                    } else {
-                        is_interacting = true;
-                        LOG("\n");
                     }
                 }
             }
