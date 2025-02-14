@@ -4251,18 +4251,18 @@ struct llm_build_context {
         return cur;
     }
 
-    struct ggml_cgraph * build_k_shift() {
+    struct ggml_cgraph * build_kv_self_shift() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        lgf.build_k_shift(ctx0, gf);
+        lgf.build_kv_self_shift(ctx0, gf);
 
         return gf;
     }
 
-    struct ggml_cgraph * build_defrag() {
+    struct ggml_cgraph * build_kv_self_defrag() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        lgf.build_defrag(ctx0, gf);
+        lgf.build_kv_self_defrag(ctx0, gf);
 
         return gf;
     }
@@ -5638,7 +5638,7 @@ struct llm_build_context {
             cb(kq, "kq", il);
 
             //kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, 1.0f/sqrtf(float(n_embd_head)), hparams.f_max_alibi_bias);
-            kq = lgf.build_soft_max_ext(ctx0, kq, 1.0f/sqrtf(float(n_embd_head)));
+            kq = lgf.build_attn_soft_max(ctx0, kq, 1.0f/sqrtf(float(n_embd_head)));
             cb(kq, "kq_soft_max_ext", il);
 
             struct ggml_tensor * v = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens)));

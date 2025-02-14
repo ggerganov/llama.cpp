@@ -92,17 +92,17 @@ public:
                  int       il,
                  bool      worst_case) = 0;
 
-    virtual ggml_tensor * build_soft_max_ext(
+    virtual ggml_tensor * build_attn_soft_max(
             ggml_context * ctx0,
              ggml_tensor * kq,
                  float     kq_scale) = 0;
 
-    virtual void build_k_shift(
+    virtual void build_kv_self_shift(
             ggml_context * ctx0,
              ggml_cgraph * graph) = 0;
 
     // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-    virtual void build_defrag(
+    virtual void build_kv_self_defrag(
             ggml_context * ctx0,
              ggml_cgraph * graph) = 0;
 

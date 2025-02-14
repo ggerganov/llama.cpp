@@ -379,17 +379,17 @@ public:
                  int       il,
                  bool      worst_case) override;
 
-    virtual ggml_tensor * build_soft_max_ext(
+    virtual ggml_tensor * build_attn_soft_max(
             ggml_context * ctx0,
              ggml_tensor * kq,
                  float     kq_scale) override;
 
-    virtual void build_k_shift(
+    virtual void build_kv_self_shift(
             ggml_context * ctx0,
              ggml_cgraph * graph) override;
 
     // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-    virtual void build_defrag(
+    virtual void build_kv_self_defrag(
             ggml_context * ctx0,
              ggml_cgraph * graph) override;
 

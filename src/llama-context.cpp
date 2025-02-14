@@ -2491,7 +2491,7 @@ void llama_context_kv_self::kv_self_update() {
 
             ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-            build_k_shift(ctx0, gf);
+            build_kv_self_shift(ctx0, gf);
 
             ggml_backend_sched_alloc_graph(sched.get(), gf);
 
@@ -2520,7 +2520,7 @@ void llama_context_kv_self::kv_self_update() {
 
         ggml_cgraph * gf = ggml_new_graph_custom(ctx0, model.max_nodes(), false);
 
-        build_defrag(ctx0, gf);
+        build_kv_self_defrag(ctx0, gf);
 
         ggml_backend_sched_alloc_graph(sched.get(), gf);
 
@@ -2762,7 +2762,7 @@ ggml_tensor * llama_context_kv_self::build_attn_qkv(
     return cur;
 }
 
-ggml_tensor * llama_context_kv_self::build_soft_max_ext(
+ggml_tensor * llama_context_kv_self::build_attn_soft_max(
         ggml_context * ctx0,
          ggml_tensor * kq,
              float     kq_scale) {
@@ -2771,7 +2771,7 @@ ggml_tensor * llama_context_kv_self::build_soft_max_ext(
     return ggml_soft_max_ext(ctx0, kq, inp_KQ_mask_cnv, kq_scale, hparams.f_max_alibi_bias);
 }
 
-void llama_context_kv_self::build_k_shift(
+void llama_context_kv_self::build_kv_self_shift(
         ggml_context * ctx0,
          ggml_cgraph * graph) {
     const auto & n_ctx      = cparams.n_ctx;
@@ -2843,7 +2843,7 @@ void llama_context_kv_self::build_k_shift(
     }
 }
 
-void llama_context_kv_self::build_defrag(
+void llama_context_kv_self::build_kv_self_defrag(
         ggml_context * ctx0,
          ggml_cgraph * graph) {
     const auto & hparams = model.hparams;
@@ -2860,7 +2860,7 @@ void llama_context_kv_self::build_defrag(
     // number of cells moved
     uint32_t n_moves = 0;
 
-    // each move requires 6*n_layer tensors (see build_defrag)
+    // each move requires 6*n_layer tensors (see build_kv_self_defrag)
     //   - source view, destination view, copy operation
     //   - x2 for keys and values
     //const uint32_t max_moves = model.max_nodes()/(6*n_layer);
