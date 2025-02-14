@@ -28,4 +28,14 @@ Haven't tested multiple tools being called, prolly should set max tool calls.
 
 Text completion streaming needs to be off to call tools. 
 
+# Todo:
+
+Outline process of using each MCP supported item. 
+
+Tools:
+
+Prompts:
+
+Resources:
+
 
