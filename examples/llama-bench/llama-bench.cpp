@@ -903,9 +903,10 @@ struct test {
     std::string              test_time;
     std::vector<uint64_t>    samples_ns;
 
-    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx)
-        :cpu_info(get_cpu_info()),
+    test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) :
+        cpu_info(get_cpu_info()),
         gpu_info(get_gpu_info()) {
+
         model_filename = inst.model;
         char buf[128];
         llama_model_desc(lmodel, buf, sizeof(buf));
