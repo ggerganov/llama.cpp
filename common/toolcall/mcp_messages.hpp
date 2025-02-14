@@ -180,4 +180,36 @@ namespace mcp
         void refreshParams();
         std::string cursor_;
     };
+
+    struct tool {
+        struct param {
+            std::string name;
+            std::string type;
+            std::string description;
+        };
+        std::string tool_name;
+        std::string tool_description;
+        std::vector<param> params;
+        std::vector<std::string> required_params;
+    };
+
+    using tools_list = std::vector<tool>;
+
+    class tools_list_response : public response {
+    public:
+        tools_list_response(nlohmann::json id,
+                            tools_list tools = tools_list(),
+                            std::string next_cursor = "");
+
+        void tools(tools_list tools);
+        const tools_list & tools() const { return tools_; }
+
+        void next_cursor(std::string next_cursor);
+        const std::string & next_cursor() { return next_cursor_; }
+
+    private:
+        void refreshResult();
+        tools_list tools_;
+        std::string next_cursor_;
+    };
 }

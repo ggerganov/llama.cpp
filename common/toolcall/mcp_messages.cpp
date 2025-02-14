@@ -199,3 +199,60 @@ void mcp::tools_list_request::refreshParams() {
         this->params(params);
     }
 }
+
+mcp::tools_list_response::tools_list_response(nlohmann::json id,
+                                              mcp::tools_list tools,
+                                              std::string next_cursor)
+    : response(id),
+      tools_(std::move(tools)),
+      next_cursor_(std::move(next_cursor))
+{
+    refreshResult();
+}
+
+void mcp::tools_list_response::tools(mcp::tools_list tools) {
+    tools_ = std::move(tools);
+    refreshResult();
+}
+
+void mcp::tools_list_response::next_cursor(std::string next_cursor) {
+    next_cursor_ = std::move(next_cursor);
+    refreshResult();
+}
+
+void mcp::tools_list_response::refreshResult() {
+    json result;
+
+    json tools = json::array();
+    for (const auto & tool : tools_) {
+        json t;
+
+        t["name"] = tool.tool_name;
+        t["description"] = tool.tool_description;
+        t["inputSchema"]["type"] = "object";
+
+        json props;
+        for (const auto & param : tool.params) {
+            props[param.name] = {
+                {"type"}, {param.type},
+                {"description"}, {param.description}
+            };
+        }
+        t["inputSchema"]["properties"] = props;
+
+        json required = json::array();
+        for (const auto & req_param : tool.required_params) {
+            required.push_back(req_param);
+        }
+        t["inputSchema"]["required"] = required;
+
+        tools.push_back(t);
+    }
+    result["tools"] = tools;
+
+    if (! next_cursor_.empty()) {
+        result["nextCursor"] = next_cursor_;
+    }
+
+    this->result(result);
+}
