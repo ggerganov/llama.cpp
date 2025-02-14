@@ -633,7 +633,11 @@ struct test_case {
         ggml_build_forward_expand(gf, out);
 
         // warmup run
-        ggml_backend_graph_compute(backend, gf);
+        ggml_status status = ggml_backend_graph_compute(backend, gf);
+        if (status != GGML_STATUS_SUCCESS) {
+            fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+            return false;
+        }
 
         // determine number of runs
         int n_runs;
@@ -684,7 +688,11 @@ struct test_case {
         int total_runs = 0;
         do {
             int64_t start_time = ggml_time_us();
-            ggml_backend_graph_compute(backend, gf);
+            ggml_status status = ggml_backend_graph_compute(backend, gf);
+            if (status != GGML_STATUS_SUCCESS) {
+                fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+                return false;
+            }
             int64_t end_time = ggml_time_us();
 
             total_time_us += end_time - start_time;
@@ -848,8 +856,16 @@ struct test_case {
         initialize_tensors(ctx); // Randomizes all tensors (including gradients).
         ggml_graph_reset(gb);    // Sets gradients to 1 if loss, 0 otherwise.
 
-        ggml_backend_graph_compute(backend, gf);
-        ggml_backend_graph_compute(backend, gb);
+        ggml_status status = ggml_backend_graph_compute(backend, gf);
+        if (status != GGML_STATUS_SUCCESS) {
+            fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+            return false;
+        }
+        status = ggml_backend_graph_compute(backend, gb);
+        if (status != GGML_STATUS_SUCCESS) {
+            fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+            return false;
+        }
 
         bool ok = true;
         for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
@@ -897,20 +913,36 @@ struct test_case {
                 float fu, fuh, fdh, fd; // output values for xiu, xiuh, xid, xidh
 
                 ggml_backend_tensor_set(t, &xiu, i*sizeof(float), sizeof(float));
-                ggml_backend_graph_compute(backend, gf);
+                status = ggml_backend_graph_compute(backend, gf);
+                if (status != GGML_STATUS_SUCCESS) {
+                    fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+                    return false;
+                }
                 ggml_backend_tensor_get(out, &fu, 0, ggml_nbytes(out));
 
                 ggml_backend_tensor_set(t, &xid, i*sizeof(float), sizeof(float));
-                ggml_backend_graph_compute(backend, gf);
+                status = ggml_backend_graph_compute(backend, gf);
+                if (status != GGML_STATUS_SUCCESS) {
+                    fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+                    return false;
+                }
                 ggml_backend_tensor_get(out, &fd, 0, ggml_nbytes(out));
 
                 if (grad_precise()) {
                     ggml_backend_tensor_set(t, &xiuh, i*sizeof(float), sizeof(float));
-                    ggml_backend_graph_compute(backend, gf);
+                    status = ggml_backend_graph_compute(backend, gf);
+                    if (status != GGML_STATUS_SUCCESS) {
+                        fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+                        return false;
+                    }
                     ggml_backend_tensor_get(out, &fuh, 0, ggml_nbytes(out));
 
                     ggml_backend_tensor_set(t, &xidh, i*sizeof(float), sizeof(float));
-                    ggml_backend_graph_compute(backend, gf);
+                    status = ggml_backend_graph_compute(backend, gf);
+                    if (status != GGML_STATUS_SUCCESS) {
+                        fprintf(stderr, "%s: ggml_backend_graph_compute failed. status=%s \n", __func__, ggml_status_to_string(status));
+                        return false;
+                    }
                     ggml_backend_tensor_get(out, &fdh, 0, ggml_nbytes(out));
 
                     gn[i] = (8.0*(double)fuh + (double)fd - (8.0*(double)fdh + (double)fu)) / (6.0*(double)eps);
