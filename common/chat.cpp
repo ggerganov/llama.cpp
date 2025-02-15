@@ -1202,6 +1202,23 @@ static json messages_to_json(const std::vector<common_chat_msg> & msgs) {
     return messages;
 }
 
+static json tools_to_json(const std::vector<common_chat_tool> & tools) {
+    if (tools.empty()) return json();
+
+    auto result = json::array();
+    for (const auto & tool : tools) {
+        result.push_back({
+            {"type", "function"},
+            {"function", {
+                {"name", tool.name},
+                {"description", tool.description},
+                {"parameters", json::parse(tool.parameters)},
+            }},
+        });
+    }
+    return result;
+}
+
 common_chat_params common_chat_templates_apply(
     const struct common_chat_templates * tmpls,
     const struct common_chat_templates_inputs & inputs)
@@ -1212,13 +1229,11 @@ common_chat_params common_chat_templates_apply(
         params.messages = messages_to_json(inputs.messages);
         params.add_generation_prompt = inputs.add_generation_prompt;
         params.extract_reasoning = inputs.extract_reasoning;
+        params.tools = tools_to_json(inputs.tools);
         params.tool_choice = inputs.tool_choice;
         params.grammar = inputs.grammar;
         if (!inputs.json_schema.empty()) {
             params.json_schema = json::parse(inputs.json_schema);
-        }
-        if (!inputs.tools.empty()) {
-            params.tools = json::parse(inputs.tools);
         }
         const auto & tmpl = params.tools.is_array() && tmpls->template_tool_use
             ? *tmpls->template_tool_use

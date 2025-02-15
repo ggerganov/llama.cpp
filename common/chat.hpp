@@ -77,11 +77,17 @@ void common_chat_templates_free(struct common_chat_templates * tmpls);
 
 typedef std::unique_ptr<struct common_chat_templates, decltype(&common_chat_templates_free)> common_chat_templates_ptr;
 
+struct common_chat_tool {
+    std::string name;
+    std::string description;
+    std::string parameters;
+};
+
 struct common_chat_templates_inputs {
     std::vector<common_chat_msg> messages;
     std::string grammar;
     std::string json_schema;
-    std::string tools;
+    std::vector<common_chat_tool> tools;
     common_chat_tool_choice tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
     bool add_generation_prompt = true;
     bool use_jinja = true;

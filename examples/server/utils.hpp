@@ -647,7 +647,15 @@ static json oaicompat_completion_params_parse(
     inputs.add_generation_prompt = true;
     inputs.use_jinja = use_jinja;
     inputs.grammar = grammar;
-    inputs.tools = tools.is_null() ? "" : tools.dump();
+    if (tools.is_array()) {
+        for (const auto & tool : tools) {
+            inputs.tools.push_back({
+                /* .name = */ tool.at("name"),
+                /* .description = */ tool.at("description"),
+                /* .arguments = */ tool.at("arguments"),
+            });
+        }
+    }
     inputs.json_schema = json_schema.is_null() ? "" : json_schema.dump();
     inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
     inputs.extract_reasoning = reasoning_format != COMMON_REASONING_FORMAT_NONE;

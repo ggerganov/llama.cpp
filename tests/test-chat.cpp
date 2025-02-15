@@ -99,59 +99,50 @@ static void assert_msg_equals(const common_chat_msg & expected, const common_cha
     }
 }
 
-const auto special_function_tool = json::parse(R"({
-  "type": "function",
-  "function": {
-    "name": "special_function",
-    "description": "I'm special",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "arg1": {
-          "type": "integer",
-          "description": "The arg."
-        }
-      },
-      "required": ["arg1"]
-    }
-  }
-})");
-const auto python_tool           = json::parse(R"({
-  "type": "function",
-  "function": {
-    "name": "python",
-    "description": "an ipython interpreter",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "type": "string",
-          "description": "Python code to execute."
-        }
-      },
-      "required": ["code"]
-    }
-  }
-})");
-const auto code_interpreter_tool = json::parse(R"({
-  "type": "function",
-  "function": {
-    "name": "code_interpreter",
-    "description": "an ipython interpreter",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "type": "string",
-          "description": "Python code to execute."
-        }
-      },
-      "required": ["code"]
-    }
-  }
-})");
-const auto tools                 = json::array({ special_function_tool, python_tool }).dump();
-const auto llama_3_1_tools       = json::array({ special_function_tool, code_interpreter_tool }).dump();
+common_chat_tool special_function_tool {
+    /* .name = */ "special_function",
+    /* .description = */ "I'm special",
+    /* .parameters = */ R"({
+        "type": "object",
+        "properties": {
+            "arg1": {
+                "type": "integer",
+                "description": "The arg."
+            }
+        },
+        "required": ["arg1"]
+    })",
+};
+common_chat_tool python_tool {
+    /* .name = */ "python",
+    /* .description = */ "an ipython interpreter",
+    /* .parameters = */ R"({
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Python code to execute."
+            }
+        },
+        "required": ["code"]
+    })",
+};
+common_chat_tool code_interpreter_tool {
+    /* .name = */ "code_interpreter",
+    /* .description = */ "an ipython interpreter",
+    /* .parameters = */ R"({
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Python code to execute."
+            }
+        },
+        "required": ["code"]
+    })",
+};
+std::vector<common_chat_tool> tools           { special_function_tool, python_tool };
+std::vector<common_chat_tool> llama_3_1_tools { special_function_tool, code_interpreter_tool };
 
 struct delta_data {
     std::string        delta;
@@ -159,7 +150,9 @@ struct delta_data {
 };
 
 static delta_data init_delta(const struct common_chat_templates * tmpls, const std::vector<std::string> & end_tokens,
-                             const common_chat_msg & user_message, const common_chat_msg & delta_message, const json & tools,
+                             const common_chat_msg & user_message,
+                             const common_chat_msg & delta_message,
+                             const std::vector<common_chat_tool> & tools,
                              const common_chat_tool_choice & tool_choice,
                              bool think = false) {
     common_chat_templates_inputs inputs;
@@ -214,7 +207,9 @@ static delta_data init_delta(const struct common_chat_templates * tmpls, const s
   the parsed message is the same as the test_message
 */
 static void test_templates(const struct common_chat_templates * tmpls, const std::vector<std::string> & end_tokens,
-                          const common_chat_msg & test_message, const std::string & tools = "", const std::string & expected_delta = "",
+                          const common_chat_msg & test_message,
+                          const std::vector<common_chat_tool> & tools = {},
+                          const std::string & expected_delta = "",
                           bool expect_grammar_triggered = true,
                           bool test_grammar_if_triggered = true,
                           bool think = false) {
@@ -377,17 +372,17 @@ static void test_template_output_parsers() {
 
     common_chat_templates_inputs inputs_tools;
     inputs_tools.messages                   = {message_user};
-    inputs_tools.tools                      = json::array({special_function_tool}).dump();
+    inputs_tools.tools                      = {special_function_tool};
     inputs_tools.extract_reasoning          = false;
 
     common_chat_templates_inputs inputs_tools_think;
     inputs_tools_think.messages             = {message_user};
-    inputs_tools_think.tools                = json::array({special_function_tool}).dump();
+    inputs_tools_think.tools                = {special_function_tool};
     inputs_tools_think.extract_reasoning    = true;
 
     common_chat_templates_inputs inputs_tools_builtin;
     inputs_tools_builtin.messages           = {message_user};
-    inputs_tools_builtin.tools              = json::array({python_tool}).dump();
+    inputs_tools_builtin.tools              = {python_tool};
     inputs_tools_builtin.extract_reasoning  = false;
 
     {
@@ -658,7 +653,7 @@ int main(int argc, char ** argv) {
         inputs.messages = {
             { "user", "Hey", {}, {}, "" },
         };
-        inputs.tools = json::array({ special_function_tool }).dump();
+        inputs.tools = { special_function_tool };
 
         std::cout << "| Template | Format |\n";
         std::cout << "|----------|--------|\n";
