@@ -78,16 +78,32 @@ jobs:
             SAFE_NAME=$(echo "${{ env.GITHUB_BRANCH_NAME }}" | tr '/' '-')
             TAG_POSTFIX="-${SAFE_NAME}-${SHORT_HASH}"
           fi
+
           # list all tags possible
           if [[ "${{ matrix.config.tag }}" == "cpu" ]]; then
-              TYPE=""
+            TYPE=""
           else
-              TYPE="-${{ matrix.config.tag }}"
+            TYPE="-${{ matrix.config.tag }}"
           fi
+
+          # also publish to legacy, for smooth transition to ggml-org
+          if [[ "${REPO_OWNER}/${REPO_NAME}" == "ggml-org/llama.cpp" ]]; then
+            LEGACY_PREFIX="ghcr.io/ggerganov/llama.cpp:"
+            LEGACY_FULLTAGS=",${LEGACY_PREFIX}full${TYPE},${LEGACY_PREFIX}full${TYPE}${TAG_POSTFIX}"
+            LEGACY_LIGHTTAGS=",${LEGACY_PREFIX}light${TYPE},${LEGACY_PREFIX}light${TYPE}${TAG_POSTFIX}"
+            LEGACY_SERVERTAGS=",${LEGACY_PREFIX}server${TYPE},${LEGACY_PREFIX}server${TYPE}${TAG_POSTFIX}"
+          else
+            LEGACY_PREFIX=""
+            LEGACY_FULLTAGS=""
+            LEGACY_LIGHTTAGS=""
+            LEGACY_SERVERTAGS=""
+          fi
+
           PREFIX="ghcr.io/${REPO_OWNER}/${REPO_NAME}:"
-          FULLTAGS="${PREFIX}full${TYPE},${PREFIX}full${TYPE}${TAG_POSTFIX}"
-          LIGHTTAGS="${PREFIX}light${TYPE},${PREFIX}light${TYPE}${TAG_POSTFIX}"
-          SERVERTAGS="${PREFIX}server${TYPE},${PREFIX}server${TYPE}${TAG_POSTFIX}"
+          FULLTAGS="${PREFIX}full${TYPE},${PREFIX}full${TYPE}${TAG_POSTFIX}${LEGACY_FULLTAGS}"
+          LIGHTTAGS="${PREFIX}light${TYPE},${PREFIX}light${TYPE}${TAG_POSTFIX}${LEGACY_LIGHTTAGS}"
+          SERVERTAGS="${PREFIX}server${TYPE},${PREFIX}server${TYPE}${TAG_POSTFIX}${LEGACY_SERVERTAGS}"
+
           echo "full_output_tags=$FULLTAGS" >> $GITHUB_OUTPUT
           echo "light_output_tags=$LIGHTTAGS" >> $GITHUB_OUTPUT
           echo "server_output_tags=$SERVERTAGS" >> $GITHUB_OUTPUT
