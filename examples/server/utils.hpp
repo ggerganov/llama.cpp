@@ -367,10 +367,10 @@ inline std::string format_chat(const common_chat_template & tmpl, const std::vec
                     }
                 }
             } else {
-                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggml-org/llama.cpp/issues/8367)");
             }
         } else {
-            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggml-org/llama.cpp/issues/8367)");
         }
 
         chat.push_back({role, content, /* tool_calls= */ {}});
