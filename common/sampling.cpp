@@ -189,9 +189,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
     if (params.mirostat == 0) {
         if (params.top_n_sigma >= 0) {
-            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.top_k));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_top_n_sigma(params.top_n_sigma));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_top_k        (params.top_k));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_temp         (params.temp));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_top_n_sigma  (params.top_n_sigma));
         } else {
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
@@ -203,36 +203,32 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                                 c_breakers.push_back(str.c_str());
                             }
 
-                            llama_sampler_chain_add(
-                                result->chain, llama_sampler_init_dry(
-                                                   vocab, llama_model_n_ctx_train(model), params.dry_multiplier,
-                                                   params.dry_base, params.dry_allowed_length,
-                                                   params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                            llama_sampler_chain_add(result->chain, llama_sampler_init_dry(vocab, llama_model_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                         }
                         break;
                     case COMMON_SAMPLER_TYPE_TOP_K:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_k(params.top_k));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
                         break;
                     case COMMON_SAMPLER_TYPE_TOP_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_p(params.top_p, params.min_keep));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
                         break;
                     case COMMON_SAMPLER_TYPE_MIN_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_min_p(params.min_p, params.min_keep));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
                         break;
                     case COMMON_SAMPLER_TYPE_XTC:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_xtc(params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_xtc      (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
                         break;
                     case COMMON_SAMPLER_TYPE_TYPICAL_P:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_typical(params.typ_p, params.min_keep));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
                         break;
                     case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext(params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext  (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                         break;
                     case COMMON_SAMPLER_TYPE_INFILL:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill(vocab));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_infill    (vocab));
                         break;
                     case COMMON_SAMPLER_TYPE_PENALTIES:
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_penalties(params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_penalties (params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
                         break;
                     default:
                         GGML_ASSERT(false && "unknown sampler type");
