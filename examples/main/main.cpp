@@ -1,4 +1,5 @@
 #include "arg.h"
+#include "chat.hpp"
 #include "common.h"
 #include "console.h"
 #include "log.h"
@@ -273,13 +274,37 @@ int main(int argc, char ** argv) {
 
         common_chat_msg new_msg{role, content, {}};
 
-        toolcall::sampling_updater updater{&sparams, vocab};
+        common_chat_inputs cinputs;
+        if (handler != nullptr) {
+            auto choice = handler->tool_choice();
+            if (std::holds_alternative<std::string>(choice)) {
+                cinputs.tool_choice = std::get<std::string>(choice);
+
+            } else {
+                auto choice_ptr = std::get<toolcall::json_ptr>(choice);
+                if (choice_ptr != nullptr) {
+                    cinputs.tool_choice = *choice_ptr;
+                }
+            }
+            cinputs.tools = handler->tool_list();
+        }
+
+        common_chat_params cparams;
         auto formatted =
             common_chat_format_single(chat_templates, chat_msgs, new_msg, add_ass, g_params->use_jinja,
-                                      handler, &updater);
+                                      &cinputs, &cparams);
 
         chat_msgs.push_back({role, content, {}});
         LOG_DBG("formatted: '%s'\n", formatted.c_str());
+
+        if (g_params->use_jinja) {
+            common_chat_grammar_to_sampler(&cparams, vocab, &sparams);
+            if (handler != nullptr) {
+                json response;
+                handler->call(formatted, response);
+                return std::string(response);
+            }
+        }
         return formatted;
     };
 

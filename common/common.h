@@ -618,6 +618,13 @@ std::string common_detokenize(
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
 
+struct common_chat_params;
+struct common_chat_inputs;
+void common_chat_grammar_to_sampler(const common_chat_params * src,
+                                    const llama_vocab * vocab,
+                                    common_params_sampling * sparams);
+
+
 //
 // Chat template utils
 //
@@ -651,13 +658,6 @@ struct common_chat_templates {
     std::unique_ptr<common_chat_template> template_tool_use;
 };
 
-namespace toolcall {
-    struct sampling_updater {
-        common_params_sampling * sparams;
-        const llama_vocab      * vocab;
-    };
-}
-
 // CPP wrapper for llama_chat_apply_template
 // If the built-in template is not supported, we default to chatml
 // If the custom "tmpl" is not supported, we throw an error
@@ -666,8 +666,8 @@ std::string common_chat_apply_template(
         const std::vector<common_chat_msg> & chat,
         bool add_ass,
         bool use_jinja,
-        toolcall::handler::ptr handler = nullptr,
-        toolcall::sampling_updater * update_sparams = nullptr);
+        const common_chat_inputs * inputs = nullptr,
+        common_chat_params * out_params = nullptr);
 
 // Format single message, while taking into account the position of that message in chat history
 std::string common_chat_format_single(
@@ -676,8 +676,8 @@ std::string common_chat_format_single(
         const common_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        toolcall::handler::ptr handler = nullptr,
-        toolcall::sampling_updater * update_sparams = nullptr);
+        const common_chat_inputs * inputs = nullptr,
+        common_chat_params * out_params = nullptr);
 
 // Returns an example of formatted chat
 std::string common_chat_format_example(

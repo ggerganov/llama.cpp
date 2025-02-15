@@ -1,10 +1,10 @@
 #pragma once
 
+#include "../json.hpp"
+#include "params.hpp" // TODO: make foreward decl.
 #include <string>
 #include <variant>
 #include <memory>
-
-#include "../json.hpp"
 
 namespace toolcall
 {
@@ -34,28 +34,6 @@ namespace toolcall
     private:
         std::unique_ptr<handler_impl> impl_;
         action last_action_;
-    };
-
-    class params {
-    public:
-        params(std::string tools = "", std::string choice = "auto");
-
-        params(const params & other) = default;
-        params(params && other) noexcept = default;
-        params & operator=(const params & other) = default;
-        params & operator=(params && other) noexcept = default;
-
-        operator bool() const;
-
-        void tools(std::string tools);
-        const tools_t tools() const { return tools_; }
-
-        void choice(std::string choice);
-        const tool_choice_t & choice() const { return tool_choice_; }
-
-    private:
-        tools_t tools_;
-        tool_choice_t tool_choice_;
     };
 
     std::shared_ptr<toolcall::handler> create_handler(const toolcall::params & params);

@@ -75,6 +75,8 @@ add_library(${TARGET} STATIC
     sampling.h
     speculative.cpp
     speculative.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/params.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/params.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.cpp
