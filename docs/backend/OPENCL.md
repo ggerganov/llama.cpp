@@ -122,7 +122,7 @@ cp libOpenCL.so ~/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x
 ```sh
 cd ~/dev/llm
 
-git clone https://github.com/ggerganov/llama.cpp && \
+git clone https://github.com/ggml-org/llama.cpp && \
 cd llama.cpp && \
 mkdir build-android && cd build-android
 
@@ -182,7 +182,7 @@ cmake --build . --target install
 mkdir -p ~/dev/llm
 cd ~/dev/llm
 
-git clone https://github.com/ggerganov/llama.cpp && cd llama.cpp
+git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
 mkdir build && cd build
 
 cmake .. -G Ninja `

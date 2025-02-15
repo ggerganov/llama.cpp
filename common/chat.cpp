@@ -968,7 +968,7 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
         }
         data.grammar = json_schema_to_grammar(inputs.json_schema);
     } else {
-        data.grammar = inputs.grammar.empty();
+        data.grammar = inputs.grammar;
     }
     return data;
 }

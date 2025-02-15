@@ -301,6 +301,56 @@ float16_t dequantFuncQ6_K(const in decodeBufQ6_K bl, const in uint blockCoords[2
     return ret;
 }
 
+#if defined(DATA_A_IQ1_S)
+layout(buffer_reference, std430, buffer_reference_align = 2) buffer decodeBufIQ1_S {
+   block_iq1_s block;
+};
+
+float16_t dequantFuncIQ1_S(const in decodeBufIQ1_S bl, const in uint blockCoords[2], const in uint coordInBlock[2])
+{
+    const float16_t d = bl.block.d;
+    const uint idx = coordInBlock[1];
+
+    const uint ib32 = idx / 32;
+    const uint ib8 = idx / 8;
+
+    const uint qh = bl.block.qh[ib32];
+    const uint qs = bl.block.qs[ib8];
+    const float dl = d * float(2 * bitfieldExtract(qh, 12, 3) + 1);
+    const float delta = ((qh & 0x8000) != 0) ? -IQ1S_DELTA : IQ1S_DELTA;
+    const uint grid = iq1s_grid[qs | (bitfieldExtract(qh, 3 * int(ib8 & 3), 3) << 8)];
+
+    float16_t ret = float16_t(dl) * (float16_t(bitfieldExtract(int(grid), 2 * int(idx % 8), 2)) + float16_t(delta));
+    return ret;
+}
+#endif
+
+#if defined(DATA_A_IQ1_M)
+layout(buffer_reference, std430, buffer_reference_align = 2) buffer decodeBufIQ1_M {
+   block_iq1_m block;
+};
+
+float16_t dequantFuncIQ1_M(const in decodeBufIQ1_M bl, const in uint blockCoords[2], const in uint coordInBlock[2])
+{
+    const u16vec4 scales = u16vec4(bl.block.scales[0], bl.block.scales[1], bl.block.scales[2], bl.block.scales[3]) >> 12;
+    const float16_t d = uint16BitsToHalf(scales.x | (scales.y << 4) | (scales.z << 8) | (scales.w << 12));
+    const uint idx = coordInBlock[1];
+
+    const uint ib8 = idx / 8;
+    const uint ib16 = idx / 16;
+    const int i8 = int(idx % 8);
+    const uint sc = bl.block.scales[ib8 / 8];
+    const uint qs = bl.block.qs[ib8];
+    const uint qh = bl.block.qh[ib16] >> (4 * (ib8 & 1));
+    const float dl = 2 * bitfieldExtract(sc, 3 * int(ib16 & 3), 3) + 1;
+    const float delta = ((qh & 8) != 0) ? -IQ1S_DELTA : IQ1S_DELTA;
+    const uint grid = iq1s_grid[qs | ((qh & 7) << 8)];
+
+    float16_t ret = d * float16_t(dl) * (float16_t(bitfieldExtract(int(grid), 2 * i8, 2)) + float16_t(delta));
+    return ret;
+}
+#endif
+
 #if defined(DATA_A_IQ2_XXS)
 layout(buffer_reference, std430, buffer_reference_align = 2) buffer decodeBufIQ2_XXS {
    block_iq2_xxs block;
@@ -512,6 +562,10 @@ float16_t dequantFuncIQ4_NL(const in decodeBufIQ4_NL bl, const in uint blockCoor
 #define dequantFuncA dequantFuncQ5_K
 #elif defined(DATA_A_Q6_K)
 #define dequantFuncA dequantFuncQ6_K
+#elif defined(DATA_A_IQ1_S)
+#define dequantFuncA dequantFuncIQ1_S
+#elif defined(DATA_A_IQ1_M)
+#define dequantFuncA dequantFuncIQ1_M
 #elif defined(DATA_A_IQ2_XXS)
 #define dequantFuncA dequantFuncIQ2_XXS
 #elif defined(DATA_A_IQ2_XS)
