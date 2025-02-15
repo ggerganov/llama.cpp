@@ -38,22 +38,22 @@ static bool parse_json(std::string::const_iterator & it, const std::string::cons
 
         json_error_locator() : position(0), found_error(false) {}
 
-        bool parse_error(std::size_t position, const std::string &, const json::exception &) override {
+        bool parse_error(std::size_t position, const std::string &, const json::exception &) override { // NOLINT
             this->position = position - 1;
             this->found_error = true;
             return false;
         }
-        bool null() override { return true; }
-        bool boolean(bool) override { return true; }
-        bool number_integer(number_integer_t) override { return true; }
-        bool number_unsigned(number_unsigned_t) override { return true; }
-        bool number_float(number_float_t, const string_t &) override { return true; }
-        bool string(string_t &) override { return true; }
-        bool binary(binary_t &) override { return true; }
-        bool start_object(std::size_t) override { return true; }
-        bool key(string_t &) override { return true; }
+        bool null() override { return true; } // NOLINT
+        bool boolean(bool) override { return true; } // NOLINT
+        bool number_integer(number_integer_t) override { return true; } // NOLINT
+        bool number_unsigned(number_unsigned_t) override { return true; } // NOLINT
+        bool number_float(number_float_t, const string_t &) override { return true; } // NOLINT
+        bool string(string_t &) override { return true; } // NOLINT
+        bool binary(binary_t &) override { return true; } // NOLINT
+        bool start_object(std::size_t) override { return true; } // NOLINT
+        bool key(string_t &) override { return true; } // NOLINT
         bool end_object() override { return true; }
-        bool start_array(std::size_t) override { return true; }
+        bool start_array(std::size_t) override { return true; } // NOLINT
         bool end_array() override { return true; }
     };
     json_error_locator err_loc;
@@ -455,10 +455,10 @@ static void expect_tool_parameters(const std::string & name, const json & parame
     const auto & parameters_required = parameters.at("required");
     for (const auto & prop : expected_properties) {
         if (!parameters_properties.contains(prop)) {
-            throw std::runtime_error("Parameters of tool " + name + " is missing property: " + prop);
+            throw std::runtime_error("Parameters of tool " + name + " is missing property: " + prop); // NOLINT
         }
         if (std::find(parameters_required.begin(), parameters_required.end(), json(prop)) == parameters_required.end()) {
-            throw std::runtime_error("Parameters of tool " + name + " must have property marked as required: " + prop);
+            throw std::runtime_error("Parameters of tool " + name + " must have property marked as required: " + prop); // NOLINT
         }
     }
     if (parameters_properties.size() != expected_properties.size()) {
@@ -474,10 +474,8 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
         std::vector<std::string> tool_rules;
 
         auto handle_builtin_tool = [&](const std::string & name, const json & parameters) {
-            if (name == "wolfram_alpha") {
+            if (name == "wolfram_alpha" || name == "web_search" || name == "brave_search") {
                 // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/wolfram_alpha/wolfram_alpha.py
-                expect_tool_parameters(name, parameters, {"query"});
-            } else if (name == "web_search" || name == "brave_search") {
                 // https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/tool_runtime/brave_search/brave_search.py
                 expect_tool_parameters(name, parameters, {"query"});
             } else if (name == "python" || name == "code_interpreter") {
@@ -489,7 +487,7 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
 
             std::vector<std::string> kvs;
             for (const auto & [key, value] : parameters.at("properties").items()) {
-                kvs.push_back("\"" + key + "=\" " + builder.add_schema(name + "-args-" + key, value));
+                kvs.push_back("\"" + key + "=\" " + builder.add_schema(name + "-args-" + key, value)); // NOLINT
             }
 
             tool_rules.push_back(
@@ -588,6 +586,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
                 const auto & function = tool.at("function");
                 std::string name = function.at("name");
                 auto parameters = function.at("parameters");
+                builder.resolve_refs(parameters);
                 auto args_rule = builder.add_schema(name + "-args", parameters);
                 tool_rules.push_back(builder.add_rule(name + "-call",
                     "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n"
@@ -727,6 +726,7 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
                 const auto & function = tool.at("function");
                 std::string name = function.at("name");
                 auto parameters = function.at("parameters");
+                builder.resolve_refs(parameters);
                 auto args_rule = builder.add_schema(name + "-args", parameters);
                 first_tool_rules.push_back(builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule));
                 subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
@@ -814,7 +814,7 @@ static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(con
                     throw std::runtime_error("Missing type in python tool");
                 }
                 has_raw_python = true;
-                auto type = parameters.at("type");
+                const auto & type = parameters.at("type");
                 if (type == "object") {
                     auto properties = parameters.at("properties");
                     for (auto it = properties.begin(); it != properties.end(); ++it) {
