@@ -1058,7 +1058,7 @@ kernel void kernel_soft_max(
     }
 
     // This barrier fixes a failing test
-    // ref: https://github.com/ggerganov/ggml/pull/621#discussion_r1425156335
+    // ref: https://github.com/ggml-org/ggml/pull/621#discussion_r1425156335
     threadgroup_barrier(mem_flags::mem_none);
 
     float sum = simd_sum(lsum);
@@ -1163,7 +1163,7 @@ kernel void kernel_soft_max_4(
     const float lsum = lsum4[0] + lsum4[1] + lsum4[2] + lsum4[3];
 
     // This barrier fixes a failing test
-    // ref: https://github.com/ggerganov/ggml/pull/621#discussion_r1425156335
+    // ref: https://github.com/ggml-org/ggml/pull/621#discussion_r1425156335
     threadgroup_barrier(mem_flags::mem_none);
 
     float sum = simd_sum(lsum);
