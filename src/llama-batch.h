@@ -5,8 +5,8 @@
 #include <array>
 #include <vector>
 
-// Input data for llama_decode
-// A llama_batch object can contain input about one or many sequences
+// Input data for llama_decode / llama_encode
+// A llama_batch_ext object can contain input about one or many sequences
 // The provided arrays (i.e. token, embd, pos, etc.) must have size of n_tokens
 //
 // - token  : the token ids of the input (used when embd is NULL)
@@ -18,7 +18,7 @@
 // - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
 //            (if set to NULL, only the logits for last token will be returned)
 //
-struct llama_batch {
+struct llama_batch_ext {
     int32_t n_tokens;
     int32_t max_tokens;
     bool is_view;
@@ -73,7 +73,7 @@ struct llama_sbatch {
     std::vector<size_t> out_ids;
     std::vector<llama_sbatch_seq> seq;
 
-    const llama_batch * batch = nullptr;
+    const llama_batch_ext * batch = nullptr;
 
     // buffers for the ubatch
     std::vector<llama_token>    ubatch_token;
@@ -96,12 +96,12 @@ struct llama_sbatch {
     // sequence-wise split
     llama_ubatch split_seq(size_t n_ubatch);
 
-    void from_batch(const llama_batch & batch, size_t n_embd, bool simple_split = false, bool logits_all = false);
+    void from_batch(const llama_batch_ext & batch, size_t n_embd, bool simple_split = false, bool logits_all = false);
 };
 
 // temporary allocate memory for the input batch if needed
 struct llama_batch_allocr {
-    struct llama_batch batch;
+    struct llama_batch_ext * batch;
 
     std::array<llama_seq_id, 1> seq_id_0 = { 0 }; // default sequence id
     std::vector<llama_pos>      pos;
@@ -110,5 +110,7 @@ struct llama_batch_allocr {
     std::vector<int8_t>         logits;
 
     // optionally fulfill the batch returned by llama_batch_get_one
-    llama_batch_allocr(struct llama_batch in_batch, llama_pos p0);
+    llama_batch_allocr(struct llama_batch & in_batch, llama_pos p0);
+
+    ~llama_batch_allocr();
 };

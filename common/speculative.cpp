@@ -13,7 +13,7 @@ struct common_speculative {
     struct llama_context * ctx;
     struct common_sampler * smpl;
 
-    llama_batch * batch;
+    llama_batch batch;
     llama_tokens prompt;
 };
 
@@ -22,7 +22,7 @@ struct common_speculative * common_speculative_init(
     auto * result = new common_speculative {
         /* .ctx    = */ ctx_dft,
         /* .smpl   = */ nullptr,
-        /* .batch  = */ llama_batch_init(llama_n_batch(ctx_dft), 1),
+        /* .batch  = */ llama_batch_init(llama_n_batch(ctx_dft), 0, 1),
         /* .prompt = */ {},
     };
 
@@ -215,7 +215,7 @@ llama_tokens common_speculative_gen_draft(
     }
 
     // we should rarely end-up here during normal decoding
-    if (llama_batch_get_n_tokens(batch) > 0) {
+    if (batch.n_tokens > 0) {
         //LOG_DBG("%s: draft prompt batch: %s\n", __func__, string_from(ctx, batch).c_str());
 
         llama_decode(ctx, batch);

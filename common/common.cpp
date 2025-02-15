@@ -1610,20 +1610,29 @@ std::pair<std::string, std::string> common_get_hf_file(const std::string &, cons
 // Batch utils
 //
 
-void common_batch_clear(struct llama_batch * batch) {
-    llama_batch_clear(batch);
+// DEPRECATED
+void common_batch_clear(struct llama_batch & batch) {
+    batch.n_tokens = 0;
 }
 
+// DEPRECATED
 void common_batch_add(
-                 struct llama_batch * batch,
+                 struct llama_batch & batch,
                         llama_token   id,
                           llama_pos   pos,
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits) {
-    int32_t res = llama_batch_add_text_token(batch, id, pos, seq_ids.data(), seq_ids.size(), logits);
-    if (res == -1) {
-        LOG_ERR("%s: llama_batch size exceeded\n", __func__);
+    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
+
+    batch.token   [batch.n_tokens] = id;
+    batch.pos     [batch.n_tokens] = pos;
+    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
+    for (size_t i = 0; i < seq_ids.size(); ++i) {
+        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
     }
+    batch.logits  [batch.n_tokens] = logits;
+
+    batch.n_tokens++;
 }
 
 //
