@@ -11,9 +11,9 @@ namespace toolcall
     public:
         mcp_stdio_transport(std::vector<std::string> argv);
 
-        virtual void start() override;
-        virtual void stop()  override;
-        virtual bool send(const mcp::message_variant & request) override;
+        [[noreturn]] virtual void start() override;
+        [[noreturn]] virtual void stop()  override;
+        [[noreturn]] virtual bool send(const mcp::message_variant & request) override;
 
     private:
         std::vector<std::string> argv_;
