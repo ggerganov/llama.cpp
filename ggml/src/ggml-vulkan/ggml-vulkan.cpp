@@ -1424,10 +1424,10 @@ static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vec
 }
 
 // Define a configuration map per GPU.
-// Outer key: GPU identifier (e.g. "RX 5700").
+// Outer key: GPU identifier (e.g. "NAVI1").
 // Inner map: key is pipeline name; value is the subgroup size.
 static std::unordered_map<std::string, std::unordered_map<std::string, uint32_t>> gpu_pipeline_config = {
-    {"RX 5700", {
+    {"NAVI1", {
         {"soft_max_f32", 64}, {"soft_max_f32_wg512", 64},
         {"soft_max_f32_f16", 64}, {"soft_max_f32_f16_wg512", 64},
         {"im2col_f32", 64}, {"im2col_f32_f16", 64},
@@ -1584,7 +1584,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
 
         required_subgroup_size = get_subgroup_size(name, device_name);
         if (required_subgroup_size == 0) {
-            required_subgroup_size = (device_name.find("RX 5700") != std::string::npos) ? 32 : required_subgroup_size;
+            required_subgroup_size = (device_name.find("NAVI1") != std::string::npos) ? 32 : required_subgroup_size;
         }
 
         if (!pipeline) {
