@@ -2,6 +2,7 @@
 
 #include "log.h"
 #include "sampling.h"
+#include "chat.hpp"
 
 #include <algorithm>
 #include <climits>

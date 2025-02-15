@@ -7,7 +7,7 @@
 
 #include "llama.h"
 #include "common.h"
-#include "chat-template.hpp"
+#include "chat.hpp"
 
 static std::string normalize_newlines(const std::string & s) {
 #ifdef _WIN32
@@ -304,11 +304,14 @@ int main(void) {
         }
     }
 
-    json messages = json::array();
+    std::vector<common_chat_msg> messages;
     for (const auto & msg : conversation) {
         messages.push_back({
-            {"role", msg.role},
-            {"content", msg.content},
+            msg.role,
+            msg.content,
+            /* .content_parts = */ {},
+            /* .tool_calls = */ {},
+            /* .reasoning_content = */ "",
         });
     }
     for (const auto & test_case : test_cases) {
@@ -317,8 +320,12 @@ int main(void) {
         }
         printf("\n\n=== %s (jinja) ===\n\n", test_case.name.c_str());
         try {
-            minja::chat_template tmpl(test_case.template_str, test_case.bos_token, test_case.eos_token);
-            auto output = normalize_newlines(tmpl.apply(messages, json(), add_generation_prompt));
+            common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, test_case.template_str.c_str(), test_case.bos_token, test_case.eos_token), &common_chat_templates_free);
+            common_chat_templates_inputs inputs;
+            inputs.messages = messages;
+            inputs.add_generation_prompt = add_generation_prompt;
+            auto output = common_chat_templates_apply(tmpls.get(), inputs).prompt;
+            output = normalize_newlines(output);
             auto expected_output = normalize_newlines(test_case.expected_output_jinja.empty() ? test_case.expected_output : test_case.expected_output_jinja);
             if (output != expected_output) {
                 printf("Expected:\n%s\n", expected_output.c_str());
@@ -336,11 +343,17 @@ int main(void) {
     // test llama_chat_format_single for system message
     printf("\n\n=== llama_chat_format_single (system message) ===\n\n");
     std::vector<common_chat_msg> chat2;
-    common_chat_msg sys_msg{"system", "You are a helpful assistant", {}};
+    common_chat_msg sys_msg {
+        "system",
+        "You are a helpful assistant",
+        /* .content_parts = */ {},
+        /* .tool_calls = */ {},
+        /* .reasoning_content = */ "",
+    };
 
     auto fmt_sys = [&](std::string tmpl_str) {
-        minja::chat_template tmpl(tmpl_str, "", "");
-        auto output = common_chat_format_single(tmpl, chat2, sys_msg, false, /* use_jinja= */ false);
+        common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str), &common_chat_templates_free);
+        auto output = common_chat_format_single(tmpls.get(), chat2, sys_msg, false, /* use_jinja= */ false);
         printf("fmt_sys(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");
         return output;
@@ -360,14 +373,20 @@ int main(void) {
 
     // test llama_chat_format_single for user message
     printf("\n\n=== llama_chat_format_single (user message) ===\n\n");
-    chat2.push_back({"system", "You are a helpful assistant", {}});
-    chat2.push_back({"user", "Hello", {}});
-    chat2.push_back({"assistant", "I am assistant", {}});
-    common_chat_msg new_msg{"user", "How are you", {}};
+    chat2.push_back({"system", "You are a helpful assistant", {}, {}, ""});
+    chat2.push_back({"user", "Hello", {}, {}, ""});
+    chat2.push_back({"assistant", "I am assistant", {}, {}, ""});
+    common_chat_msg new_msg {
+        "user",
+        "How are you",
+        /* .content_parts = */ {},
+        /* .tool_calls = */ {},
+        /* .reasoning_content = */ "",
+    };
 
-    auto fmt_single = [&](std::string tmpl_str) {
-        minja::chat_template tmpl(tmpl_str, "", "");
-        auto output = common_chat_format_single(tmpl, chat2, new_msg, true, /* use_jinja= */ false);
+    auto fmt_single = [&](const std::string & tmpl_str) {
+        common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str.c_str()), &common_chat_templates_free);
+        auto output = common_chat_format_single(tmpls.get(), chat2, new_msg, true, /* use_jinja= */ false);
         printf("fmt_single(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");
         return output;

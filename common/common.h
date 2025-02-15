@@ -617,62 +617,6 @@ std::string common_detokenize(
                                   bool   special = true);
 
 //
-// Chat template utils
-//
-
-struct common_tool_call {
-    std::string name;
-    std::string arguments;
-    std::string id;
-};
-
-// same with llama_chat_message, but uses std::string
-struct common_chat_msg {
-    std::string role;
-    std::string content;
-    std::vector<common_tool_call> tool_calls;
-    std::string reasoning_content = "";
-};
-
-// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
-
-namespace minja {
-    class chat_template;
-}
-
-typedef minja::chat_template common_chat_template;
-
-struct common_chat_templates {
-    bool has_explicit_template; // Model had builtin template or template overridde was specified.
-    std::unique_ptr<common_chat_template> template_default; // always set (defaults to chatml)
-    std::unique_ptr<common_chat_template> template_tool_use;
-};
-
-// CPP wrapper for llama_chat_apply_template
-// If the built-in template is not supported, we default to chatml
-// If the custom "tmpl" is not supported, we throw an error
-std::string common_chat_apply_template(
-        const common_chat_template & tmpl,
-        const std::vector<common_chat_msg> & chat,
-        bool add_ass,
-        bool use_jinja);
-
-// Format single message, while taking into account the position of that message in chat history
-std::string common_chat_format_single(
-        const common_chat_template & tmpl,
-        const std::vector<common_chat_msg> & past_msg,
-        const common_chat_msg & new_msg,
-        bool add_ass,
-        bool use_jinja);
-
-// Returns an example of formatted chat
-std::string common_chat_format_example(
-    const common_chat_template & tmpl, bool use_jinja);
-
-common_chat_templates common_chat_templates_from_model(const struct llama_model * model, const std::string & chat_template_override);
-
-//
 // KV cache utils
 //
 

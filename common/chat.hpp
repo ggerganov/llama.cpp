@@ -3,23 +3,36 @@
 #pragma once
 
 #include "common.h"
-#include <json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
 
-using json = nlohmann::ordered_json;
+struct common_chat_templates;
 
-struct common_chat_inputs {
-    json messages;
-    json tools;
-    json tool_choice;
-    json json_schema;
-    bool parallel_tool_calls;
-    bool stream;
-    std::string grammar;
-    bool add_generation_prompt = true;
-    bool extract_reasoning     = true;
+struct common_chat_tool_call {
+    std::string name;
+    std::string arguments;
+    std::string id;
+};
+
+struct common_chat_msg_content_part {
+    std::string type;
+    std::string text;
+};
+
+// same with llama_chat_message, but uses std::string
+struct common_chat_msg {
+    std::string role;
+    std::string content;
+    std::vector<common_chat_msg_content_part> content_parts;
+    std::vector<common_chat_tool_call> tool_calls;
+    std::string reasoning_content;
+};
+
+enum common_chat_tool_choice {
+    COMMON_CHAT_TOOL_CHOICE_AUTO,
+    COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+    COMMON_CHAT_TOOL_CHOICE_NONE,
 };
 
 enum common_chat_format {
@@ -42,7 +55,7 @@ enum common_chat_format {
 
 struct common_chat_params {
     common_chat_format                  format = COMMON_CHAT_FORMAT_CONTENT_ONLY;
-    json                                prompt;
+    std::string                         prompt;
     std::string                         grammar;
     bool                                grammar_lazy = false;
     std::vector<common_grammar_trigger> grammar_triggers;
@@ -50,6 +63,51 @@ struct common_chat_params {
     std::vector<std::string>            additional_stops;
 };
 
-struct common_chat_params common_chat_params_init(const common_chat_template & tmpl, const struct common_chat_inputs & inputs);
+// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
+bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
+
+struct common_chat_templates * common_chat_templates_init(
+                                    const struct llama_model * model,
+                                           const std::string & chat_template_override,
+                                           const std::string & bos_token_override = "",
+                                           const std::string & eos_token_override = "");
+
+bool common_chat_templates_was_explicit(const struct common_chat_templates * tmpls);
+void common_chat_templates_free(struct common_chat_templates * tmpls);
+
+typedef std::unique_ptr<struct common_chat_templates, decltype(&common_chat_templates_free)> common_chat_templates_ptr;
+
+struct common_chat_templates_inputs {
+    std::vector<common_chat_msg> messages;
+    std::string grammar;
+    std::string json_schema;
+    std::string tools;
+    common_chat_tool_choice tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+    bool add_generation_prompt = true;
+    bool use_jinja = true;
+    // Parameters below only supported when use_jinja is true
+    bool parallel_tool_calls = false;
+    bool extract_reasoning     = true;
+};
+
+struct common_chat_params      common_chat_templates_apply(
+    const struct common_chat_templates * tmpls,
+    const struct common_chat_templates_inputs & inputs);
+
+// Format single message, while taking into account the position of that message in chat history
+std::string common_chat_format_single(
+        const struct common_chat_templates * tmpls,
+        const std::vector<common_chat_msg> & past_msg,
+        const common_chat_msg & new_msg,
+        bool add_ass,
+        bool use_jinja);
+
+// Returns an example of formatted chat
+std::string common_chat_format_example(
+    const struct common_chat_templates * tmpls,
+    bool use_jinja);
+
 std::string               common_chat_format_name(common_chat_format format);
 common_chat_msg           common_chat_parse(      const std::string & input, common_chat_format format);
+
+common_chat_tool_choice common_chat_tool_choice_parse(const std::string & tool_choice);
