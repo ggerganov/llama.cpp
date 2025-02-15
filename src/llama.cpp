@@ -8473,9 +8473,9 @@ static int llama_prepare_sbatch(
     lctx.embd_seq.clear();
 
     // count outputs
-    if (batch.logits && !embd_pooled) {
+    if (batch.output && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch.logits[i] != 0;
+            n_outputs += batch.output[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -9974,7 +9974,6 @@ bool llama_kv_cache_can_shift(struct llama_context * ctx) {
     return llama_kv_cache_can_shift(ctx->kv_self);
 }
 
-///
 
 int32_t llama_encode(
         struct llama_context * ctx,

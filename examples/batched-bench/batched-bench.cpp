@@ -73,7 +73,7 @@ int main(int argc, char ** argv) {
                 batch.pos      + i,
                 batch.n_seq_id + i,
                 batch.seq_id   + i,
-                batch.logits   + i,
+                batch.output   + i,
             };
 
             const int ret = llama_decode(ctx, batch_view);
@@ -128,7 +128,7 @@ int main(int argc, char ** argv) {
                         common_batch_add(batch, 0, i, { j }, false);
                     }
                 }
-                batch.logits[batch.n_tokens - 1] = true;
+                batch.output[batch.n_tokens - 1] = true;
 
                 const auto t_pp_start = ggml_time_us();
 

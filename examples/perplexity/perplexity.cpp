@@ -573,9 +573,9 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
                     batch.pos     [idx]    = j*n_batch + k;
                     batch.n_seq_id[idx]    = 1;
                     batch.seq_id  [idx][0] = seq;
-                    batch.logits  [idx]    = batch.pos[idx] >= first ? 1 : 0;
+                    batch.output  [idx]    = batch.pos[idx] >= first ? 1 : 0;
 
-                    n_outputs += batch.logits[idx] != 0;
+                    n_outputs += batch.output[idx] != 0;
                 }
                 batch.n_tokens += batch_size;
 
@@ -670,7 +670,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             batch.pos      + i,
             batch.n_seq_id + i,
             batch.seq_id   + i,
-            batch.logits   + i,
+            batch.output   + i,
         };
 
         const int ret = llama_decode(ctx, batch_view);
@@ -681,7 +681,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
 
         int n_outputs = 0;
         for (int i = 0; i < n_tokens; ++i) {
-            n_outputs += batch_view.logits[i] != 0;
+            n_outputs += batch_view.output[i] != 0;
         }
 
         memcpy(batch_logits.data() + size_t(prev_outputs)*n_vocab, llama_get_logits(ctx), size_t(n_outputs)*n_vocab*sizeof(float));
@@ -897,7 +897,7 @@ static void hellaswag_score(llama_context * ctx, const common_params & params) {
             for (size_t i = 0; i < hs_cur.common_prefix; ++i) {
                 common_batch_add(batch, hs_cur.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3 }, false);
             }
-            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+            batch.output[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
 
             for (int s = 0; s < 4; ++s) {
@@ -1178,7 +1178,7 @@ static void winogrande_score(llama_context * ctx, const common_params & params) 
             for (size_t i = 0; i < data[i1].common_prefix; ++i) {
                 common_batch_add(batch, data[i1].seq_tokens[0][i], i, { s0 + 0, s0 + 1 }, false);
             }
-            batch.logits[batch.n_tokens - 1] = true;
+            batch.output[batch.n_tokens - 1] = true;
             n_logits += 1;
 
             for (int s = 0; s < 2; ++s) {
@@ -1546,7 +1546,7 @@ static void multiple_choice_score(llama_context * ctx, const common_params & par
                 //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
                 common_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
             }
-            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+            batch.output[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
 
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
