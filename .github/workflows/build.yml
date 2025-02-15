@@ -401,7 +401,7 @@ jobs:
         run: |
           cd build
           # This is using llvmpipe and runs slower than other backends
-          ctest -L main --verbose --timeout 1800
+          ctest -L main --verbose --timeout 2700
 
       - name: Determine tag name
         id: tag
