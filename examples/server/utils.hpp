@@ -12,9 +12,7 @@
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
-#include "minja.hpp"
 #include "chat.hpp"
-#include "chat-template.hpp"
 
 #include <random>
 #include <sstream>

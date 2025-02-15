@@ -10,7 +10,6 @@
 #include <json.hpp>
 #include <string>
 
-#include "chat-template.hpp"
 #include "chat.hpp"
 #include "llama-grammar.h"
 #include "unicode.h"
@@ -79,11 +78,6 @@ static bool match_string(const std::string & input, llama_grammar * grammar) {
     return false;
 }
 
-// Dumps `{"a": 1}` as `"{\"a\": 1}"`, unlike nlohmann::json::dump which would dump it as `"{\"a\":1}"`.
-static std::string dump(const json & j) {
-    return minja::Value(j).dump(-1, /* to_json= */ true);
-}
-
 static void assert_msg_equals(const common_chat_msg & expected, const common_chat_msg & actual) {
     assert_equals(expected.role, actual.role);
     assert_equals(expected.content, actual.content);
@@ -100,7 +94,7 @@ static void assert_msg_equals(const common_chat_msg & expected, const common_cha
         const auto & expected_tool_call = expected.tool_calls[i];
         const auto & actual_tool_call   = actual.tool_calls[i];
         assert_equals(expected_tool_call.name, actual_tool_call.name);
-        assert_equals(dump(json::parse(expected_tool_call.arguments)), dump(json::parse(actual_tool_call.arguments)));
+        assert_equals(json::parse(expected_tool_call.arguments).dump(), json::parse(actual_tool_call.arguments).dump());
         assert_equals(expected_tool_call.id, actual_tool_call.id);
     }
 }
