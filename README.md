@@ -11,11 +11,10 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 > [!IMPORTANT]
 > New `llama.cpp` package location: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp/pkgs/container/llama.cpp)
-> 
+>
 > Update your container URLs to: `ghcr.io/ggml-org/llama.cpp`
 >
 > More info: https://github.com/ggml-org/llama.cpp/discussions/11801
-
 
 ## Recent API changes
 
