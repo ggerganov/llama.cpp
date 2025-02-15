@@ -348,7 +348,11 @@ static llama_tokens format_infill(
 static std::vector<common_chat_msg> oaicompat_messages_parse(const json & messages) {
     std::vector<common_chat_msg> msgs;
 
+    if (!messages.is_array()) throw std::runtime_error("Expected 'messages' to be an array, got " + messages.dump());
+
     for (const auto & message : messages) {
+        if (!message.is_object()) throw std::runtime_error("Expected 'message' to be an object, got " + message.dump());
+
         common_chat_msg msg;
         msg.role = json_value(message, "role", std::string(""));
 
