@@ -1768,6 +1768,46 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
     return text;
 }
 
+void common_chat_grammar_to_sampler(const common_chat_params * src,
+                                    const llama_vocab * vocab,
+                                    common_params_sampling * sparams)
+{
+    GGML_ASSERT(src && vocab && sparams);
+
+    auto & dst = *sparams;
+
+    dst.grammar      = src->grammar;
+    dst.grammar_lazy = src->grammar_lazy;
+
+    for (const auto & trigger : src->grammar_triggers) {
+        auto ids = common_tokenize(vocab, trigger.word, false, true);
+
+        if (ids.size() == 1) {
+            LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
+            dst.grammar_trigger_tokens.push_back(ids[0]);
+            dst.preserved_tokens.insert(ids[0]);
+            continue;
+        }
+        LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
+        dst.grammar_trigger_words.push_back(trigger);
+    }
+
+    for (const auto & preserved : src->preserved_tokens) {
+        auto ids = common_tokenize(vocab, preserved, false, true);
+        if (ids.size() == 1) {
+            LOG_DBG("Preserved token: %d\n", ids[0]);
+            dst.preserved_tokens.insert(ids[0]);
+
+        } else {
+            // This may happen when using a tool call style meant for a model
+            // with special tokens to preserve on a model without said tokens.
+            LOG_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n",
+                    preserved.c_str());
+        }
+    }
+}
+
+
 //
 // Chat template utils
 //
@@ -1793,57 +1833,19 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     return res >= 0;
 }
 
-static void copy_chat_params(const common_chat_params & src, toolcall::sampling_updater * update_sparams)
-{
-    GGML_ASSERT(update_sparams && update_sparams->sparams && update_sparams->vocab);
-
-    auto & dst = *update_sparams->sparams;
-    auto vocab = update_sparams->vocab;
-
-    dst.grammar      = src.grammar;
-    dst.grammar_lazy = src.grammar_lazy;
-
-    for (const auto & trigger : src.grammar_triggers) {
-        auto ids = common_tokenize(vocab, trigger.word, false, true);
-
-        if (ids.size() == 1) {
-            LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
-            dst.grammar_trigger_tokens.push_back(ids[0]);
-            dst.preserved_tokens.insert(ids[0]);
-            continue;
-        }
-        LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
-        dst.grammar_trigger_words.push_back(trigger);
-    }
-
-    for (const auto & preserved : src.preserved_tokens) {
-        auto ids = common_tokenize(vocab, preserved, false, true);
-        if (ids.size() == 1) {
-            LOG_DBG("Preserved token: %d\n", ids[0]);
-            dst.preserved_tokens.insert(ids[0]);
-
-        } else {
-            // This may happen when using a tool call style meant for a model
-            // with special tokens to preserve on a model without said tokens.
-            LOG_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n",
-                    preserved.c_str());
-        }
-    }
-}
-
 std::string common_chat_apply_template(
         const common_chat_templates & tmpl,
         const std::vector<common_chat_msg> & msgs,
         bool add_ass,
         bool use_jinja,
-        toolcall::handler::ptr handler,
-        toolcall::sampling_updater * update_sparams)
+        const common_chat_inputs * inputs_,
+        common_chat_params * out_params)
 {
-    bool use_tool_template = (use_jinja && handler != nullptr) && tmpl.template_tool_use;
+    bool use_tool_template = use_jinja && tmpl.template_tool_use;
     const auto & tmpl_selected = use_tool_template ? *tmpl.template_tool_use : *tmpl.template_default;
 
     if (use_jinja) {
-        common_chat_inputs inputs;
+        common_chat_inputs inputs = inputs_ ? *inputs_ : common_chat_inputs();
 
         auto messages = json::array();
         for (const auto & msg : msgs) {
@@ -1852,35 +1854,11 @@ std::string common_chat_apply_template(
         inputs.messages = messages;
         inputs.add_generation_prompt = add_ass;
 
-        if (handler != nullptr) {
-            auto choice = handler->tool_choice();
-            if (std::holds_alternative<std::string>(choice)) {
-                inputs.tool_choice = std::get<std::string>(choice);
-
-            } else {
-                auto choice_ptr = std::get<toolcall::json_ptr>(choice);
-                if (choice_ptr != nullptr) {
-                    inputs.tool_choice = *choice_ptr;
-                }
-            }
-
-            inputs.tools = handler->tool_list();
-        }
-
         auto chat_params = common_chat_params_init(tmpl_selected, inputs);
-        if (update_sparams) {
-            copy_chat_params(chat_params, update_sparams);
+        if (out_params != nullptr) {
+            *out_params = chat_params;
         }
-
-        auto prompt = chat_params.prompt;
-        if (handler != nullptr) {
-            json response;
-            handler->call(prompt, response);
-            return response; // Caller will determine what to do based upon last_action
-
-        } else {
-            return prompt;
-        }
+        return chat_params.prompt;
     }
 
     int alloc_size = 0;
@@ -1918,12 +1896,12 @@ std::string common_chat_format_single(
         const common_chat_msg & new_msg,
         bool add_ass,
         bool use_jinja,
-        toolcall::handler::ptr handler,
-        toolcall::sampling_updater * update_sparams)
+        const common_chat_inputs * inputs,
+        common_chat_params * out_params)
 {
     std::ostringstream ss;
     auto fmt_past_msg = past_msg.empty() ? ""
-        : common_chat_apply_template(tmpl, past_msg, false, use_jinja, handler, update_sparams);
+        : common_chat_apply_template(tmpl, past_msg, false, use_jinja, inputs);
 
     std::vector<common_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
@@ -1932,7 +1910,7 @@ std::string common_chat_format_single(
     };
     // format chat with new_msg
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = common_chat_apply_template(tmpl, chat_new, add_ass, use_jinja, handler, update_sparams);
+    auto fmt_new_msg = common_chat_apply_template(tmpl, chat_new, add_ass, use_jinja, inputs, out_params);
     // get the diff part
     ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return ss.str();
