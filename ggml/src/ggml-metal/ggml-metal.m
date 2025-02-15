@@ -1983,7 +1983,7 @@ static void ggml_metal_encode_node(
                 const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
                 // TODO: add ggml_metal_kargs struct
-                // TODO: optimize (see https://github.com/ggerganov/llama.cpp/pull/10238/commits/7941b6b9ec29a2866fec6fa6c51612515ca509f6)
+                // TODO: optimize (see https://github.com/ggml-org/llama.cpp/pull/10238/commits/7941b6b9ec29a2866fec6fa6c51612515ca509f6)
                 [encoder setComputePipelineState:pipeline];
                 [encoder setBuffer:id_src0 offset:offs_src0   atIndex:0];
                 if (id_src1) {
