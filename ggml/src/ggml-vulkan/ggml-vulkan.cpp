@@ -1423,33 +1423,46 @@ static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vec
     return supported;
 }
 
-// Define a configuration map per GPU.
-// Outer key: GPU identifier (e.g. "NAVI1").
-// Inner map: key is pipeline name; value is the subgroup size.
-static std::unordered_map<std::string, std::unordered_map<std::string, uint32_t>> gpu_pipeline_config = {
-    {"NAVI1", {
-        {"soft_max_f32", 64}, {"soft_max_f32_wg512", 64},
-        {"soft_max_f32_f16", 64}, {"soft_max_f32_f16_wg512", 64},
-        {"im2col_f32", 64}, {"im2col_f32_f16", 64},
-    }}
+struct GpuPipelineConfig {
+    // List of all aliases for a given GPU.
+    // For example, this can include names like "NAVI10", "RX 5700", etc.
+    std::vector<std::string> device_names;
+
+    // Mapping of pipeline names to their specific subgroup sizes.
+    // Example: {"soft_max_f32", 64}.
+    std::unordered_map<std::string, uint32_t> pipelines;
+
+    // Default subgroup size for this GPU.
+    // Defaults to 0 if not explicitly provided.
+    uint32_t default_subgroup_size = 0;
+};
+
+// Define configurations for different GPUs.
+static std::vector<GpuPipelineConfig> gpu_pipeline_configs = {
+    {
+        {"NAVI10", "NAVI14", "RX 5700", "RX 5600", "RX 5500"},
+        {
+            {"soft_max_f32", 64}, {"soft_max_f32_wg512", 64},
+            {"soft_max_f32_f16", 64}, {"soft_max_f32_f16_wg512", 64},
+            {"im2col_f32", 64}, {"im2col_f32_f16", 64},
+        },
+        32
+    },
 };
 
 static uint32_t get_subgroup_size(const std::string &pipeline_name, const std::string &device_name) {
-    std::string foundKey;
-    for (const auto &entry : gpu_pipeline_config) {
-        if (device_name.find(entry.first) != std::string::npos) {
-            foundKey = entry.first;
-            break;
+    for (const auto &config : gpu_pipeline_configs) {
+        for (const auto &alias : config.device_names) {
+            if (device_name.find(alias) != std::string::npos) {
+                auto pipIt = config.pipelines.find(pipeline_name);
+                if (pipIt != config.pipelines.end() && pipIt->second != 0) {
+                    return pipIt->second;
+                }
+                return config.default_subgroup_size;
+            }
         }
     }
-    if (!foundKey.empty()) {
-        auto &pipelineMap = gpu_pipeline_config[foundKey];
-        auto pipIt = pipelineMap.find(pipeline_name);
-        if (pipIt != pipelineMap.end() && pipIt->second != 0) {
-            return pipIt->second;
-        }
-    }
-    // If not defined, return 0.
+    // If no matching configuration is found, return 0.
     return 0;
 }
 
@@ -1583,9 +1596,6 @@ static void ggml_vk_load_shaders(vk_device& device) {
                                               uint32_t align, bool disable_robustness = false, bool require_full_subgroups = false, uint32_t required_subgroup_size = 0) {
 
         required_subgroup_size = get_subgroup_size(name, device_name);
-        if (required_subgroup_size == 0) {
-            required_subgroup_size = (device_name.find("NAVI1") != std::string::npos) ? 32 : required_subgroup_size;
-        }
 
         if (!pipeline) {
             pipeline = std::make_shared<vk_pipeline_struct>();
