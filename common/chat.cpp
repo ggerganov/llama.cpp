@@ -1431,7 +1431,7 @@ static common_chat_params common_chat_templates_apply_jinja(
 
     // Use generic handler when mixing tools + JSON schema.
     // TODO: support that mix in handlers below.
-    if ((!params.tools.is_array() && params.json_schema.is_object())) {
+    if ((params.tools.is_array() && params.json_schema.is_object())) {
         return common_chat_params_init_generic(tmpl, params);
     }
 

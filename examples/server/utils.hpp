@@ -571,8 +571,8 @@ static json oaicompat_completion_params_parse(
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
-    auto json_schema = json_value(llama_params, "json_schema", json());
-    auto grammar = json_value(llama_params, "grammar", std::string());
+    auto json_schema = json_value(body, "json_schema", json());
+    auto grammar = json_value(body, "grammar", std::string());
     if (!json_schema.is_null() && !grammar.empty()) {
         throw std::runtime_error("Cannot use both json_schema and grammar");
     }
@@ -601,7 +601,7 @@ static json oaicompat_completion_params_parse(
     inputs.use_jinja             = use_jinja;
     inputs.parallel_tool_calls   = json_value(body, "parallel_tool_calls", false);
     inputs.extract_reasoning     = reasoning_format != COMMON_REASONING_FORMAT_NONE;
-    if (!inputs.tools.empty() && inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE && llama_params.contains("grammar")) {
+    if (!inputs.tools.empty() && inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE && body.contains("grammar")) {
         throw std::runtime_error("Cannot use custom grammar constraints with tools.");
     }
 
