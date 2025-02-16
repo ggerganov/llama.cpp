@@ -4,6 +4,7 @@
 #include "minja/chat-template.hpp"
 #include "minja/minja.hpp"
 
+#include <optional>
 
 typedef minja::chat_template common_chat_template;
 
