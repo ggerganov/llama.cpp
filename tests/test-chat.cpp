@@ -318,6 +318,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         tool_calls,
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_thoughts = {
         "assistant",
@@ -325,6 +327,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         tool_calls,
         /* .reasoning_content = */ "I'm\nthinking",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_thoughts_unparsed = {
         "assistant",
@@ -332,6 +336,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         tool_calls,
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_id {
         "assistant",
@@ -339,6 +345,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         tool_calls_id,
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_idx {
         "assistant",
@@ -346,6 +354,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         tool_calls_idx,
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_python {
         "assistant",
@@ -353,6 +363,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         { { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
     common_chat_msg message_assist_call_code_interpreter {
         "assistant",
@@ -360,6 +372,8 @@ static void test_template_output_parsers() {
         /* .content_parts = */ {},
         { { "code_interpreter", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
         /* .reasoning_content = */ "",
+        /* .tool_name = */ "",
+        /* .tool_call_id = */ "",
     };
 
     common_chat_templates_inputs inputs_no_tools;
