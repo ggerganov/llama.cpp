@@ -759,11 +759,14 @@ int main(int argc, char ** argv) {
 
                 // check for reverse prompt using special tokens
                 llama_token last_token = common_sampler_last(smpl);
-                if (std::find(antiprompt_token.begin(), antiprompt_token.end(), (int32_t) last_token) != antiprompt_token.end()) {
-                    if (params.interactive) {
-                        is_interacting = true;
+                for (auto token : antiprompt_token) {
+                    if (token == last_token) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                        }
+                        is_antiprompt = true;
+                        break;
                     }
-                    is_antiprompt = true;
                 }
 
                 if (is_antiprompt) {
