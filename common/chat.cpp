@@ -134,7 +134,7 @@ json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msg
             jmsg["name"] = msg.tool_name;
         }
         if (!msg.tool_call_id.empty()) {
-            jmsg["tool_call_id"] = json::parse(msg.tool_call_id);
+            jmsg["tool_call_id"] = msg.tool_call_id;
         }
         if (!msg.tool_calls.empty()) {
             auto & tool_calls = jmsg["tool_calls"] = json::array();
