@@ -345,41 +345,6 @@ static llama_tokens format_infill(
     return embd_inp;
 }
 
-// Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const common_chat_template & tmpl, const std::vector<json> & messages) {
-    std::vector<common_chat_msg> chat;
-
-    for (size_t i = 0; i < messages.size(); ++i) {
-        const auto & curr_msg = messages[i];
-
-        std::string role = json_value(curr_msg, "role", std::string(""));
-
-        std::string content;
-        if (curr_msg.contains("content")) {
-            if (curr_msg["content"].is_string()) {
-                content = curr_msg["content"].get<std::string>();
-            } else if (curr_msg["content"].is_array()) {
-                for (const auto & part : curr_msg["content"]) {
-                    if (part.contains("text")) {
-                        content += "\n" + part["text"].get<std::string>();
-                    }
-                }
-            } else {
-                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggml-org/llama.cpp/issues/8367)");
-            }
-        } else {
-            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggml-org/llama.cpp/issues/8367)");
-        }
-
-        chat.push_back({role, content, /* tool_calls= */ {}});
-    }
-
-    const auto formatted_chat = common_chat_apply_template(tmpl, chat, true, /* use_jinja= */ false);
-    LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
-
-    return formatted_chat;
-}
-
 //
 // base64 utils (TODO: move to common in the future)
 //
