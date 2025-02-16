@@ -41,7 +41,7 @@ common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::strin
 template <>
 std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messages) {
     std::vector<common_chat_msg> msgs;
-    
+
     try {
 
         if (!messages.is_array()) {
@@ -203,7 +203,7 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const std::string 
 template <>
 std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const json & tools) {
     std::vector<common_chat_tool> result;
-    
+
     try {
         if (!tools.is_null()) {
             if (!tools.is_array()) {
@@ -1417,7 +1417,7 @@ static common_chat_params common_chat_templates_apply_jinja(
     if (!inputs.json_schema.empty()) {
         params.json_schema = json::parse(inputs.json_schema);
     }
-    
+
     if (inputs.parallel_tool_calls && !tmpl.original_caps().supports_parallel_tool_calls) {
         LOG_DBG("Disabling parallel_tool_calls because the template does not support it\n");
         params.parallel_tool_calls = false;
@@ -1554,7 +1554,7 @@ common_chat_params common_chat_templates_apply(
     const struct common_chat_templates_inputs & inputs)
 {
     GGML_ASSERT(tmpls != nullptr);
-    return inputs.use_jinja 
+    return inputs.use_jinja
         ? common_chat_templates_apply_jinja(tmpls, inputs)
         : common_chat_templates_apply_legacy(tmpls, inputs);
 }
