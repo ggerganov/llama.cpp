@@ -504,6 +504,7 @@ struct vk_op_rope_push_constants {
     uint32_t s1;
     uint32_t s2;
     int32_t sections[4];
+    uint32_t is_back;
 };
 
 struct vk_op_soft_max_push_constants {
@@ -5345,6 +5346,7 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
         }
         return nullptr;
     case GGML_OP_ROPE:
+    case GGML_OP_ROPE_BACK:
         {
             const int mode = ((const int32_t *) dst->op_params)[2];
             const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
@@ -5696,6 +5698,7 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context& subctx, co
         } break;
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_ROPE:
+    case GGML_OP_ROPE_BACK:
         elements = { (uint32_t)ggml_nrows(src0), (uint32_t)ne00, 1 };
         break;
     case GGML_OP_GET_ROWS:
@@ -5791,7 +5794,7 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context& subctx, co
 
         ggml_vk_sync_buffers(subctx);
         ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { vk_subbuffer{ d_X, x_buf_offset, x_sz }, subbuf_y, vk_subbuffer{ d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
-    } else if (op == GGML_OP_ROPE) {
+    } else if (op == GGML_OP_ROPE || op == GGML_OP_ROPE_BACK) {
         // Empty src2 is possible in rope, but the shader needs a buffer
         vk_subbuffer subbuf_z;
         if (use_src2) {
@@ -6370,7 +6373,7 @@ static void ggml_vk_soft_max(ggml_backend_vk_context * ctx, vk_context& subctx, 
     }, dryrun);
 }
 
-static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst, bool dryrun = false) {
+static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst, bool backprop, bool dryrun = false) {
     const int n_dims        = ((int32_t *) dst->op_params)[1];
     const int mode          = ((int32_t *) dst->op_params)[2];
     // const int n_ctx         = ((int32_t *) dst->op_params)[3];
@@ -6398,7 +6401,7 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context& subctx, cons
         (uint32_t)src0->ne[0], (uint32_t)n_dims, freq_scale, (uint32_t)src0->ne[1],
         freq_base, ext_factor, attn_factor, {corr_dims[0], corr_dims[1]}, theta_scale,
         src2 != nullptr, (uint32_t)src0->ne[2], s1, s2,
-        sections[0], sections[1], sections[2], sections[3],
+        sections[0], sections[1], sections[2], sections[3], backprop
     }, dryrun);
 }
 
@@ -7325,6 +7328,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
     case GGML_OP_ROPE:
+    case GGML_OP_ROPE_BACK:
     case GGML_OP_MUL_MAT:
     case GGML_OP_MUL_MAT_ID:
     case GGML_OP_ARGSORT:
@@ -7384,6 +7388,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_ROPE:
+        case GGML_OP_ROPE_BACK:
         case GGML_OP_ARGSORT:
         case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
@@ -7510,7 +7515,11 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
 
         break;
     case GGML_OP_ROPE:
-        ggml_vk_rope(ctx, compute_ctx, src0, src1, src2, node, dryrun);
+        ggml_vk_rope(ctx, compute_ctx, src0, src1, src2, node, false, dryrun);
+
+        break;
+    case GGML_OP_ROPE_BACK:
+        ggml_vk_rope(ctx, compute_ctx, src0, src1, src2, node, true, dryrun);
 
         break;
     case GGML_OP_ARGSORT:
@@ -7642,6 +7651,7 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
     case GGML_OP_ROPE:
+    case GGML_OP_ROPE_BACK:
     case GGML_OP_RESHAPE:
     case GGML_OP_VIEW:
     case GGML_OP_PERMUTE:
@@ -8560,6 +8570,7 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
         case GGML_OP_REPEAT_BACK:
             return op->type == GGML_TYPE_F32 && op->src[0]->type == GGML_TYPE_F32;
         case GGML_OP_ROPE:
+        case GGML_OP_ROPE_BACK:
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -8984,7 +8995,7 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         }
     } else if (tensor->op == GGML_OP_DIAG_MASK_INF) {
         tensor_clone = ggml_diag_mask_inf(ggml_ctx, src_clone[0], *(int *)tensor->op_params);
-    } else if (tensor->op == GGML_OP_ROPE) {
+    } else if (tensor->op == GGML_OP_ROPE || tensor->op == GGML_OP_ROPE_BACK) {
         const int n_dims      = ((int32_t *) tensor->op_params)[1];
         const int mode        = ((int32_t *) tensor->op_params)[2];
         //const int n_ctx_ggml       = ((int32_t *) tensor->op_params)[3];
@@ -8997,9 +9008,17 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         const float beta_slow       = ((float *) tensor->op_params)[10];
         if (mode & GGML_ROPE_TYPE_MROPE) {
             int32_t *sections = ((int32_t *) tensor->op_params) + 11;
-            tensor_clone = ggml_rope_multi(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, sections, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            if (tensor->op == GGML_OP_ROPE) {
+                tensor_clone = ggml_rope_multi(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, sections, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            } else {
+                tensor_clone = ggml_rope_multi_back(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, sections, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            }
         } else {
-            tensor_clone = ggml_rope_ext(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            if (tensor->op == GGML_OP_ROPE) {
+                tensor_clone = ggml_rope_ext(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            } else {
+                tensor_clone = ggml_rope_ext_back(ggml_ctx, src_clone[0], src_clone[1], src_clone[2], n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+            }
         }
     } else if (tensor->op == GGML_OP_UNARY) {
         switch (ggml_get_unary_op(tensor)) {
