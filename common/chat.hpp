@@ -19,7 +19,6 @@ struct common_chat_msg_content_part {
     std::string text;
 };
 
-// same with llama_chat_message, but uses std::string
 struct common_chat_msg {
     std::string role;
     std::string content;
