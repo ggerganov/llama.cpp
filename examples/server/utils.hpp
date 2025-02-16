@@ -397,6 +397,33 @@ static std::vector<common_chat_msg> oaicompat_messages_parse(const json & messag
     return msgs;
 }
 
+static std::vector<common_chat_tool> oaicompat_tools_parse(const json & tools) {
+    std::vector<common_chat_tool> result;
+    
+    try {
+        if (!tools.is_null()) {
+            if (!tools.is_array()) throw std::runtime_error("Expected 'tools' to be an array, got " + tools.dump());
+            for (const auto & tool : tools) {
+                if (!tool.contains("type")) throw std::runtime_error("Missing tool type: " + tool.dump());
+                const auto & type = tool.at("type");
+                if (!type.is_string() || type != "function") throw std::runtime_error("Unsupported tool type: " + tool.dump());
+                if (!tool.contains("function")) throw std::runtime_error("Missing tool function: " + tool.dump());
+
+                const auto & function = tool.at("function");
+                result.push_back({
+                    /* .name = */ function.at("name"),
+                    /* .description = */ function.at("description"),
+                    /* .parameters = */ function.at("parameters").dump(),
+                });
+            }
+        }
+    } catch (const std::exception & e) {
+        throw std::runtime_error("Failed to parse tools: " + std::string(e.what()) + "; tools = " + tools.dump(2));
+    }
+
+    return result;
+}
+
 //
 // base64 utils (TODO: move to common in the future)
 //
@@ -647,15 +674,7 @@ static json oaicompat_completion_params_parse(
     inputs.add_generation_prompt = true;
     inputs.use_jinja = use_jinja;
     inputs.grammar = grammar;
-    if (tools.is_array()) {
-        for (const auto & tool : tools) {
-            inputs.tools.push_back({
-                /* .name = */ tool.at("name"),
-                /* .description = */ tool.at("description"),
-                /* .arguments = */ tool.at("arguments"),
-            });
-        }
-    }
+    inputs.tools = oaicompat_tools_parse(tools);
     inputs.json_schema = json_schema.is_null() ? "" : json_schema.dump();
     inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
     inputs.extract_reasoning = reasoning_format != COMMON_REASONING_FORMAT_NONE;
