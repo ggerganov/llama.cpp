@@ -252,6 +252,7 @@ struct vk_device_struct {
     vk_pipeline pipeline_diag_mask_inf_f32;
     vk_pipeline pipeline_soft_max_f32, pipeline_soft_max_f32_f16;
     vk_pipeline pipeline_soft_max_f32_wg512, pipeline_soft_max_f32_f16_wg512;
+    vk_pipeline pipeline_soft_max_back_f32;
     vk_pipeline pipeline_rope_norm_f32, pipeline_rope_norm_f16;
     vk_pipeline pipeline_rope_neox_f32, pipeline_rope_neox_f16;
     vk_pipeline pipeline_rope_multi_f32, pipeline_rope_multi_f16;
@@ -2195,6 +2196,7 @@ static void ggml_vk_load_shaders(vk_device& device) {
     ggml_vk_create_pipeline(device, device->pipeline_soft_max_f32_wg512, "soft_max_f32_wg512", soft_max_f32_len, soft_max_f32_data, "main", 3, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, { 512 }, 1);
     ggml_vk_create_pipeline(device, device->pipeline_soft_max_f32_f16, "soft_max_f32_f16", soft_max_f32_f16_len, soft_max_f32_f16_data, "main", 3, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
     ggml_vk_create_pipeline(device, device->pipeline_soft_max_f32_f16_wg512, "soft_max_f32_f16_wg512", soft_max_f32_f16_len, soft_max_f32_f16_data, "main", 3, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, { 512 }, 1);
+    ggml_vk_create_pipeline(device, device->pipeline_soft_max_back_f32, "soft_max_back_f32", soft_max_back_f32_len, soft_max_back_f32_data, "main", 3, sizeof(vk_op_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
 
     ggml_vk_create_pipeline(device, device->pipeline_rope_norm_f32, "rope_norm_f32", rope_norm_f32_len, rope_norm_f32_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
     ggml_vk_create_pipeline(device, device->pipeline_rope_neox_f32, "rope_neox_f32", rope_neox_f32_len, rope_neox_f32_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
@@ -5359,6 +5361,11 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
             return src0->ne[0] > 1024 ? ctx->device->pipeline_soft_max_f32_f16_wg512 : ctx->device->pipeline_soft_max_f32_f16;
         }
         return nullptr;
+    case GGML_OP_SOFT_MAX_BACK:
+        if (src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+            return ctx->device->pipeline_soft_max_back_f32;
+        }
+        return nullptr;
     case GGML_OP_ROPE:
     case GGML_OP_ROPE_BACK:
         {
@@ -5690,6 +5697,7 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context& subctx, co
     case GGML_OP_RMS_NORM:
     case GGML_OP_RMS_NORM_BACK:
     case GGML_OP_SOFT_MAX:
+    case GGML_OP_SOFT_MAX_BACK:
     case GGML_OP_SUM_ROWS:
     case GGML_OP_ARGMAX:
         {
@@ -6395,6 +6403,11 @@ static void ggml_vk_soft_max(ggml_backend_vk_context * ctx, vk_context& subctx, 
         n_head_log2,
         nrows_x,
     }, dryrun);
+}
+
+static void ggml_vk_soft_max_back(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, bool dryrun = false) {
+    float * op_params = (float *)dst->op_params;
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, subctx, src0, src1, nullptr, dst, GGML_OP_SOFT_MAX_BACK, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], op_params[0], op_params[1] }, dryrun);
 }
 
 static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst, bool backprop, bool dryrun = false) {
@@ -7353,6 +7366,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_RMS_NORM_BACK:
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
+    case GGML_OP_SOFT_MAX_BACK:
     case GGML_OP_ROPE:
     case GGML_OP_ROPE_BACK:
     case GGML_OP_MUL_MAT:
@@ -7415,6 +7429,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         case GGML_OP_UNARY:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
+        case GGML_OP_SOFT_MAX_BACK:
         case GGML_OP_ROPE:
         case GGML_OP_ROPE_BACK:
         case GGML_OP_ARGSORT:
@@ -7548,6 +7563,10 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         break;
     case GGML_OP_SOFT_MAX:
         ggml_vk_soft_max(ctx, compute_ctx, src0, src1, node, dryrun);
+
+        break;
+    case GGML_OP_SOFT_MAX_BACK:
+        ggml_vk_soft_max_back(ctx, compute_ctx, src0, src1, node, dryrun);
 
         break;
     case GGML_OP_ROPE:
@@ -7688,6 +7707,7 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
     case GGML_OP_RMS_NORM_BACK:
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
+    case GGML_OP_SOFT_MAX_BACK:
     case GGML_OP_ROPE:
     case GGML_OP_ROPE_BACK:
     case GGML_OP_RESHAPE:
@@ -8636,6 +8656,7 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
         case GGML_OP_PAD:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
+        case GGML_OP_SOFT_MAX_BACK:
         case GGML_OP_ARGSORT:
         case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
@@ -9038,6 +9059,8 @@ static void ggml_vk_check_results_0(ggml_tensor * tensor) {
         } else {
             tensor_clone = ggml_soft_max(ggml_ctx, src_clone[0]);
         }
+    } else if (tensor->op == GGML_OP_SOFT_MAX_BACK) {
+        tensor_clone = ggml_soft_max_ext_back(ggml_ctx, src_clone[0], src_clone[1], ((float *)tensor->op_params)[0], ((float *)tensor->op_params)[1]);
     } else if (tensor->op == GGML_OP_DIAG_MASK_INF) {
         tensor_clone = ggml_diag_mask_inf(ggml_ctx, src_clone[0], *(int *)tensor->op_params);
     } else if (tensor->op == GGML_OP_ROPE || tensor->op == GGML_OP_ROPE_BACK) {
