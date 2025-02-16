@@ -27,7 +27,7 @@ template <class T> static void assert_equals(const T & expected, const T & actua
 }
 
 static std::string read_file(const std::string & path) {
-    std::cerr << "# Reading: " << path << std::endl << std::flush;
+    std::cerr << "# Reading: " << path << '\n' << std::flush;
     std::ifstream fs(path, std::ios_base::binary);
     if (!fs.is_open()) {
         fs = std::ifstream("../" + path, std::ios_base::binary);
@@ -40,7 +40,7 @@ static std::string read_file(const std::string & path) {
     fs.seekg(0);
     std::string out;
     out.resize(static_cast<size_t>(size));
-    fs.read(&out[0], static_cast<std::streamsize>(size));
+    fs.read(out.data(), static_cast<std::streamsize>(size));
     return out;
 }
 
@@ -68,11 +68,9 @@ static bool match_string(const std::string & input, llama_grammar * grammar) {
         }
     }
 
-    for (const auto & stack : stacks_cur) {
-        if (stack.empty()) {
-            // An empty stack means that the grammar has been completed
-            return true;
-        }
+    if (std::any_of(stacks_cur.begin(), stacks_cur.end(), [](const auto & stack) { return stack.empty(); })) {
+        // An empty stack means that the grammar has been completed
+        return true;
     }
 
     return false;
@@ -213,7 +211,9 @@ static void test_templates(const struct common_chat_templates * tmpls, const std
                           bool expect_grammar_triggered = true,
                           bool test_grammar_if_triggered = true,
                           bool think = false) {
-    common_chat_msg user_message = { "user", "Hello, world!", {}, {}, "" };
+    common_chat_msg user_message;
+    user_message.role = "user";
+    user_message.content = "Hello, world!";
 
     for (const auto & tool_choice : std::vector<common_chat_tool_choice> {COMMON_CHAT_TOOL_CHOICE_AUTO, COMMON_CHAT_TOOL_CHOICE_REQUIRED}) {
         auto data = init_delta(tmpls, end_tokens, user_message, test_message, tools, tool_choice, think);
@@ -272,6 +272,8 @@ const common_chat_msg message_user {
     /* .content_parts = */ {},
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 
 const common_chat_msg message_user_parts {
@@ -283,6 +285,8 @@ const common_chat_msg message_user_parts {
     },
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 const common_chat_msg message_assist {
     "assistant",
@@ -290,6 +294,8 @@ const common_chat_msg message_assist {
     /* .content_parts = */ {},
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 const common_chat_msg message_assist_thoughts_unparsed_think {
     "assistant",
@@ -297,6 +303,8 @@ const common_chat_msg message_assist_thoughts_unparsed_think {
     /* .content_parts = */ {},
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 const common_chat_msg message_assist_thoughts_unparsed_r7b {
     "assistant",
@@ -304,6 +312,8 @@ const common_chat_msg message_assist_thoughts_unparsed_r7b {
     /* .content_parts = */ {},
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 const common_chat_msg message_assist_thoughts {
     "assistant",
@@ -311,6 +321,8 @@ const common_chat_msg message_assist_thoughts {
     /* .content_parts = */ {},
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "I'm thinking",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
 };
 const std::vector<common_chat_tool_call> tool_calls {
     { "special_function", "{\"arg1\": 1}", /* .id = */ "" },
@@ -777,40 +789,46 @@ static void test_template_output_parsers() {
 }
 
 int main(int argc, char ** argv) {
+    try {
 #ifndef _WIN32
-    if (argc > 1) {
-        common_chat_templates_inputs inputs;
-        inputs.messages = {
-            { "user", "Hey", {}, {}, "" },
-        };
-        inputs.tools = { special_function_tool };
+        if (argc > 1) {
+            common_chat_templates_inputs inputs;
+            common_chat_msg msg;
+            msg.role = "user";
+            msg.content = "Hey";
+            inputs.messages = {msg};
+            inputs.tools = { special_function_tool };
 
-        std::cout << "| Template | Format |\n";
-        std::cout << "|----------|--------|\n";
+            std::cout << "| Template | Format |\n";
+            std::cout << "|----------|--------|\n";
 
-        for (int i = 1; i < argc; i++) {
-            try {
-                std::string path = argv[i];
-                if (path.rfind(".jinja") != path.size() - 6) {
-                    std::cerr << "Skipping non-jinja file: " << path << std::endl;
-                    continue;
+            for (int i = 1; i < argc; i++) {
+                try {
+                    std::string path = argv[i];
+                    if (path.rfind(".jinja") != path.size() - 6) {
+                        std::cerr << "Skipping non-jinja file: " << path << '\n';
+                        continue;
+                    }
+                    auto tmpls = read_templates(path);
+                    auto parts  = string_split(path, "/");
+                    auto name   = parts[parts.size() - 1];
+                    auto format = common_chat_format_name(common_chat_templates_apply(tmpls.get(), inputs).format);
+                    std::cout << "| " << name << " | " << format << " |\n";
+                } catch (const std::exception & e) {
+                    std::cerr << "Failed to process " << argv[i] << ": " << e.what() << '\n';
                 }
-                auto tmpls = read_templates(path);
-                auto parts  = string_split(path, "/");
-                auto name   = parts[parts.size() - 1];
-                auto format = common_chat_format_name(common_chat_templates_apply(tmpls.get(), inputs).format);
-                std::cout << "| " << name << " | " << format << " |\n";
-            } catch (const std::exception & e) {
-                std::cerr << "Failed to process " << argv[i] << ": " << e.what() << std::endl;
             }
-        }
-    } else
+        } else
 #endif
-    {
-        test_msgs_oaicompat_json_conversion();
-        test_tools_oaicompat_json_conversion();
-        test_template_output_parsers();
-        std::cout << "\n[chat] All tests passed!" << std::endl;
+        {
+            test_msgs_oaicompat_json_conversion();
+            test_tools_oaicompat_json_conversion();
+            test_template_output_parsers();
+            std::cout << "\n[chat] All tests passed!" << '\n';
+        }
+        return 0;
+    } catch (const std::exception & e) {
+        std::cerr << "Error: " << e.what() << '\n';
+        return 1;
     }
-    return 0;
 }
