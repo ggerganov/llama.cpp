@@ -128,7 +128,7 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messa
 }
 
 template <>
-json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msgs) {
+json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msgs, bool concat_typed_text) {
     json messages = json::array();
     for (const auto & msg : msgs) {
         if (!msg.content.empty() && !msg.content_parts.empty()) {
@@ -140,12 +140,27 @@ json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msg
         if (!msg.content.empty()) {
             jmsg["content"] = msg.content;
         } else if (!msg.content_parts.empty()) {
-            auto & parts = jmsg["content"] = json::array();
-            for (const auto & part : msg.content_parts) {
-                parts.push_back({
-                    {"type", part.type},
-                    {"text", part.text},
-                });
+            if (concat_typed_text) {
+                std::string text;
+                for (const auto & part : msg.content_parts) {
+                    if (part.type != "text") {
+                        LOG_WRN("Ignoring content part type: %s\n", part.type.c_str());
+                        continue;
+                    }
+                    if (!text.empty()) {
+                        text += '\n';
+                    }
+                    text += part.text;
+                }
+                jmsg["content"] = text;
+            } else {
+                auto & parts = jmsg["content"] = json::array();
+                for (const auto & part : msg.content_parts) {
+                    parts.push_back({
+                        {"type", part.type},
+                        {"text", part.text},
+                    });
+                }
             }
         } else {
             jmsg["content"] = json(); // null
@@ -1388,21 +1403,21 @@ static common_chat_params common_chat_templates_apply_jinja(
     const struct common_chat_templates_inputs & inputs)
 {
     templates_params params;
-    params.messages = common_chat_msgs_to_json_oaicompat<json>(inputs.messages);
-    params.add_generation_prompt = inputs.add_generation_prompt;
-    params.extract_reasoning = inputs.extract_reasoning;
     params.tools = common_chat_tools_to_json_oaicompat<json>(inputs.tools);
-    params.tool_choice = inputs.tool_choice;
-    params.grammar = inputs.grammar;
-    if (!inputs.json_schema.empty()) {
-        params.json_schema = json::parse(inputs.json_schema);
-    }
     const auto & tmpl = params.tools.is_array() && tmpls->template_tool_use
         ? *tmpls->template_tool_use
         : *tmpls->template_default;
     const auto & src = tmpl.source();
     const auto & caps = tmpl.original_caps();
-
+    params.messages = common_chat_msgs_to_json_oaicompat<json>(inputs.messages, /* concat_text= */ !tmpl.original_caps().requires_typed_content);
+    params.add_generation_prompt = inputs.add_generation_prompt;
+    params.extract_reasoning = inputs.extract_reasoning;
+    params.tool_choice = inputs.tool_choice;
+    params.grammar = inputs.grammar;
+    if (!inputs.json_schema.empty()) {
+        params.json_schema = json::parse(inputs.json_schema);
+    }
+    
     if (inputs.parallel_tool_calls && !tmpl.original_caps().supports_parallel_tool_calls) {
         LOG_DBG("Disabling parallel_tool_calls because the template does not support it\n");
         params.parallel_tool_calls = false;
@@ -1487,6 +1502,10 @@ static common_chat_params common_chat_templates_apply_legacy(
     for (const auto & msg : inputs.messages) {
         auto content = msg.content;
         for (const auto & part : msg.content_parts) {
+            if (part.type != "text") {
+                LOG_WRN("Ignoring non-text content part: %s\n", part.type.c_str());
+                continue;
+            }
             if (!content.empty()) {
                 content += "\n";;
             }
