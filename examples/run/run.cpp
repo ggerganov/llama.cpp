@@ -837,7 +837,10 @@ static void add_message(const char * role, const std::string & text, LlamaData &
 static int apply_chat_template(const struct common_chat_templates * tmpls, LlamaData & llama_data, const bool append, bool use_jinja) {
     common_chat_templates_inputs inputs;
     for (const auto & msg : llama_data.messages) {
-        inputs.messages.push_back({ msg.role, msg.content, {}, {}, "" });
+        common_chat_msg cmsg;
+        cmsg.role    = msg.role;
+        cmsg.content = msg.content;
+        inputs.messages.push_back(cmsg);
     }
     inputs.add_generation_prompt = append;
     inputs.use_jinja = use_jinja;
