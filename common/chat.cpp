@@ -26,6 +26,193 @@ struct templates_params {
     bool extract_reasoning     = true;
 };
 
+common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice) {
+    if (tool_choice == "auto")      return COMMON_CHAT_TOOL_CHOICE_AUTO;
+    if (tool_choice == "none")      return COMMON_CHAT_TOOL_CHOICE_NONE;
+    if (tool_choice == "required")  return COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+    throw std::runtime_error("Invalid tool_choice: " + tool_choice);
+}
+
+template <>
+std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messages) {
+    std::vector<common_chat_msg> msgs;
+    
+    try {
+
+        if (!messages.is_array()) throw std::runtime_error("Expected 'messages' to be an array, got " + messages.dump());
+
+        for (const auto & message : messages) {
+            if (!message.is_object()) throw std::runtime_error("Expected 'message' to be an object, got " + message.dump());
+
+            common_chat_msg msg;
+            if (!message.contains("role")) throw std::runtime_error("Missing 'role' in message: " + message.dump());
+            msg.role = message.at("role");
+
+            if (message.contains("content")) {
+                const auto & content = message.at("content");
+                if (content.is_string()) {
+                    msg.content = content;
+                } else if (content.is_array()) {
+                    for (const auto & part : content) {
+                        if (!part.contains("type")) throw std::runtime_error("Missing content part type: " + part.dump());
+                        const auto & type = part.at("type");
+                        if (type != "text") throw std::runtime_error("Unsupported content part type: " + type.dump());
+                        common_chat_msg_content_part msg_part;
+                        msg_part.type = type;
+                        msg_part.text = part.at("text");
+                        msg.content_parts.push_back(msg_part);
+                    }
+                } else if (!content.is_null()) {
+                    throw std::runtime_error("Invalid 'content' type: expected string or array, got " + content.dump() + " (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+                }
+            } else {
+                throw std::runtime_error("Expected 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+            }
+            if (message.contains("reasoning_content")) {
+                msg.reasoning_content = message.at("reasoning_content");
+            }
+            if (message.contains("name")) {
+                msg.tool_name = message.at("name");
+            }
+            if (message.contains("tool_call_id")) {
+                msg.tool_call_id = message.at("tool_call_id");
+            }
+            if (message.contains("tool_calls")) {
+                for (const auto & tool_call : message.at("tool_calls")) {
+                    common_chat_tool_call tc;
+                    if (!tool_call.contains("type")) throw std::runtime_error("Missing tool call type: " + tool_call.dump());
+                    const auto & type = tool_call.at("type");
+                    if (type != "function") throw std::runtime_error("Unsupported tool call type: " + tool_call.dump());
+                    if (!tool_call.contains("function")) throw std::runtime_error("Missing tool call function: " + tool_call.dump());
+                    const auto & fc = tool_call.at("function");
+                    if (!fc.contains("name")) throw std::runtime_error("Missing tool call name: " + tool_call.dump());
+                    tc.name = fc.at("name");
+                    tc.arguments = fc.at("arguments");
+                    if (tool_call.contains("id")) {
+                        tc.id = tool_call.at("id");
+                    }
+                    msg.tool_calls.push_back(tc);
+                }
+            }
+
+            msgs.push_back(msg);
+        }
+    } catch (const std::exception & e) {
+        throw std::runtime_error("Failed to parse messages: " + std::string(e.what()) + "; messages = " + messages.dump(2));
+    }
+
+    return msgs;
+}
+
+template <>
+json common_chat_msgs_to_json_oaicompat(const std::vector<common_chat_msg> & msgs) {
+    json messages = json::array();
+    for (const auto & msg : msgs) {
+        if (!msg.content.empty() && !msg.content_parts.empty()) {
+            throw std::runtime_error("Cannot specify both content and content_parts");
+        }
+        json jmsg {
+            {"role", msg.role},
+        };
+        if (!msg.content.empty()) {
+            jmsg["content"] = msg.content;
+        } else if (!msg.content_parts.empty()) {
+            auto & parts = jmsg["content"] = json::array();
+            for (const auto & part : msg.content_parts) {
+                parts.push_back({
+                    {"type", part.type},
+                    {"text", part.text},
+                });
+            }
+        } else {
+            jmsg["content"] = json(); // null
+        }
+        if (!msg.reasoning_content.empty()) {
+            jmsg["reasoning_content"] = msg.reasoning_content;
+        }
+        if (!msg.tool_name.empty()) {
+            jmsg["name"] = msg.tool_name;
+        }
+        if (!msg.tool_call_id.empty()) {
+            jmsg["tool_call_id"] = json::parse(msg.tool_call_id);
+        }
+        if (!msg.tool_calls.empty()) {
+            auto & tool_calls = jmsg["tool_calls"] = json::array();
+            for (const auto & tool_call : msg.tool_calls) {
+                json tc {
+                    {"type", "function"},
+                    {"function", {
+                        {"name", tool_call.name},
+                        {"arguments", tool_call.arguments},
+                    }},
+                };
+                if (!tool_call.id.empty()) {
+                    tc["id"] = tool_call.id;
+                }
+                tool_calls.push_back(tc);
+            }
+        }
+        messages.push_back(jmsg);
+    }
+    return messages;
+}
+
+template <>
+std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const std::string & messages) {
+    return common_chat_msgs_parse_oaicompat(json::parse(messages));
+}
+
+template <>
+std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const json & tools) {
+    std::vector<common_chat_tool> result;
+    
+    try {
+        if (!tools.is_null()) {
+            if (!tools.is_array()) throw std::runtime_error("Expected 'tools' to be an array, got " + tools.dump());
+            for (const auto & tool : tools) {
+                if (!tool.contains("type")) throw std::runtime_error("Missing tool type: " + tool.dump());
+                const auto & type = tool.at("type");
+                if (!type.is_string() || type != "function") throw std::runtime_error("Unsupported tool type: " + tool.dump());
+                if (!tool.contains("function")) throw std::runtime_error("Missing tool function: " + tool.dump());
+
+                const auto & function = tool.at("function");
+                result.push_back({
+                    /* .name = */ function.at("name"),
+                    /* .description = */ function.at("description"),
+                    /* .parameters = */ function.at("parameters").dump(),
+                });
+            }
+        }
+    } catch (const std::exception & e) {
+        throw std::runtime_error("Failed to parse tools: " + std::string(e.what()) + "; tools = " + tools.dump(2));
+    }
+
+    return result;
+}
+
+template <>
+std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const std::string & tools) {
+    return common_chat_tools_parse_oaicompat(json::parse(tools));
+}
+
+template <>
+json common_chat_tools_to_json_oaicompat(const std::vector<common_chat_tool> & tools) {
+    if (tools.empty()) return json();
+
+    auto result = json::array();
+    for (const auto & tool : tools) {
+        result.push_back({
+            {"type", "function"},
+            {"function", {
+                {"name", tool.name},
+                {"description", tool.description},
+                {"parameters", json::parse(tool.parameters)},
+            }},
+        });
+    }
+    return result;
+}
+
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {
@@ -1153,75 +1340,6 @@ static common_chat_params common_chat_params_init_without_tools(const common_cha
     return data;
 }
 
-static json messages_to_json(const std::vector<common_chat_msg> & msgs) {
-    json messages = json::array();
-    for (const auto & msg : msgs) {
-        if (!msg.content.empty() && !msg.content_parts.empty()) {
-            throw std::runtime_error("Cannot specify both content and content_parts");
-        }
-        json jmsg {
-            {"role", msg.role},
-        };
-        if (!msg.content.empty()) {
-            jmsg["content"] = msg.content;
-        } else if (!msg.content_parts.empty()) {
-            auto & parts = jmsg["content"] = json::array();
-            for (const auto & part : msg.content_parts) {
-                parts.push_back({
-                    {"type", part.type},
-                    {"text", part.text},
-                });
-            }
-        } else {
-            jmsg["content"] = json(); // null
-        }
-        if (!msg.reasoning_content.empty()) {
-            jmsg["reasoning_content"] = msg.reasoning_content;
-        }
-        if (!msg.tool_name.empty()) {
-            jmsg["name"] = msg.tool_name;
-        }
-        if (!msg.tool_call_id.empty()) {
-            jmsg["tool_call_id"] = json::parse(msg.tool_call_id);
-        }
-        if (!msg.tool_calls.empty()) {
-            auto & tool_calls = jmsg["tool_calls"] = json::array();
-            for (const auto & tool_call : msg.tool_calls) {
-                json tc {
-                    {"type", "function"},
-                    {"function", {
-                        {"name", tool_call.name},
-                        {"arguments", tool_call.arguments},
-                    }},
-                };
-                if (!tool_call.id.empty()) {
-                    tc["id"] = tool_call.id;
-                }
-                tool_calls.push_back(tc);
-            }
-        }
-        messages.push_back(jmsg);
-    }
-    return messages;
-}
-
-static json tools_to_json(const std::vector<common_chat_tool> & tools) {
-    if (tools.empty()) return json();
-
-    auto result = json::array();
-    for (const auto & tool : tools) {
-        result.push_back({
-            {"type", "function"},
-            {"function", {
-                {"name", tool.name},
-                {"description", tool.description},
-                {"parameters", json::parse(tool.parameters)},
-            }},
-        });
-    }
-    return result;
-}
-
 common_chat_params common_chat_templates_apply(
     const struct common_chat_templates * tmpls,
     const struct common_chat_templates_inputs & inputs)
@@ -1229,10 +1347,10 @@ common_chat_params common_chat_templates_apply(
     GGML_ASSERT(tmpls != nullptr);
     if (inputs.use_jinja) {
         templates_params params;
-        params.messages = messages_to_json(inputs.messages);
+        params.messages = common_chat_msgs_to_json_oaicompat<json>(inputs.messages);
         params.add_generation_prompt = inputs.add_generation_prompt;
         params.extract_reasoning = inputs.extract_reasoning;
-        params.tools = tools_to_json(inputs.tools);
+        params.tools = common_chat_tools_to_json_oaicompat<json>(inputs.tools);
         params.tool_choice = inputs.tool_choice;
         params.grammar = inputs.grammar;
         if (!inputs.json_schema.empty()) {
@@ -1405,121 +1523,4 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
         default:
             throw std::runtime_error("Unsupported format: " + common_chat_format_name(format));
     }
-}
-
-common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice) {
-    if (tool_choice == "auto")      return COMMON_CHAT_TOOL_CHOICE_AUTO;
-    if (tool_choice == "none")      return COMMON_CHAT_TOOL_CHOICE_NONE;
-    if (tool_choice == "required")  return COMMON_CHAT_TOOL_CHOICE_REQUIRED;
-    throw std::runtime_error("Invalid tool_choice: " + tool_choice);
-}
-
-
-template <>
-std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messages) {
-    std::vector<common_chat_msg> msgs;
-    
-    try {
-
-        if (!messages.is_array()) throw std::runtime_error("Expected 'messages' to be an array, got " + messages.dump());
-
-        for (const auto & message : messages) {
-            if (!message.is_object()) throw std::runtime_error("Expected 'message' to be an object, got " + message.dump());
-
-            common_chat_msg msg;
-            if (!message.contains("role")) throw std::runtime_error("Missing 'role' in message: " + message.dump());
-            msg.role = message.at("role");
-
-            if (message.contains("content")) {
-                const auto & content = message.at("content");
-                if (content.is_string()) {
-                    msg.content = content;
-                } else if (content.is_array()) {
-                    for (const auto & part : content) {
-                        if (!part.contains("type")) throw std::runtime_error("Missing content part type: " + part.dump());
-                        const auto & type = part.at("type");
-                        if (type != "text") throw std::runtime_error("Unsupported content part type: " + type.dump());
-                        common_chat_msg_content_part msg_part;
-                        msg_part.type = type;
-                        msg_part.text = part.at("text");
-                        msg.content_parts.push_back(msg_part);
-                    }
-                } else if (!content.is_null()) {
-                    throw std::runtime_error("Invalid 'content' type: expected string or array, got " + content.dump() + " (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
-                }
-            } else {
-                throw std::runtime_error("Expected 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
-            }
-            if (message.contains("reasoning_content")) {
-                msg.reasoning_content = message.at("reasoning_content");
-            }
-            if (message.contains("name")) {
-                msg.tool_name = message.at("name");
-            }
-            if (message.contains("tool_call_id")) {
-                msg.tool_call_id = message.at("tool_call_id");
-            }
-            if (message.contains("tool_calls")) {
-                for (const auto & tool_call : message.at("tool_calls")) {
-                    common_chat_tool_call tc;
-                    if (!tool_call.contains("type")) throw std::runtime_error("Missing tool call type: " + tool_call.dump());
-                    const auto & type = tool_call.at("type");
-                    if (type != "function") throw std::runtime_error("Unsupported tool call type: " + tool_call.dump());
-                    if (!tool_call.contains("function")) throw std::runtime_error("Missing tool call function: " + tool_call.dump());
-                    const auto & fc = tool_call.at("function");
-                    if (!fc.contains("name")) throw std::runtime_error("Missing tool call name: " + tool_call.dump());
-                    tc.name = fc.at("name");
-                    tc.arguments = fc.at("arguments");
-                    if (fc.contains("id")) {
-                        tc.id = fc.at("id");
-                    }
-                    msg.tool_calls.push_back(tc);
-                }
-            }
-
-            msgs.push_back(msg);
-        }
-    } catch (const std::exception & e) {
-        throw std::runtime_error("Failed to parse messages: " + std::string(e.what()) + "; messages = " + messages.dump(2));
-    }
-
-    return msgs;
-}
-
-template <>
-std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const std::string & messages) {
-    return common_chat_msgs_parse_oaicompat(json::parse(messages));
-}
-
-template <>
-std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const json & tools) {
-    std::vector<common_chat_tool> result;
-    
-    try {
-        if (!tools.is_null()) {
-            if (!tools.is_array()) throw std::runtime_error("Expected 'tools' to be an array, got " + tools.dump());
-            for (const auto & tool : tools) {
-                if (!tool.contains("type")) throw std::runtime_error("Missing tool type: " + tool.dump());
-                const auto & type = tool.at("type");
-                if (!type.is_string() || type != "function") throw std::runtime_error("Unsupported tool type: " + tool.dump());
-                if (!tool.contains("function")) throw std::runtime_error("Missing tool function: " + tool.dump());
-
-                const auto & function = tool.at("function");
-                result.push_back({
-                    /* .name = */ function.at("name"),
-                    /* .description = */ function.at("description"),
-                    /* .parameters = */ function.at("parameters").dump(),
-                });
-            }
-        }
-    } catch (const std::exception & e) {
-        throw std::runtime_error("Failed to parse tools: " + std::string(e.what()) + "; tools = " + tools.dump(2));
-    }
-
-    return result;
-}
-
-template <>
-std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const std::string & tools) {
-    return common_chat_tools_parse_oaicompat(json::parse(tools));
 }

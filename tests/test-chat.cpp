@@ -266,115 +266,136 @@ static void test_templates(const struct common_chat_templates * tmpls, const std
     }
 }
 
-static void test_template_output_parsers() {
-    common_chat_msg message_user {
-        "user",
-        "Hey there!",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
-    common_chat_msg message_assist {
-        "assistant",
-        "Hello, world!\nWhat's up?",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
-    common_chat_msg message_assist_thoughts_unparsed_think {
-        "assistant",
-        "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
-    common_chat_msg message_assist_thoughts_unparsed_r7b {
-        "assistant",
-        "<|START_THINKING|>I'm thinking<|END_THINKING|>Hello, world!\nWhat's up?",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
-    common_chat_msg message_assist_thoughts {
-        "assistant",
-        "Hello, world!\nWhat's up?",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "I'm thinking",
-    };
-    std::vector<common_chat_tool_call> tool_calls {
-        { "special_function", "{\"arg1\": 1}", /* .id = */ "" },
-    };
-    std::vector<common_chat_tool_call> tool_calls_idx {
-        { "special_function", "{\"arg1\": 1}", /* .id = */ "0" },
-    };
-    std::vector<common_chat_tool_call> tool_calls_id {
-        { "special_function", "{\"arg1\": 1}", /* .id = */ "123456789" },
-    };
+const common_chat_msg message_user {
+    "user",
+    "Hey there!",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+};
+const common_chat_msg message_assist {
+    "assistant",
+    "Hello, world!\nWhat's up?",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+};
+const common_chat_msg message_assist_thoughts_unparsed_think {
+    "assistant",
+    "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+};
+const common_chat_msg message_assist_thoughts_unparsed_r7b {
+    "assistant",
+    "<|START_THINKING|>I'm thinking<|END_THINKING|>Hello, world!\nWhat's up?",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+};
+const common_chat_msg message_assist_thoughts {
+    "assistant",
+    "Hello, world!\nWhat's up?",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "I'm thinking",
+};
+const std::vector<common_chat_tool_call> tool_calls {
+    { "special_function", "{\"arg1\": 1}", /* .id = */ "" },
+};
+const std::vector<common_chat_tool_call> tool_calls_idx {
+    { "special_function", "{\"arg1\": 1}", /* .id = */ "0" },
+};
+const std::vector<common_chat_tool_call> tool_calls_id {
+    { "special_function", "{\"arg1\": 1}", /* .id = */ "123456789" },
+};
 
-    common_chat_msg message_assist_call {
-        "assistant",
-        "",
-        /* .content_parts = */ {},
-        tool_calls,
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
+const common_chat_msg message_assist_call {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_thoughts = {
+    "assistant",
+    /* .content = */ "",
+    /* .content_parts = */ {},
+    tool_calls,
+    /* .reasoning_content = */ "I'm\nthinking",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_thoughts_unparsed = {
+    "assistant",
+    /* .content = */ "<think>I'm\nthinking</think>",
+    /* .content_parts = */ {},
+    tool_calls,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_id {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls_id,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_idx {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls_idx,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_python {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    { { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_code_interpreter {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    { { "code_interpreter", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+
+static void test_oaicompat_json_conversion() {
+    std::vector<common_chat_msg> msgs{
+        message_assist_call,
+        message_assist_call_thoughts,
+        message_assist_call_thoughts_unparsed,
+        message_assist_call_id,
+        message_assist_call_idx,
+        message_assist_call_python,
+        message_assist_call_code_interpreter,
     };
-    common_chat_msg message_assist_call_thoughts = {
-        "assistant",
-        /* .content = */ "",
-        /* .content_parts = */ {},
-        tool_calls,
-        /* .reasoning_content = */ "I'm\nthinking",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
-    common_chat_msg message_assist_call_thoughts_unparsed = {
-        "assistant",
-        /* .content = */ "<think>I'm\nthinking</think>",
-        /* .content_parts = */ {},
-        tool_calls,
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
-    common_chat_msg message_assist_call_id {
-        "assistant",
-        "",
-        /* .content_parts = */ {},
-        tool_calls_id,
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
-    common_chat_msg message_assist_call_idx {
-        "assistant",
-        "",
-        /* .content_parts = */ {},
-        tool_calls_idx,
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
-    common_chat_msg message_assist_call_python {
-        "assistant",
-        "",
-        /* .content_parts = */ {},
-        { { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
-    common_chat_msg message_assist_call_code_interpreter {
-        "assistant",
-        "",
-        /* .content_parts = */ {},
-        { { "code_interpreter", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
-        /* .reasoning_content = */ "",
-        /* .tool_name = */ "",
-        /* .tool_call_id = */ "",
-    };
+    for (const auto & msg : msgs) {
+        auto oai_json = common_chat_msgs_to_json_oaicompat<json>({msg});
+        fprintf(stderr, "OAI JSON: %s\n", oai_json.dump(2).c_str());
+        auto msgs2 = common_chat_msgs_parse_oaicompat(oai_json);
+        assert_equals((size_t) 1, msgs2.size());
+        auto msg2 = msgs2[0];
+        assert_msg_equals(msg, msg2);
+    }
+}
+
+static void test_template_output_parsers() {
 
     common_chat_templates_inputs inputs_no_tools;
     inputs_no_tools.messages                = {message_user};
@@ -691,6 +712,7 @@ int main(int argc, char ** argv) {
     } else
 #endif
     {
+        test_oaicompat_json_conversion();
         test_template_output_parsers();
         std::cout << "\n[chat] All tests passed!" << std::endl;
     }
