@@ -332,6 +332,20 @@ bool common_chat_templates_was_explicit(const struct common_chat_templates * tmp
     return tmpls->has_explicit_template;
 }
 
+const char * common_chat_templates_source(const struct common_chat_templates * tmpls, const char * variant) {
+    if (variant != nullptr) {
+        if (strcmp(variant, "tool_use") == 0) {
+            if (tmpls->template_tool_use) {
+                return tmpls->template_tool_use->source().c_str();
+            }
+            return nullptr;
+        } else {
+            LOG_DBG("%s: unknown template variant: %s\n", __func__, variant);
+        }
+    }
+    return tmpls->template_default->source().c_str();
+}
+
 struct common_chat_templates * common_chat_templates_init(
     const struct llama_model * model,
     const std::string & chat_template_override,

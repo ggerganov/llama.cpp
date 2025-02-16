@@ -92,8 +92,9 @@ struct common_chat_templates * common_chat_templates_init(
                                            const std::string & bos_token_override = "",
                                            const std::string & eos_token_override = "");
 
-bool common_chat_templates_was_explicit(const struct common_chat_templates * tmpls);
-void common_chat_templates_free(struct common_chat_templates * tmpls);
+bool         common_chat_templates_was_explicit(const struct common_chat_templates * tmpls);
+const char * common_chat_templates_source(const struct common_chat_templates * tmpls, const char * variant = nullptr);
+void         common_chat_templates_free(struct common_chat_templates * tmpls);
 
 typedef std::unique_ptr<struct common_chat_templates, decltype(&common_chat_templates_free)> common_chat_templates_ptr;
 

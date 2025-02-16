@@ -1897,6 +1897,7 @@ struct server_context {
             common_chat_format_example(chat_templates, params.use_jinja);
         } catch (const std::exception & e) {
             SRV_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
+            common_chat_templates_free(chat_templates);
             chat_templates = common_chat_templates_init(model, "chatml");
         }
 
@@ -3795,14 +3796,16 @@ int main(int argc, char ** argv) {
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params_base.n_parallel },
             { "model_path",                  ctx_server.params_base.model },
-            // { "chat_template",               ctx_server.chat_templates.template_default->source() },
-            // { "bos_token",                   ctx_server.chat_templates.template_default->bos_token() },
-            // { "eos_token",                   ctx_server.chat_templates.template_default->eos_token() },
+            { "chat_template",               common_chat_templates_source(ctx_server.chat_templates) },
+            { "bos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_bos(ctx_server.vocab), /* special= */ true)},
+            { "eos_token",                   common_token_to_piece(ctx_server.ctx, llama_vocab_eos(ctx_server.vocab), /* special= */ true)},
             { "build_info",                  build_info },
         };
-        // if (ctx_server.params_base.use_jinja && ctx_server.chat_templates.template_tool_use) {
-        //     data["chat_template_tool_use"] = ctx_server.chat_templates.template_tool_use->source();
-        // }
+        if (ctx_server.params_base.use_jinja) {
+            if (auto tool_use_src = common_chat_templates_source(ctx_server.chat_templates, "tool_use")) {
+                data["chat_template_tool_use"] = tool_use_src;
+            }
+        }
 
         res_ok(res, data);
     };
@@ -4454,9 +4457,9 @@ int main(int argc, char ** argv) {
     LOG_INF("%s: model loaded\n", __func__);
 
     // print sample chat example to make it clear which template is used
-    // LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
-    //     ctx_server.chat_templates.template_default->source().c_str(),
-    //     common_chat_format_example(*ctx_server.chat_templates.template_default, ctx_server.params_base.use_jinja).c_str());
+    LOG_INF("%s: chat template, chat_template: %s, example_format: '%s'\n", __func__,
+        common_chat_templates_source(ctx_server.chat_templates),
+        common_chat_format_example(ctx_server.chat_templates, ctx_server.params_base.use_jinja).c_str());
 
     ctx_server.queue_tasks.on_new_task([&ctx_server](const server_task & task) {
         ctx_server.process_single_task(task);
