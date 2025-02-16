@@ -1,5 +1,4 @@
 #include "chat.hpp"
-#include <json.hpp>
 #include "json-schema-to-grammar.h"
 #include "log.h"
 #include "minja/chat-template.hpp"

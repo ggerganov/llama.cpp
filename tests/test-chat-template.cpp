@@ -18,6 +18,13 @@ static std::string normalize_newlines(const std::string & s) {
 #endif
 }
 
+static common_chat_msg simple_msg(const std::string & role, const std::string & content) {
+    common_chat_msg msg;
+    msg.role = role;
+    msg.content = content;
+    return msg;
+}
+
 int main(void) {
     std::vector<llama_chat_message> conversation {
         {"system", "You are a helpful assistant"},
@@ -306,13 +313,7 @@ int main(void) {
 
     std::vector<common_chat_msg> messages;
     for (const auto & msg : conversation) {
-        messages.push_back({
-            msg.role,
-            msg.content,
-            /* .content_parts = */ {},
-            /* .tool_calls = */ {},
-            /* .reasoning_content = */ "",
-        });
+        messages.push_back(simple_msg(msg.role, msg.content));
     }
     for (const auto & test_case : test_cases) {
         if (!test_case.supported_with_jinja) {
@@ -322,6 +323,7 @@ int main(void) {
         try {
             common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, test_case.template_str.c_str(), test_case.bos_token, test_case.eos_token), &common_chat_templates_free);
             common_chat_templates_inputs inputs;
+            inputs.use_jinja = false;
             inputs.messages = messages;
             inputs.add_generation_prompt = add_generation_prompt;
             auto output = common_chat_templates_apply(tmpls.get(), inputs).prompt;
@@ -343,13 +345,7 @@ int main(void) {
     // test llama_chat_format_single for system message
     printf("\n\n=== llama_chat_format_single (system message) ===\n\n");
     std::vector<common_chat_msg> chat2;
-    common_chat_msg sys_msg {
-        "system",
-        "You are a helpful assistant",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
+    auto sys_msg = simple_msg("system", "You are a helpful assistant");
 
     auto fmt_sys = [&](std::string tmpl_str) {
         common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str), &common_chat_templates_free);
@@ -373,16 +369,10 @@ int main(void) {
 
     // test llama_chat_format_single for user message
     printf("\n\n=== llama_chat_format_single (user message) ===\n\n");
-    chat2.push_back({"system", "You are a helpful assistant", {}, {}, ""});
-    chat2.push_back({"user", "Hello", {}, {}, ""});
-    chat2.push_back({"assistant", "I am assistant", {}, {}, ""});
-    common_chat_msg new_msg {
-        "user",
-        "How are you",
-        /* .content_parts = */ {},
-        /* .tool_calls = */ {},
-        /* .reasoning_content = */ "",
-    };
+    chat2.push_back(simple_msg("system", "You are a helpful assistant"));
+    chat2.push_back(simple_msg("user", "Hello"));
+    chat2.push_back(simple_msg("assistant", "I am assistant"));
+    auto new_msg = simple_msg("user", "How are you");
 
     auto fmt_single = [&](const std::string & tmpl_str) {
         common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str.c_str()), &common_chat_templates_free);
