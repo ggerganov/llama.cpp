@@ -387,12 +387,72 @@ static void test_oaicompat_json_conversion() {
     };
     for (const auto & msg : msgs) {
         auto oai_json = common_chat_msgs_to_json_oaicompat<json>({msg});
-        fprintf(stderr, "OAI JSON: %s\n", oai_json.dump(2).c_str());
         auto msgs2 = common_chat_msgs_parse_oaicompat(oai_json);
         assert_equals((size_t) 1, msgs2.size());
         auto msg2 = msgs2[0];
         assert_msg_equals(msg, msg2);
     }
+    assert_equals(
+        std::string(
+            "[\n"
+            "  {\n"
+            "    \"role\": \"assistant\",\n"
+            "    \"content\": null,\n"
+            "    \"tool_calls\": [\n"
+            "      {\n"
+            "        \"type\": \"function\",\n"
+            "        \"function\": {\n"
+            "          \"name\": \"python\",\n"
+            "          \"arguments\": \"{\\\"code\\\": \\\"print('hey')\\\"}\"\n"
+            "        }\n"
+            "      }\n"
+            "    ]\n"
+            "  }\n"
+            "]"
+        ),
+        common_chat_msgs_to_json_oaicompat<json>({message_assist_call_python}).dump(2));
+
+    std::vector<common_chat_tool> tools{
+        special_function_tool,
+        python_tool,
+        code_interpreter_tool,
+    };
+
+    for (const auto & tool : tools) {
+        auto oai_json = common_chat_tools_to_json_oaicompat<json>({tool});
+        auto tools2 = common_chat_tools_parse_oaicompat(oai_json);
+        assert_equals((size_t) 1, tools2.size());
+        auto tool2 = tools2[0];
+        assert_equals(tool.name, tool2.name);
+        assert_equals(tool.description, tool2.description);
+        assert_equals(json::parse(tool.parameters).dump(2), json::parse(tool2.parameters).dump(2));
+    }
+
+    assert_equals(
+        std::string(
+            "[\n"
+            "  {\n"
+            "    \"type\": \"function\",\n"
+            "    \"function\": {\n"
+            "      \"name\": \"special_function\",\n"
+            "      \"description\": \"I'm special\",\n"
+            "      \"parameters\": {\n"
+            "        \"type\": \"object\",\n"
+            "        \"properties\": {\n"
+            "          \"arg1\": {\n"
+            "            \"type\": \"integer\",\n"
+            "            \"description\": \"The arg.\"\n"
+            "          }\n"
+            "        },\n"
+            "        \"required\": [\n"
+            "          \"arg1\"\n"
+            "        ]\n"
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "]"
+        ),
+        common_chat_tools_to_json_oaicompat<json>({special_function_tool}).dump(2));
 }
 
 static void test_template_output_parsers() {
