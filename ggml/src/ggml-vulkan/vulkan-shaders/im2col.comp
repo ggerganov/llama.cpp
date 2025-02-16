@@ -68,14 +68,13 @@ void main() {
             continue;
         }
 
-        const uint iiw = int(current_ix) * p.s0 + int(current_kx) * p.d0 - p.p0;
-        const uint iih = oh_s1 + int(current_ky) * p.d1 - p.p1;
+        const uint iiw = current_ix * p.s0 + current_kx * p.d0 - p.p0;
+        const uint iih = oh_s1 + current_ky * p.d1 - p.p1;
 
         offset_dst[idx] = dst_base + current_ix * p.CHW + current_ky * p.KW + current_kx;
 
-        const bool valid = (iih >= 0 && iih < int(p.IH)) && (iiw >= 0 && iiw < int(p.IW));
-        if (valid) {
-            values[idx] = data_a[src_base + uint(iih) * p.IW + uint(iiw)];
+        if ((iih < p.IH) && (iiw < p.IW)) {
+            values[idx] = data_a[src_base + iih * p.IW + iiw];
         }
 
         if (++current_ix == p.OW) {
