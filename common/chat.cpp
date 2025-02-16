@@ -582,10 +582,17 @@ static std::string apply(
     // tmpl_inputs.now = std::chrono::system_clock::now();
 
     minja::chat_template_options tmpl_opts;
-    tmpl_opts.use_bos_token = false;
-    tmpl_opts.use_eos_token = false;
-
-    return tmpl.apply(tmpl_inputs, tmpl_opts);
+    // To avoid double BOS / EOS tokens, we're manually removing begining / trailing tokens
+    // instead of using `chat_template_options.use_bos_token = false`, since these tokens
+    // may be needed inside the template / between messages too.
+    auto result = tmpl.apply(tmpl_inputs, tmpl_opts);
+    if (string_starts_with(result, tmpl.bos_token())) {
+        result = result.substr(tmpl.bos_token().size());
+    }
+    if (string_ends_with(result, tmpl.eos_token())) {
+        result = result.substr(0, result.size() - tmpl.eos_token().size());
+    }
+    return result;
 }
 
 static common_chat_params common_chat_params_init_generic(const common_chat_template & tmpl, const struct templates_params & inputs) {
