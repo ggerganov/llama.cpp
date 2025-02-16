@@ -192,6 +192,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             llama_sampler_chain_add(result->chain, llama_sampler_init_top_k        (params.top_k));
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp         (params.temp));
             llama_sampler_chain_add(result->chain, llama_sampler_init_top_n_sigma  (params.top_n_sigma));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_xtc          (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
         } else {
             for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
@@ -203,7 +204,7 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                                 c_breakers.push_back(str.c_str());
                             }
 
-                            llama_sampler_chain_add(result->chain, llama_sampler_init_dry(vocab, llama_model_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                            llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (vocab, llama_model_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                         }
                         break;
                     case COMMON_SAMPLER_TYPE_TOP_K:
