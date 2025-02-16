@@ -601,7 +601,7 @@ static json oaicompat_completion_params_parse(
     inputs.use_jinja             = use_jinja;
     inputs.parallel_tool_calls   = json_value(body, "parallel_tool_calls", false);
     inputs.extract_reasoning     = reasoning_format != COMMON_REASONING_FORMAT_NONE;
-    if (inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE && llama_params.contains("grammar")) {
+    if (!inputs.tools.empty() && inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE && llama_params.contains("grammar")) {
         throw std::runtime_error("Cannot use custom grammar constraints with tools.");
     }
 
