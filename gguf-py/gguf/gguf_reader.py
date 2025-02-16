@@ -56,14 +56,14 @@ class ReaderField(NamedTuple):
 
     def contents(self, index_or_slice: int | slice = slice(None)) -> Any:
         if self.types:
-            to_string = lambda x: str(x.tobytes(), encoding='utf-8')
+            to_string = lambda x: str(x.tobytes(), encoding='utf-8') # noqa: E731
             main_type = self.types[0]
 
             if main_type == GGUFValueType.ARRAY:
                 sub_type = self.types[-1]
 
                 if sub_type == GGUFValueType.STRING:
-                    indices = self.data[index_or_slice]
+                    indices: int | list = self.data[index_or_slice]
 
                     if isinstance(index_or_slice, int):
                         return to_string(self.parts[indices])
