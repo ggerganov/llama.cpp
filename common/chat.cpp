@@ -1317,9 +1317,18 @@ common_chat_params common_chat_templates_apply(
 
         int alloc_size = 0;
         std::vector<llama_chat_message> chat;
+        std::vector<std::string> contents;
         for (const auto & msg : inputs.messages) {
-            chat.push_back({msg.role.c_str(), msg.content.c_str()});
-            alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
+            auto content = msg.content;
+            for (const auto & part : msg.content_parts) {
+                if (!content.empty()) {
+                    content += "\n";;
+                }
+                content += part.text;
+            }
+            contents.emplace_back(std::move(content));
+            chat.push_back({msg.role.c_str(), contents.back().c_str()});
+            alloc_size += (msg.role.size() + contents.back().size()) * 1.25;
         }
 
         std::vector<char> buf(alloc_size);
