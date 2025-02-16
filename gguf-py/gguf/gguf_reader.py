@@ -63,12 +63,14 @@ class ReaderField(NamedTuple):
                 sub_type = self.types[-1]
 
                 if sub_type == GGUFValueType.STRING:
-                    indices: int | list = self.data[index_or_slice]
+                    indices: int | list[int] = self.data[index_or_slice]
 
                     if isinstance(index_or_slice, int):
-                        return to_string(self.parts[indices])
+                        idx: int = indices
+                        return to_string(self.parts[idx])
                     else:
-                        return [to_string(self.parts[idx]) for idx in indices]
+                        idxlist: list[int] = indices
+                        return [to_string(self.parts[idx]) for idx in idxlist]
                 else:
                     # FIXME: When/if _get_field_parts() support multi-dimensional arrays, this must do so too
 
