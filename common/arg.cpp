@@ -2247,7 +2247,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_LOG_VERBOSITY"));
     add_opt(common_arg(
         {"--log-prefix"},
-        "Enable prefx in log messages",
+        "Enable prefix in log messages",
         [](common_params &) {
             common_log_set_prefix(common_log_main(), true);
         }
