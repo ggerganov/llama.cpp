@@ -1448,8 +1448,12 @@ common_chat_params common_chat_templates_apply(
                 content += part.text;
             }
             contents.emplace_back(std::move(content));
-            chat.push_back({msg.role.c_str(), contents.back().c_str()});
-            alloc_size += (msg.role.size() + contents.back().size()) * 1.25;
+        }
+        for (size_t i = 0; i < contents.size(); ++i) {
+            const auto & msg = inputs.messages[i];
+            const auto & content = contents[i];
+            chat.push_back({msg.role.c_str(), content.c_str()});
+            alloc_size += (msg.role.size() + content.size()) * 1.25;
         }
 
         std::vector<char> buf(alloc_size);
