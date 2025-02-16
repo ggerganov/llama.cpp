@@ -144,7 +144,7 @@ class GGUFReader:
             # If we get 0 here that means it's (probably) a GGUF file created for
             # the opposite byte order of the machine this script is running on.
             self.byte_order = 'S'
-            temp_version = temp_version.newbyteorder(self.byte_order)
+            temp_version = temp_version.view(temp_version.dtype.newbyteorder(self.byte_order))
         version = temp_version[0]
         if version not in READER_SUPPORTED_VERSIONS:
             raise ValueError(f'Sorry, file appears to be version {version} which we cannot handle')
@@ -198,9 +198,7 @@ class GGUFReader:
         itemsize = int(np.empty([], dtype = dtype).itemsize)
         end_offs = offset + itemsize * count
         arr = self.data[offset:end_offs].view(dtype=dtype)[:count]
-        if override_order is None:
-            return arr
-        return arr.view(arr.dtype.newbyteorder(override_order))
+        return arr.view(arr.dtype.newbyteorder(self.byte_order if override_order is None else override_order))
 
     def _push_field(self, field: ReaderField, skip_sum: bool = False) -> int:
         if field.name in self.fields:
