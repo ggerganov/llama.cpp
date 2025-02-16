@@ -273,6 +273,17 @@ const common_chat_msg message_user {
     /* .tool_calls = */ {},
     /* .reasoning_content = */ "",
 };
+
+const common_chat_msg message_user_parts {
+    "user",
+    /* .content = */ "",
+    /* .content_parts = */ {
+        { "text", "Hey" },
+        { "text", "there" },
+    },
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+};
 const common_chat_msg message_assist {
     "assistant",
     "Hello, world!\nWhat's up?",
@@ -375,8 +386,10 @@ const common_chat_msg message_assist_call_code_interpreter {
     /* .tool_call_id = */ "",
 };
 
-static void test_oaicompat_json_conversion() {
+static void test_msgs_oaicompat_json_conversion() {
     std::vector<common_chat_msg> msgs{
+        message_user,
+        message_user_parts,
         message_assist_call,
         message_assist_call_thoughts,
         message_assist_call_thoughts_unparsed,
@@ -396,6 +409,26 @@ static void test_oaicompat_json_conversion() {
         std::string(
             "[\n"
             "  {\n"
+            "    \"role\": \"user\",\n"
+            "    \"content\": [\n"
+            "      {\n"
+            "        \"type\": \"text\",\n"
+            "        \"text\": \"Hey\"\n"
+            "      },\n"
+            "      {\n"
+            "        \"type\": \"text\",\n"
+            "        \"text\": \"there\"\n"
+            "      }\n"
+            "    ]\n"
+            "  }\n"
+            "]"
+        ),
+        common_chat_msgs_to_json_oaicompat<json>({message_user_parts}).dump(2));
+
+    assert_equals(
+        std::string(
+            "[\n"
+            "  {\n"
             "    \"role\": \"assistant\",\n"
             "    \"content\": null,\n"
             "    \"tool_calls\": [\n"
@@ -411,7 +444,9 @@ static void test_oaicompat_json_conversion() {
             "]"
         ),
         common_chat_msgs_to_json_oaicompat<json>({message_assist_call_python}).dump(2));
+}
 
+static void test_tools_oaicompat_json_conversion() {
     std::vector<common_chat_tool> tools{
         special_function_tool,
         python_tool,
@@ -772,7 +807,8 @@ int main(int argc, char ** argv) {
     } else
 #endif
     {
-        test_oaicompat_json_conversion();
+        test_msgs_oaicompat_json_conversion();
+        test_tools_oaicompat_json_conversion();
         test_template_output_parsers();
         std::cout << "\n[chat] All tests passed!" << std::endl;
     }
