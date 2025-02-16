@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <regex>
 
 #undef NDEBUG
 #include <cassert>
