@@ -29,6 +29,12 @@ struct common_chat_msg {
     std::string reasoning_content;
 };
 
+struct common_chat_tool {
+    std::string name;
+    std::string description;
+    std::string parameters;
+};
+
 enum common_chat_tool_choice {
     COMMON_CHAT_TOOL_CHOICE_AUTO,
     COMMON_CHAT_TOOL_CHOICE_REQUIRED,
@@ -51,6 +57,19 @@ enum common_chat_format {
     COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING,
 
     COMMON_CHAT_FORMAT_COUNT, // Not a format, just the # formats
+};
+
+struct common_chat_templates_inputs {
+    std::vector<common_chat_msg> messages;
+    std::string grammar;
+    std::string json_schema;
+    bool add_generation_prompt = true;
+    bool use_jinja = true;
+    // Parameters below only supported when use_jinja is true
+    std::vector<common_chat_tool> tools;
+    common_chat_tool_choice tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+    bool parallel_tool_calls = false;
+    bool extract_reasoning     = true;
 };
 
 struct common_chat_params {
@@ -77,25 +96,6 @@ void common_chat_templates_free(struct common_chat_templates * tmpls);
 
 typedef std::unique_ptr<struct common_chat_templates, decltype(&common_chat_templates_free)> common_chat_templates_ptr;
 
-struct common_chat_tool {
-    std::string name;
-    std::string description;
-    std::string parameters;
-};
-
-struct common_chat_templates_inputs {
-    std::vector<common_chat_msg> messages;
-    std::string grammar;
-    std::string json_schema;
-    std::vector<common_chat_tool> tools;
-    common_chat_tool_choice tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
-    bool add_generation_prompt = true;
-    bool use_jinja = true;
-    // Parameters below only supported when use_jinja is true
-    bool parallel_tool_calls = false;
-    bool extract_reasoning     = true;
-};
-
 struct common_chat_params      common_chat_templates_apply(
     const struct common_chat_templates * tmpls,
     const struct common_chat_templates_inputs & inputs);
@@ -117,3 +117,11 @@ std::string               common_chat_format_name(common_chat_format format);
 common_chat_msg           common_chat_parse(      const std::string & input, common_chat_format format);
 
 common_chat_tool_choice common_chat_tool_choice_parse(const std::string & tool_choice);
+
+// Parses a JSON array of messages in OpenAI's chat completion API format.
+// T can be std::string containing JSON or nlohmann::ordered_json
+template <class T> std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const T & messages);
+
+// Parses a JSON array of tools in OpenAI's chat completion tool call API format.
+// T can be std::string containing JSON or nlohmann::ordered_json
+template <class T> std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const T & tools);
