@@ -27,6 +27,8 @@ struct common_chat_msg {
     std::vector<common_chat_msg_content_part> content_parts;
     std::vector<common_chat_tool_call> tool_calls;
     std::string reasoning_content;
+    std::string tool_name;
+    std::string tool_call_id;
 };
 
 struct common_chat_tool {
@@ -116,7 +118,7 @@ std::string common_chat_format_example(
 std::string               common_chat_format_name(common_chat_format format);
 common_chat_msg           common_chat_parse(      const std::string & input, common_chat_format format);
 
-common_chat_tool_choice common_chat_tool_choice_parse(const std::string & tool_choice);
+common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice);
 
 // Parses a JSON array of messages in OpenAI's chat completion API format.
 // T can be std::string containing JSON or nlohmann::ordered_json

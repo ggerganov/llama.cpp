@@ -5,9 +5,6 @@
 #include "minja/chat-template.hpp"
 #include "minja/minja.hpp"
 
-namespace minja {
-    class chat_template;
-}
 
 typedef minja::chat_template common_chat_template;
 
@@ -1181,6 +1178,12 @@ static json messages_to_json(const std::vector<common_chat_msg> & msgs) {
         if (!msg.reasoning_content.empty()) {
             jmsg["reasoning_content"] = msg.reasoning_content;
         }
+        if (!msg.tool_name.empty()) {
+            jmsg["name"] = msg.tool_name;
+        }
+        if (!msg.tool_call_id.empty()) {
+            jmsg["tool_call_id"] = json::parse(msg.tool_call_id);
+        }
         if (!msg.tool_calls.empty()) {
             auto & tool_calls = jmsg["tool_calls"] = json::array();
             for (const auto & tool_call : msg.tool_calls) {
@@ -1404,7 +1407,7 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
     }
 }
 
-common_chat_tool_choice common_chat_tool_choice_parse(const std::string & tool_choice) {
+common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice) {
     if (tool_choice == "auto")      return COMMON_CHAT_TOOL_CHOICE_AUTO;
     if (tool_choice == "none")      return COMMON_CHAT_TOOL_CHOICE_NONE;
     if (tool_choice == "required")  return COMMON_CHAT_TOOL_CHOICE_REQUIRED;
@@ -1449,6 +1452,12 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messa
             }
             if (message.contains("reasoning_content")) {
                 msg.reasoning_content = message.at("reasoning_content");
+            }
+            if (message.contains("name")) {
+                msg.tool_name = message.at("name");
+            }
+            if (message.contains("tool_call_id")) {
+                msg.tool_call_id = message.at("tool_call_id");
             }
             if (message.contains("tool_calls")) {
                 for (const auto & tool_call : message.at("tool_calls")) {

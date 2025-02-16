@@ -592,15 +592,15 @@ static json oaicompat_completion_params_parse(
     }
 
     common_chat_templates_inputs inputs;
-    inputs.messages = common_chat_msgs_parse_oaicompat(body.at("messages"));
+    inputs.messages              = common_chat_msgs_parse_oaicompat(body.at("messages"));
+    inputs.tools                 = common_chat_tools_parse_oaicompat(tools);
+    inputs.tool_choice           = common_chat_tool_choice_parse_oaicompat(json_value(body, "tool_choice", std::string("auto")));
+    inputs.json_schema           = json_schema.is_null() ? "" : json_schema.dump();
+    inputs.grammar               = grammar;
     inputs.add_generation_prompt = true;
-    inputs.use_jinja = use_jinja;
-    inputs.grammar = grammar;
-    inputs.tools = common_chat_tools_parse_oaicompat(tools);
-    inputs.json_schema = json_schema.is_null() ? "" : json_schema.dump();
-    inputs.parallel_tool_calls = json_value(body, "parallel_tool_calls", false);
-    inputs.extract_reasoning = reasoning_format != COMMON_REASONING_FORMAT_NONE;
-    inputs.tool_choice = common_chat_tool_choice_parse(json_value(body, "tool_choice", std::string("auto")));
+    inputs.use_jinja             = use_jinja;
+    inputs.parallel_tool_calls   = json_value(body, "parallel_tool_calls", false);
+    inputs.extract_reasoning     = reasoning_format != COMMON_REASONING_FORMAT_NONE;
     if (inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE && llama_params.contains("grammar")) {
         throw std::runtime_error("Cannot use custom grammar constraints with tools.");
     }
@@ -608,10 +608,10 @@ static json oaicompat_completion_params_parse(
     // Apply chat template to the list of messages
     auto chat_params = common_chat_templates_apply(tmpls, inputs);
 
-    llama_params["chat_format"] = static_cast<int>(chat_params.format);
-    llama_params["prompt"] = chat_params.prompt;
-    llama_params["grammar"] = chat_params.grammar;
-    llama_params["grammar_lazy"] = chat_params.grammar_lazy;
+    llama_params["chat_format"]      = static_cast<int>(chat_params.format);
+    llama_params["prompt"]           = chat_params.prompt;
+    llama_params["grammar"]          = chat_params.grammar;
+    llama_params["grammar_lazy"]     = chat_params.grammar_lazy;
     auto grammar_triggers = json::array();
     for (const auto & trigger : chat_params.grammar_triggers) {
         grammar_triggers.push_back({
