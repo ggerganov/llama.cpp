@@ -401,7 +401,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
             {
                 "role": "tool",
                 "name": "calculate",
-                "content": 0.55644242476,
+                "content": "0.55644242476",
                 "tool_call_id": "call_6789"
             }
         ],

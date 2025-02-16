@@ -1433,7 +1433,7 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messa
                         msg.content_parts.push_back(msg_part);
                     }
                 } else if (!content.is_null()) {
-                    throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+                    throw std::runtime_error("Invalid 'content' type: expected string or array, got " + content.dump() + " (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
                 }
             } else {
                 throw std::runtime_error("Expected 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
@@ -1444,11 +1444,16 @@ std::vector<common_chat_msg> common_chat_msgs_parse_oaicompat(const json & messa
             if (message.contains("tool_calls")) {
                 for (const auto & tool_call : message.at("tool_calls")) {
                     common_chat_tool_call tc;
-                    if (!tool_call.contains("name")) throw std::runtime_error("Missing tool call name: " + tool_call.dump());
-                    tc.name = tool_call.at("name");
-                    tc.arguments = tool_call.at("arguments");
-                    if (tool_call.contains("id")) {
-                        tc.id = tool_call.at("id");
+                    if (!tool_call.contains("type")) throw std::runtime_error("Missing tool call type: " + tool_call.dump());
+                    const auto & type = tool_call.at("type");
+                    if (type != "function") throw std::runtime_error("Unsupported tool call type: " + tool_call.dump());
+                    if (!tool_call.contains("function")) throw std::runtime_error("Missing tool call function: " + tool_call.dump());
+                    const auto & fc = tool_call.at("function");
+                    if (!fc.contains("name")) throw std::runtime_error("Missing tool call name: " + tool_call.dump());
+                    tc.name = fc.at("name");
+                    tc.arguments = fc.at("arguments");
+                    if (fc.contains("id")) {
+                        tc.id = fc.at("id");
                     }
                     msg.tool_calls.push_back(tc);
                 }
