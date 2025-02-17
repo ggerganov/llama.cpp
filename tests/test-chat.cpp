@@ -45,7 +45,7 @@ static std::string read_file(const std::string & path) {
 }
 
 static common_chat_templates_ptr read_templates(const std::string & path) {
-    return common_chat_templates_ptr(common_chat_templates_init(/* model= */ nullptr, read_file(path)), &common_chat_templates_free);
+    return common_chat_templates_ptr(common_chat_templates_init(/* model= */ nullptr, read_file(path)));
 }
 
 static std::unique_ptr<llama_grammar> build_grammar(const std::string & grammar_str) {

@@ -1057,9 +1057,7 @@ static int get_user_input(std::string & user_input, const std::string & user) {
 static int chat_loop(LlamaData & llama_data, const std::string & user, bool use_jinja) {
     int prev_len = 0;
     llama_data.fmtted.resize(llama_n_ctx(llama_data.context.get()));
-    common_chat_templates_ptr chat_templates(
-        common_chat_templates_init(llama_data.model.get(), ""),
-        &common_chat_templates_free);
+    auto chat_templates = common_chat_templates_init(llama_data.model.get(), "");
     static const bool stdout_a_terminal = is_stdout_a_terminal();
     while (true) {
         // Get user input

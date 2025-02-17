@@ -322,7 +322,7 @@ int main(void) {
         }
         printf("\n\n=== %s (jinja) ===\n\n", test_case.name.c_str());
         try {
-            common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, test_case.template_str.c_str(), test_case.bos_token, test_case.eos_token), &common_chat_templates_free);
+            auto tmpls = common_chat_templates_init(/* model= */ nullptr, test_case.template_str.c_str(), test_case.bos_token, test_case.eos_token);
             common_chat_templates_inputs inputs;
             inputs.use_jinja = true;
             inputs.messages = messages;
@@ -349,7 +349,7 @@ int main(void) {
     auto sys_msg = simple_msg("system", "You are a helpful assistant");
 
     auto fmt_sys = [&](std::string tmpl_str) {
-        common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str), &common_chat_templates_free);
+        auto tmpls = common_chat_templates_init(/* model= */ nullptr, tmpl_str);
         auto output = common_chat_format_single(tmpls.get(), chat2, sys_msg, false, /* use_jinja= */ false);
         printf("fmt_sys(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");
@@ -376,7 +376,7 @@ int main(void) {
     auto new_msg = simple_msg("user", "How are you");
 
     auto fmt_single = [&](const std::string & tmpl_str) {
-        common_chat_templates_ptr tmpls(common_chat_templates_init(/* model= */ nullptr, tmpl_str.c_str()), &common_chat_templates_free);
+        auto tmpls = common_chat_templates_init(/* model= */ nullptr, tmpl_str.c_str());
         auto output = common_chat_format_single(tmpls.get(), chat2, new_msg, true, /* use_jinja= */ false);
         printf("fmt_single(%s) : %s\n", tmpl_str.c_str(), output.c_str());
         printf("-------------------------\n");

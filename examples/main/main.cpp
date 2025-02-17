@@ -158,9 +158,7 @@ int main(int argc, char ** argv) {
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
-    common_chat_templates_ptr chat_templates(
-        common_chat_templates_init(model, params.chat_template),
-        &common_chat_templates_free);
+    auto chat_templates = common_chat_templates_init(model, params.chat_template);
 
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 

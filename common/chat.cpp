@@ -269,12 +269,12 @@ bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
             msg.role = "user";
             msg.content = "test";
 
-            auto * tmpls = common_chat_templates_init(/* model= */ nullptr, tmpl);
+            auto tmpls = common_chat_templates_init(/* model= */ nullptr, tmpl);
 
             common_chat_templates_inputs inputs;
             inputs.messages = {msg};
 
-            common_chat_templates_apply(tmpls, inputs);
+            common_chat_templates_apply(tmpls.get(), inputs);
             return true;
         } catch (const std::exception & e) {
             LOG_ERR("%s: failed to apply template: %s\n", __func__, e.what());
@@ -362,7 +362,7 @@ const char * common_chat_templates_source(const struct common_chat_templates * t
     return tmpls->template_default->source().c_str();
 }
 
-struct common_chat_templates * common_chat_templates_init(
+common_chat_templates_ptr common_chat_templates_init(
     const struct llama_model * model,
     const std::string & chat_template_override,
     const std::string & bos_token_override,
@@ -426,7 +426,7 @@ struct common_chat_templates * common_chat_templates_init(
             LOG_ERR("%s: failed to parse tool use chat template (ignoring it): %s\n", __func__, e.what());
         }
     }
-    return tmpls;
+    return {tmpls, common_chat_templates_free};
 }
 
 std::string common_chat_format_name(common_chat_format format) {
