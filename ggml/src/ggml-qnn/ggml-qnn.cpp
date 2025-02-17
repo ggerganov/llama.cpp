@@ -1885,7 +1885,7 @@ public:
         return 0;
     }
 
-    std::string &get_qnn_graph_name() { return _graph_name; }
+    std::string & get_qnn_graph_name() { return _graph_name; }
 
     bool is_rpcmem_initialized() {
         return _rpcmem_initialized;
@@ -1906,8 +1906,10 @@ public:
     void unregister_rpcmem(Qnn_MemHandle_t mem_handle);
 
     void * alloc_rpcmem(size_t bytes, size_t alignment);
+    void * get_rpcmem_from_memhandle(Qnn_MemHandle_t mem_handle);
 
     void free_rpcmem(void * buf);
+    void free_rpcmem();
 
     bool is_rpcmem_allocated(void * buf);
 
@@ -1975,15 +1977,16 @@ private:
     QNN_INTERFACE_VER_TYPE _qnn_raw_interface;
     QNN_SYSTEM_INTERFACE_VER_TYPE _qnn_raw_system_interface;
 
-    std::unordered_set<Qnn_MemHandle_t> _qnn_mem_set;
+    std::unordered_map<void *, Qnn_MemHandle_t> _qnn_mem_set;
     std::unordered_map<void *, Qnn_MemHandle_t> _qnn_rpc_buffer_to_handles;
+
 
     static std::mutex _init_mutex;
     static std::unordered_map<BackendIdType, void *> _loaded_lib_handle;
     static std::unordered_map<std::string, BackendIdType> _lib_path_to_backend_id;
     static std::unordered_map<BackendIdType, const QnnInterface_t *> _loaded_backend;
 
-    void *_rpc_lib_handle = nullptr;
+    void * _rpc_lib_handle = nullptr;
     std::atomic_bool _rpcmem_initialized{false};
     pfn_rpc_mem_alloc _pfn_rpc_mem_alloc;
     pfn_rpc_mem_free _pfn_rpc_mem_free;
@@ -2032,9 +2035,28 @@ void qnn_instance::free_rpcmem(void * buf) {
     } else if (0 == _rpcmem_store_map.count(buf)) {
         GGMLQNN_LOG_WARN("no allocated tensor\n");
     } else {
+        GGMLQNN_LOG_DEBUG("free rpc mem %p", _rpcmem_store_map[buf]);
         _pfn_rpc_mem_free(_rpcmem_store_map[buf]);
         _rpcmem_store_map.erase(buf);
     }
+}
+
+void qnn_instance::free_rpcmem() {
+    Qnn_ErrorHandle_t error = QNN_SUCCESS;
+
+    if (_rpcmem_store_map.empty()) {
+        GGMLQNN_LOG_WARN("no rpcmem allocated\n");
+        return;
+    }
+
+    for (std::unordered_map<void *, void *>::iterator it = _rpcmem_store_map.begin();
+         it != _qnn_mem_set.end();
+         it++) {
+        void * rpcbuffer = it->second;
+        GGMLQNN_LOG_DEBUG("free rpc buffer %p", rpcbuffer);
+        _pfn_rpc_mem_free(rpcbuffer);
+    }
+    _rpcmem_store_map.clear();
 }
 
 int32_t qnn_instance::rpcmem_to_fd(void * buf) {
@@ -2059,10 +2081,6 @@ int qnn_instance::register_rpcmem(void * p_data, Qnn_Tensor_t * p_tensor) {
         return 2;
     }
 
-    if (is_rpcmem_allocated(p_data)) {
-        GGMLQNN_LOG_WARN("rpc memory already allocated\n");
-        //return 3;
-    }
     if (is_rpcmem_registered((QNN_VER_PTR(*p_tensor)->memHandle))) {
         GGMLQNN_LOG_WARN("tensor %s has been registered shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
         return 4;
@@ -2094,7 +2112,7 @@ int qnn_instance::register_rpcmem(void * p_data, Qnn_Tensor_t * p_tensor) {
         GGMLQNN_LOG_INFO("tensor %s successfully register shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
     }
     QNN_VER_PTR(*p_tensor)->memHandle = handle;
-    _qnn_mem_set.insert(handle);
+    _qnn_mem_set.insert((std::pair<void*, Qnn_MemHandle_t>(p_data, handle)));
 
     return 0;
 }
@@ -2136,6 +2154,19 @@ Qnn_MemHandle_t  qnn_instance::register_rpcmem(void * p_data, const uint32_t ran
     return handle;
 }
 
+void * qnn_instance::get_rpcmem_from_memhandle(Qnn_MemHandle_t mem_handle) {
+    for (std::unordered_map<void *, Qnn_MemHandle_t>::iterator it = _qnn_mem_set.begin();
+         it != _qnn_mem_set.end();
+         it++) {
+        Qnn_MemHandle_t mem_handle = it->second;
+        if (it->second == mem_handle) {
+            return it->first;
+        }
+    }
+    GGMLQNN_LOG_WARN("can't find rpcmem from qnn mem handle %p", mem_handle);
+    return nullptr;
+}
+
 void qnn_instance::unregister_rpcmem() {
     Qnn_ErrorHandle_t error = QNN_SUCCESS;
 
@@ -2143,10 +2174,16 @@ void qnn_instance::unregister_rpcmem() {
         GGMLQNN_LOG_WARN("no rpcmem registered\n");
     }
 
-    for (auto &mem_handle : _qnn_mem_set) {
+    for (std::unordered_map<void *, Qnn_MemHandle_t>::iterator it = _qnn_mem_set.begin();
+         it != _qnn_mem_set.end();
+         it++) {
+        Qnn_MemHandle_t mem_handle = it->second;
         error = _qnn_interface.qnn_mem_de_register(&mem_handle, 1);
         if (error != QNN_SUCCESS) {
-            GGMLQNN_LOG_WARN("failed to unregister shared memory, error %d\n", QNN_GET_ERROR_CODE(error));
+            GGMLQNN_LOG_WARN("failed to unregister shared memory, error %d\n",
+                         QNN_GET_ERROR_CODE(error));
+        } else {
+            GGMLQNN_LOG_DEBUG("unregister shared memory ok");
         }
     }
     _qnn_mem_set.clear();
@@ -2158,14 +2195,14 @@ void qnn_instance::unregister_rpcmem(Qnn_MemHandle_t mem_handle) {
         GGMLQNN_LOG_WARN("failed to unregister shared memory, error %d", QNN_GET_ERROR_CODE(error));
     }
 
-    auto it = std::find_if(_qnn_rpc_buffer_to_handles.begin(), _qnn_rpc_buffer_to_handles.end(),
+    auto it = std::find_if(_qnn_mem_set.begin(), _qnn_mem_set.end(),
                            [mem_handle](const auto &kv) { return kv.second == mem_handle; });
-    if (it == _qnn_rpc_buffer_to_handles.end()) {
+    if (it == _qnn_mem_set.end()) {
         GGMLQNN_LOG_WARN("failed to find shared memory handler: %p", mem_handle);
         return;
     }
 
-    _qnn_rpc_buffer_to_handles.erase(it);
+    _qnn_mem_set.erase(it);
 }
 
 bool qnn_instance::is_rpcmem_allocated(void * buf) {
@@ -2562,7 +2599,7 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
                                temp_context_config.empty() ? nullptr : temp_context_config.data(),
                                &_qnn_context_handle);
     if (nullptr == _qnn_context_handle) {
-        GGMLQNN_LOG_WARN("why failed to initialize qnn context\n");
+        GGMLQNN_LOG_WARN("why failed to initialize qnn context, error:%s\n", strerror(errno));
         return 8;
     } else {
         GGMLQNN_LOG_DEBUG("initialize qnn context successfully\n");
@@ -2636,8 +2673,12 @@ int qnn_instance::qnn_finalize() {
     int ret_status = 0;
     Qnn_ErrorHandle_t error = QNN_SUCCESS;
 
+    GGMLQNN_LOG_DEBUG("enter %s\n", __func__);
     //FIXME:should be removed in the future
     reset_idx();
+
+    free_rpcmem();
+    unregister_rpcmem();
 
     if (nullptr != _pfn_rpc_mem_deinit)
         _pfn_rpc_mem_deinit();
@@ -2700,6 +2741,7 @@ int qnn_instance::qnn_finalize() {
     unload_backend();
 
     unload_system();
+    GGMLQNN_LOG_DEBUG("leave %s\n", __func__);
 
     return ret_status;
 }
@@ -2954,6 +2996,10 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
     const ggml_tensor * src1                    = op->src[1];
     ggml_tensor * dst                           = op;
 
+    uint8_t * qnn_rpcbuffer_0                   = nullptr;
+    uint8_t * qnn_rpcbuffer_1                   = nullptr;
+    uint8_t * qnn_rpcbuffer_2                   = nullptr;
+
     GGMLQNN_CHECK_PARAMS(ctx, src0, src1, dst);
 
     instance                                    = ctx->instance;
@@ -3067,6 +3113,19 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
             GGMLQNN_LOG_INFO("can't create qnn graph handle with graph name %s, error = %d\n", graph_name.c_str(), error);
             return;
         }
+
+        if (ctx->device == QNN_BACKEND_NPU) {
+            QNN_VER_PTR(*tensor_0)->memType     = QNN_TENSORMEMTYPE_MEMHANDLE;
+            QNN_VER_PTR(*tensor_0)->clientBuf   = {.data=nullptr, .dataSize=0};
+
+            QNN_VER_PTR(*tensor_1)->memType     = QNN_TENSORMEMTYPE_MEMHANDLE;
+            QNN_VER_PTR(*tensor_1)->clientBuf   = {.data=nullptr, .dataSize=0};
+
+            QNN_VER_PTR(*tensor_2)->memType     = QNN_TENSORMEMTYPE_MEMHANDLE;
+            QNN_VER_PTR(*tensor_2)->clientBuf   = {.data=nullptr, .dataSize=0};
+        }
+
+
         error = qnn_raw_interface.tensorCreateGraphTensor(graph_handle, tensor_0);
         if (QNN_SUCCESS != error) {
             GGMLQNN_LOG_INFO("error = %d\n", error);
@@ -3080,9 +3139,43 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
             GGMLQNN_LOG_INFO("error = %d\n", error);
         }
 
-        QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data, ggml_get_tensor_data_size(src0)};
-        QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data, ggml_get_tensor_data_size(src1)};
-        QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data, ggml_get_tensor_data_size(dst)};
+        if (ctx->device != QNN_BACKEND_NPU) {
+            QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data, ggml_get_tensor_data_size(src0)};
+            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data, ggml_get_tensor_data_size(src1)};
+            QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data, ggml_get_tensor_data_size(dst)};
+        } else {
+            qnn_rpcbuffer_0 = static_cast<uint8_t *>(instance->alloc_rpcmem(
+                    ggml_nbytes(src0), 4));
+            if (nullptr == qnn_rpcbuffer_0) {
+                GGMLQNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
+                goto failure;
+            } else {
+                GGMLQNN_LOG_DEBUG("alloc rpcmem %p successfully\n", qnn_rpcbuffer_0);
+            }
+            instance->register_rpcmem(qnn_rpcbuffer_0, tensor_0);
+            memcpy(qnn_rpcbuffer_0, src0->data, ggml_nbytes(src0));
+
+            qnn_rpcbuffer_1 = static_cast<uint8_t *>(instance->alloc_rpcmem(
+                    ggml_nbytes(src1), 4));
+            if (nullptr == qnn_rpcbuffer_1) {
+                GGMLQNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
+                goto failure;
+            } else {
+                GGMLQNN_LOG_DEBUG("alloc rpcmem %p successfully\n", qnn_rpcbuffer_1);
+            }
+            instance->register_rpcmem(qnn_rpcbuffer_1, tensor_1);
+            memcpy(qnn_rpcbuffer_1, src1->data, ggml_nbytes(src1));
+
+            qnn_rpcbuffer_2 = static_cast<uint8_t *>(instance->alloc_rpcmem(
+                    ggml_nbytes(dst), 4));
+            if (nullptr == qnn_rpcbuffer_2) {
+                GGMLQNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
+                goto failure;
+            } else {
+                GGMLQNN_LOG_DEBUG("alloc rpcmem %p successfully\n", qnn_rpcbuffer_2);
+            }
+            instance->register_rpcmem(qnn_rpcbuffer_2, tensor_2);
+        }
 
         Qnn_Tensor_t tensor_inputs[] = {
                 *tensor_0,
@@ -3119,6 +3212,15 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
         if (QNN_SUCCESS != error) {
             GGMLQNN_LOG_INFO("error = %d\n", error);
         }
+
+        if (ctx->device == QNN_BACKEND_NPU) {
+            uint8_t * qnn_rpcbuffer = static_cast<uint8_t *>(instance->get_rpcmem_from_memhandle(
+                    QNN_VER_PTR(*tensor_2)->memHandle));
+            GGMLQNN_LOG_INFO("qnn_rpcbuffer = %p\n", qnn_rpcbuffer);
+            if (nullptr != qnn_rpcbuffer)
+                memcpy(dst->data, qnn_rpcbuffer, ggml_nbytes(dst));
+        }
+
         auto  graph_item = std::make_tuple(graph_handle, tensor_0, tensor_1, tensor_2);
         instance->_qnn_graph_map[map_entry] = graph_item;
     } else {
@@ -3138,9 +3240,21 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
         QNN_VER_PTR(*tensor_2)->rank = ggml_get_tensor_rank(dst);
         QNN_VER_PTR(*tensor_2)->dataType = dst_qnn_type;
 
-        QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data, ggml_get_tensor_data_size(src0)};
-        QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data, ggml_get_tensor_data_size(src1)};
-        QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data, ggml_get_tensor_data_size(dst)};
+        if (ctx->device != QNN_BACKEND_NPU) {
+            QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data, ggml_get_tensor_data_size(src0)};
+            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data, ggml_get_tensor_data_size(src1)};
+            QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data, ggml_get_tensor_data_size(dst)};
+        } else {
+            uint8_t * qnn_buffer_0 = static_cast<uint8_t *>(instance->get_rpcmem_from_memhandle(
+                    QNN_VER_PTR(*tensor_0)->memHandle));
+            if (nullptr != qnn_buffer_0)
+                memcpy(qnn_buffer_0, src0->data, ggml_nbytes(src0));
+
+            uint8_t * qnn_buffer_1 = static_cast<uint8_t *>(instance->get_rpcmem_from_memhandle(
+                    QNN_VER_PTR(*tensor_1)->memHandle));
+            if (nullptr != qnn_buffer_1)
+                memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
+        }
 
         Qnn_Tensor_t tensor_inputs[] = {
                 *tensor_0,
@@ -3156,6 +3270,35 @@ static void ggml_qnn_add(ggml_backend_t backend, ggml_tensor * op) {
         if (QNN_SUCCESS != error) {
             GGMLQNN_LOG_INFO("error = %d\n", error);
         }
+
+        if (ctx->device == QNN_BACKEND_NPU) {
+            uint8_t * qnn_buffer_2 = static_cast<uint8_t *>(instance->get_rpcmem_from_memhandle(
+                    QNN_VER_PTR(*tensor_2)->memHandle));
+            if (nullptr != qnn_buffer_2)
+                memcpy(dst->data, qnn_buffer_2, ggml_nbytes(dst));
+        }
+    }
+
+failure:
+    if (QNN_SUCCESS != error) {
+        GGMLQNN_LOG_DEBUG("tensor0 name %s", QNN_TENSOR_GET_NAME(*tensor_0));
+        GGMLQNN_LOG_DEBUG("tensor1 name %s", QNN_TENSOR_GET_NAME(*tensor_1));
+        GGMLQNN_LOG_DEBUG("tensor2 name %s", QNN_TENSOR_GET_NAME(*tensor_2));
+        GGMLQNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
+                      " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      src0->name, src0->type, ggml_type_name(src0->type),
+                      src0->ne[0], src0->ne[1], src0->ne[2], src0->nb[0],
+                      src0->nb[1], src0->nb[2]);
+        GGMLQNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
+                      " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      src1->name, src1->type, ggml_type_name(src1->type),
+                      src1->ne[0], src1->ne[1], src1->ne[2], src1->nb[0],
+                      src1->nb[1], src1->nb[2]);
+        GGMLQNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
+                      " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      dst->name, dst->type, ggml_type_name(dst->type),
+                      dst->ne[0], dst->ne[1], dst->ne[2], dst->nb[0],
+                      dst->nb[1], dst->nb[2]);
     }
 
     //avoid memory leak in func free_qnn_tensor
