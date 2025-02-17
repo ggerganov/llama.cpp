@@ -411,7 +411,7 @@ common_chat_templates_ptr common_chat_templates_init(
         token_bos = get_token(llama_vocab_bos(vocab), "BOS", "bos_token");
         token_eos = get_token(llama_vocab_eos(vocab), "EOS", "eos_token");
     }
-    common_chat_templates_ptr tmpls(new common_chat_templates(), common_chat_templates_free);
+    common_chat_templates_ptr tmpls(new common_chat_templates());
     tmpls->has_explicit_template = has_explicit_template;
     try {
         tmpls->template_default = std::make_unique<minja::chat_template>(default_template_src, token_bos, token_eos);

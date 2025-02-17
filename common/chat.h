@@ -85,9 +85,11 @@ struct common_chat_params {
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja);
 
-
 void common_chat_templates_free(struct common_chat_templates * tmpls);
-typedef std::unique_ptr<struct common_chat_templates, decltype(&common_chat_templates_free)> common_chat_templates_ptr;
+
+struct common_chat_templates_deleter { void operator()(common_chat_templates * tmpls) { common_chat_templates_free(tmpls); } };
+
+typedef std::unique_ptr<struct common_chat_templates, common_chat_templates_deleter> common_chat_templates_ptr;
 
 common_chat_templates_ptr common_chat_templates_init(
                                     const struct llama_model * model,

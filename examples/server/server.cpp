@@ -1806,8 +1806,6 @@ struct server_context {
 
     common_chat_templates_ptr chat_templates;
 
-    server_context() : chat_templates(nullptr, nullptr) {}
-
     ~server_context() {
         // Clear any sampling context
         for (server_slot & slot : slots) {
