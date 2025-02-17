@@ -4,7 +4,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "llama.h"
-#include "chat.hpp"
+#include "chat.h"
 
 #include <cstdio>
 #include <cstring>

@@ -10,7 +10,7 @@
 #include <json.hpp>
 #include <string>
 
-#include "chat.hpp"
+#include "chat.h"
 #include "llama-grammar.h"
 #include "unicode.h"
 

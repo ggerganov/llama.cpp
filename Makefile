@@ -1364,7 +1364,7 @@ llama-server: \
 	examples/server/index.html.hpp \
 	examples/server/loading.html.hpp \
 	common/chat.cpp \
-	common/chat.hpp \
+	common/chat.h \
 	common/chat-template.hpp \
 	common/json.hpp \
 	common/minja.hpp \

@@ -8,7 +8,7 @@
 
 #include "llama.h"
 #include "common.h"
-#include "chat.hpp"
+#include "chat.h"
 
 static std::string normalize_newlines(const std::string & s) {
 #ifdef _WIN32

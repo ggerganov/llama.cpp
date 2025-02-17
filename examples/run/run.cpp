@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "chat.hpp"
+#include "chat.h"
 #include "common.h"
 #include "json.hpp"
 #include "linenoise.cpp/linenoise.h"
