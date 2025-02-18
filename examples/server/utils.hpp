@@ -741,7 +741,7 @@ static json format_response_rerank(
         const json & request,
         const json & ranks,
         bool is_tei_format,
-        std::vector<std::string> & texts) {
+        const std::vector<std::string> & texts) {
     json res;
     if (is_tei_format) {
         // TEI response format
@@ -754,7 +754,7 @@ static json format_response_rerank(
                 {"score", json_value(rank, "score", 0.0)},
             };
             if (return_text) {
-                elem["text"] = texts[index];
+                elem["text"] = std::move(texts[index]);
             }
             res.push_back(elem);
         }
