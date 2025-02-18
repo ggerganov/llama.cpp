@@ -57,8 +57,7 @@ add_library(${TARGET} STATIC
     arg.h
     base64.hpp
     chat.cpp
-    chat.hpp
-    chat-template.hpp
+    chat.h
     common.cpp
     common.h
     console.cpp
@@ -68,7 +67,8 @@ add_library(${TARGET} STATIC
     llguidance.cpp
     log.cpp
     log.h
-    minja.hpp
+    minja/chat-template.hpp
+    minja/minja.hpp
     ngram-cache.cpp
     ngram-cache.h
     sampling.cpp
