@@ -79,6 +79,7 @@ export default function ChatScreen() {
     pendingMessages,
     canvasData,
     replaceMessageAndGenerate,
+    setExtraContext
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -88,7 +89,7 @@ export default function ChatScreen() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.command === 'setText') {
         setInputMsg(event.data?.text);
-        StorageUtils.setExtraContext(event.data?.context)
+          setExtraContext(event.data?.context)
         inputRef.current?.focus();
       }
     };
