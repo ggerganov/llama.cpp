@@ -3625,7 +3625,7 @@ int main(int argc, char ** argv) {
             }, {
                     {"name",  "n_busy_slots_per_decode"},
                     {"help",  "Average number of busy slots per llama_decode() call"},
-                    {"value",  (float) res_metrics->n_busy_slots_total / (float) res_metrics->n_decode_total}
+                    {"value",  (float) res_metrics->n_busy_slots_total / std::max((float) res_metrics->n_decode_total, 1.f)}
             }}},
             {"gauge", {{
                     {"name",  "prompt_tokens_seconds"},
@@ -4234,6 +4234,11 @@ int main(int argc, char ** argv) {
         //    return;
         //}
 
+        // if true, use TEI API format, otherwise use Jina API format
+        // Jina: https://jina.ai/reranker/
+        // TEI: https://huggingface.github.io/text-embeddings-inference/#/Text%20Embeddings%20Inference/rerank
+        bool is_tei_format = body.contains("texts");
+
         json query;
         if (body.count("query") == 1) {
             query = body.at("query");
@@ -4246,7 +4251,8 @@ int main(int argc, char ** argv) {
             return;
         }
 
-        std::vector<std::string> documents = json_value(body, "documents", std::vector<std::string>());
+        std::vector<std::string> documents = json_value(body, "documents",
+                                             json_value(body, "texts", std::vector<std::string>()));
         if (documents.empty()) {
             res_error(res, format_error_response("\"documents\" must be a non-empty string array", ERROR_TYPE_INVALID_REQUEST));
             return;
@@ -4291,7 +4297,12 @@ int main(int argc, char ** argv) {
         }
 
         // write JSON response
-        json root = format_response_rerank(body, responses);
+        json root = format_response_rerank(
+            body,
+            responses,
+            is_tei_format,
+            documents);
+
         res_ok(res, root);
     };
 
