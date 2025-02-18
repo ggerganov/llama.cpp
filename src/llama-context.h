@@ -97,7 +97,7 @@ struct llama_context : public llama_graph_i {
 
     // TODO: add encode/decode graphs
     virtual llama_graph_result graph_build(
-            ggml_context_ptr & ctx,
+                ggml_context * ctx,
           const llama_ubatch & ubatch,
                         bool   worst_case);
 

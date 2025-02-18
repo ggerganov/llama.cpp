@@ -3841,19 +3841,18 @@ struct llm_build_context {
     const enum llama_pooling_type pooling_type;
     const enum llama_rope_type    rope_type;
 
-    ggml_context_ptr & ctx;
-    ggml_context     * ctx0 = nullptr;
+    ggml_context * ctx0 = nullptr;
 
     llama_graph_result res;
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-            ggml_context_ptr & ctx,
-            llama_graph_i    & lgf,
-      const llama_model      & model,
-      const llama_cparams    & cparams,
-      const llama_ubatch     & ubatch,
-            bool               worst_case) :
+            ggml_context  * ctx,
+            llama_graph_i & lgf,
+      const llama_model   & model,
+      const llama_cparams & cparams,
+      const llama_ubatch  & ubatch,
+            bool            worst_case) :
         lgf              (lgf),
         model            (model),
         hparams          (model.hparams),
@@ -3885,8 +3884,7 @@ struct llm_build_context {
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
-        ctx              (ctx),
-        ctx0             (this->ctx.get()) {
+        ctx0             (ctx) {
         }
 
     // TODO: tmp
@@ -10937,7 +10935,7 @@ struct llm_build_context {
 };
 
 llama_graph_result llama_model::build_graph(
-      ggml_context_ptr & ctx,
+          ggml_context * ctx,
          llama_graph_i & lgf,
    const llama_cparams & cparams,
    const llama_ubatch  & ubatch,
