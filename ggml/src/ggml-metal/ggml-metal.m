@@ -24,7 +24,7 @@
 #endif
 
 // create residency sets only on macOS >= 15.0
-#if TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || \
+#if !TARGET_CPU_X86_64 && TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || \
     TARGET_OS_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 || \
     TARGET_OS_TV && __TV_OS_VERSION_MAX_ALLOWED >= 180000 || \
     TARGET_OS_VISION && __VISION_OS_VERSION_MAX_ALLOWED >= 200000
@@ -1983,7 +1983,7 @@ static void ggml_metal_encode_node(
                 const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
                 // TODO: add ggml_metal_kargs struct
-                // TODO: optimize (see https://github.com/ggerganov/llama.cpp/pull/10238/commits/7941b6b9ec29a2866fec6fa6c51612515ca509f6)
+                // TODO: optimize (see https://github.com/ggml-org/llama.cpp/pull/10238/commits/7941b6b9ec29a2866fec6fa6c51612515ca509f6)
                 [encoder setComputePipelineState:pipeline];
                 [encoder setBuffer:id_src0 offset:offs_src0   atIndex:0];
                 if (id_src1) {

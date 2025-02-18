@@ -42,7 +42,7 @@ enum stop_type {
     STOP_TYPE_LIMIT,
 };
 
-// state diagram: https://github.com/ggerganov/llama.cpp/pull/9283
+// state diagram: https://github.com/ggml-org/llama.cpp/pull/9283
 enum slot_state {
     SLOT_STATE_IDLE,
     SLOT_STATE_STARTED, // TODO: this state is only used for setting up the initial prompt processing; maybe merge it with launch_slot_with_task in the future
@@ -173,6 +173,7 @@ struct slot_params {
             {"grammar_trigger_words",     grammar_trigger_words},
             {"grammar_trigger_tokens",    sampling.grammar_trigger_tokens},
             {"preserved_tokens",          sampling.preserved_tokens},
+            {"chat_format",               common_chat_format_name(oaicompat_chat_format)},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
@@ -724,9 +725,19 @@ struct server_task_result_cmpl_final : server_task_result {
             msg.content = content;
         }
 
-        json tool_calls;
+        json message {
+            {"role", "assistant"},
+        };
+        if (!msg.reasoning_content.empty()) {
+            message["reasoning_content"] = msg.reasoning_content;
+        }
+        if (msg.content.empty() && !msg.tool_calls.empty()) {
+            message["content"] = json();
+        } else {
+            message["content"] = msg.content;
+        }
         if (!msg.tool_calls.empty()) {
-            tool_calls = json::array();
+            auto tool_calls = json::array();
             for (const auto & tc : msg.tool_calls) {
                 tool_calls.push_back({
                     {"type", "function"},
@@ -737,15 +748,7 @@ struct server_task_result_cmpl_final : server_task_result {
                     {"id", tc.id},
                 });
             }
-        }
-
-        json message {
-            {"content", msg.content},
-            {"tool_calls", tool_calls},
-            {"role", "assistant"},
-        };
-        if (!msg.tool_plan.empty()) {
-            message["tool_plan"] = msg.tool_plan;
+            message["tool_calls"] = tool_calls;
         }
 
         json choice {
@@ -1600,6 +1603,10 @@ struct server_queue {
 
             while (true) {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (!running) {
+                    QUE_DBG("%s", "terminate\n");
+                    return;
+                }
                 if (queue_tasks.empty()) {
                     lock.unlock();
                     break;
@@ -1620,11 +1627,11 @@ struct server_queue {
             QUE_DBG("%s", "waiting for new tasks\n");
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (!running) {
+                    QUE_DBG("%s", "terminate\n");
+                    return;
+                }
                 if (queue_tasks.empty()) {
-                    if (!running) {
-                        QUE_DBG("%s", "terminate\n");
-                        return;
-                    }
                     condition_tasks.wait(lock, [&]{
                         return (!queue_tasks.empty() || !running);
                     });
@@ -2069,8 +2076,8 @@ struct server_context {
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
+            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.params.n_predict, slot.n_predict);
             slot.params.n_predict = slot.n_predict;
-            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.n_predict, slot.n_predict);
         }
 
         if (slot.params.ignore_eos && has_eos_token) {
@@ -2275,7 +2282,7 @@ struct server_context {
             for (size_t i = 0; i < std::min(max_probs, n_probs); i++) {
                 result.probs.push_back({
                     cur_p->data[i].id,
-                    common_detokenize(ctx, {cur_p->data[i].id}, special),
+                    common_token_to_piece(ctx, cur_p->data[i].id, special),
                     cur_p->data[i].p
                 });
             }
@@ -2297,7 +2304,7 @@ struct server_context {
             for (size_t i = 0; i < std::min(n_vocab, n_probs); i++) {
                 result.probs.push_back({
                     cur[i].id,
-                    common_detokenize(ctx, {cur[i].id}, special),
+                    common_token_to_piece(ctx, cur[i].id, special),
                     cur[i].p
                 });
             }
@@ -3649,7 +3656,7 @@ int main(int argc, char ** argv) {
             }, {
                     {"name",  "n_busy_slots_per_decode"},
                     {"help",  "Average number of busy slots per llama_decode() call"},
-                    {"value",  (float) res_metrics->n_busy_slots_total / (float) res_metrics->n_decode_total}
+                    {"value",  (float) res_metrics->n_busy_slots_total / std::max((float) res_metrics->n_decode_total, 1.f)}
             }}},
             {"gauge", {{
                     {"name",  "prompt_tokens_seconds"},
@@ -4056,7 +4063,7 @@ int main(int argc, char ** argv) {
         }
 
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, params.reasoning_format, ctx_server.chat_templates);
 
         return handle_completions_impl(
             SERVER_TASK_TYPE_COMPLETION,
@@ -4069,7 +4076,7 @@ int main(int argc, char ** argv) {
     // same with handle_chat_completions, but without inference part
     const auto handle_apply_template = [&ctx_server, &params, &res_ok](const httplib::Request & req, httplib::Response & res) {
         auto body = json::parse(req.body);
-        json data = oaicompat_completion_params_parse(body, params.use_jinja, ctx_server.chat_templates);
+        json data = oaicompat_completion_params_parse(body, params.use_jinja, params.reasoning_format, ctx_server.chat_templates);
         res_ok(res, {{ "prompt", std::move(data.at("prompt")) }});
     };
 
@@ -4430,6 +4437,7 @@ int main(int argc, char ** argv) {
 
     // clean up function, to be called before exit
     auto clean_up = [&svr]() {
+        SRV_INF("%s: cleaning up before exit...\n", __func__);
         svr->stop();
         llama_backend_free();
     };
@@ -4446,10 +4454,6 @@ int main(int argc, char ** argv) {
     }
 
     if (!was_bound) {
-        //LOG_ERROR("couldn't bind HTTP server socket", {
-        //    {"hostname", params.hostname},
-        //    {"port", params.port},
-        //});
         LOG_ERR("%s: couldn't bind HTTP server socket, hostname: %s, port: %d\n", __func__, params.hostname.c_str(), params.port);
         clean_up();
         return 1;
@@ -4466,7 +4470,7 @@ int main(int argc, char ** argv) {
 
     if (!ctx_server.load_model(params)) {
         clean_up();
-        t.join();
+        // t.join(); // FIXME: see below
         LOG_ERR("%s: exiting due to model loading error\n", __func__);
         return 1;
     }
@@ -4490,12 +4494,9 @@ int main(int argc, char ** argv) {
     });
 
     shutdown_handler = [&](int) {
+        // this will unblock start_loop()
         ctx_server.queue_tasks.terminate();
     };
-
-    LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
-
-    ctx_server.queue_tasks.start_loop();
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;
@@ -4511,8 +4512,13 @@ int main(int argc, char ** argv) {
     SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
+    LOG_INF("%s: server is listening on http://%s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
+
+    // this call blocks the main thread until queue_tasks.terminate() is called
+    ctx_server.queue_tasks.start_loop();
+
     clean_up();
-    t.join();
+    // t.join(); // FIXME: http thread may stuck if there is an on-going request. we don't need to care about this for now as the HTTP connection will already be closed at this point, but it's better to fix this
 
     return 0;
 }

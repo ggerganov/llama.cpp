@@ -41,12 +41,13 @@
 #define CUDART_HMAX   11070 // CUDA 11.7, min. ver. for which __hmax and __hmax2 are known to work (may be higher than needed)
 #define CUDART_HMASK  12000 // CUDA 12.0, min. ver. for half2 -> uint mask comparisons
 
-#define GGML_CUDA_CC_PASCAL     600
-#define GGML_CUDA_CC_DP4A       610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
-#define GGML_CUDA_CC_VOLTA      700
-#define GGML_CUDA_CC_TURING     750
-#define GGML_CUDA_CC_AMPERE     800
-#define GGML_CUDA_CC_OFFSET_AMD 0x1000000
+#define GGML_CUDA_CC_PASCAL       600
+#define GGML_CUDA_CC_DP4A         610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
+#define GGML_CUDA_CC_VOLTA        700
+#define GGML_CUDA_CC_TURING       750
+#define GGML_CUDA_CC_AMPERE       800
+#define GGML_CUDA_CC_ADA_LOVELACE 890
+#define GGML_CUDA_CC_OFFSET_AMD   0x1000000
 
 // GCN/CNDA, wave size is 64
 #define GGML_CUDA_CC_GCN4       (GGML_CUDA_CC_OFFSET_AMD + 0x803)  // Tonga, Fiji, Polaris, minimum for fast fp16
@@ -70,6 +71,47 @@
 
 #define GGML_CUDA_CC_QY1        210
 #define GGML_CUDA_CC_QY2        220
+
+#ifdef __CUDA_ARCH_LIST__
+constexpr bool ggml_cuda_has_arch_impl(int) {
+    return false;
+}
+
+template<class ... Archs>
+constexpr bool ggml_cuda_has_arch_impl(const int arch, const int first, Archs... rest) {
+    return arch == first || ggml_cuda_has_arch_impl(arch, rest...);
+}
+
+constexpr bool ggml_cuda_has_arch(const int arch) {
+    return ggml_cuda_has_arch_impl(arch, __CUDA_ARCH_LIST__);
+}
+
+constexpr int ggml_cuda_highest_compiled_arch_impl(const int arch, const int cur) {
+    if (cur == 0) {
+        GGML_ABORT("ggml was not compiled with any CUDA arch <= %d", arch);
+    }
+    return cur;
+}
+
+template<class ... Archs>
+constexpr int ggml_cuda_highest_compiled_arch_impl(const int arch, const int cur, const int first, Archs... rest) {
+    if (first <= arch && first > cur) {
+        return ggml_cuda_highest_compiled_arch_impl(arch, first, rest...);
+    } else {
+        return ggml_cuda_highest_compiled_arch_impl(arch, cur, rest...);
+    }
+}
+
+constexpr int ggml_cuda_highest_compiled_arch(const int arch) {
+    return ggml_cuda_highest_compiled_arch_impl(arch, 0, __CUDA_ARCH_LIST__);
+}
+#else
+static int ggml_cuda_highest_compiled_arch(const int arch) {
+    return arch;
+}
+#endif // __CUDA_ARCH_LIST__
+
+// ---------------------------------------------------------------------------------------------------------
 
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
@@ -124,11 +166,11 @@ static const char * cu_get_error_str(CUresult err) {
 #define CU_CHECK(err) CUDA_CHECK_GEN(err, CUDA_SUCCESS, cu_get_error_str)
 #endif
 
-#if CUDART_VERSION >= 11100 || defined(GGML_USE_MUSA)
+#if CUDART_VERSION >= 11010 || defined(GGML_USE_MUSA)
 #define GGML_CUDA_ASSUME(x) __builtin_assume(x)
 #else
 #define GGML_CUDA_ASSUME(x)
-#endif // CUDART_VERSION >= 11100
+#endif // CUDART_VERSION >= 11010
 
 #ifdef GGML_CUDA_F16
 typedef half dfloat; // dequantize float
@@ -158,22 +200,44 @@ typedef float2 dfloat2;
 #define NEW_MMA_AVAILABLE
 #endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_TURING
 
+#if !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#define CP_ASYNC_AVAILABLE
+#endif // !(defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+
 #if !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= GGML_CUDA_CC_QY1)
 #define FLASH_ATTN_AVAILABLE
 #endif // !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= GGML_CUDA_CC_QY1)
 
-static constexpr bool fast_fp16_available(const int cc) {
+static bool fp16_available(const int cc) {
+    return ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_PASCAL;
+}
+
+static bool fast_fp16_available(const int cc) {
+    return fp16_available(cc) && cc != 610;
+}
+
+// To be used for feature selection of external libraries, e.g. cuBLAS.
+static bool fast_fp16_hardware_available(const int cc) {
     return cc >= GGML_CUDA_CC_PASCAL && cc != 610;
 }
 
-// Any FP16 tensor cores are available.
-static constexpr bool fp16_mma_available(const int cc) {
+// Any FP16 tensor core instructions are available for ggml code.
+static bool fp16_mma_available(const int cc) {
+    return cc < GGML_CUDA_CC_OFFSET_AMD && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_VOLTA;
+}
+
+// To be used for feature selection of external libraries, e.g. cuBLAS.
+static bool fp16_mma_hardware_available(const int cc) {
     return cc < GGML_CUDA_CC_OFFSET_AMD && cc >= GGML_CUDA_CC_VOLTA;
 }
 
 // Volta technically had FP16 tensor cores but they work very differently compared to Turing and later.
-static constexpr bool new_mma_available(const int cc) {
-    return cc < GGML_CUDA_CC_OFFSET_AMD && cc >= GGML_CUDA_CC_TURING;
+static bool new_mma_available(const int cc) {
+    return cc < GGML_CUDA_CC_OFFSET_AMD && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_TURING;
+}
+
+static bool cp_async_available(const int cc) {
+    return cc < GGML_CUDA_CC_OFFSET_AMD && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_AMPERE;
 }
 
 static constexpr __device__ int ggml_cuda_get_physical_warp_size() {

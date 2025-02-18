@@ -3,7 +3,7 @@
 **To get the Code:**
 
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com/ggml-org/llama.cpp
 cd llama.cpp
 ```
 
@@ -46,7 +46,7 @@ cmake --build build --config Release
   ```
 
 - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
-    - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
+    - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
     - Tab Workload: Desktop-development with C++
     - Tab Components (select quickly via search): C++-_CMake_ Tools for Windows, _Git_ for Windows, C++-_Clang_ Compiler for Windows, MS-Build Support for LLVM-Toolset (clang)
     - Please remember to always use a Developer Command Prompt / PowerShell for VS2022 for git, build, test

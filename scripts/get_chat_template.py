@@ -7,9 +7,8 @@
     ./scripts/get_chat_template.py model_id [variant]
 
   Examples:
-    ./scripts/get_chat_template.py NousResearch/Meta-Llama-3-8B-Instruct
-    ./scripts/get_chat_template.py NousResearch/Hermes-3-Llama-3.1-8B tool_use
-    ./scripts/get_chat_template.py meta-llama/Llama-3.2-3B-Instruct
+    ./scripts/get_chat_template.py CohereForAI/c4ai-command-r-plus tool_use
+    ./scripts/get_chat_template.py microsoft/Phi-3.5-mini-instruct
 '''
 
 import json
