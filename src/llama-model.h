@@ -353,7 +353,7 @@ struct llama_model {
     std::string desc() const;
 
     size_t size() const;
-    size_t max_nodes() const;
+    size_t n_tensors() const;
     size_t n_devices() const;
 
     // total number of parameters in the model
@@ -371,6 +371,7 @@ struct llama_model {
     // TODO: add encode/decode graphs
     llama_graph_result build_graph(
               ggml_context * ctx,
+               ggml_cgraph * gf,
              llama_graph_i * lgf,
        const llama_cparams & cparams,
        const llama_ubatch  & ubatch,

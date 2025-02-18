@@ -13,6 +13,9 @@
 
 static const llama_kv_cache_slot_info llama_kv_cache_slot_info_failed{false};
 
+llama_kv_cache::llama_kv_cache(const llama_hparams & hparams) : hparams(hparams) {
+}
+
 bool llama_kv_cache::init(
         const llama_model & model,
       const llama_cparams & cparams,
@@ -20,8 +23,6 @@ bool llama_kv_cache::init(
                 ggml_type   type_v,
                  uint32_t   kv_size,
                      bool   offload) {
-    const struct llama_hparams & hparams = model.hparams;
-
     const int32_t n_layer = hparams.n_layer;
 
     has_shift = false;
@@ -698,7 +699,309 @@ size_t llama_kv_cache::size_v_bytes() const {
     return size_v_bytes;
 }
 
-void llama_kv_cache::state_write(llama_io_write_i & io, const llama_hparams & hparams, llama_seq_id seq_id) const {
+void llama_kv_cache::build_shift(
+        ggml_context * ctx0,
+        ggml_cgraph * gf,
+        llama_graph_i * lgf) {
+    const auto & n_layer = hparams.n_layer;
+
+    const auto & n_embd_head_k = hparams.n_embd_head_k;
+  //const auto & n_embd_head_v = hparams.n_embd_head_v;
+
+    //GGML_ASSERT(kv_self.size == n_ctx);
+
+    ggml_tensor * inp_k_shift = lgf->build_inp_k_shift(ctx0);
+
+    for (uint32_t il = 0; il < n_layer; ++il) {
+        const int64_t n_head_kv    = hparams.n_head_kv(il);
+        const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
+
+        struct ggml_tensor * rope_factors = lgf->build_rope_factors(il);
+
+        struct ggml_tensor * k =
+            ggml_view_3d(ctx0, k_l[il],
+                n_embd_head_k, n_head_kv, size,
+                ggml_row_size(k_l[il]->type, n_embd_head_k),
+                ggml_row_size(k_l[il]->type, n_embd_k_gqa),
+                0);
+
+        ggml_tensor * cur = lgf->build_rope_shift(ctx0, k, inp_k_shift, rope_factors, k_l[il]->buffer);
+
+        ggml_build_forward_expand(gf, cur);
+    }
+}
+
+void llama_kv_cache::build_defrag(
+        ggml_context * ctx0,
+        ggml_cgraph * gf,
+        int32_t max_nodes,
+        bool v_trans) {
+    const uint32_t n_layer = hparams.n_layer;
+
+    const uint32_t n_kv   = cell_max();
+    const uint32_t n_used = used;
+
+    assert(n_used <= n_kv);
+
+    //const int64_t t_start = ggml_time_us();
+
+    // number of cells moved
+    uint32_t n_moves = 0;
+
+    // each move requires 6*n_layer tensors (see build_kv_self_defrag)
+    //   - source view, destination view, copy operation
+    //   - x2 for keys and values
+    //const uint32_t max_moves = max_nodes/(6*n_layer);
+    // TODO: tmp fix https://github.com/ggerganov/llama.cpp/issues/6685#issuecomment-2057579516
+    const uint32_t max_moves = (max_nodes - 2*n_layer)/(6*n_layer);
+
+    // determine which KV cells to move where
+    //
+    //  cell i moves to ids[i]
+    //
+    //  if ids[i] == i || ids[i] == n_kv, then cell i is not moved
+    //
+    std::vector<uint32_t> ids(n_kv, n_kv);
+
+    for (uint32_t i0 = 0; i0 < n_used; ++i0) {
+        const auto & cell0 = cells[i0];
+
+        if (!cell0.is_empty()) {
+            ids[i0] = i0;
+
+            continue;
+        }
+
+        // found a hole - fill it with data from the end of the cache
+
+        uint32_t nh = 1;
+
+        // determine the size of the hole
+        while (i0 + nh < n_used && cells[i0 + nh].is_empty()) {
+            nh++;
+        }
+
+        uint32_t nf = 0;
+        uint32_t is = n_kv - 1;
+
+        // starting from the end, find nh non-empty cells
+        for (; is > i0; --is) {
+            const auto & cell1 = cells[is];
+
+            if (cell1.is_empty() || ids[is] != n_kv) {
+                continue;
+            }
+
+            // non-empty cell which is not yet moved
+            nf++;
+
+            if (nf == nh) {
+                break;
+            }
+        }
+
+        // this can only happen if `n_used` is not accurate, which would be a bug
+        GGML_ASSERT(nf == nh && "KV defrag bug: nf != nh");
+
+        nf = 0;
+
+        uint32_t i1 = is;
+
+        // are we moving a continuous block of memory?
+        bool cont = false;
+
+        // should we stop searching for the next move?
+        bool stop = false;
+
+        // go back and move the nf cells to the hole
+        for (; i1 < n_kv; ++i1) {
+            auto & cell1 = cells[i1];
+
+            if (cell1.is_empty() || ids[i1] != n_kv) {
+                if (n_moves == max_moves) {
+                    stop = true;
+                    break;
+                }
+
+                cont = false;
+                continue;
+            }
+
+            // this cell goes to (i0 + nf)
+            ids[i1] = i0 + nf;
+
+            // move the cell meta data
+            cells[i0 + nf] = cell1;
+
+            // clear the old cell and move the head there
+            cell1 = llama_kv_cell();
+            head = n_used;
+
+            if (!cont) {
+                n_moves++;
+                cont = true;
+            }
+
+            nf++;
+
+            if (nf == nh) {
+                break;
+            }
+        }
+
+        if (stop || n_moves == max_moves) {
+            break;
+        }
+
+        //LLAMA_LOG_INFO("(tmp log) KV defrag: move [%u, %u) to [%u, %u)\n", is, i1 + 1, i0, i0 + nh);
+
+        i0 += nh - 1;
+    }
+
+    if (n_moves == 0) {
+        return;
+    }
+
+    //LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
+
+    //LLAMA_LOG_INFO("expected gf nodes: %u\n", 6*n_moves*n_layer);
+
+#if 0
+    // CPU defrag
+    //
+    // TODO: optimizations are possible:
+    //       - multiple threads
+    //       - avoid copying to the host memory when already there
+    //
+    // likely not worth the effort, as we have ggml_graph based defrag
+    //
+
+    const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
+    const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
+
+    const uint32_t kv_size = size;
+
+    std::vector<uint8_t> buf_k;
+    std::vector<uint8_t> buf_v;
+
+    for (uint32_t il = 0; il < n_layer; ++il) {
+        const size_t k_size_row = ggml_row_size(k_l[il]->type, n_embd_k_gqa);
+        const size_t k_size     = ggml_row_size(k_l[il]->type, n_embd_k_gqa*kv_size);
+
+        const size_t v_size_el = ggml_type_size(v_l[il]->type);
+        const size_t v_size    = ggml_row_size (v_l[il]->type, n_embd_v_gqa*kv_size);
+
+        buf_k.resize(k_size);
+        buf_v.resize(v_size);
+
+        ggml_backend_tensor_get(k_l[il], buf_k.data(), 0, buf_k.size());
+        ggml_backend_tensor_get(v_l[il], buf_v.data(), 0, buf_v.size());
+
+        // batch move [i, i+nm) to [id, id+nm)
+        // note: cells can move only to a lower index
+        for (uint32_t i = 0; i < n_kv; ++i) {
+            const uint32_t id = ids[i];
+
+            if (i == id || id == n_kv) {
+                continue;
+            }
+
+            uint32_t nm = 1;
+
+            while (i + nm < n_kv && ids[i + nm] == id + nm) {
+                nm++;
+            }
+
+            // move keys
+            {
+                const int64_t os =  i*k_size_row;
+                const int64_t od = id*k_size_row;
+
+                memcpy(buf_k.data() + od, buf_k.data() + os, nm*k_size_row);
+            }
+
+            // move values (note: they are transposed)
+            {
+                const int64_t os =  i;
+                const int64_t od = id;
+
+                for (uint32_t j = 0; j < n_embd_v_gqa; ++j) {
+                    memcpy(buf_v.data() + (od + j*kv_size)*v_size_el, buf_v.data() + (os + j*kv_size)*v_size_el, nm*v_size_el);
+                }
+            }
+
+            i += nm - 1;
+        }
+
+        ggml_backend_tensor_set(k_l[il], buf_k.data(), 0, buf_k.size());
+        ggml_backend_tensor_set(v_l[il], buf_v.data(), 0, buf_v.size());
+    }
+#else
+    for (uint32_t i = 0; i < ids.size(); ++i) {
+        const uint32_t id = ids[i];
+
+        if (i == id || id == ids.size()) {
+            continue;
+        }
+
+        uint32_t nm = 1;
+
+        while (i + nm < ids.size() && ids[i + nm] == id + nm) {
+            nm++;
+        }
+
+        for (uint32_t il = 0; il < n_layer; ++il) {
+            const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
+            const int64_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
+
+            ggml_tensor * view_k_src = ggml_view_2d(ctx0, k_l[il],
+                    n_embd_k_gqa, nm,
+                    ggml_row_size(k_l[il]->type, n_embd_k_gqa),
+                    ggml_row_size(k_l[il]->type, n_embd_k_gqa*i));
+
+            ggml_tensor * view_k_dst = ggml_view_2d(ctx0, k_l[il],
+                    n_embd_k_gqa, nm,
+                    ggml_row_size(k_l[il]->type, n_embd_k_gqa),
+                    ggml_row_size(k_l[il]->type, n_embd_k_gqa*id));
+
+            ggml_tensor * view_v_src;
+            ggml_tensor * view_v_dst;
+
+            if (!v_trans) {
+                // NOTE: the V cache is not transposed when using flash attention
+                view_v_src = ggml_view_2d(ctx0, v_l[il],
+                        n_embd_v_gqa, nm,
+                        ggml_row_size(v_l[il]->type, n_embd_v_gqa),
+                        ggml_row_size(v_l[il]->type, n_embd_v_gqa*i));
+
+                view_v_dst = ggml_view_2d(ctx0, v_l[il],
+                        n_embd_v_gqa, nm,
+                        ggml_row_size(v_l[il]->type, n_embd_v_gqa),
+                        ggml_row_size(v_l[il]->type, n_embd_v_gqa*id));
+            } else {
+                view_v_src = ggml_view_2d(ctx0, v_l[il],
+                        nm, n_embd_v_gqa,
+                        ggml_row_size(v_l[il]->type, size),
+                        ggml_row_size(v_l[il]->type, i));
+
+                view_v_dst = ggml_view_2d(ctx0, v_l[il],
+                        nm, n_embd_v_gqa,
+                        ggml_row_size(v_l[il]->type, size),
+                        ggml_row_size(v_l[il]->type, id));
+            }
+
+            ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_k_src, view_k_dst));
+            ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_v_src, view_v_dst));
+        }
+
+        i += nm - 1;
+    }
+
+    //LLAMA_LOG_INFO("gf->n_nodes = %d\n", gf->n_nodes);
+#endif
+}
+
+void llama_kv_cache::state_write(llama_io_write_i & io, llama_seq_id seq_id) const {
     std::vector<std::pair<uint32_t, uint32_t>> cell_ranges; // ranges, from inclusive, to exclusive
     uint32_t cell_count = 0;
 
@@ -733,16 +1036,16 @@ void llama_kv_cache::state_write(llama_io_write_i & io, const llama_hparams & hp
     io.write(&cell_count, sizeof(cell_count));
 
     state_write_meta(io, cell_ranges, seq_id);
-    state_write_data(io, cell_ranges, hparams);
+    state_write_data(io, cell_ranges);
 }
 
-void llama_kv_cache::state_read(llama_io_read_i & io, const llama_hparams & hparams, llama_seq_id seq_id) {
+void llama_kv_cache::state_read(llama_io_read_i & io, llama_seq_id seq_id) {
     uint32_t cell_count;
     io.read_to(&cell_count, sizeof(cell_count));
 
     bool res = true;
     res = res && state_read_meta(io, cell_count, seq_id);
-    res = res && state_read_data(io, hparams, cell_count);
+    res = res && state_read_data(io, cell_count);
 
     if (!res) {
         if (seq_id == -1) {
@@ -773,7 +1076,7 @@ void llama_kv_cache::state_write_meta(llama_io_write_i & io, const std::vector<s
     }
 }
 
-void llama_kv_cache::state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, const llama_hparams & hparams) const {
+void llama_kv_cache::state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges) const {
     const uint32_t v_trans = this->v_trans ? 1 : 0;
     const uint32_t n_layer = hparams.n_layer;
 
@@ -955,7 +1258,7 @@ bool llama_kv_cache::state_read_meta(llama_io_read_i & io, uint32_t cell_count, 
     return true;
 }
 
-bool llama_kv_cache::state_read_data(llama_io_read_i & io, const llama_hparams & hparams, uint32_t cell_count) {
+bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t cell_count) {
     uint32_t v_trans;
     uint32_t n_layer;
     io.read_to(&v_trans, sizeof(v_trans));

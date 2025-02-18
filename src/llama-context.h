@@ -43,6 +43,8 @@ struct llama_context : public llama_graph_i {
     virtual uint32_t n_threads()       const;
     virtual uint32_t n_threads_batch() const;
 
+    virtual int32_t max_nodes() const;
+
     virtual       llama_kv_cache * get_kv_self()       = 0;
     virtual const llama_kv_cache * get_kv_self() const = 0;
 
@@ -93,18 +95,19 @@ struct llama_context : public llama_graph_i {
     virtual void synchronize();
 
     // zero-out inputs and create ggml_context
-    virtual ggml_context_ptr graph_init();
+    virtual ggml_cgraph * graph_init();
 
     // TODO: add encode/decode graphs
     virtual llama_graph_result graph_build(
-                ggml_context * ctx,
-          const llama_ubatch & ubatch,
-                        bool   worst_case);
+            ggml_context * ctx,
+             ggml_cgraph * gf,
+      const llama_ubatch & ubatch,
+                    bool   worst_case);
 
     // returns the result of ggml_backend_sched_graph_compute_async execution
     virtual enum ggml_status graph_compute(
-                ggml_cgraph * graph,
-                       bool   batched);
+            ggml_cgraph * gf,
+                   bool   batched);
 
     virtual void input_set(const llama_ubatch & ubatch);
 
@@ -171,6 +174,13 @@ struct llama_context : public llama_graph_i {
              ggml_tensor * ids);
 
     virtual ggml_tensor * build_rope_factors(int il);
+
+    virtual ggml_tensor * build_rope_shift(
+            ggml_context * ctx0,
+             ggml_tensor * cur,
+             ggml_tensor * shift,
+             ggml_tensor * factors,
+             ggml_backend_buffer * bbuf);
 
     virtual ggml_tensor * build_inp_embd(
             ggml_context * ctx0,
@@ -274,6 +284,8 @@ protected:
 
     ggml_backend_sched_ptr sched;
 
+    ggml_context_ptr ctx_compute;
+
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
 
@@ -332,7 +344,7 @@ public:
 
     virtual void kv_self_update() override;
 
-    virtual ggml_context_ptr graph_init() override;
+    virtual ggml_cgraph * graph_init() override;
 
     virtual void input_set(const llama_ubatch & ubatch) override;
 
@@ -349,11 +361,13 @@ public:
 
     llama_kv_cache kv_self;
 
-    struct ggml_tensor * inp_KQ_mask;         // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_cnv;     //     [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
-    struct ggml_tensor * inp_K_shift;         // I32 [kv_size]
+    ggml_tensor * inp_KQ_mask;         // F32 [kv_size, n_batch]
+    ggml_tensor * inp_KQ_mask_cnv;     //     [kv_size, n_batch]
+    ggml_tensor * inp_KQ_mask_swa;     // F32 [kv_size, n_batch]
+    ggml_tensor * inp_KQ_mask_swa_cnv; //     [kv_size, n_batch]
+    ggml_tensor * inp_k_shift;         // I32 [kv_size]
+
+    virtual ggml_tensor * build_inp_k_shift(ggml_context * ctx0) override;
 
     virtual void build_attn_inp(
             ggml_context * ctx0,
@@ -386,15 +400,6 @@ public:
             ggml_context * ctx0,
              ggml_tensor * kq,
                  float     kq_scale) override;
-
-    virtual void build_kv_self_shift(
-            ggml_context * ctx0,
-             ggml_cgraph * graph) override;
-
-    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-    virtual void build_kv_self_defrag(
-            ggml_context * ctx0,
-             ggml_cgraph * graph) override;
 
     // === encoder-decoder ===
 
