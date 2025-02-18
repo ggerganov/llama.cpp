@@ -741,7 +741,7 @@ static json format_response_rerank(
         const json & request,
         const json & ranks,
         bool is_tei_format,
-        const std::vector<std::string> & texts) {
+        std::vector<std::string> & texts) {
     json res;
     if (is_tei_format) {
         // TEI response format
@@ -771,7 +771,7 @@ static json format_response_rerank(
             n_tokens += json_value(rank, "tokens_evaluated", 0);
         }
 
-        res = json {
+        res = json{
             {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
             {"object", "list"},
             {"usage", json{
