@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import { CallbackGeneratedChunk, useAppContext } from '../utils/app.context';
 import ChatMessage from './ChatMessage';
 import { CanvasType, Message, PendingMessage } from '../utils/types';
@@ -81,6 +81,33 @@ export default function ChatScreen() {
     replaceMessageAndGenerate,
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Accept setText message from a parent window and set inputMsg and extraContext
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.command === 'setText') {
+        setInputMsg(event.data?.text);
+        StorageUtils.setExtraContext(event.data?.context)
+        inputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Add a keydown listener that sends the "escapePressed" message to the parent window
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+          window.parent.postMessage({ command: 'escapePressed' }, '*');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // keep track of leaf node for rendering
   const [currNodeId, setCurrNodeId] = useState<number>(-1);
@@ -203,6 +230,7 @@ export default function ChatScreen() {
           <textarea
             className="textarea textarea-bordered w-full"
             placeholder="Type a message (Shift+Enter to add a new line)"
+            ref={inputRef}
             value={inputMsg}
             onChange={(e) => setInputMsg(e.target.value)}
             onKeyDown={(e) => {

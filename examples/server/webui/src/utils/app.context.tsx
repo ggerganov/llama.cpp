@@ -174,6 +174,11 @@ export const AppContextProvider = ({
           : [{ role: 'system', content: config.systemMessage } as APIMessage]),
         ...normalizeMsgsForAPI(currMessages),
       ];
+      let extraContext:string = await StorageUtils.getExtraContext()
+      if (extraContext && extraContext != ""){
+        // insert extra context just after the systemMessage
+        messages.splice(config.systemMessage.length === 0 ? 0 : 1, 0, { role: 'user', content:extraContext } as APIMessage)
+      }
       if (config.excludeThoughtOnReq) {
         messages = filterThoughtFromMsgs(messages);
       }

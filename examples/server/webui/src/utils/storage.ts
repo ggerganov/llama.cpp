@@ -21,6 +21,7 @@ const dispatchConversationChange = (convId: string) => {
 const db = new Dexie('LlamacppWebui') as Dexie & {
   conversations: Table<Conversation>;
   messages: Table<Message>;
+  extraContext: string;
 };
 
 // https://dexie.org/docs/Version/Version.stores()
@@ -115,6 +116,12 @@ const StorageUtils = {
       children: [],
     });
     return conv;
+  },
+  async setExtraContext(extraContext: string): Promise<void> {
+    db.extraContext = extraContext
+  },
+  async getExtraContext(): Promise<string> {
+    return db.extraContext;
   },
   /**
    * if convId does not exist, throw an error
