@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CallbackGeneratedChunk, useAppContext } from '../utils/app.context';
 import ChatMessage from './ChatMessage';
 import { CanvasType, Message, PendingMessage } from '../utils/types';
@@ -89,7 +89,7 @@ export default function ChatScreen() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.command === 'setText') {
         setInputMsg(event.data?.text);
-          setExtraContext(event.data?.context)
+        setExtraContext(event.data?.context)
         inputRef.current?.focus();
       }
     };
