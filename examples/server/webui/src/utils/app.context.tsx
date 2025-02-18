@@ -25,6 +25,7 @@ interface AppContextValue {
     convId: string | null,
     leafNodeId: Message['id'] | null,
     content: string,
+    extra: Message['extra'],
     onChunk: CallbackGeneratedChunk
   ) => Promise<boolean>;
   stopGenerating: (convId: string) => void;
@@ -32,6 +33,7 @@ interface AppContextValue {
     convId: string,
     parentNodeId: Message['id'], // the parent node of the message to be replaced
     content: string | null,
+    extra: Message['extra'],
     onChunk: CallbackGeneratedChunk
   ) => Promise<void>;
 
@@ -44,10 +46,6 @@ interface AppContextValue {
   saveConfig: (config: typeof CONFIG_DEFAULT) => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
-
-  // extra context
-  extraContext: string;
-  setExtraContext: (extraCtx: string) => void;
 }
 
 // this callback is used for scrolling to the bottom of the chat and switching to the last node
@@ -86,7 +84,6 @@ export const AppContextProvider = ({
   const [config, setConfig] = useState(StorageUtils.getConfig());
   const [canvasData, setCanvasData] = useState<CanvasData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [extraContext, setExtraContext] = useState("");
 
   // handle change when the convId from URL is changed
   useEffect(() => {
@@ -179,10 +176,6 @@ export const AppContextProvider = ({
           : [{ role: 'system', content: config.systemMessage } as APIMessage]),
         ...normalizeMsgsForAPI(currMessages),
       ];
-      if (extraContext && extraContext != ""){
-        // insert extra context just before the user messages
-        messages.splice(config.systemMessage.length === 0 ? 0 : 1, 0, { role: 'user', content:extraContext } as APIMessage)
-      }
       if (config.excludeThoughtOnReq) {
         messages = filterThoughtFromMsgs(messages);
       }
@@ -283,6 +276,7 @@ export const AppContextProvider = ({
     convId: string | null,
     leafNodeId: Message['id'] | null,
     content: string,
+    extra: Message['extra'],
     onChunk: CallbackGeneratedChunk
   ): Promise<boolean> => {
     if (isGenerating(convId ?? '') || content.trim().length === 0) return false;
@@ -307,6 +301,7 @@ export const AppContextProvider = ({
         convId,
         role: 'user',
         content,
+        extra,
         parent: leafNodeId,
         children: [],
       },
@@ -333,6 +328,7 @@ export const AppContextProvider = ({
     convId: string,
     parentNodeId: Message['id'], // the parent node of the message to be replaced
     content: string | null,
+    extra: Message['extra'],
     onChunk: CallbackGeneratedChunk
   ) => {
     if (isGenerating(convId)) return;
@@ -348,6 +344,7 @@ export const AppContextProvider = ({
           convId,
           role: 'user',
           content,
+          extra,
           parent: parentNodeId,
           children: [],
         },
@@ -380,8 +377,6 @@ export const AppContextProvider = ({
         saveConfig,
         showSettings,
         setShowSettings,
-        extraContext,
-        setExtraContext,
       }}
     >
       {children}

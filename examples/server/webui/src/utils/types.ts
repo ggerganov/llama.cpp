@@ -42,9 +42,18 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timings?: TimingReport;
+  extra?: MessageExtra[];
   // node based system for branching
   parent: Message['id'];
   children: Message['id'][];
+}
+
+type MessageExtra = MessageExtraTextFile; // TODO: will add more in the future
+
+export interface MessageExtraTextFile {
+  type: 'textFile';
+  name: string;
+  content: string;
 }
 
 export type APIMessage = Pick<Message, 'role' | 'content'>;

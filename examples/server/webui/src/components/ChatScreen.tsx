@@ -5,6 +5,7 @@ import { CanvasType, Message, PendingMessage } from '../utils/types';
 import { classNames, throttle } from '../utils/misc';
 import CanvasPyInterpreter from './CanvasPyInterpreter';
 import StorageUtils from '../utils/storage';
+import { useVSCodeContext } from '../utils/llama-vscode';
 
 /**
  * A message display is a message node with additional information for rendering.
@@ -79,36 +80,16 @@ export default function ChatScreen() {
     pendingMessages,
     canvasData,
     replaceMessageAndGenerate,
-    setExtraContext
   } = useAppContext();
   const [inputMsg, setInputMsg] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Accept setText message from a parent window and set inputMsg and extraContext
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.command === 'setText') {
-        setInputMsg(event.data?.text);
-        setExtraContext(event.data?.context)
-        inputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  // Add a keydown listener that sends the "escapePressed" message to the parent window
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-          window.parent.postMessage({ command: 'escapePressed' }, '*');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const { extraContext, clearExtraContext } = useVSCodeContext(
+    inputRef,
+    setInputMsg
+  );
+  // TODO: improve this when we have "upload file" feature
+  const currExtra: Message['extra'] = extraContext ? [extraContext] : undefined;
 
   // keep track of leaf node for rendering
   const [currNodeId, setCurrNodeId] = useState<number>(-1);
@@ -143,10 +124,20 @@ export default function ChatScreen() {
     setCurrNodeId(-1);
     // get the last message node
     const lastMsgNodeId = messages.at(-1)?.msg.id ?? null;
-    if (!(await sendMessage(currConvId, lastMsgNodeId, inputMsg, onChunk))) {
+    if (
+      !(await sendMessage(
+        currConvId,
+        lastMsgNodeId,
+        inputMsg,
+        currExtra,
+        onChunk
+      ))
+    ) {
       // restore the input message if failed
       setInputMsg(lastInpMsg);
     }
+    // OK
+    clearExtraContext();
   };
 
   const handleEditMessage = async (msg: Message, content: string) => {
@@ -157,6 +148,7 @@ export default function ChatScreen() {
       viewingChat.conv.id,
       msg.parent,
       content,
+      msg.extra,
       onChunk
     );
     setCurrNodeId(-1);
@@ -171,6 +163,7 @@ export default function ChatScreen() {
       viewingChat.conv.id,
       msg.parent,
       null,
+      msg.extra,
       onChunk
     );
     setCurrNodeId(-1);
