@@ -172,10 +172,14 @@ export default function ChatMessage({
                         </summary>
                         <div className="collapse-content">
                           {msg.extra.map(
-                            (extra) =>
+                            (extra, i) =>
                               extra.type === 'textFile' ? (
                                 <div key={extra.name}>
                                   <b>{extra.name}</b>
+                                  <pre>{extra.content}</pre>
+                                </div>
+                              ) : extra.type === 'context' ? (
+                                <div key={i}>
                                   <pre>{extra.content}</pre>
                                 </div>
                               ) : null // TODO: support other extra types
