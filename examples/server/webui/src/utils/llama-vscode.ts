@@ -21,7 +21,6 @@ export const useVSCodeContext = (
   const [extraContext, setExtraContext] = useState<MessageExtraContext | null>(
     null
   );
-  console.log({ extraContext });
 
   // Accept setText message from a parent window and set inputMsg and extraContext
   useEffect(() => {
