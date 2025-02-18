@@ -737,28 +737,50 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     return res;
 }
 
-static json format_response_rerank(const json & request, const json & ranks) {
-    json data = json::array();
-    int32_t n_tokens = 0;
-    int i = 0;
-    for (const auto & rank : ranks) {
-        data.push_back(json{
-            {"index",    i++},
-            {"relevance_score", json_value(rank, "score", 0.0)},
-        });
+static json format_response_rerank(
+        const json & request,
+        const json & ranks,
+        bool is_tei_format,
+        std::vector<std::string> & texts) {
+    json res;
+    if (is_tei_format) {
+        // TEI response format
+        res = json::array();
+        bool return_text = json_value(request, "return_text", false);
+        for (const auto & rank : ranks) {
+            int index = json_value(rank, "index", 0);
+            json elem = json{
+                {"index", index},
+                {"score", json_value(rank, "score", 0.0)},
+            };
+            if (return_text) {
+                elem["text"] = std::move(texts[index]);
+            }
+            res.push_back(elem);
+        }
+    } else {
+        // Jina response format
+        json results = json::array();
+        int32_t n_tokens = 0;
+        for (const auto & rank : ranks) {
+            results.push_back(json{
+                {"index",           json_value(rank, "index", 0)},
+                {"relevance_score", json_value(rank, "score", 0.0)},
+            });
 
-        n_tokens += json_value(rank, "tokens_evaluated", 0);
+            n_tokens += json_value(rank, "tokens_evaluated", 0);
+        }
+
+        res = json{
+            {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
+            {"object", "list"},
+            {"usage", json{
+                {"prompt_tokens", n_tokens},
+                {"total_tokens", n_tokens}
+            }},
+            {"results", results}
+        };
     }
-
-    json res = json {
-        {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
-        {"object", "list"},
-        {"usage", json {
-            {"prompt_tokens", n_tokens},
-            {"total_tokens", n_tokens}
-        }},
-        {"results", data}
-    };
 
     return res;
 }
