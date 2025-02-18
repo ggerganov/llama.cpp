@@ -13,8 +13,10 @@ struct llama_ubatch;
 struct llama_graph_result {
     ggml_cgraph * gf = nullptr;
 
-    ggml_tensor * t_logits = nullptr;
-    ggml_tensor * t_embd   = nullptr;
+    // important graph nodes
+    ggml_tensor * t_logits      = nullptr;
+    ggml_tensor * t_embd        = nullptr;
+    ggml_tensor * t_embd_pooled = nullptr;
 };
 
 // TODO: can become more granular in the future

@@ -96,7 +96,10 @@ struct llama_context : public llama_graph_i {
     virtual ggml_context_ptr graph_init();
 
     // TODO: add encode/decode graphs
-    virtual llama_graph_result graph_build(const llama_ubatch & ubatch, bool worst_case);
+    virtual llama_graph_result graph_build(
+            ggml_context_ptr & ctx,
+          const llama_ubatch & ubatch,
+                        bool   worst_case);
 
     // returns the result of ggml_backend_sched_graph_compute_async execution
     virtual enum ggml_status graph_compute(

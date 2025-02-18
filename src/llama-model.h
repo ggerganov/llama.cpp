@@ -370,11 +370,11 @@ struct llama_model {
 
     // TODO: add encode/decode graphs
     llama_graph_result build_graph(
-             llama_graph_i &  lgf,
-       const llama_cparams &  cparams,
-       const llama_ubatch  &  ubatch,
-          ggml_context_ptr && ctx,
-                      bool    worst_case) const;
+          ggml_context_ptr & ctx,
+             llama_graph_i & lgf,
+       const llama_cparams & cparams,
+       const llama_ubatch  & ubatch,
+                      bool   worst_case) const;
 
 private:
     struct impl;

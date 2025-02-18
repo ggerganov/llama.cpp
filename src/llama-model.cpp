@@ -3841,17 +3841,19 @@ struct llm_build_context {
     const enum llama_pooling_type pooling_type;
     const enum llama_rope_type    rope_type;
 
-    const ggml_context_ptr   ctx  = nullptr;
-          ggml_context     * ctx0 = nullptr;
+    ggml_context_ptr & ctx;
+    ggml_context     * ctx0 = nullptr;
+
+    llama_graph_result res;
 
     // TODO: consider making the entire interface noexcept
     llm_build_context(
-             llama_graph_i &  lgf,
-       const llama_model   &  model,
-       const llama_cparams &  cparams,
-       const llama_ubatch  &  ubatch,
-          ggml_context_ptr && ctx,
-                      bool    worst_case) :
+            ggml_context_ptr & ctx,
+            llama_graph_i    & lgf,
+      const llama_model      & model,
+      const llama_cparams    & cparams,
+      const llama_ubatch     & ubatch,
+            bool               worst_case) :
         lgf              (lgf),
         model            (model),
         hparams          (model.hparams),
@@ -3883,7 +3885,7 @@ struct llm_build_context {
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
-        ctx              (std::move(ctx)),
+        ctx              (ctx),
         ctx0             (this->ctx.get()) {
         }
 
@@ -4280,16 +4282,18 @@ struct llm_build_context {
     }
 
     void append_pooling(struct ggml_cgraph * gf) {
-        // find result_norm tensor for input
-        struct ggml_tensor * inp = nullptr;
-        for (int i = ggml_graph_n_nodes(gf) - 1; i >= 0; --i) {
-            inp = ggml_graph_node(gf, i);
-            if (strcmp(inp->name, "result_norm") == 0 || strcmp(inp->name, "result_embd") == 0) {
-                break;
-            }
+        struct ggml_tensor * inp = res.t_embd;
 
-            inp = nullptr;
-        }
+        //// find result_norm tensor for input
+        //for (int i = ggml_graph_n_nodes(gf) - 1; i >= 0; --i) {
+        //    inp = ggml_graph_node(gf, i);
+        //    if (strcmp(inp->name, "result_norm") == 0 || strcmp(inp->name, "result_embd") == 0) {
+        //        break;
+        //    }
+
+        //    inp = nullptr;
+        //}
+
         GGML_ASSERT(inp != nullptr && "missing result_norm/result_embd tensor");
 
         struct ggml_tensor * cur;
@@ -4338,6 +4342,7 @@ struct llm_build_context {
         }
 
         cb(cur, "result_embd_pooled", -1);
+        res.t_embd_pooled = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -4390,6 +4395,7 @@ struct llm_build_context {
 
     void build_llama(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -4530,7 +4536,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -4541,12 +4549,14 @@ struct llm_build_context {
         }
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_deci(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -4682,7 +4692,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -4693,12 +4705,14 @@ struct llm_build_context {
         }
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_baichuan(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -4799,17 +4813,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_xverse(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -4898,11 +4917,15 @@ struct llm_build_context {
         cur = inpL;
 
         cur = build_norm(cur, model.output_norm, NULL, LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -4910,6 +4933,7 @@ struct llm_build_context {
     void build_falcon(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -5015,16 +5039,21 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_grok(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -5158,7 +5187,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -5169,6 +5200,7 @@ struct llm_build_context {
         cur = ggml_scale(ctx0, cur, 0.5773502691896257f);
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -5176,6 +5208,7 @@ struct llm_build_context {
     void build_dbrx(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -5282,12 +5315,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -5295,6 +5331,7 @@ struct llm_build_context {
     void build_starcoder(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -5384,16 +5421,21 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_refact(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -5473,11 +5515,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -5668,6 +5714,7 @@ struct llm_build_context {
         cur = inpL;
 
         cb(cur, "result_embd", -1);
+        res.t_embd = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -5675,6 +5722,7 @@ struct llm_build_context {
     void build_bloom(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -5761,10 +5809,14 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -5772,6 +5824,7 @@ struct llm_build_context {
     void build_mpt(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -5897,16 +5950,21 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_stablelm(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6042,17 +6100,22 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_qwen(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6150,17 +6213,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_qwen2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -6258,17 +6326,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_qwen2vl(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -6371,17 +6444,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_qwen2moe(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -6511,11 +6589,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -6523,6 +6605,7 @@ struct llm_build_context {
     void build_phi2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6628,13 +6711,17 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
         cb(cur, "result_output_no_bias", -1);
 
         cur = ggml_add(ctx0, cur, model.output_b);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -6642,6 +6729,7 @@ struct llm_build_context {
     void build_phi3(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6656,7 +6744,7 @@ struct llm_build_context {
         lgf.build_attn_inp(ctx0, n_tokens, true, true, worst_case);
 
         for (int il = 0; il < n_layer; ++il) {
-            auto residual = inpL;
+            auto * residual = inpL;
 
             // self-attention
             {
@@ -6766,7 +6854,9 @@ struct llm_build_context {
             model.output_norm,
             model.output_norm_b,
             LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
 
@@ -6774,13 +6864,16 @@ struct llm_build_context {
             cb(cur, "result_output_no_bias", -1);
             cur = ggml_add(ctx0, cur, model.output_b);
         }
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_plamo(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -6870,11 +6963,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -6882,6 +6979,7 @@ struct llm_build_context {
     void build_gpt2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6972,10 +7070,14 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -6983,6 +7085,7 @@ struct llm_build_context {
     void build_codeshell(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -7079,16 +7182,21 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_orion(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -7192,17 +7300,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_internlm2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -7306,11 +7419,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7507,7 +7624,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head scaling
         const float scale_lmhead = float(n_embd_base)/float(n_embd);
@@ -7516,7 +7635,9 @@ struct llm_build_context {
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7616,11 +7737,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7736,7 +7861,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -7747,6 +7874,7 @@ struct llm_build_context {
         cur = ggml_scale(ctx0, cur, hparams.f_final_logit_softcapping);
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7754,6 +7882,7 @@ struct llm_build_context {
     // TODO: move up next to build_starcoder
     void build_starcoder2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -7858,11 +7987,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7908,18 +8041,24 @@ struct llm_build_context {
         cur = build_norm(inpL,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_command_r(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
+
         const float f_logit_scale = hparams.f_logit_scale;
 
         struct ggml_tensor * cur;
@@ -8046,7 +8185,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -8056,13 +8197,16 @@ struct llm_build_context {
         }
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_cohere2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
+
         const float f_logit_scale = hparams.f_logit_scale;
 
         struct ggml_tensor * cur;
@@ -8170,7 +8314,9 @@ struct llm_build_context {
         cur = inpL;
 
         cur = build_norm(cur, model.output_norm, NULL, LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -8180,6 +8326,7 @@ struct llm_build_context {
         }
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -8192,6 +8339,7 @@ struct llm_build_context {
     //   * removed MoE
     void build_olmo(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -8296,17 +8444,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 NULL, NULL,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_olmo2(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -8411,11 +8564,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -8426,6 +8583,7 @@ struct llm_build_context {
     //   * added q, k norm
     void build_olmoe(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -8533,17 +8691,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_openelm(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -8655,10 +8818,14 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -8666,6 +8833,7 @@ struct llm_build_context {
     void build_gptneox(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -8794,16 +8962,21 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_arctic(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -8918,17 +9091,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_deepseek(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -9068,12 +9246,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -9292,17 +9473,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = ggml_mul_mat(ctx0, model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_bitnet(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -9438,12 +9624,16 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         // FIXME: do not use model.tok_embd directly, duplicate as model.output
         cur = build_lora_mm(model.tok_embd, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -9451,6 +9641,7 @@ struct llm_build_context {
     //void build_t5_enc(ggml_cgraph * gf) {
     //    const int64_t n_embd_head = hparams.n_embd_head_v;
     //    const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
     //    GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
     //    struct ggml_tensor * cur;
@@ -9567,7 +9758,9 @@ struct llm_build_context {
     //    cur = build_norm(cur,
     //            model.output_norm_enc, NULL,
     //            LLM_NORM_RMS, -1);
+    //
     //    cb(cur, "result_norm", -1);
+    //    res.t_embd = cur;
 
     //    ggml_build_forward_expand(gf, cur);
     //}
@@ -9575,6 +9768,7 @@ struct llm_build_context {
     //void build_t5_dec(ggml_cgraph * gf) {
     //    const int64_t n_embd_head = hparams.n_embd_head_v;
     //    const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
     //    GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
     //    struct ggml_tensor * cur;
@@ -9760,11 +9954,15 @@ struct llm_build_context {
     //    cur = build_norm(cur,
     //            model.output_norm, NULL,
     //            LLM_NORM_RMS, -1);
+
     //    cb(cur, "result_norm", -1);
+    //    res.t_embd = cur;
 
     //    // lm_head
     //    cur = build_lora_mm(model.output, cur);
+
     //    cb(cur, "result_output", -1);
+    //    res.t_logits = cur;
 
     //    ggml_build_forward_expand(gf, cur);
 
@@ -9774,6 +9972,7 @@ struct llm_build_context {
     void build_jais(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -9849,11 +10048,14 @@ struct llm_build_context {
                 model.output_norm,
                 model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
 
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -9861,6 +10063,7 @@ struct llm_build_context {
     void build_chatglm(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -9975,16 +10178,21 @@ struct llm_build_context {
                 model.output_norm,
                 NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_nemotron(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         //GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -10090,17 +10298,22 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, model.output_norm_b,
                 LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 
     void build_exaone(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -10208,11 +10421,15 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -10290,15 +10507,21 @@ struct llm_build_context {
         }
 
         cur = inpL;
+
         struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+
         cur = ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
         cur = build_norm(cur, model.output_norm, model.output_norm_b, LLM_NORM, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -10375,10 +10598,14 @@ struct llm_build_context {
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
         cur = build_norm(cur, model.output_norm, model.output_norm_b, LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         cur = build_lora_mm(model.output, cur);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -10391,6 +10618,7 @@ struct llm_build_context {
     //   * removed MoE
     void build_chameleon(ggml_cgraph * gf) {
         const int64_t n_embd_head = hparams.n_embd_head_v;
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -10530,7 +10758,9 @@ struct llm_build_context {
         cur = build_norm(cur,
                 model.output_norm, NULL,
                 LLM_NORM_RMS, -1);
+
         cb(cur, "result_norm", -1);
+        res.t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
@@ -10546,8 +10776,11 @@ struct llm_build_context {
         struct ggml_tensor * img_logits = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, num_img_tokens);
         img_logits = ggml_clamp(ctx0, img_logits, -FLT_MAX, -FLT_MAX);
         cb(img_logits, "img_logits", -1);
+
         cur = ggml_set_1d(ctx0, cur, img_logits, ggml_element_size(cur) * img_token_start_idx);
+
         cb(cur, "result_output", -1);
+        res.t_logits = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -10695,23 +10928,23 @@ struct llm_build_context {
         cur = build_lora_mm(model.output, cur);
 
         cur = ggml_add(ctx0, cur, model.output_b);
+
         cb(cur, "result_embd", -1);
+        res.t_embd = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
 };
 
 llama_graph_result llama_model::build_graph(
-         llama_graph_i &  lgf,
-   const llama_cparams &  cparams,
-   const llama_ubatch  &  ubatch,
-      ggml_context_ptr && ctx,
+      ggml_context_ptr & ctx,
+         llama_graph_i & lgf,
+   const llama_cparams & cparams,
+   const llama_ubatch  & ubatch,
                   bool    worst_case) const {
-    llama_graph_result result = {};
+    struct llm_build_context llm(ctx, lgf, *this, cparams, ubatch, worst_case);
 
-    struct llm_build_context llm(lgf, *this, cparams, ubatch, std::move(ctx), worst_case);
-
-    auto & gf = result.gf;
+    auto & gf = llm.res.gf;
 
     gf = ggml_new_graph_custom(llm.ctx0, max_nodes(), false);
 
@@ -10935,7 +11168,7 @@ llama_graph_result llama_model::build_graph(
         llm.append_pooling(gf);
     }
 
-    return result;
+    return llm.res;
 }
 
 //
