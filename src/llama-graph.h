@@ -10,6 +10,13 @@ struct ggml_context;
 struct ggml_tensor;
 struct llama_ubatch;
 
+struct llama_graph_result {
+    ggml_cgraph * gf = nullptr;
+
+    ggml_tensor * t_logits = nullptr;
+    ggml_tensor * t_embd   = nullptr;
+};
+
 // TODO: can become more granular in the future
 class llama_graph_i {
 public:

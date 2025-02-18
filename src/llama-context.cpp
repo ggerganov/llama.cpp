@@ -246,31 +246,48 @@ void llama_context::init() {
         uint32_t n_tokens = std::min(cparams.n_ctx, cparams.n_ubatch);
         llama_token token = model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
 
+        int n_splits_pp = -1;
+        int n_nodes_pp  = -1;
+
+        int n_splits_tg = -1;
+        int n_nodes_tg  = -1;
+
         // reserve pp graph first so that buffers are only allocated once
-        llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-        ggml_cgraph * gf_pp = build_graph(ubatch_pp, true);
-        if (!ggml_backend_sched_reserve(sched.get(), gf_pp)) {
-            LLAMA_LOG_ERROR("%s: failed to allocate compute pp buffers\n", __func__);
-            throw std::runtime_error("failed to allocate compute buffers");
+        {
+            llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
+            auto res_pp = graph_build(ubatch_pp, true);
+            auto & gf_pp = res_pp.gf;
+            if (!ggml_backend_sched_reserve(sched.get(), gf_pp)) {
+                LLAMA_LOG_ERROR("%s: failed to allocate compute pp buffers\n", __func__);
+                throw std::runtime_error("failed to allocate compute buffers");
+            }
+
+            n_splits_pp = ggml_backend_sched_get_n_splits(sched.get());
+            n_nodes_pp  = ggml_graph_n_nodes(gf_pp);
         }
-        int n_splits_pp = ggml_backend_sched_get_n_splits(sched.get());
-        int n_nodes_pp  = ggml_graph_n_nodes(gf_pp);
 
         // reserve with tg graph to get the number of splits and nodes
-        llama_ubatch ubatch_tg = { true, 1, 1, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
-        ggml_cgraph * gf_tg = build_graph(ubatch_tg, true);
-        if (!ggml_backend_sched_reserve(sched.get(), gf_tg)) {
-            LLAMA_LOG_ERROR("%s: failed to allocate compute tg buffers\n", __func__);
-            throw std::runtime_error("failed to allocate compute buffers");
+        {
+            llama_ubatch ubatch_tg = { true, 1, 1, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
+            auto res_tg = graph_build(ubatch_tg, true);
+            auto & gf_tg = res_tg.gf;
+            if (!ggml_backend_sched_reserve(sched.get(), gf_tg)) {
+                LLAMA_LOG_ERROR("%s: failed to allocate compute tg buffers\n", __func__);
+                throw std::runtime_error("failed to allocate compute buffers");
+            }
+            n_splits_tg = ggml_backend_sched_get_n_splits(sched.get());
+            n_nodes_tg  = ggml_graph_n_nodes(gf_tg);
         }
-        int n_splits_tg = ggml_backend_sched_get_n_splits(sched.get());
-        int n_nodes_tg  = ggml_graph_n_nodes(gf_tg);
 
         // reserve again with pp graph to avoid ggml-alloc reallocations during inference
-        gf_pp = build_graph(ubatch_pp, true);
-        if (!ggml_backend_sched_reserve(sched.get(), gf_pp)) {
-            LLAMA_LOG_ERROR("%s: failed to allocate compute pp buffers\n", __func__);
-            throw std::runtime_error("failed to allocate compute buffers");
+        {
+            llama_ubatch ubatch_pp = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
+            auto res_pp = graph_build(ubatch_pp, true);
+            auto & gf_pp = res_pp.gf;
+            if (!ggml_backend_sched_reserve(sched.get(), gf_pp)) {
+                LLAMA_LOG_ERROR("%s: failed to allocate compute pp buffers\n", __func__);
+                throw std::runtime_error("failed to allocate compute buffers");
+            }
         }
 
         for (size_t i = 0; i < backend_ptrs.size(); ++i) {
@@ -890,7 +907,7 @@ void llama_context::build_cb(
     }
 }
 
-ggml_cgraph * llama_context::build_graph(const llama_ubatch & ubatch, bool worst_case) {
+llama_graph_result llama_context::graph_build(const llama_ubatch & ubatch, bool worst_case) {
     return model.build_graph(*this, cparams, ubatch, graph_init(), worst_case);
 }
 
@@ -1814,11 +1831,11 @@ int llama_context_kv_self::decode(llama_batch & inp_batch) {
             llama_token token = model.vocab.token_bos(); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             llama_ubatch ubatch = { true, n_tokens, n_tokens / n_seqs, n_seqs, &token, nullptr, nullptr, nullptr, nullptr, nullptr};
 
-            ggml_cgraph * gf = build_graph(ubatch, true);
+            auto res = graph_build(ubatch, true);
 
             // initialize scheduler with the worst-case graph
             ggml_backend_sched_reset(sched.get());
-            if (!ggml_backend_sched_reserve(sched.get(), gf)) {
+            if (!ggml_backend_sched_reserve(sched.get(), res.gf)) {
                 LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
             }
 
@@ -1828,7 +1845,9 @@ int llama_context_kv_self::decode(llama_batch & inp_batch) {
         ggml_backend_sched_reset(sched.get());
         ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
 
-        ggml_cgraph * gf = build_graph(ubatch, false);
+        auto res = graph_build(ubatch, false);
+
+        auto & gf = res.gf;
 
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
@@ -2073,7 +2092,9 @@ int llama_context_kv_self::encode(llama_batch & inp_batch) {
     ggml_backend_sched_reset(sched.get());
     ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
 
-    ggml_cgraph * gf = build_graph(ubatch, false);
+    auto res = graph_build(ubatch, false);
+
+    auto & gf = res.gf;
 
     ggml_backend_sched_alloc_graph(sched.get(), gf);
 

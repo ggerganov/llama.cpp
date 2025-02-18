@@ -95,6 +95,9 @@ struct llama_context : public llama_graph_i {
     // zero-out inputs and create ggml_context
     virtual ggml_context_ptr graph_init();
 
+    // TODO: add encode/decode graphs
+    virtual llama_graph_result graph_build(const llama_ubatch & ubatch, bool worst_case);
+
     // returns the result of ggml_backend_sched_graph_compute_async execution
     virtual enum ggml_status graph_compute(
                 ggml_cgraph * graph,
@@ -144,9 +147,6 @@ struct llama_context : public llama_graph_i {
               const char * name,
       const llama_ubatch & ubatch,
                      int   il);
-
-    // TODO: add encode/decode graphs
-    virtual ggml_cgraph * build_graph(const llama_ubatch & ubatch, bool worst_case);
 
     // apply control vector for layer il
     virtual ggml_tensor * build_cvec(
