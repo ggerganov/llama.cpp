@@ -171,14 +171,14 @@ static std::string format(const char * fmt, ...) {
 #define TN_GLM_BOI_W "adapter.boi"
 #define TN_GLM_EOI_W "adapter.eoi"
 
-#define TN_JANUS_ATTN_POOL_LATENT "attn_pool_latent"
-#define TN_JANUS_ATTN_POOL_Q "attn_pool_q.%s"
-#define TN_JANUS_ATTN_POOL_K "attn_pool_k.%s"
-#define TN_JANUS_ATTN_POOL_V "attn_pool_v.%s"
-#define TN_JANUS_ATTN_POOL_PROJ "attn_pool_proj.%s"
-#define TN_JANUS_ATTN_POOL_FFN_DOWN "attn_pool_ffn_down.%s"
-#define TN_JANUS_ATTN_POOL_NORM "attn_pool_norm.%s"
-#define TN_JANUS_ATTN_POOL_FFN_UP "attn_pool_ffn_up.%s"
+#define TN_JANUS_ATTN_POOL_LATENT "v.attn_pool.latent"
+#define TN_JANUS_ATTN_POOL_Q "v.attn_pool.q.%s"
+#define TN_JANUS_ATTN_POOL_K "v.attn_pool.k.%s"
+#define TN_JANUS_ATTN_POOL_V "v.attn_pool.v.%s"
+#define TN_JANUS_ATTN_POOL_PROJ "v.attn_pool.proj.%s"
+#define TN_JANUS_ATTN_POOL_FFN_DOWN "v.attn_pool.ffn_down.%s"
+#define TN_JANUS_ATTN_POOL_NORM "v.attn_pool.norm.%s"
+#define TN_JANUS_ATTN_POOL_FFN_UP "v.attn_pool.ffn_up.%s"
 
 
 enum projector_type {
@@ -1187,9 +1187,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // TODO: Check the ctx0 and memory usage
     else if (ctx->has_janus_attn_pool){
         if (ctx->proj_type == PROJECTOR_TYPE_ATTN_POOL) {
-            struct ggml_tensor* latent = model.attn_pool_latent; // Should be [D, 1, 1]
+            struct ggml_tensor* latent = model.attn_pool_latent; 
             struct ggml_tensor* latent_expanded = ggml_repeat(ctx0, latent,
-                ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, 1, batch_size)); // [D, 1, B]
+                ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, 1, batch_size)); 
 
             struct ggml_tensor* Q = ggml_add(ctx0,
                 ggml_mul_mat(ctx0, model.attn_pool_q_w, latent_expanded),
@@ -1216,39 +1216,39 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             V = ggml_cont(ggml_permute(ctx0, V, 1, 2, 0, 3)); 
             V = ggml_reshape_3d(ctx0, V, num_positions, d_head, n_head * batch_size);
 
-            struct ggml_tensor* attn_scores = ggml_mul_mat(ctx0, K, Q); 
-            attn_scores = ggml_soft_max_inplace(ctx0, attn_scores);
+            struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q); 
+            KQ = ggml_soft_max_inplace(ctx0, KQ);
 
-            struct ggml_tensor* attn_output = ggml_mul_mat(ctx0, V, attn_scores);
-            attn_output = ggml_reshape_4d(ctx0, attn_output, d_head, 1, n_head, batch_size);
-            attn_output = ggml_cont(ggml_permute(ctx0, attn_output, 0, 2, 1, 3));
-            attn_output = ggml_cont_3d(ctx0, attn_output, hidden_size, 1, batch_size);
-
-            attn_output = ggml_add(ctx0,
-                        ggml_mul_mat(ctx0, model.attn_pool_proj_w, attn_output),
+            struct ggml_tensor* KQV = ggml_mul_mat(ctx0, V, KQ);
+            KQV = ggml_reshape_4d(ctx0, KQV, d_head, 1, n_head, batch_size);
+            KQV = ggml_cont(ggml_permute(ctx0, KQV, 0, 2, 1, 3));
+            
+            KQV = ggml_cont_3d(ctx0, KQV, hidden_size, 1, batch_size);
+            KQV = ggml_add(ctx0,
+                        ggml_mul_mat(ctx0, model.attn_pool_proj_w, KQV),
                         model.attn_pool_proj_b
                     );
+            // Norm before MLP
+            KQV = ggml_norm(ctx0, KQV, eps);
+            KQV = ggml_add(ctx0, ggml_mul(ctx0, KQV, model.attn_pool_norm_w), model.attn_pool_norm_b);
 
-            // MLP: fc1 -> gelu -> norm -> fc2
+            // MLP: fc1 -> gelu -> fc2
             // References: 
             // https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/mlp.py#L13
-            struct ggml_tensor * cur = attn_output;
-            cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_norm_w, cur), model.attn_pool_norm_b);
-            cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_ffn_down_w, cur), model.attn_pool_ffn_down_b);
-            cur = ggml_gelu_inplace(ctx0, cur);
-            cur = ggml_norm(ctx0, cur, eps);
-            cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_norm_w, cur), model.attn_pool_norm_b);
-            cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_ffn_up_w, cur), model.attn_pool_ffn_up_b);
+            struct ggml_tensor * embeddings = KQV;
+            embeddings = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_ffn_down_w, embeddings), model.attn_pool_ffn_down_b);
+            embeddings = ggml_gelu_inplace(ctx0, embeddings);
+            embeddings = ggml_add(ctx0, ggml_mul_mat(ctx0, model.attn_pool_ffn_up_w, embeddings), model.attn_pool_ffn_up_b);
             // Residual connection
             // https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/attention_pool.py#L98
-            attn_output = ggml_add(ctx0, attn_output, cur); // [D, 1, B]
+            embeddings = ggml_add(ctx0, embeddings, KQV); 
 
             // Pooling, select first token
             embeddings = ggml_view_2d(ctx0,
-                                    attn_output,
-                                    attn_output->ne[0], 
-                                    attn_output->ne[2], 
-                                    attn_output->nb[2],
+                                    embeddings,
+                                    embeddings->ne[0], 
+                                    embeddings->ne[2], 
+                                    embeddings->nb[2],
                                     0);
         } else {
             GGML_ABORT("fatal error");
@@ -3033,6 +3033,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MERGER) {
         return ctx->vision_model.mm_1_b->ne[0];
+    }
+    if (ctx->proj_type == PROJECTOR_TYPE_ATTN_POOL) {
+        return ctx->vision_model.attn_pool_ffn_up_b->ne[0];
     }
 
     std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
