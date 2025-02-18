@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageExtraTextFile } from './types';
+import { MessageExtraContext } from './types';
 
 // Extra context when using llama.cpp WebUI from llama-vscode, inside an iframe
 // Ref: https://github.com/ggml-org/llama.cpp/pull/11940
@@ -18,7 +18,7 @@ export const useVSCodeContext = (
   inputRef: React.RefObject<HTMLTextAreaElement>,
   setInputMsg: (text: string) => void
 ) => {
-  const [extraContext, setExtraContext] = useState<MessageExtraTextFile | null>(
+  const [extraContext, setExtraContext] = useState<MessageExtraContext | null>(
     null
   );
   console.log({ extraContext });
@@ -29,11 +29,12 @@ export const useVSCodeContext = (
       if (event.data?.command === 'setText') {
         const data: SetTextEvData = event.data;
         setInputMsg(data?.text);
-        setExtraContext({
-          type: 'textFile',
-          name: '(context)', // TODO: set filename
-          content: data?.context ?? '(no context)',
-        });
+        if (data?.context && data.context.length > 0) {
+          setExtraContext({
+            type: 'context',
+            content: data.context,
+          });
+        }
         inputRef.current?.focus();
       }
     };
