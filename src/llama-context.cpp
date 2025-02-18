@@ -576,7 +576,7 @@ llama_graph_result llama_context::graph_build(
             ggml_context * ctx,
       const llama_ubatch & ubatch,
                     bool   worst_case) {
-    return model.build_graph(ctx, *this, cparams, ubatch, worst_case);
+    return model.build_graph(ctx, this, cparams, ubatch, worst_case);
 }
 
 enum ggml_status llama_context::graph_compute(

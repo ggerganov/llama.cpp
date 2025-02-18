@@ -371,7 +371,7 @@ struct llama_model {
     // TODO: add encode/decode graphs
     llama_graph_result build_graph(
               ggml_context * ctx,
-             llama_graph_i & lgf,
+             llama_graph_i * lgf,
        const llama_cparams & cparams,
        const llama_ubatch  & ubatch,
                       bool   worst_case) const;
