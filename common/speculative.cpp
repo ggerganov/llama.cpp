@@ -252,16 +252,16 @@ llama_tokens common_speculative_gen_draft(
         // add drafted token for each sequence
         const llama_token id = cur_p->data[0].id;
 
-        // only collect very high-confidence draft tokens
-        if (cur_p->data[0].p < params.p_min) {
-            break;
-        }
-
         common_sampler_accept(smpl, id, true);
 
         result.push_back(id);
 
         if (params.n_draft <= (int) result.size()) {
+            break;
+        }
+
+        // only collect very high-confidence draft tokens
+        if (cur_p->data[0].p < params.p_min) {
             break;
         }
 
