@@ -4246,9 +4246,9 @@ struct llm_build_context {
              struct ggml_cgraph * gf,
              struct ggml_tensor * wo,
              struct ggml_tensor * wo_b,
+             struct ggml_tensor * q_cur,
              struct ggml_tensor * k_cur,
              struct ggml_tensor * v_cur,
-             struct ggml_tensor * q_cur,
                         int32_t   n_tokens,
                         float     kq_scale,
                         int       il) {
@@ -4258,7 +4258,7 @@ struct llm_build_context {
         ggml_build_forward_expand(gf, k_cur);
         ggml_build_forward_expand(gf, v_cur);
 
-        ggml_tensor * cur = lgf->build_attn(ctx0, gf, wo, wo_b, k_cur, v_cur, q_cur, n_tokens, kq_scale, il, worst_case);
+        ggml_tensor * cur = lgf->build_attn(ctx0, gf, wo, wo_b, q_cur, k_cur, v_cur, n_tokens, kq_scale, il, worst_case);
         cb(cur, "kqv_out", il);
 
         return cur;
@@ -4460,7 +4460,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, kq_scale, il);
+                        Qcur, Kcur, Vcur, n_tokens, kq_scale, il);
             }
 
             if (il == n_layer - 1) {
@@ -4632,7 +4632,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, kq_scale, il);
+                        Qcur, Kcur, Vcur, n_tokens, kq_scale, il);
             }
 
             if (il == n_layer - 1) {
@@ -4768,7 +4768,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -4874,7 +4874,7 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -4996,7 +4996,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -5118,7 +5118,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f, il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f, il);
             }
 
             if (il == n_layer - 1) {
@@ -5265,7 +5265,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -5375,7 +5375,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -5470,7 +5470,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -5763,7 +5763,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -5896,13 +5896,13 @@ struct llm_build_context {
 
                     cur = build_attn(gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                            Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
                 } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
                     cur = build_attn(gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                            Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
                 }
             }
 
@@ -6048,7 +6048,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -6168,7 +6168,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -6283,7 +6283,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -6401,7 +6401,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -6514,7 +6514,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -6673,7 +6673,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f, il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f, il);
             }
 
             if (il == n_layer - 1) {
@@ -6796,7 +6796,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f, il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f, il);
             }
 
             if (il == n_layer - 1) {
@@ -6921,7 +6921,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
             struct ggml_tensor * sa_out = cur;
 
@@ -7024,7 +7024,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -7136,7 +7136,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -7257,7 +7257,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -7376,7 +7376,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -7570,7 +7570,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        k_states, v_states, q_states, n_tokens, kq_scale, il);
+                        q_states, k_states, v_states, n_tokens, kq_scale, il);
             }
 
             if (il == n_layer - 1) {
@@ -7692,7 +7692,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f, il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f, il);
             }
 
             if (il == n_layer - 1) {
@@ -7806,7 +7806,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f, il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f, il);
             }
 
             cur = build_norm(cur,
@@ -7943,7 +7943,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8143,7 +8143,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8276,8 +8276,9 @@ struct llm_build_context {
                     cb(Kcur, "Kcur", il);
                 }
 
-                cur = build_attn(gf, model.layers[il].wo, model.layers[il].bo, Kcur, Vcur, Qcur,
-                                   n_tokens, 1.0f / sqrtf(float(n_embd_head)), il);
+                cur = build_attn(gf,
+                        model.layers[il].wo, model.layers[il].bo,
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8400,7 +8401,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, nullptr,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8515,7 +8516,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             cur = build_norm(cur,
@@ -8643,7 +8644,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8773,7 +8774,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -8883,7 +8884,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -9025,7 +9026,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -9172,7 +9173,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, kq_scale, il);
+                        Qcur, Kcur, Vcur, n_tokens, kq_scale, il);
             }
 
             if (il == n_layer - 1) {
@@ -9400,7 +9401,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        k_states, v_states, q_states, n_tokens, kq_scale, il);
+                        q_states, k_states, v_states, n_tokens, kq_scale, il);
             }
 
             if (il == n_layer - 1) {
@@ -9558,7 +9559,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         NULL, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
 
                 cur = build_norm(cur,
                         model.layers[il].attn_sub_norm, NULL,
@@ -10007,7 +10008,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/float(n_embd_head), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/float(n_embd_head), il);
             }
 
             if (il == n_layer - 1) {
@@ -10135,7 +10136,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
 
             }
 
@@ -10254,7 +10255,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -10377,7 +10378,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             }
 
             if (il == n_layer - 1) {
@@ -10699,7 +10700,7 @@ struct llm_build_context {
 
                 cur = build_attn(gf,
                         model.layers[il].wo, nullptr,
-                        Kcur, Vcur, Qcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
+                        Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
 
                 if (hparams.swin_norm) {
                     cur = build_norm(cur,
