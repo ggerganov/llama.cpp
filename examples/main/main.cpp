@@ -5,6 +5,7 @@
 #include "sampling.h"
 #include "llama.h"
 #include "chat.h"
+#include "toolcall/handler.h"
 
 #include <cstdio>
 #include <cstring>

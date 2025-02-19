@@ -1,8 +1,6 @@
 #pragma once
 
 #include <string>
-#include <variant>
-#include <memory>
 
 namespace toolcall
 {

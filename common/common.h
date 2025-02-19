@@ -3,7 +3,7 @@
 #pragma once
 
 #include "llama-cpp.h"
-#include "toolcall/handler.h"
+#include "toolcall/params.h"
 #include <set>
 #include <string>
 #include <vector>
