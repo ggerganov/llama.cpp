@@ -113,6 +113,15 @@ public:
              ggml_tensor * kq,
                  float     kq_scale) = 0;
 
+    virtual void build_kv_self_shift(
+            ggml_context * ctx0,
+            ggml_cgraph * gf) = 0;
+
+    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
+    virtual void build_kv_self_defrag(
+            ggml_context * ctx0,
+            ggml_cgraph * gf) = 0;
+
     virtual ggml_tensor * build_inp_k_shift(
             ggml_context * ctx0) = 0;
 
@@ -181,19 +190,4 @@ public:
       const llama_ubatch & ubatch,
                      int   il,
                     bool   worst_case) = 0;
-};
-
-class llama_graph_kv_cache_i {
-public:
-    virtual void build_shift(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-           llama_graph_i * lgf) = 0;
-
-    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
-    virtual void build_defrag(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-                 int32_t   max_nodes,
-                    bool   v_trans) = 0;
 };

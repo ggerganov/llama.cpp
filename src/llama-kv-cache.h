@@ -49,7 +49,7 @@ struct llama_kv_cache_slot_info {
 // TODO: pimpl
 // TODO: add notion of max sequences
 // TODO: add llama_hparams &
-struct llama_kv_cache : public llama_graph_kv_cache_i {
+struct llama_kv_cache {
     llama_kv_cache(const llama_hparams & hparams);
     virtual ~llama_kv_cache() = default;
 
@@ -96,19 +96,6 @@ struct llama_kv_cache : public llama_graph_kv_cache_i {
 
     size_t size_k_bytes() const;
     size_t size_v_bytes() const;
-
-    // graph build API
-
-    virtual void build_shift(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-           llama_graph_i * lgf) override;
-
-    virtual void build_defrag(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-                 int32_t   max_nodes,
-                    bool   v_trans) override;
 
     // state save/load
 

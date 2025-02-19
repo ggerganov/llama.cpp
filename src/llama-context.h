@@ -378,7 +378,7 @@ public:
 
     virtual void build_attn_kv_store(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * k_cur,
              ggml_tensor * v_cur,
                  int32_t   n_tokens,
@@ -387,7 +387,7 @@ public:
 
     virtual ggml_tensor * build_attn_qkv(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * wo,
              ggml_tensor * wo_b,
              ggml_tensor * q_cur,
@@ -400,6 +400,15 @@ public:
             ggml_context * ctx0,
              ggml_tensor * kq,
                  float     kq_scale) override;
+
+    virtual void build_kv_self_shift(
+            ggml_context * ctx0,
+            ggml_cgraph * gf) override;
+
+    // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
+    virtual void build_kv_self_defrag(
+            ggml_context * ctx0,
+            ggml_cgraph * gf) override;
 
     // === encoder-decoder ===
 
@@ -443,7 +452,7 @@ public:
 
     virtual ggml_tensor * build_copy_mask_state(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * s,
              ggml_tensor * state_copy,
              ggml_tensor * state_mask,
@@ -454,7 +463,7 @@ public:
 
     virtual ggml_tensor * build_mamba_layer(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * cur,
              ggml_tensor * state_copy,
              ggml_tensor * state_mask,
@@ -464,7 +473,7 @@ public:
 
     virtual ggml_tensor * build_rwkv_token_shift_load(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * state_copy,
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
@@ -480,7 +489,7 @@ public:
 
     virtual ggml_tensor * build_rwkv6_time_mix(
             ggml_context * ctx0,
-             ggml_cgraph * graph,
+             ggml_cgraph * gf,
              ggml_tensor * cur,
              ggml_tensor * x_prev,
              ggml_tensor * state_copy,
