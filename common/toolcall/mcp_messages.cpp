@@ -1,4 +1,4 @@
-#include "mcp_messages.hpp"
+#include "mcp_messages.h"
 #include <iostream>
 
 using json = nlohmann::json;

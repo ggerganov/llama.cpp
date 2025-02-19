@@ -1,5 +1,5 @@
 
-#include "mcp_stdio_transport.hpp"
+#include "mcp_stdio_transport.h"
 
 #include <stdexcept>
 

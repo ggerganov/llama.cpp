@@ -76,16 +76,14 @@ add_library(${TARGET} STATIC
     speculative.cpp
     speculative.h
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/params.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/params.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/params.h
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/handler.h
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_transport.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_messages.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_transport.h
     ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_stdio_transport.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_stdio_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_stdio_transport.h
     )
 
 if (BUILD_SHARED_LIBS)
@@ -101,6 +99,11 @@ if (LLAMA_CURL)
     include_directories(${CURL_INCLUDE_DIRS})
     find_library(CURL_LIBRARY curl REQUIRED)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
+
+    target_sources(${TARGET}
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/toolcall/mcp_sse_transport.h)
+
 endif ()
 
 if (LLAMA_LLGUIDANCE)

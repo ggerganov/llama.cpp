@@ -1,5 +1,5 @@
 
-#include "params.hpp"
+#include "params.h"
 #include <stdexcept>
 #include <json.hpp>
 

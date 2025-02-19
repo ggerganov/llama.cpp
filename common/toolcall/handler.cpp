@@ -1,12 +1,12 @@
 
 #include <json.hpp>
-#include "handler.hpp"
+#include "handler.h"
 
 #ifdef LLAMA_USE_CURL
-#    include "mcp_sse_transport.hpp"
+#    include "mcp_sse_transport.h"
 #endif
 
-#include "mcp_stdio_transport.hpp"
+#include "mcp_stdio_transport.h"
 
 using json = nlohmann::json;
 

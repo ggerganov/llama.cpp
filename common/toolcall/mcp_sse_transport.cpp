@@ -1,7 +1,7 @@
 
 #include <iostream>
 #include <sstream>
-#include "mcp_sse_transport.hpp"
+#include "mcp_sse_transport.h"
 #include <log.h>
 #include <chrono>
 

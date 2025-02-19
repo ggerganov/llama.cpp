@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mcp_messages.hpp"
+#include "mcp_messages.h"
 #include <string>
 #include <tuple>
 #include <vector>

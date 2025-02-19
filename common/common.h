@@ -3,12 +3,11 @@
 #pragma once
 
 #include "llama-cpp.h"
-#include "toolcall/handler.hpp"
+#include "toolcall/handler.h"
 #include <set>
 #include <string>
 #include <vector>
 #include <sstream>
-#include <variant>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -619,7 +618,6 @@ std::string common_detokenize(
                                   bool   special = true);
 
 struct common_chat_params;
-struct common_chat_inputs;
 void common_chat_grammar_to_sampler(const common_chat_params * src,
                                     const llama_vocab * vocab,
                                     common_params_sampling * sparams);
