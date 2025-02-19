@@ -4,7 +4,7 @@
 #include <variant>
 #include <memory>
 
-#include "../json.hpp" // TODO: switch to foreward decl.
+#include <json.hpp> // TODO: switch to foreward decl.
 // namespace nlohmann { class ordered_json; }
 
 namespace toolcall

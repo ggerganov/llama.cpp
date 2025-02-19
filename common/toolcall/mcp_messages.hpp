@@ -2,7 +2,7 @@
 #include <optional>
 #include <vector>
 #include <variant>
-#include "../json.hpp"
+#include <json.hpp>
 
 namespace mcp
 {
@@ -214,7 +214,13 @@ namespace mcp
         std::string next_cursor_;
     };
 
-    using message_variant = std::variant<
-        initialize_request, initialize_response, initialized_notification,
-        tools_list_request, tools_list_response>;
+    using message_variant =
+        std::variant<std::monostate,
+                     initialize_request,
+                     initialize_response,
+                     initialized_notification,
+                     tools_list_request,
+                     tools_list_response>;
+
+    bool create_message(const std::string & data, message_variant & message);
 }

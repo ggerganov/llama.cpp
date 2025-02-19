@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../json.hpp"
+#include <json.hpp> // TODO: remove dependence on this
 #include "params.hpp" // TODO: make foreward decl.
 #include <string>
 #include <variant>

@@ -13,7 +13,7 @@ namespace toolcall
 
         [[noreturn]] virtual void start() override;
         [[noreturn]] virtual void stop()  override;
-        [[noreturn]] virtual bool send(const mcp::message_variant & request) override;
+        [[noreturn]] virtual bool send(const std::string & request_json) override;
 
     private:
         std::vector<std::string> argv_;

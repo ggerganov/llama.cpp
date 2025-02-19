@@ -16,6 +16,6 @@ toolcall::mcp_stdio_transport::mcp_stdio_transport(std::vector<std::string> argv
     throw std::logic_error(std::string("Function not implemented: ") + __func__);
 }
 
-[[noreturn]] bool toolcall::mcp_stdio_transport::send(const mcp::message_variant & /*request*/) {
+[[noreturn]] bool toolcall::mcp_stdio_transport::send(const std::string & /*request_json*/) {
     throw std::logic_error(std::string("Function not implemented: ") + __func__);
 }
