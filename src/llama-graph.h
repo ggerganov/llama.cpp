@@ -55,7 +55,7 @@ public:
              ggml_tensor * cur,
              ggml_tensor * shift,
              ggml_tensor * factors,
-             ggml_backend_buffer * bbuft) = 0;
+             ggml_backend_buffer * bbuf) = 0;
 
     // graph build API (context-specific)
 
@@ -137,11 +137,11 @@ public:
 
     virtual ggml_tensor * build_inp_s_copy(
             ggml_context * ctx0,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_inp_s_mask(
             ggml_context * ctx0,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_copy_mask_state(
             ggml_context * ctx0,
@@ -152,7 +152,7 @@ public:
                  int32_t   n_tokens,
                  int32_t   n_state,
                  int32_t   n_seqs,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_mamba_layer(
             ggml_context * ctx0,
@@ -162,7 +162,7 @@ public:
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_rwkv_token_shift_load(
             ggml_context * ctx0,
@@ -171,14 +171,14 @@ public:
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_rwkv_token_shift_store(
             ggml_context * ctx0,
              ggml_tensor * token_shift,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_rwkv6_time_mix(
             ggml_context * ctx0,
@@ -189,5 +189,5 @@ public:
              ggml_tensor * state_mask,
       const llama_ubatch & ubatch,
                      int   il,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 };

@@ -326,8 +326,19 @@ struct llama_context * llama_init_from_model(
     llama_context * ctx = nullptr;
 
     try {
-        // TODO: add logic which llama_context implementation to construct
-        ctx = new llama_context_kv_self(*model, params);
+        // TODO: make static method of llama_context
+        switch (model->arch) {
+            case LLM_ARCH_RWKV6:
+            case LLM_ARCH_RWKV6QWEN2:
+            case LLM_ARCH_MAMBA:
+                GGML_ASSERT(llama_model_is_recurrent(model));
+                ctx = new llama_context_recurrent(*model, params);
+                break;
+            default:
+                GGML_ASSERT(!llama_model_is_recurrent(model));
+                ctx = new llama_context_kv_self(*model, params);
+        };
+
         ctx->init();
     } catch (const std::exception & e) {
         LLAMA_LOG_ERROR("%s: failed to initialize context: %s\n", __func__, e.what());
