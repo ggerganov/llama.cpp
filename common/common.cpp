@@ -12,6 +12,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat.h"
 
 #include <algorithm>
 #include <cinttypes>

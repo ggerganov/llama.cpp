@@ -1,18 +1,13 @@
 #pragma once
 
-#include <json.hpp> // TODO: remove dependence on this
-#include "params.hpp" // TODO: make foreward decl.
+#include "params.hpp"
 #include <string>
 #include <variant>
 #include <memory>
+#include <vector>
 
 namespace toolcall
 {
-    using json = nlohmann::ordered_json;
-    using json_ptr = std::shared_ptr<json>;
-    using tools_t = std::variant<std::string, json_ptr>;
-    using tool_choice_t = std::variant<std::string, json_ptr>;
-
     enum action {
         ACCEPT,
         PENDING,
@@ -26,9 +21,9 @@ namespace toolcall
 
         handler(std::unique_ptr<handler_impl> impl) : impl_(std::move(impl)) {}
 
-        json tool_list();
-        action call(const json & request, json & response);
-        const tool_choice_t & tool_choice() const;
+        std::string tool_list();
+        action call(const std::string & request, std::string & response);
+        const std::string & tool_choice() const;
         action last_action() const;
 
     private:
@@ -40,45 +35,45 @@ namespace toolcall
 
     class handler_impl {
     public:
-        handler_impl(tool_choice_t tool_choice)
+        handler_impl(std::string tool_choice)
             : tool_choice_(std::move(tool_choice)) {}
 
         virtual ~handler_impl() = default;
-        virtual json tool_list() = 0;
-        virtual action call(const json & request, json & response) = 0;
+        virtual std::string tool_list() = 0;
+        virtual action call(const std::string & request, std::string & response) = 0;
 
-        const tool_choice_t & tool_choice() const { return tool_choice_; }
+        const std::string & tool_choice() const { return tool_choice_; }
 
     protected:
-        tool_choice_t tool_choice_;
+        std::string tool_choice_;
     };
 
     class loopback_impl : public handler_impl {
     public:
-        loopback_impl(json tools, tool_choice_t tool_choice)
+        loopback_impl(std::string tools, std::string tool_choice)
             : handler_impl(tool_choice), tools_(std::move(tools)) {}
 
-        virtual json tool_list() override {
+        virtual std::string tool_list() override {
             return tools_;
         }
 
-        virtual action call(const json & request, json & response) override {
+        virtual action call(const std::string & request, std::string & response) override {
             response = request;
             return toolcall::DEFER;
         }
 
     private:
-        json tools_;
+        std::string tools_;
     };
 
     class mcp_transport;
     class mcp_impl : public handler_impl {
     public:
-        mcp_impl(std::string server_uri, tool_choice_t tool_choice);
-        mcp_impl(std::vector<std::string> argv, tool_choice_t tool_choice);
+        mcp_impl(std::string server_uri, std::string tool_choice);
+        mcp_impl(std::vector<std::string> argv, std::string tool_choice);
 
-        virtual json tool_list() override;
-        virtual action call(const json & request, json & response) override;
+        virtual std::string tool_list() override;
+        virtual action call(const std::string & request, std::string & response) override;
 
     private:
         std::unique_ptr<mcp_transport> transport_;

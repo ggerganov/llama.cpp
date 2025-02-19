@@ -1,5 +1,4 @@
 #include "arg.h"
-#include "chat.hpp"
 #include "common.h"
 #include "console.h"
 #include "log.h"
@@ -276,19 +275,21 @@ int main(int argc, char ** argv) {
         new_msg.role = role;
         new_msg.content = content;
 
-        common_chat_inputs cinputs;
+        common_chat_templates_inputs cinputs;
         if (handler != nullptr) {
             auto choice = handler->tool_choice();
-            if (std::holds_alternative<std::string>(choice)) {
-                cinputs.tool_choice = std::get<std::string>(choice);
+            if (choice == "auto") {
+                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
 
-            } else {
-                auto choice_ptr = std::get<toolcall::json_ptr>(choice);
-                if (choice_ptr != nullptr) {
-                    cinputs.tool_choice = *choice_ptr;
-                }
+            } else if (choice == "required") {
+                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+
+            } else if (choice == "none") {
+                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_NONE;
             }
-            cinputs.tools = handler->tool_list();
+
+            // TODO
+            //cinputs.tools = handler->tool_list();
         }
 
         common_chat_params cparams;
@@ -302,7 +303,7 @@ int main(int argc, char ** argv) {
         if (g_params->use_jinja) {
             common_chat_grammar_to_sampler(&cparams, vocab, &sparams);
             if (handler != nullptr) {
-                json response;
+                std::string response;
                 handler->call(formatted, response);
                 return std::string(response);
             }
