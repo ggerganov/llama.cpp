@@ -277,19 +277,8 @@ int main(int argc, char ** argv) {
 
         common_chat_templates_inputs cinputs;
         if (handler != nullptr) {
-            auto choice = handler->tool_choice();
-            if (choice == "auto") {
-                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
-
-            } else if (choice == "required") {
-                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
-
-            } else if (choice == "none") {
-                cinputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_NONE;
-            }
-
-            // TODO
-            //cinputs.tools = handler->tool_list();
+            cinputs.tool_choice = common_chat_tool_choice_parse_oaicompat(handler->tool_choice());
+            cinputs.tools = common_chat_tools_parse_oaicompat(handler->tool_list());
         }
 
         common_chat_params cparams;

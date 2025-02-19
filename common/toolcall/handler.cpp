@@ -15,14 +15,15 @@ std::shared_ptr<toolcall::handler> toolcall::create_handler(const toolcall::para
 
     auto tools = params.tools();
     auto choice = params.choice();
-    if (params.has_uri()) {
+    if (params) {
+        if (params.has_uri()) {
 #ifdef LLAMA_USE_CURL
-        handler.reset(new toolcall::handler(std::make_unique<toolcall::mcp_impl>(tools, choice)));
+            handler.reset(new toolcall::handler(std::make_unique<toolcall::mcp_impl>(tools, choice)));
 #endif
-    } else {
-        handler.reset(new toolcall::handler(std::make_unique<toolcall::loopback_impl>(tools, choice)));
+        } else {
+            handler.reset(new toolcall::handler(std::make_unique<toolcall::loopback_impl>(tools, choice)));
+        }
     }
-
     return handler;
 }
 
@@ -65,7 +66,7 @@ toolcall::mcp_impl::mcp_impl(std::vector<std::string> argv, std::string tool_cho
 
 std::string toolcall::mcp_impl::tool_list() {
     // Construct tools/list call and send to transport
-    return json{};// TODO
+    return "[]";// TODO
 }
 
 toolcall::action toolcall::mcp_impl::call(const std::string & /*request*/, std::string & /*response*/) {
