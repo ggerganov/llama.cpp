@@ -4258,13 +4258,7 @@ struct llm_build_context {
         ggml_build_forward_expand(gf, k_cur);
         ggml_build_forward_expand(gf, v_cur);
 
-        //build_kv_store(gf, k_cur, v_cur, il);
-        lgf->build_attn_kv_store(ctx0, gf, k_cur, v_cur, n_tokens, il, worst_case);
-
-        struct ggml_tensor * cur;
-
-        //cur = build_kqv(gf, wo, wo_b, q_cur, kq_mask, kq_scale, il);
-        cur = lgf->build_attn_qkv(ctx0, gf, wo, wo_b, q_cur, n_tokens, kq_scale, il, worst_case);
+        ggml_tensor * cur = lgf->build_attn(ctx0, gf, wo, wo_b, k_cur, v_cur, q_cur, n_tokens, kq_scale, il, worst_case);
         cb(cur, "kqv_out", il);
 
         return cur;

@@ -376,20 +376,13 @@ public:
                     bool   swa,
                     bool   worst_case) override;
 
-    virtual void build_attn_kv_store(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-             ggml_tensor * k_cur,
-             ggml_tensor * v_cur,
-                 int32_t   n_tokens,
-                 int64_t   il,
-                 bool      worst_case) override;
-
-    virtual ggml_tensor * build_attn_qkv(
+    virtual ggml_tensor * build_attn(
             ggml_context * ctx0,
              ggml_cgraph * gf,
              ggml_tensor * wo,
              ggml_tensor * wo_b,
+             ggml_tensor * k_cur,
+             ggml_tensor * v_cur,
              ggml_tensor * q_cur,
                  int32_t   n_tokens,
                  float     kq_scale,
@@ -443,6 +436,7 @@ protected:
 
 // a recurrent transformer (ie.e RWKV, Mamba)
 // TODO: temporary reuse kv_self, but in the future, implement recurrent-specific context with specific cache
+//class llama_context_recurrent : public llama_context {
 class llama_context_recurrent : public llama_context_kv_self {
 public:
     llama_context_recurrent(

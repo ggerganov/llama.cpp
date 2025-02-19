@@ -88,20 +88,13 @@ public:
                     bool   swa,
                     bool   worst_case) = 0;
 
-    virtual void build_attn_kv_store(
-            ggml_context * ctx0,
-             ggml_cgraph * gf,
-             ggml_tensor * k_cur,
-             ggml_tensor * v_cur,
-                 int32_t   n_tokens,
-                 int64_t   il,
-                 bool      worst_case) = 0;
-
-    virtual ggml_tensor * build_attn_qkv(
+    virtual ggml_tensor * build_attn(
             ggml_context * ctx0,
              ggml_cgraph * gf,
              ggml_tensor * wo,
              ggml_tensor * wo_b,
+             ggml_tensor * k_cur,
+             ggml_tensor * v_cur,
              ggml_tensor * q_cur,
                  int32_t   n_tokens,
                  float     kq_scale,
