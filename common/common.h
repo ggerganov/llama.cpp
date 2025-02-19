@@ -178,10 +178,10 @@ struct common_params_speculative {
 
     int32_t n_ctx        =     0; // draft context size
     int32_t n_max        =    16; // maximum number of tokens to draft during speculative decoding
-    int32_t n_min        =     5; // minimum number of draft tokens to use for speculative decoding
+    int32_t n_min        =     0; // minimum number of draft tokens to use for speculative decoding
     int32_t n_gpu_layers =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
     float   p_split      =  0.1f; // speculative decoding split probability
-    float   p_min        =  0.9f; // minimum speculative decoding probability (greedy)
+    float   p_min        = 0.75f; // minimum speculative decoding probability (greedy)
 
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;
