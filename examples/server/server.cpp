@@ -274,7 +274,7 @@ struct server_task {
         params.speculative.p_min = json_value(data, "speculative.p_min", defaults.speculative.p_min);
 
         params.speculative.n_min = std::min(params.speculative.n_max, params.speculative.n_min);
-        params.speculative.n_min = std::max(params.speculative.n_min, 2);
+        params.speculative.n_min = std::max(params.speculative.n_min, 0);
         params.speculative.n_max = std::max(params.speculative.n_max, 0);
 
         // Use OpenAI API logprobs only if n_probs wasn't provided
