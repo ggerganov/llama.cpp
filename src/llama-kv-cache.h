@@ -48,7 +48,6 @@ struct llama_kv_cache_slot_info {
 // ring-buffer of cached KV data
 // TODO: pimpl
 // TODO: add notion of max sequences
-// TODO: add llama_hparams &
 struct llama_kv_cache {
     llama_kv_cache(const llama_hparams & hparams);
     virtual ~llama_kv_cache() = default;
@@ -108,7 +107,10 @@ struct llama_kv_cache {
 
     bool has_shift = false;
     bool do_defrag = false;
+
+    // TODO: remove this and implement llama_kv_cache_recurrent instead
     bool recurrent = false; // with recurrent state models, a cell can hold the state for more than one past token
+
     bool v_trans   = true;  // the value tensor is transposed
     bool can_shift = false;
 
@@ -139,6 +141,11 @@ private:
 
     bool state_read_meta(llama_io_read_i & io, uint32_t cell_count, llama_seq_id dest_seq_id = -1);
     bool state_read_data(llama_io_read_i & io, uint32_t cell_count);
+};
+
+// TODO: temporary reusing llama_kv_cache -- implement recurrent cache and simplify llama_kv_cache
+struct llama_kv_cache_recurrent : public llama_kv_cache {
+    using llama_kv_cache::llama_kv_cache;
 };
 
 //
