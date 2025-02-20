@@ -5094,13 +5094,13 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     const int8_t m32 = 32;
     const int vector_length = svcntb()*8;
-    const svuint8_t m3b_sv = svdup_n_u8(0X3);
+    const svuint8_t m3b_sv = svdup_n_u8(0x3);
     const svint32_t vzero_sv = svdup_n_s32(0);
 
     const svuint8_t m0_sv = svdup_n_u8(1);
-    const svuint8_t m1_sv =  svlsl_n_u8_x(svptrue_b8(), m0_sv, 1);
-    const svuint8_t m2_sv =  svlsl_n_u8_x(svptrue_b8(), m0_sv, 2);
-    const svuint8_t m3_sv =  svlsl_n_u8_x(svptrue_b8(), m0_sv, 3);
+    const svuint8_t m1_sv = svlsl_n_u8_x(svptrue_b8(), m0_sv, 1);
+    const svuint8_t m2_sv = svlsl_n_u8_x(svptrue_b8(), m0_sv, 2);
+    const svuint8_t m3_sv = svlsl_n_u8_x(svptrue_b8(), m0_sv, 3);
     svbool_t pred_s32 = svnot_b_z (svptrue_b32(), svptrue_pat_b32(SV_VL4));
 
     float sum = 0;
@@ -5194,12 +5194,12 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
                         sumi1_1 = svmla_s32_m(svptrue_b32(), sumi1_1, svdot_s32(vzero_sv, q3bytes_sv, q8bytes_1_sv_2), svdup_n_s32((int32_t)scale[3]));
 
 
-                        if (j==0) {
+                        if (j == 0) {
                             qhbits_sv_1 = svlsr_n_u8_x(svptrue_b8(), qhbits_sv_1, 4);
                             qhbits_sv_2 = svlsr_n_u8_x(svptrue_b8(), qhbits_sv_2, 4);
                         }
 
-                    scale += 4;
+                        scale += 4;
 
                     }
 
@@ -5250,11 +5250,11 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
                         sumi1_1 = svmla_s32_m(svptrue_pat_b32(SV_VL8), sumi1_1, svdot_s32(vzero_sv, q3bytes_sv, q8bytes_1_sv_2), scale_1);
 
 
-                        if (j==0) {
+                        if (j == 0) {
                             qhbits_sv = svlsr_n_u8_x(svptrue_pat_b8(SV_VL32), qhbits_sv, 4);
                         }
 
-                    scale += 4;
+                        scale += 4;
 
                     }
 
