@@ -328,6 +328,11 @@ struct llama_context * llama_init_from_model(
     try {
         // TODO: make static method of llama_context
         switch (model->arch) {
+            case LLM_ARCH_BERT:
+            case LLM_ARCH_JINA_BERT_V2:
+            case LLM_ARCH_NOMIC_BERT:
+                ctx = new llama_context(*model, params);
+                break;
             case LLM_ARCH_RWKV6:
             case LLM_ARCH_RWKV6QWEN2:
             case LLM_ARCH_MAMBA:

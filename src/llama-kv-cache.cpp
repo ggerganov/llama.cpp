@@ -1079,14 +1079,26 @@ bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t cell_count) 
 //
 
 int32_t llama_kv_cache_n_tokens(const llama_kv_cache * kv) {
+    if (!kv) {
+        return 0;
+    }
+
     return kv->n_tokens();
 }
 
 int32_t llama_kv_cache_used_cells(const llama_kv_cache * kv) {
+    if (!kv) {
+        return 0;
+    }
+
     return kv->used;
 }
 
 void llama_kv_cache_clear(llama_kv_cache * kv) {
+    if (!kv) {
+        return;
+    }
+
     kv->clear();
 }
 
@@ -1095,6 +1107,10 @@ bool llama_kv_cache_seq_rm(
           llama_seq_id   seq_id,
              llama_pos   p0,
              llama_pos   p1) {
+    if (!kv) {
+        return true;
+    }
+
     return kv->seq_rm(seq_id, p0, p1);
 }
 
@@ -1104,10 +1120,18 @@ void llama_kv_cache_seq_cp(
           llama_seq_id   seq_id_dst,
              llama_pos   p0,
              llama_pos   p1) {
+    if (!kv) {
+        return;
+    }
+
     kv->seq_cp(seq_id_src, seq_id_dst, p0, p1);
 }
 
 void llama_kv_cache_seq_keep(llama_kv_cache * kv, llama_seq_id seq_id) {
+    if (!kv) {
+        return;
+    }
+
     kv->seq_keep(seq_id);
 }
 
@@ -1117,6 +1141,10 @@ void llama_kv_cache_seq_add(
              llama_pos   p0,
              llama_pos   p1,
              llama_pos   delta) {
+    if (!kv) {
+        return;
+    }
+
     kv->seq_add(seq_id, p0, p1, delta);
 }
 
@@ -1126,18 +1154,34 @@ void llama_kv_cache_seq_div(
              llama_pos   p0,
              llama_pos   p1,
                    int   d) {
+    if (!kv) {
+        return;
+    }
+
     kv->seq_div(seq_id, p0, p1, d);
 }
 
 llama_pos llama_kv_cache_seq_pos_max(llama_kv_cache * kv, llama_seq_id seq_id) {
+    if (!kv) {
+        return 0;
+    }
+
     return kv->seq_pos_max(seq_id);
 }
 
 void llama_kv_cache_defrag(llama_kv_cache * kv) {
+    if (!kv) {
+        return;
+    }
+
     kv->defrag();
 }
 
 bool llama_kv_cache_can_shift(const llama_kv_cache * kv) {
+    if (!kv) {
+        return false;
+    }
+
     return kv->can_shift;
 }
 

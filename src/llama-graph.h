@@ -99,34 +99,29 @@ public:
                  int32_t   n_tokens,
                  float     kq_scale,
                  int       il,
-                 bool      worst_case) = 0;
-
-    virtual ggml_tensor * build_attn_soft_max(
-            ggml_context * ctx0,
-             ggml_tensor * kq,
-                 float     kq_scale) = 0;
+                 bool      worst_case);
 
     virtual void build_kv_self_shift(
             ggml_context * ctx0,
-            ggml_cgraph * gf) = 0;
+            ggml_cgraph * gf);
 
     // find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
     virtual void build_kv_self_defrag(
             ggml_context * ctx0,
-            ggml_cgraph * gf) = 0;
+            ggml_cgraph * gf);
 
-    virtual ggml_tensor * build_inp_k_shift(
-            ggml_context * ctx0) = 0;
+    virtual ggml_tensor * build_inp_self_k_shift(
+            ggml_context * ctx0);
 
     virtual ggml_tensor * build_inp_embd_enc(
             ggml_context * ctx0,
                  int32_t   n_tokens,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
-    virtual ggml_tensor * build_inp_KQ_mask_cross(
+    virtual ggml_tensor * build_inp_kq_mask_cross(
             ggml_context * ctx0,
                  int32_t   n_tokens,
-                    bool   worst_case) = 0;
+                    bool   worst_case);
 
     virtual ggml_tensor * build_inp_s_copy(
             ggml_context * ctx0,

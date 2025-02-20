@@ -3956,8 +3956,8 @@ struct llm_build_context {
     }
 
     // TODO: tmp
-    struct ggml_tensor * build_inp_KQ_mask_cross() {
-        ggml_tensor * cur = lgf->build_inp_KQ_mask_cross(ctx0, n_tokens, worst_case);
+    struct ggml_tensor * build_inp_kq_mask_cross() {
+        ggml_tensor * cur = lgf->build_inp_kq_mask_cross(ctx0, n_tokens, worst_case);
         cb(cur, "KQ_mask_cross", -1);
 
         return cur;
@@ -5568,7 +5568,6 @@ struct llm_build_context {
             // self-attention
             if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT_V2) {
                 Qcur = ggml_add(ctx0, build_lora_mm(model.layers[il].wq, cur), model.layers[il].bq);
-                cb(Qcur, "Qcur", il);
 
                 if (model.layers[il].attn_q_norm) {
                     Qcur = build_norm(Qcur,
@@ -5578,7 +5577,6 @@ struct llm_build_context {
                 }
 
                 Kcur = ggml_add(ctx0, build_lora_mm(model.layers[il].wk, cur), model.layers[il].bk);
-                cb(Kcur, "Kcur", il);
 
                 if (model.layers[il].attn_k_norm) {
                     Kcur = build_norm(Kcur,
@@ -5586,11 +5584,12 @@ struct llm_build_context {
                             model.layers[il].attn_k_norm_b,
                             LLM_NORM, il);
                 }
+
                 Vcur = ggml_add(ctx0, build_lora_mm(model.layers[il].wv, cur), model.layers[il].bv);
-                cb(Vcur, "Vcur", il);
 
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
                 Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
+                Vcur = ggml_reshape_3d(ctx0, Vcur, n_embd_head, n_head_kv, n_tokens);
             } else {
                 // compute Q and K and RoPE them
                 cur = build_lora_mm(model.layers[il].wqkv, cur);
@@ -5599,10 +5598,6 @@ struct llm_build_context {
                 Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
                 Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
                 Vcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa)));
-
-                cb(Qcur, "Qcur", il);
-                cb(Kcur, "Kcur", il);
-                cb(Vcur, "Vcur", il);
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
@@ -5617,40 +5612,17 @@ struct llm_build_context {
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
+
+                Vcur = ggml_reshape_3d(ctx0, Vcur, n_embd_head, n_head_kv, n_tokens);
             }
 
-            struct ggml_tensor * q =                 ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            struct ggml_tensor * k = ggml_cont(ctx0, ggml_permute(ctx0, Kcur, 0, 2, 1, 3));
+            cb(Qcur, "Qcur", il);
+            cb(Kcur, "Kcur", il);
+            cb(Vcur, "Vcur", il);
 
-            struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
-            cb(kq, "kq", il);
-
-            //kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, 1.0f/sqrtf(float(n_embd_head)), hparams.f_max_alibi_bias);
-            kq = lgf->build_attn_soft_max(ctx0, kq, 1.0f/sqrtf(float(n_embd_head)));
-            cb(kq, "kq_soft_max_ext", il);
-
-            struct ggml_tensor * v = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens)));
-            cb(v, "v", il);
-
-            struct ggml_tensor * kqv = ggml_mul_mat(ctx0, ggml_reshape_3d(ctx0, v, n_tokens, n_embd_head, n_head_kv), kq);
-            cb(kqv, "kqv", il);
-
-            struct ggml_tensor * kqv_merged = ggml_permute(ctx0, kqv, 0, 2, 1, 3);
-            cb(kqv_merged, "kqv_merged", il);
-
-            cur = ggml_cont_2d(ctx0, kqv_merged, n_embd_gqa, n_tokens);
-            cb(cur, "kqv_merged_cont", il);
-
-            ggml_build_forward_expand(gf, cur);
-
-            cur = build_lora_mm(model.layers[il].wo, cur);
-            if (model.layers[il].bo) {
-                cb(cur, "kqv_wo", il);
-            }
-
-            if (model.layers[il].bo) {
-                cur = ggml_add(ctx0, cur, model.layers[il].bo);
-            }
+            cur = build_attn(gf,
+                    model.layers[il].wo, model.layers[il].bo,
+                    Qcur, Kcur, Vcur, n_tokens, 1.0f/sqrtf(float(n_embd_head)), il);
             cb(cur, "kqv_out", il);
 
             if (il == n_layer - 1 && pooling_type == LLAMA_POOLING_TYPE_NONE) {
@@ -9652,7 +9624,7 @@ struct llm_build_context {
     //    struct ggml_tensor * pos_bucket_enc = build_pos_bucket(false);
 
     //    // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-    //    struct ggml_tensor * KQ_mask_enc = build_inp_KQ_mask(false);
+    //    struct ggml_tensor * KQ_mask_enc = build_inp_kq_mask(false);
 
     //    for (int il = 0; il < n_layer; ++il) {
     //        struct ggml_tensor * inpSA = inpL;
@@ -9781,8 +9753,8 @@ struct llm_build_context {
     //    struct ggml_tensor * embd_enc       = build_inp_embd_enc();
     //    struct ggml_tensor * pos_bucket_dec = build_pos_bucket(true);
 
-    //    struct ggml_tensor * KQ_mask_dec   = build_inp_KQ_mask();
-    //    struct ggml_tensor * KQ_mask_cross = build_inp_KQ_mask_cross();
+    //    struct ggml_tensor * KQ_mask_dec   = build_inp_kq_mask();
+    //    struct ggml_tensor * KQ_mask_cross = build_inp_kq_mask_cross();
 
     //    for (int il = 0; il < n_layer; ++il) {
     //        struct ggml_tensor * inpSA = inpL;

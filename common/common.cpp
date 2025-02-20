@@ -952,7 +952,7 @@ struct common_init_result common_init_from_params(common_params & params) {
     }
 
     if (params.ctx_shift && !llama_kv_self_can_shift(lctx)) {
-        LOG_WRN("%s: KV cache shifting is not supported for this model, disabling KV cache shifting\n", __func__);
+        LOG_WRN("%s: KV cache shifting is not supported for this context, disabling KV cache shifting\n", __func__);
         params.ctx_shift = false;
     }
 
