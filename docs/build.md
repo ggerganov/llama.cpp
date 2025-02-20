@@ -205,6 +205,13 @@ This provides GPU acceleration using the MUSA cores of your Moore Threads MTT GP
   cmake -B build -DGGML_MUSA=ON
   cmake --build build --config Release
   ```
+- For static build:
+
+  ```bash
+  cmake -B build -DGGML_MUSA=ON \
+    -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+  cmake --build build --config Release
+  ```
 
 The environment variable [`MUSA_VISIBLE_DEVICES`](https://docs.mthreads.com/musa-sdk/musa-sdk-doc-online/programming_guide/Z%E9%99%84%E5%BD%95/) can be used to specify which GPU(s) will be used.
 
