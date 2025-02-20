@@ -402,7 +402,6 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
             set(PRIVATE_ARCH_FLAGS "${PRIVATE_ARCH_FLAGS}+sve+sve2")
         endif()
 
-        list(APPEND GGML_CDEF_PUBLIC GGML_USE_CPU_KLEIDIAI)
         set_source_files_properties(${GGML_KLEIDIAI_SOURCES} PROPERTIES COMPILE_OPTIONS "${PRIVATE_ARCH_FLAGS}")
         list(APPEND GGML_CPU_SOURCES ${GGML_KLEIDIAI_SOURCES})
     endif()
