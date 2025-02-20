@@ -6,6 +6,7 @@
     - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
     - If you modified the `ggml` source, run the `test-backend-ops` tool to check whether different backend implementations of the `ggml` operators produce consistent results (this requires access to at least two different `ggml` backends)
     - If you modified a `ggml` operator or added a new one, add the corresponding test cases to `test-backend-ops`
+- Do not add multiple, unrelated changes to a single PR. It is generally easier for maintainers to review small PRs with a single feature, especially since not every maintainer is familiar with all parts of the codebase. For example, instead of a single PR that fixes a bug and adds support for some model, make separate PRs for the bugfix and model support
 - Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
 - If your PR becomes stale, don't hesitate to ping the maintainers in the comments
 
