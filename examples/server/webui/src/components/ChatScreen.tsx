@@ -228,6 +228,7 @@ export default function ChatScreen() {
             value={inputMsg}
             onChange={(e) => setInputMsg(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
               if (e.key === 'Enter' && e.shiftKey) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
