@@ -4,7 +4,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "llama.h"
-#include "chat-template.hpp"
+#include "chat.h"
 
 #include <cstdio>
 #include <cstring>
@@ -158,7 +158,7 @@ int main(int argc, char ** argv) {
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
-    auto chat_templates = common_chat_templates_from_model(model, params.chat_template);
+    auto chat_templates = common_chat_templates_init(model, params.chat_template);
 
     LOG_INF("%s: llama threadpool init, n_threads = %d\n", __func__, (int) params.cpuparams.n_threads);
 
@@ -201,7 +201,7 @@ int main(int argc, char ** argv) {
     }
 
     // auto enable conversation mode if chat template is available
-    const bool has_chat_template = chat_templates.has_explicit_template && chat_templates.template_default;
+    const bool has_chat_template = common_chat_templates_was_explicit(chat_templates.get());
     if (params.conversation_mode == COMMON_CONVERSATION_MODE_AUTO) {
         if (has_chat_template) {
             LOG_INF("%s: chat template is available, enabling conversation mode (disable it with -no-cnv)\n", __func__);
@@ -219,7 +219,7 @@ int main(int argc, char ** argv) {
     // print chat template example in conversation mode
     if (params.conversation_mode) {
         if (params.enable_chat_template) {
-            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(*chat_templates.template_default, params.use_jinja).c_str());
+            LOG_INF("%s: chat template example:\n%s\n", __func__, common_chat_format_example(chat_templates.get(), params.use_jinja).c_str());
         } else {
             LOG_INF("%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
         }
@@ -264,9 +264,11 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_inp;
 
     auto chat_add_and_format = [&chat_msgs, &chat_templates](const std::string & role, const std::string & content) {
-        common_chat_msg new_msg{role, content, {}};
-        auto formatted = common_chat_format_single(*chat_templates.template_default, chat_msgs, new_msg, role == "user", g_params->use_jinja);
-        chat_msgs.push_back({role, content, {}});
+        common_chat_msg new_msg;
+        new_msg.role = role;
+        new_msg.content = content;
+        auto formatted = common_chat_format_single(chat_templates.get(), chat_msgs, new_msg, role == "user", g_params->use_jinja);
+        chat_msgs.push_back(new_msg);
         LOG_DBG("formatted: '%s'\n", formatted.c_str());
         return formatted;
     };
@@ -755,11 +757,14 @@ int main(int argc, char ** argv) {
 
                 // check for reverse prompt using special tokens
                 llama_token last_token = common_sampler_last(smpl);
-                if (std::find(antiprompt_token.begin(), antiprompt_token.end(), last_token) != antiprompt_token.end()) {
-                    if (params.interactive) {
-                        is_interacting = true;
+                for (auto token : antiprompt_token) {
+                    if (token == last_token) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                        }
+                        is_antiprompt = true;
+                        break;
                     }
-                    is_antiprompt = true;
                 }
 
                 if (is_antiprompt) {
