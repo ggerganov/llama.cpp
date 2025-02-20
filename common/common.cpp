@@ -12,6 +12,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "chat.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -1766,6 +1767,46 @@ std::string common_detokenize(const struct llama_vocab * vocab, const std::vecto
     return text;
 }
 
+void common_chat_grammar_to_sampler(const common_chat_params * src,
+                                    const llama_vocab * vocab,
+                                    common_params_sampling * sparams)
+{
+    GGML_ASSERT(src && vocab && sparams);
+
+    auto & dst = *sparams;
+
+    dst.grammar      = src->grammar;
+    dst.grammar_lazy = src->grammar_lazy;
+
+    for (const auto & trigger : src->grammar_triggers) {
+        auto ids = common_tokenize(vocab, trigger.word, false, true);
+
+        if (ids.size() == 1) {
+            LOG_DBG("Grammar trigger token: %d (`%s`)\n", ids[0], trigger.word.c_str());
+            dst.grammar_trigger_tokens.push_back(ids[0]);
+            dst.preserved_tokens.insert(ids[0]);
+            continue;
+        }
+        LOG_DBG("Grammar trigger word: `%s`\n", trigger.word.c_str());
+        dst.grammar_trigger_words.push_back(trigger);
+    }
+
+    for (const auto & preserved : src->preserved_tokens) {
+        auto ids = common_tokenize(vocab, preserved, false, true);
+        if (ids.size() == 1) {
+            LOG_DBG("Preserved token: %d\n", ids[0]);
+            dst.preserved_tokens.insert(ids[0]);
+
+        } else {
+            // This may happen when using a tool call style meant for a model
+            // with special tokens to preserve on a model without said tokens.
+            LOG_WRN("Not preserved because more than 1 token (wrong chat template override?): %s\n",
+                    preserved.c_str());
+        }
+    }
+}
+
+
 //
 // KV cache utils
 //
@@ -2025,4 +2066,3 @@ common_control_vector_data common_control_vector_load(const std::vector<common_c
 
     return result;
 }
-

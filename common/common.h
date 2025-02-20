@@ -3,7 +3,7 @@
 #pragma once
 
 #include "llama-cpp.h"
-
+#include "toolcall/params.h"
 #include <set>
 #include <string>
 #include <vector>
@@ -353,6 +353,7 @@ struct common_params {
     std::string chat_template = "";                                                                         // NOLINT
     bool use_jinja = false;                                                                                 // NOLINT
     bool enable_chat_template = true;
+    toolcall::params jinja_tools;
     common_reasoning_format reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
 
     std::vector<std::string> api_keys;
@@ -615,6 +616,12 @@ std::string common_detokenize(
               const struct llama_vocab * vocab,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
+
+struct common_chat_params;
+void common_chat_grammar_to_sampler(const common_chat_params * src,
+                                    const llama_vocab * vocab,
+                                    common_params_sampling * sparams);
+
 
 //
 // KV cache utils
