@@ -1060,7 +1060,7 @@ static struct ggml_tensor * llm_build_rwkv7_time_mix(
     bool has_gating = layer->time_mix_g1 && layer->time_mix_g2;
 
     struct ggml_tensor * sx = ggml_sub(ctx, x_prev, cur);
-    struct ggml_tensor * dummy = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, n_embd, n_tokens, layer->time_mix_lerp_fused->ne[2]);
+    struct ggml_tensor * dummy = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n_embd, n_seq_tokens, n_seqs, has_gating ? 6 : 5);
     sx = ggml_repeat(ctx, sx, dummy);
 
     struct ggml_tensor * xxx = ggml_add(ctx, ggml_mul(ctx, sx, layer->time_mix_lerp_fused), cur);
@@ -1149,7 +1149,7 @@ static struct ggml_tensor * llm_build_rwkv7_time_mix(
     }
     cur = llm_build_lora_mm(lctx, ctx, layer->time_mix_output, cur);
 
-    return cur;
+    return ggml_reshape_3d(ctx, cur, n_embd, n_seq_tokens, n_seqs);
 }
 
 static struct ggml_tensor * llm_build_rwkv7_channel_mix(
@@ -7768,9 +7768,9 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                inp_ffn = ggml_get_rows(ctx0, x_norm_ffn, inp_out_ids);
-                x_prev  = ggml_get_rows(ctx0, x_prev,     inp_out_ids);
-                cur     = ggml_get_rows(ctx0, cur,        inp_out_ids);
+                inp_ffn = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, x_norm_ffn, n_embd, n_tokens), inp_out_ids);
+                x_prev  = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, x_prev,     n_embd, n_tokens), inp_out_ids);
+                cur     = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, cur,        n_embd, n_tokens), inp_out_ids);
             }
 
             cur = ggml_add(ctx0, cur, llm_build_rwkv6_channel_mix(lctx, ctx0, layer, inp_ffn, x_prev));
@@ -8002,9 +8002,9 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                inp_ffn = ggml_get_rows(ctx0, x_norm_ffn, inp_out_ids);
-                x_prev  = ggml_get_rows(ctx0, x_prev,     inp_out_ids);
-                cur     = ggml_get_rows(ctx0, cur,        inp_out_ids);
+                inp_ffn = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, x_norm_ffn, n_embd, n_tokens), inp_out_ids);
+                x_prev  = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, x_prev,     n_embd, n_tokens), inp_out_ids);
+                cur     = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, cur,        n_embd, n_tokens), inp_out_ids);
             }
 
             cur = ggml_add(ctx0, cur, llm_build_rwkv7_channel_mix(lctx, ctx0, layer, inp_ffn, x_prev));

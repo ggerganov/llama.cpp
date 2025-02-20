@@ -3555,20 +3555,23 @@ class Rwkv7Model(Model):
             # ignore them all since they are not used
             return
 
+        wkv_has_gate = self.hparams.get("wkv_has_gate", True)
+        lerp_list = ["r", "w", "k", "v", "a", "g"] if wkv_has_gate else ["r", "w", "k", "v", "a"]
+
         if bid is not None and "attention.x_" in name:
             if "attention.x_x" in name:
                 # already concatenated
                 new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
-                data = data_torch.reshape(6, 1, -1)
+                data = data_torch.reshape(len(lerp_list), 1, 1, -1)
                 yield (new_name, data)
             else:
                 try:
                     self.lerp_weights[bid][name] = data_torch
                 except KeyError:
                     self.lerp_weights[bid] = {name: data_torch}
-                if all(f"model.layers.{bid}.attention.x_{i}" in self.lerp_weights[bid].keys() for i in ["r", "w", "k", "v", "a", "g"]):
+                if all(f"model.layers.{bid}.attention.x_{i}" in self.lerp_weights[bid].keys() for i in lerp_list):
                     new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
-                    data = torch.stack([self.lerp_weights[bid][f"model.layers.{bid}.attention.x_{i}"].squeeze(0) for i in ["r", "w", "k", "v", "a", "g"]], dim=0)
+                    data = torch.stack([self.lerp_weights[bid][f"model.layers.{bid}.attention.x_{i}"] for i in lerp_list], dim=0)
                     yield (new_name, data)
             return
         else:
