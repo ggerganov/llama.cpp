@@ -2712,9 +2712,13 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
 
             if (!ctx->has_glm_projector) {
                 struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
+                // The patches vector is used to get rows to index into the embeds with;
+                // we should skip dim 0 only if we have CLS to avoid going out of bounds
+                // when retrieving the rows.
+                int patch_offset = ctx->has_class_embedding ? 1 : 0;
                 int* patches_data = (int*)malloc(ggml_nbytes(patches));
                 for (int i = 0; i < num_patches; i++) {
-                    patches_data[i] = i + 1;
+                    patches_data[i] = i + patch_offset;
                 }
                 ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
                 free(patches_data);
