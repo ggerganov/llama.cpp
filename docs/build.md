@@ -205,7 +205,8 @@ This provides GPU acceleration using the MUSA cores of your Moore Threads MTT GP
   cmake -B build -DGGML_MUSA=ON
   cmake --build build --config Release
   ```
-- For static build:
+
+  For static build:
 
   ```bash
   cmake -B build -DGGML_MUSA=ON \
