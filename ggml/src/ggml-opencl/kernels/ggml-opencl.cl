@@ -1797,6 +1797,9 @@ kernel void kernel_mul_mat_f16_f16(
 //------------------------------------------------------------------------------
 // mul_mat_f16_f32_1row
 //------------------------------------------------------------------------------
+#ifdef ADRENO_GPU
+REQD_SUBGROUP_SIZE_64
+#endif
 kernel void kernel_mul_mat_f16_f32_1row(
         global char * src0,
         ulong offset0,

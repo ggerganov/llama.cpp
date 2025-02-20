@@ -444,19 +444,8 @@ static ggml_backend_opencl_context * ggml_cl2_init(ggml_backend_dev_t dev) {
         backend_ctx->gpu_family = GPU_FAMILY::ADRENO;
         backend_ctx->adreno_gen = get_adreno_gpu_gen(default_device->name);
 
-        // Default wave size is 128, A8x uses 64.
-        if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X) {
-            backend_ctx->adreno_wave_size = 64;
-        } else if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A7X ||
-                   backend_ctx->adreno_gen == ADRENO_GPU_GEN::X1E) {
-            backend_ctx->adreno_wave_size = 128;
-        } else {
-            backend_ctx->adreno_wave_size = 128;
-            GGML_LOG_WARN("ggml_opencl: Unsupported Adreno GPU: %s, "
-                "using wave size %d, "
-                "may not work as expected\n",
-                backend_ctx->device_name.c_str(), backend_ctx->adreno_wave_size);
-        }
+        // Use wave size of 64 for all Adreno GPUs.
+        backend_ctx->adreno_wave_size = 64;
     } else if (strstr(default_device->name, "Intel")) {
         backend_ctx->gpu_family = GPU_FAMILY::INTEL;
     } else {
@@ -1376,6 +1365,11 @@ static void ggml_backend_opencl_buffer_set_tensor(ggml_backend_buffer_t buffer, 
         int M = tensor->ne[1];   // ne01
         int K = tensor->ne[0];   // ne00
 
+        //For matrix-vector multiplication kernel, we assume K is a multiple of 32
+        GGML_ASSERT(K % 32 == 0);
+        //For transpose kernels, we assume K is a multiple of 4 (satisfied by prior assert), and M is a multiple of 4
+        GGML_ASSERT(M % 4 == 0);
+
         // transpose is out of place, so we need to allocate transposed buffers
         // <----------------------------------------------------------------------------------> //
         // use sub_buffer of max buffer size instead
@@ -1416,36 +1410,36 @@ static void ggml_backend_opencl_buffer_set_tensor(ggml_backend_buffer_t buffer, 
         cl_mem qT_d_image1D;
         cl_mem dT_d_image1D;
 
-        cl_image_format img_fmt_1d = { CL_RGBA, CL_FLOAT };
+        cl_image_format img_fmt_1d = { CL_RGBA, CL_HALF_FLOAT };
         cl_image_desc img_desc_1d;
 
         memset(&img_desc_1d, 0, sizeof(img_desc_1d));
         img_desc_1d.image_type = CL_MEM_OBJECT_IMAGE1D_BUFFER;
-        img_desc_1d.image_width = M * K / 8 / 4;
+        img_desc_1d.image_width = M * K / 4 / 4;
         img_desc_1d.buffer = extra->q;
         q_d_image1D = clCreateImage(context, 0, &img_fmt_1d, &img_desc_1d, NULL, &err);
         CL_CHECK(err);
 
-        img_fmt_1d = { CL_RGBA, CL_FLOAT };
+        img_fmt_1d = { CL_RGBA, CL_HALF_FLOAT };
         memset(&img_desc_1d, 0, sizeof(img_desc_1d));
         img_desc_1d.image_type = CL_MEM_OBJECT_IMAGE1D_BUFFER;
-        img_desc_1d.image_width = M * K / 8 / 4;
+        img_desc_1d.image_width = M * K / 4 / 4;
         img_desc_1d.buffer = qT_d;
         qT_d_image1D = clCreateImage(context, 0, &img_fmt_1d, &img_desc_1d, NULL, &err);
         CL_CHECK(err);
 
-        img_fmt_1d = { CL_RGBA, CL_FLOAT };
+        img_fmt_1d = { CL_RGBA, CL_HALF_FLOAT };
         memset(&img_desc_1d, 0, sizeof(img_desc_1d));
         img_desc_1d.image_type = CL_MEM_OBJECT_IMAGE1D_BUFFER;
-        img_desc_1d.image_width = M * K / 32 / 4 / 2;
+        img_desc_1d.image_width = M * K / 32 / 4;
         img_desc_1d.buffer = extra->d;
         d_d_image1D = clCreateImage(context, 0, &img_fmt_1d, &img_desc_1d, NULL, &err);
         CL_CHECK(err);
 
-        img_fmt_1d = { CL_RGBA, CL_FLOAT };
+        img_fmt_1d = { CL_RGBA, CL_HALF_FLOAT };
         memset(&img_desc_1d, 0, sizeof(img_desc_1d));
         img_desc_1d.image_type = CL_MEM_OBJECT_IMAGE1D_BUFFER;
-        img_desc_1d.image_width = M * K / 32 / 4 / 2;
+        img_desc_1d.image_width = M * K / 32 / 4;
         img_desc_1d.buffer = dT_d;
         dT_d_image1D = clCreateImage(context, 0, &img_fmt_1d, &img_desc_1d, NULL, &err);
         CL_CHECK(err);
@@ -1454,8 +1448,8 @@ static void ggml_backend_opencl_buffer_set_tensor(ggml_backend_buffer_t buffer, 
         // set up and call the transpose kernels
         // <----------------------------------------------------------------------------------> //
         // weights
-        int height_q = M / 8;
-        int width_q = K / 8 / 4;
+        int height_q = M / 4;
+        int width_q = K / 4 / 4;
         kernel = backend_ctx->kernel_transpose_16;
 
         CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &q_d_image1D));
@@ -1469,8 +1463,8 @@ static void ggml_backend_opencl_buffer_set_tensor(ggml_backend_buffer_t buffer, 
         CL_CHECK(clWaitForEvents(1, &evt));
 
         // scales
-        int height_s = M / 8;
-        int width_s = K / 32 / 8;
+        int height_s = M / 4;
+        int width_s = K / 32 / 4;
 
         kernel = backend_ctx->kernel_transpose_16;
         CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_d_image1D));
@@ -1864,7 +1858,6 @@ static void dump_tensor(ggml_backend_t backend, const struct ggml_tensor * tenso
     void * buf_d;
 #endif
 
-#ifdef GGML_USE_OPENCL
     // Make sure everything is done.
     CL_CHECK(clFinish(queue));
 
@@ -1900,7 +1893,6 @@ static void dump_tensor(ggml_backend_t backend, const struct ggml_tensor * tenso
         extra->offset, ggml_nbytes(tensor), buf, 0, NULL, NULL));
     CL_CHECK(clFinish(queue));
 #endif // GGML_OPENCL_SOA_Q
-#endif // GGML_USE_OPENCL
 
     // Open file and dump.
     char fname[512];
@@ -2865,6 +2857,9 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
             CL_CHECK(status);
 
             int height_B = N/4;
+            if (height_B == 0) {
+                height_B = 1;
+            }
             int width_B = K/4;
             int padded_height_B = (N + padding)/4;
 
@@ -3013,11 +3008,12 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
         }
 
         if (N == 1) {
-            local_work_size[0] = backend_ctx->adreno_wave_size; // localsize
+            size_t wavesize = backend_ctx->adreno_wave_size;
+            local_work_size[0] = wavesize; // localsize
             local_work_size[1] = 4; // reduce factor
             local_work_size[2] = 1;
 
-            global_work_size[0] = M / 2;
+            global_work_size[0] = (((M / 2) + wavesize - 1) / wavesize) * wavesize;
             global_work_size[1] = 4; // reduce factor
             global_work_size[2] = 1;
         }
