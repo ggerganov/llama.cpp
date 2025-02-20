@@ -956,12 +956,20 @@ static bool alloc_tensor_range(struct ggml_context * ctx,
             if (t->view_src == NULL) {
                 ggml_tallocr_alloc(&tallocr, t);
             } else if (t->buffer == NULL) {
-                ggml_backend_view_init(t);
+                enum ggml_status status = ggml_backend_view_init(t);
+                if (status != GGML_STATUS_SUCCESS) {
+                    GGML_LOG_WARN("%s: failed to ggml_backend_view_init: %s\n", __func__, ggml_status_to_string(status));
+                    return false;
+                }
             }
         } else {
             if (t->view_src != NULL && t->buffer == NULL) {
                 // view of a pre-allocated tensor
-                ggml_backend_view_init(t);
+                enum ggml_status status = ggml_backend_view_init(t);
+                if (status != GGML_STATUS_SUCCESS) {
+                    GGML_LOG_WARN("%s: failed to ggml_backend_view_init: %s\n", __func__, ggml_status_to_string(status));
+                    return false;
+                }
             }
         }
     }
