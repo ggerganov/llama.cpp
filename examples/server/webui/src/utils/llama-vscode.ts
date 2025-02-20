@@ -40,7 +40,7 @@ export const useVSCodeContext = (
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [inputRef, setInputMsg]);
 
   // Add a keydown listener that sends the "escapePressed" message to the parent window
   useEffect(() => {
