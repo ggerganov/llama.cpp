@@ -71,6 +71,7 @@ enum llama_vocab_pre_type {
     LLAMA_VOCAB_PRE_TYPE_MMBERT            = 60,
     LLAMA_VOCAB_PRE_TYPE_K2_HORIZON        = 61,
     LLAMA_VOCAB_PRE_TYPE_FLINT             = 62,
+    LLAMA_VOCAB_PRE_TYPE_DOMYN_SMALL       = 63,
 };
 
 struct LLM_KV;
