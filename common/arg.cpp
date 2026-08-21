@@ -2817,6 +2817,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
     add_opt(common_arg(
+        {"--htp-performance-mode"}, "MODE",
+        "Hexagon HTP power/performance mode, one of: extreme_power_saver, low_power_saver,\n"
+        "power_saver, high_power_saver, low_balanced, balanced, high_performance,\n"
+        "sustained_high_performance, burst, default (default: default)",
+        [](common_params & params, const std::string & value) {
+#if defined(_WIN32)
+            _putenv_s("GGML_HEXAGON_POWER_MODE", value.c_str());
+#else
+            setenv("GGML_HEXAGON_POWER_MODE", value.c_str(), 1);
+#endif
+            GGML_UNUSED(params);
+        }
+    ));
+    add_opt(common_arg(
         {"-sm", "--split-mode"}, "{none,layer,row,tensor}",
         "how to split the model across multiple GPUs, one of:\n"
         "- none: use one GPU only\n"

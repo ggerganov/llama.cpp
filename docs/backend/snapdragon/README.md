@@ -329,6 +329,33 @@ on 4 physical NPUs, or `--devices 'HTP0[0-1:0],HTP1[0-1:1]'` on 2 physical NPUs 
 
 - `GGML_HEXAGON_DMA64=0` (default: enabled on v81+)
   Disables 64-bit DMA for model weights. Set to `1` to enable it explicitly on a supported architecture.
+  
+- `GGML_HEXAGON_POWER_MODE=default`
+  Controls the DCVS/HMX power mode requested from the HTP DSP for the session. Mirrors the
+  QNN Execution Provider's `htp_performance_mode` options. Can also be set via the
+  `--htp-performance-mode` CLI flag. Available modes:
+
+  - `extreme_power_saver`
+  - `low_power_saver`
+  - `power_saver`
+  - `high_power_saver`
+  - `low_balanced`
+  - `balanced`
+  - `high_performance`
+  - `sustained_high_performance`
+  - `burst` (maximum clocks, disables DCVS; may thermal-throttle on sustained workloads)
+  - `default` (currently aliases to `burst`)
+
+  Unknown values are logged as a warning and fall back to `burst`.
+
+  Examples:
+
+      `GGML_HEXAGON_POWER_MODE=balanced llama-completion ...`
+      `llama-completion --htp-performance-mode sustained_high_performance ...`
+
+- `GGML_HEXAGON_HOSTBUF=1`
+  Controls whether the Hexagon backend allocates host buffers. By default, all buffers except for REPACK are host buffers.
+  This option is required for testing Ops that require REPACK buffers (MUL_MAT and MUL_MAT_ID).
 
 - `GGML_HEXAGON_VERBOSE=1`
   Enables verbose logging of Ops from the backend. Example output:
