@@ -357,6 +357,10 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
         warn_names.push_back("router mode");
     }
 
+    if (params.server_connect) {
+        warn_names.push_back("peer-to-peer tunnel (llama-connect, experimental)");
+    }
+
     if (params.ui_mcp_proxy) {
         ctx_http.get ("/cors-proxy",      ex_wrapper(proxy_handler_get));
         ctx_http.post("/cors-proxy",      ex_wrapper(proxy_handler_post));
