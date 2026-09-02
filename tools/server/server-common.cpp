@@ -35,6 +35,10 @@
 #endif
 
 #if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
 #include <windows.h>
 #elif defined(__APPLE__) && defined(__MACH__)
 #include <mach-o/dyld.h>
