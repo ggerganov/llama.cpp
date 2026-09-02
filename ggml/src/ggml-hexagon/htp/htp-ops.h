@@ -197,18 +197,16 @@ enum htp_profiler_mode {
     HTP_PROF_TRACE    = 3,
 };
 
-// DCVS/HMX power profile requested for the session. Mirrors the QNN
-// Execution Provider htp_performance_mode option set.
+// DCVS/HMX power profile requested for the session.
 enum htp_power_mode {
-    HTP_POWER_MODE_EXTREME_POWER_SAVER        = 0,
-    HTP_POWER_MODE_LOW_POWER_SAVER             = 1,
-    HTP_POWER_MODE_POWER_SAVER                 = 2,
-    HTP_POWER_MODE_HIGH_POWER_SAVER            = 3,
-    HTP_POWER_MODE_LOW_BALANCED                = 4,
-    HTP_POWER_MODE_BALANCED                    = 5,
-    HTP_POWER_MODE_HIGH_PERFORMANCE            = 6,
-    HTP_POWER_MODE_SUSTAINED_HIGH_PERFORMANCE  = 7,
-    HTP_POWER_MODE_BURST                       = 8,
+    HTP_POWER_MODE_LOW_POWER_SAVER            = 0,
+    HTP_POWER_MODE_POWER_SAVER                = 1,
+    HTP_POWER_MODE_HIGH_POWER_SAVER           = 2,
+    HTP_POWER_MODE_LOW_BALANCED               = 3,
+    HTP_POWER_MODE_BALANCED                   = 4,
+    HTP_POWER_MODE_HIGH_PERFORMANCE           = 5,
+    HTP_POWER_MODE_SUSTAINED_HIGH_PERFORMANCE = 6,
+    HTP_POWER_MODE_BURST                      = 7,
 
     HTP_POWER_MODE_COUNT
 };

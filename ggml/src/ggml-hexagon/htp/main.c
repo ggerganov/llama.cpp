@@ -363,13 +363,9 @@ static void htp_main_thread(void * context);
 static void htp_packet_callback(dspqueue_t queue, int error, void * context);
 static void htp_error_callback(dspqueue_t queue, int error, void * context);
 
-// DCVS/HMX corner settings for each htp_power_mode, mirroring the QNN
-// Execution Provider's htp_performance_mode ladder. All non-BURST modes
-// leave DCVS enabled and sleep allowed so the HTP can back off under
-// thermal pressure; BURST preserves the previous unconditional-max-power
-// behavior exactly (dcvs_enable = FALSE, sleep_disable = TRUE, corners
-// pinned to MAX). Corner constants are from HAP_power.h
-// (HAP_dcvs_voltage_corner_t / HAP_dcvs_exp_vcorner_t).
+// Non-BURST modes leave DCVS enabled and sleep allowed so the HTP can back off
+// under thermal pressure. BURST pins all corners to MAX and disables both.
+// Corner constants are from HAP_power.h (HAP_dcvs_voltage_corner_t / HAP_dcvs_exp_vcorner_t).
 struct htp_power_profile {
     boolean  dcvs_enable;
     uint32_t bus_min_corner;
@@ -402,10 +398,8 @@ struct htp_power_profile {
     }
 
 static const struct htp_power_profile htp_power_profiles[HTP_POWER_MODE_COUNT] = {
-    [HTP_POWER_MODE_EXTREME_POWER_SAVER] =
-        HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS2, HAP_DCVS_VCORNER_SVS2, HAP_DCVS_EXP_VCORNER_MIN_SVS),
     [HTP_POWER_MODE_LOW_POWER_SAVER] =
-        HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS2, HAP_DCVS_VCORNER_SVS, HAP_DCVS_EXP_VCORNER_LOW_SVS),
+        HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS2, HAP_DCVS_VCORNER_SVS2, HAP_DCVS_EXP_VCORNER_MIN_SVS),
     [HTP_POWER_MODE_POWER_SAVER] =
         HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS, HAP_DCVS_VCORNER_SVS_PLUS, HAP_DCVS_EXP_VCORNER_SVS),
     [HTP_POWER_MODE_HIGH_POWER_SAVER] =
@@ -443,11 +437,11 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
     }
 
     if (power_mode >= HTP_POWER_MODE_COUNT) {
-        FARF(ERROR, "invalid power_mode %u, falling back to BURST", (unsigned) power_mode);
+        FARF(ERROR, "invalid power-mode %u, falling back to burst", (unsigned) power_mode);
         power_mode = HTP_POWER_MODE_BURST;
     }
     const struct htp_power_profile * pwr = &htp_power_profiles[power_mode];
-    FARF(ALWAYS, "power_mode %u : dcvs_enable %d bus[%u,%u,%u] core[%u,%u,%u] sleep_disable %d hmx[%u,%u,%u]",
+    FARF(ALWAYS, "power-mode %u : dcvs-enable %d bus[%u,%u,%u] core[%u,%u,%u] sleep-disable %d hmx[%u,%u,%u]",
          (unsigned) power_mode, (int) pwr->dcvs_enable,
          (unsigned) pwr->bus_min_corner, (unsigned) pwr->bus_max_corner, (unsigned) pwr->bus_target_corner,
          (unsigned) pwr->core_min_corner, (unsigned) pwr->core_max_corner, (unsigned) pwr->core_target_corner,

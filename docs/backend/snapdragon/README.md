@@ -331,11 +331,10 @@ on 4 physical NPUs, or `--devices 'HTP0[0-1:0],HTP1[0-1:1]'` on 2 physical NPUs 
   Disables 64-bit DMA for model weights. Set to `1` to enable it explicitly on a supported architecture.
   
 - `GGML_HEXAGON_POWER_MODE=default`
-  Controls the DCVS/HMX power mode requested from the HTP DSP for the session. Mirrors the
-  QNN Execution Provider's `htp_performance_mode` options. Can also be set via the
-  `--htp-performance-mode` CLI flag. Available modes:
+  Controls the DCVS/HMX power mode requested from the HTP DSP for the session. Modes are listed
+  from lowest to highest power. All modes except `burst` leave DCVS enabled and DSP sleep allowed,
+  so the HTP can back off under thermal pressure.
 
-  - `extreme_power_saver`
   - `low_power_saver`
   - `power_saver`
   - `high_power_saver`
@@ -348,10 +347,13 @@ on 4 physical NPUs, or `--devices 'HTP0[0-1:0],HTP1[0-1:1]'` on 2 physical NPUs 
 
   Unknown values are logged as a warning and fall back to `burst`.
 
+  This must be set in the environment before the process initializes the backend registry, so
+  there is no `llama-*` CLI flag for it. The `run.py` runner exposes it as `--hex-power-mode`.
+
   Examples:
 
       `GGML_HEXAGON_POWER_MODE=balanced llama-completion ...`
-      `llama-completion --htp-performance-mode sustained_high_performance ...`
+      `./scripts/snapdragon/run.py --hex-power-mode sustained_high_performance ...`
 
 - `GGML_HEXAGON_HOSTBUF=1`
   Controls whether the Hexagon backend allocates host buffers. By default, all buffers except for REPACK are host buffers.
