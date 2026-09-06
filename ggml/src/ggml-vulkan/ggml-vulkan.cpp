@@ -395,6 +395,7 @@ enum vk_device_architecture {
     AMD_RDNA1,
     AMD_RDNA2,
     AMD_RDNA3,
+    AMD_RDNA4,
     INTEL_XE1,
     INTEL_XE2,
     NVIDIA_PRE_TURING,
@@ -443,6 +444,10 @@ static vk_device_architecture get_device_architecture(const vk::PhysicalDevice& 
             // RDNA
             if (shader_core_props_amd.wavefrontsPerSimd == 20) {
                 return vk_device_architecture::AMD_RDNA1;
+            }
+            // RDNA4 (gfx1201) can be identified by API version 1.4 or device ID 0x7550 (RX 9070 series)
+            if (props.apiVersion >= VK_API_VERSION_1_4 || props.deviceID == 0x7550) {
+                return vk_device_architecture::AMD_RDNA4;
             }
             if (integer_dot_props.integerDotProduct4x8BitPackedMixedSignednessAccelerated) {
                 return vk_device_architecture::AMD_RDNA3;
@@ -4176,6 +4181,20 @@ static std::vector<GpuPipelineConfig> gpu_pipeline_configs = {
         },
         RDNA_DEFAULT_SUBGROUP_SIZE
     },
+    {
+        vk_device_architecture::AMD_RDNA3,
+        {
+            rdna2_pipelines,
+        },
+        RDNA_DEFAULT_SUBGROUP_SIZE
+    },
+    {
+        vk_device_architecture::AMD_RDNA4,
+        {
+            rdna2_pipelines,
+        },
+        RDNA_DEFAULT_SUBGROUP_SIZE
+    },
 };
 
 static uint32_t get_subgroup_size(const std::string &pipeline_name, const vk_device_architecture &arch) {
@@ -4379,6 +4398,12 @@ static void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
             m_warptile_mmqid = m_warptile_mmqid_int = { 256, 64, 64, 32, 16, 16, 2, 2, 2, 1, 16 };
         } else if (device->vendor_id == VK_VENDOR_ID_AMD && device->coopmat_support && device->driver_id != vk::DriverId::eAmdProprietary) {
             // This is intentionally using tx_m values, slight performance increase
+            l_warptile = { 256, 128, 128, 16, mm_warp_8, 64, 2, tm_m, tn_m, tk_m, mm_warp_8 };
+            l_warptile_mmq = l_warptile_mmq_int = { 256, 128, 128, 32, mm_warp_8, 64, 2, tm_m, tn_m, tk_m, mm_warp_8 };
+            l_warptile_mmq_int_k = { 256, 128, 128, 32, mm_warp_16, 64, 1, 4, 2, 1, mm_warp_16 };
+        } else if (device->vendor_id == VK_VENDOR_ID_AMD && device->architecture == AMD_RDNA4) {
+            // RDNA4 (gfx12xx) tuning for proprietary driver
+            // Larger warptiles help with occupancy on RDNA4's compute units
             l_warptile = { 256, 128, 128, 16, mm_warp_8, 64, 2, tm_m, tn_m, tk_m, mm_warp_8 };
             l_warptile_mmq = l_warptile_mmq_int = { 256, 128, 128, 32, mm_warp_8, 64, 2, tm_m, tn_m, tk_m, mm_warp_8 };
             l_warptile_mmq_int_k = { 256, 128, 128, 32, mm_warp_16, 64, 1, 4, 2, 1, mm_warp_16 };
@@ -5289,11 +5314,12 @@ static void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
         rm_stdq = 2;
         rm_stdq_int = 2;
     }
-    // RDNA3: above four columns, static 4 rows for all types bench faster than the default
-    const bool is_rdna3 = device->vendor_id == VK_VENDOR_ID_AMD && device->architecture == AMD_RDNA3;
-    auto const &rm_int_n = [&](uint32_t rows, uint32_t i) { return (is_rdna3 && i >= 4) ? 4u : rows; };
-    // RDNA3: Static 4 rows for all types bench faster than the default
-    auto const &rm_id = [&](uint32_t rows) { return is_rdna3 ? 4u : rows; };
+    // RDNA3/4: above four columns, static 4 rows for all types bench faster than the default
+    const bool is_rdna3_or_rdna4 = device->vendor_id == VK_VENDOR_ID_AMD &&
+                                   (device->architecture == AMD_RDNA3 || device->architecture == AMD_RDNA4);
+    auto const &rm_int_n = [&](uint32_t rows, uint32_t i) { return (is_rdna3_or_rdna4 && i >= 4) ? 4u : rows; };
+    // RDNA3/4: Static 4 rows for all types bench faster than the default
+    auto const &rm_id = [&](uint32_t rows) { return is_rdna3_or_rdna4 ? 4u : rows; };
     uint32_t rm_iq = 2 * rm_kq;
 
     const bool use_subgroups = device->subgroup_arithmetic;
@@ -6309,6 +6335,14 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         const char* GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM = getenv("GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM");
         device->disable_host_visible_vidmem = GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM != nullptr;
+
+        // On AMD RDNA2/RDNA3/RDNA4 discrete GPUs, the proprietary driver may
+        // report host-visible device memory, but compute performance suffers
+        // significantly. Default to device-local only unless overridden.
+        if ((device->architecture == AMD_RDNA2 || device->architecture == AMD_RDNA3 ||
+             device->architecture == AMD_RDNA4) && !device->uma) {
+            device->disable_host_visible_vidmem = true;
+        }
 
         const char* GGML_VK_ALLOW_SYSMEM_FALLBACK = getenv("GGML_VK_ALLOW_SYSMEM_FALLBACK");
         device->allow_sysmem_fallback = GGML_VK_ALLOW_SYSMEM_FALLBACK != nullptr;
@@ -7939,9 +7973,34 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec(ggml_backend_vk_context * 
 
     // heuristic to choose workgroup size
     uint32_t dmmv_wg = DMMV_WG_SIZE_SUBGROUP;
-    if ((ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->architecture != vk_device_architecture::NVIDIA_PRE_TURING) || ctx->device->vendor_id == VK_VENDOR_ID_INTEL) {
+    if (ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->architecture != vk_device_architecture::NVIDIA_PRE_TURING) {
         // Prefer larger workgroups when M is small, to spread the work out more
         // and keep more SMs busy.
+        // q6_k seems to prefer small workgroup size even for "medium" values of M.
+        if (a_type == GGML_TYPE_Q6_K) {
+            if (m < 4096 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        } else {
+            if (m <= 8192 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        }
+    } else if (ctx->device->vendor_id == VK_VENDOR_ID_AMD) {
+        // Prefer larger workgroups for AMD RDNA2/3/4 when M is small to increase
+        // occupancy and keep compute units busy during decode.
+        if (a_type == GGML_TYPE_Q6_K) {
+            if (m < 4096 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        } else {
+            if (m <= 8192 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        }
+    } else if (ctx->device->vendor_id == VK_VENDOR_ID_INTEL) {
+        // Prefer larger workgroups when M is small, to spread the work out more
+        // and keep more EUs busy.
         // q6_k seems to prefer small workgroup size even for "medium" values of M.
         if (a_type == GGML_TYPE_Q6_K) {
             if (m < 4096 && k >= 1024) {
@@ -8106,9 +8165,34 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec_id(ggml_backend_vk_context
 
     // heuristic to choose workgroup size
     uint32_t dmmv_wg = DMMV_WG_SIZE_SUBGROUP;
-    if ((ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->architecture != vk_device_architecture::NVIDIA_PRE_TURING) || ctx->device->vendor_id == VK_VENDOR_ID_INTEL) {
+    if (ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->architecture != vk_device_architecture::NVIDIA_PRE_TURING) {
         // Prefer larger workgroups when M is small, to spread the work out more
         // and keep more SMs busy.
+        // q6_k seems to prefer small workgroup size even for "medium" values of M.
+        if (a_type == GGML_TYPE_Q6_K) {
+            if (m < 4096 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        } else {
+            if (m <= 8192 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        }
+    } else if (ctx->device->vendor_id == VK_VENDOR_ID_AMD) {
+        // Prefer larger workgroups for AMD RDNA2/3/4 when M is small to increase
+        // occupancy and keep compute units busy during decode.
+        if (a_type == GGML_TYPE_Q6_K) {
+            if (m < 4096 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        } else {
+            if (m <= 8192 && k >= 1024) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
+        }
+    } else if (ctx->device->vendor_id == VK_VENDOR_ID_INTEL) {
+        // Prefer larger workgroups when M is small, to spread the work out more
+        // and keep more EUs busy.
         // q6_k seems to prefer small workgroup size even for "medium" values of M.
         if (a_type == GGML_TYPE_Q6_K) {
             if (m < 4096 && k >= 1024) {
@@ -19501,6 +19585,7 @@ static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDevicePrope
     case VK_VENDOR_ID_AMD:
         if (driver_props.driverID == vk::DriverId::eAmdProprietary || driver_props.driverID == vk::DriverId::eAmdOpenSource) {
             // Workaround for AMD proprietary driver reporting support on all GPUs
+            // RDNA4 (gfx12xx) has WMMA, not true KHR_coopmat - disable coopmat
             return arch == vk_device_architecture::AMD_RDNA3;
         }
         return true;
