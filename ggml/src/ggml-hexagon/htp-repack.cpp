@@ -10,6 +10,10 @@
 #include <cstring>
 #include <initializer_list>
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#    include <arm_neon.h>
+#endif
+
 // --- 4-bit block-32 nibble helpers (shared by Q4_0, IQ4_NL, Q4_1, MXFP4) ---
 
 static inline void unpack_nibbles_32(uint8_t * dst, const uint8_t * qs) {
@@ -130,8 +134,59 @@ static void unpack_from_tiled_grid_32(void * data, const ggml_tensor * t, size_t
 static void repack_q4_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
     repack_to_tiled_grid_32<block_q4_0, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_0,
         [](uint8_t * tile_dst, const block_q4_0 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
-            uint8_t tile_quants[32][32];
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            if (ct * 32 + 32 <= ne1 && kt < ne0 / 32) {
+                for (int row0 = 0; row0 < 32; row0 += 8) {
+                    uint8x8_t low_rows[8];
+                    uint8x8_t high_rows[8];
+
+                    for (int rr = 0; rr < 8; ++rr) {
+                        const block_q4_0 * src_block = &src_slice[(ct * 32 + row0 + rr) * row_stride + kt];
+                        const uint8x16_t packed = vld1q_u8(src_block->qs);
+                        const uint8x8x2_t separated = vuzp_u8(vget_low_u8(packed), vget_high_u8(packed));
+                        const uint8x8_t low_even = vand_u8(separated.val[0], vdup_n_u8(0x0F));
+                        const uint8x8_t low_odd  = vand_u8(separated.val[1], vdup_n_u8(0x0F));
+                        const uint8x8_t high_even = vshr_n_u8(separated.val[0], 4);
+                        const uint8x8_t high_odd  = vshr_n_u8(separated.val[1], 4);
+                        low_rows[rr]  = vorr_u8(vshl_n_u8(low_odd, 4), low_even);
+                        high_rows[rr] = vorr_u8(vshl_n_u8(high_odd, 4), high_even);
+                    }
+
+                    auto transpose8 = [](const uint8x8_t rows[8], uint8_t * dst) {
+                        const uint8x8x2_t t0 = vtrn_u8(rows[0], rows[1]);
+                        const uint8x8x2_t t1 = vtrn_u8(rows[2], rows[3]);
+                        const uint8x8x2_t t2 = vtrn_u8(rows[4], rows[5]);
+                        const uint8x8x2_t t3 = vtrn_u8(rows[6], rows[7]);
+                        const uint16x4x2_t t4 = vtrn_u16(vreinterpret_u16_u8(t0.val[0]), vreinterpret_u16_u8(t1.val[0]));
+                        const uint16x4x2_t t5 = vtrn_u16(vreinterpret_u16_u8(t0.val[1]), vreinterpret_u16_u8(t1.val[1]));
+                        const uint16x4x2_t t6 = vtrn_u16(vreinterpret_u16_u8(t2.val[0]), vreinterpret_u16_u8(t3.val[0]));
+                        const uint16x4x2_t t7 = vtrn_u16(vreinterpret_u16_u8(t2.val[1]), vreinterpret_u16_u8(t3.val[1]));
+                        const uint32x2x2_t t8 = vtrn_u32(vreinterpret_u32_u16(t4.val[0]), vreinterpret_u32_u16(t6.val[0]));
+                        const uint32x2x2_t t9 = vtrn_u32(vreinterpret_u32_u16(t4.val[1]), vreinterpret_u32_u16(t6.val[1]));
+                        const uint32x2x2_t ta = vtrn_u32(vreinterpret_u32_u16(t5.val[0]), vreinterpret_u32_u16(t7.val[0]));
+                        const uint32x2x2_t tb = vtrn_u32(vreinterpret_u32_u16(t5.val[1]), vreinterpret_u32_u16(t7.val[1]));
+                        vst1_u8(dst + 0 * 32, vreinterpret_u8_u32(t8.val[0]));
+                        vst1_u8(dst + 1 * 32, vreinterpret_u8_u32(ta.val[0]));
+                        vst1_u8(dst + 2 * 32, vreinterpret_u8_u32(t9.val[0]));
+                        vst1_u8(dst + 3 * 32, vreinterpret_u8_u32(tb.val[0]));
+                        vst1_u8(dst + 4 * 32, vreinterpret_u8_u32(t8.val[1]));
+                        vst1_u8(dst + 5 * 32, vreinterpret_u8_u32(ta.val[1]));
+                        vst1_u8(dst + 6 * 32, vreinterpret_u8_u32(t9.val[1]));
+                        vst1_u8(dst + 7 * 32, vreinterpret_u8_u32(tb.val[1]));
+                    };
+
+                    transpose8(low_rows, tile_dst + row0);
+                    transpose8(high_rows, tile_dst + 8 * 32 + row0);
+                }
+
+                for (int row = 0; row < 32; ++row) {
+                    scale_dst[row] = src_slice[(ct * 32 + row) * row_stride + kt].d;
+                }
+                return;
+            }
+#endif
+            uint8_t tile_quants[32][32];
             for (int row = 0; row < 32; row++) {
                 const int64_t r = ct * 32 + row;
                 if (r < ne1 && kt < ne0 / 32) {
