@@ -306,7 +306,6 @@ set(GGML_OPENCL_KERNELS
     pad
     repeat
     mul_mat_f16_f32
-    mul_mm_f16_f32_kq_kqv
     conv2d
     conv2d_f16_f32
     flash_attn_repack
@@ -319,7 +318,11 @@ set(GGML_OPENCL_KERNELS
 )
 
 if (GGML_OPENCL_USE_ADRENO_KERNELS)
-    list(APPEND GGML_OPENCL_KERNELS gemm_xmem_f16_f32_os8 sdpa_xmem_f32_f16_os8)
+    list(APPEND GGML_OPENCL_KERNELS
+        gemm_xmem_f16_f32_os8
+        mul_mm_f16_f32_attn_adreno
+        mul_mm_f16_f32_kq_kqv
+        sdpa_xmem_f32_f16_os8)
 endif ()
 
 foreach (K ${GGML_OPENCL_KERNELS})
