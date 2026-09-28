@@ -17,6 +17,7 @@
 	import { filterModelOptions } from '$lib/utils';
 	import { type Snippet, untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { toast } from 'svelte-sonner';
 
 	interface Props {
 		class?: string;
