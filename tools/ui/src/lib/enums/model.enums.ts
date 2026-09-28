@@ -93,3 +93,9 @@ export enum ModelsTableSortKey {
 	CONTEXT = 'context',
 	NAME = 'name'
 }
+
+/** Kinds a provider block carries on top of the manager's own sections. */
+export enum ModelsTableProviderKind {
+	COMPAT = 'compat',
+	PROVIDER = 'provider'
+}
