@@ -126,10 +126,10 @@
 
 <div class="flex h-full min-h-0 flex-col">
 	<ModelsManagerModelConfigurationHeader
-		{isDownload}
-		{isDownloadPaused}
 		{canToggleLoad}
 		{isCustomized}
+		{isDownload}
+		{isDownloadPaused}
 		{isLoaded}
 		{onClose}
 		onRequestCancelDownload={() => (cancelDownloadOpen = true)}
@@ -238,9 +238,9 @@
 	{#if deviceStore.isMobile}
 		<div class="shrink-0 border-t border-border/40 px-4 py-3">
 			<ModelsManagerModelConfigurationActions
+				{canToggleLoad}
 				{isDownload}
 				{isDownloadPaused}
-				{canToggleLoad}
 				{isLoaded}
 				isLoading={status === ServerModelStatus.LOADING}
 				onRequestCancelDownload={() => (cancelDownloadOpen = true)}

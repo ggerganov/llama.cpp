@@ -33,10 +33,10 @@
 	}
 
 	let {
-		isDownload = false,
-		isDownloadPaused = false,
 		canToggleLoad,
 		isCustomized,
+		isDownload = false,
+		isDownloadPaused = false,
 		isLoaded,
 		onClose,
 		onRequestCancelDownload,
@@ -175,9 +175,9 @@
 	<!-- a phone floats the actions at the bottom of the pane, where the thumb is -->
 	{#if !isMobile}
 		<ModelsManagerModelConfigurationActions
+			{canToggleLoad}
 			{isDownload}
 			{isDownloadPaused}
-			{canToggleLoad}
 			{isLoaded}
 			{isLoading}
 			{onRequestCancelDownload}
