@@ -9,6 +9,7 @@ import { browser } from '$app/environment';
 import {
 	CLI_FLAGS,
 	HF_UD_QUANT_PREFIX_REGEX,
+	LOCAL_BACKEND_ID,
 	MODEL_ID,
 	type ModelSidecar,
 	STORAGE_APP_NAME
@@ -21,8 +22,10 @@ import {
 } from '$lib/enums';
 import { HuggingFaceService } from '$lib/services/huggingface.service';
 import { ModelsService } from '$lib/services/models.service';
-import type { ModelPropsManager } from '$lib/stores/models/props.svelte';
+import { backendsStore } from '$lib/stores/backends.svelte';
 // direct imports between stores, not via the barrel, to avoid circular deps
+import { backendsModelsStore } from '$lib/stores/backendsModels.svelte';
+import type { ModelPropsManager } from '$lib/stores/models/props.svelte';
 import { serverStore } from '$lib/stores/server.svelte';
 // explicit type imports: the app.d.ts globals resolve to `any`, so import the real types
 import type {
@@ -32,6 +35,7 @@ import type {
 } from '$lib/types';
 import type { ModelSidecarBadge } from '$lib/types/models';
 import { repoOf } from '$lib/utils/model-names';
+import { backendIdFromModelId } from '$lib/utils/model-option-id';
 import { isAuxSidecar, isDraftSidecar, sidecarFromFileToken } from '$lib/utils/sidecars';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';
@@ -41,13 +45,20 @@ import { toast } from 'svelte-sonner';
  * cannot reach around the host's full surface; modelsStore implements this
  * structurally.
  */
+/** How long a remote operation is watched before its last answer is kept. */
+const REMOTE_STATUS_TIMEOUT_MS = 10 * 60 * 1000;
+const REMOTE_STATUS_POLL_MS = 2000;
+
 export interface ModelStatusHost {
 	error: string | null;
+	/** Load state a model's own backend reports, local or external. */
+	getModelStatus(modelId: string): ServerModelStatus | null;
 	readonly props: ModelPropsManager;
 	/** Router model rows the status feed updates. */
 	routerModels: ApiModelDataEntry[];
 	fetchRouterModels(): Promise<void>;
 	isModelLoaded(modelId: string): boolean;
+	switchBackend(): Promise<void>;
 	toDisplayName(id: string): string;
 }
 
@@ -213,6 +224,8 @@ export class ModelStatusManager {
 	 * removes the model along with the partial files of its download.
 	 */
 	async cancelDownload(repoWithTag: string): Promise<boolean> {
+		await this.ensureLocalTarget();
+
 		if (!serverStore.isRouterMode) {
 			toast.error('Model downloads are only available in router mode');
 
@@ -265,12 +278,14 @@ export class ModelStatusManager {
 	 * settled status, so no waiter is registered here.
 	 */
 	async cancelLoad(modelId: string): Promise<void> {
+		const backendId = this.backendIdFor(modelId);
+
 		if (!serverStore.isRouterMode) return;
 
 		this.subscribe();
 
 		try {
-			await ModelsService.unload(modelId);
+			await ModelsService.unload(modelId, backendId);
 			toast.info(`Load cancelled: ${this.host.toDisplayName(modelId)}`);
 		} catch (error) {
 			toast.error(`Failed to cancel load: ${this.host.toDisplayName(modelId)}`);
@@ -306,6 +321,28 @@ export class ModelStatusManager {
 			return;
 		}
 
+		// a second click must not post again: the server would answer that the model
+		// already exists, so a download already on its way is left alone
+		if (this.pendingDownloads.has(model) || this.isDownloadInProgress(model)) return;
+
+		// the marker and its last reported progress survive until the request is
+		// accepted: dropping them first would drop the paused state, which reads as
+		// a lost download if the server rejects the resume
+		const snapshot = this.pausedDownloads.get(model) ?? null;
+		const wasPaused = this.pausedDownloads.has(model);
+
+		// the download reads as in flight from here, so the chip shows it before the
+		// server answers; the feed refines it with the real counts. Both marks land
+		// ahead of the first await, so a second click in the same tick still coalesces
+		this.pendingDownloads.add(model);
+		this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
+
+		// the local server owns the download endpoint, so the target moves only once
+		// the row already reads as downloading
+		await this.ensureLocalTarget();
+
+		// read once the target has moved: the listing describes the server taking the
+		// download, not the backend the row was clicked from
 		const registered = this.host.routerModels.find(
 			(m) => downloadIdKey(m.id) === downloadIdKey(model)
 		);
@@ -317,24 +354,8 @@ export class ModelStatusManager {
 			...extraSidecars
 		].filter((kind, i, all) => SERVER_SIDECARS.includes(kind) && all.indexOf(kind) === i);
 
-		// a second click must not post again: the server would answer that the model
-		// already exists, so a download already on its way is left alone
-		if (this.pendingDownloads.has(model) || this.isDownloadInProgress(model)) return;
-
-		this.pendingDownloads.add(model);
-
 		// the feed must be live so the resulting models_reload event refreshes the list
 		this.subscribe();
-
-		// the marker and its last reported progress survive until the request is
-		// accepted: dropping them first would drop the paused state, which reads as
-		// a lost download if the server rejects the resume
-		const snapshot = this.pausedDownloads.get(model) ?? null;
-		const wasPaused = this.pausedDownloads.has(model);
-
-		// the download reads as in flight from here, so the chip shows it before the
-		// server answers; the feed refines it with the real counts
-		this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
 
 		try {
 			const res = await ModelsService.downloadModel(model, sidecars);
@@ -482,7 +503,10 @@ export class ModelStatusManager {
 		return this.loadingStates.get(modelId) ?? false;
 	}
 
-	async load(modelId: string): Promise<void> {
+	async load(modelId: string, extraArgs?: string[]): Promise<void> {
+		const backendId = this.backendIdFor(modelId);
+		const isLocal = backendId === LOCAL_BACKEND_ID;
+
 		if (this.host.isModelLoaded(modelId)) return;
 
 		if (this.loadingStates.get(modelId)) return;
@@ -493,13 +517,21 @@ export class ModelStatusManager {
 		// the feed drives completion, so it must be live before the request
 		this.subscribe();
 
-		const reachedLoaded = this.waitForStatus(modelId, ServerModelStatus.LOADED);
+		const reachedLoaded = isLocal
+			? this.waitForStatus(modelId, ServerModelStatus.LOADED)
+			: Promise.resolve();
 
 		reachedLoaded.catch(() => {});
 
 		try {
-			await ModelsService.load(modelId);
-			await reachedLoaded;
+			await ModelsService.load(modelId, extraArgs, backendId);
+
+			if (isLocal) {
+				await reachedLoaded;
+			} else {
+				await this.waitForRemoteStatus(backendId, modelId, ServerModelStatus.LOADED);
+			}
+
 			toast.success(`Model loaded: ${this.host.toDisplayName(modelId)}`);
 		} catch (error) {
 			this.rejectStatus(modelId, error instanceof Error ? error : new Error('load failed'));
@@ -519,6 +551,8 @@ export class ModelStatusManager {
 	 * before the request: an unconfirmed pause would leave the chip spinning.
 	 */
 	async pauseDownload(repoWithTag: string): Promise<void> {
+		await this.ensureLocalTarget();
+
 		if (!serverStore.isRouterMode) {
 			toast.error('Model downloads are only available in router mode');
 
@@ -596,6 +630,9 @@ export class ModelStatusManager {
 	}
 
 	async unload(modelId: string): Promise<void> {
+		const backendId = this.backendIdFor(modelId);
+		const isLocal = backendId === LOCAL_BACKEND_ID;
+
 		if (!this.host.isModelLoaded(modelId)) return;
 
 		if (this.loadingStates.get(modelId)) return;
@@ -605,13 +642,21 @@ export class ModelStatusManager {
 
 		this.subscribe();
 
-		const reachedUnloaded = this.waitForStatus(modelId, ServerModelStatus.UNLOADED);
+		const reachedUnloaded = isLocal
+			? this.waitForStatus(modelId, ServerModelStatus.UNLOADED)
+			: Promise.resolve();
 
 		reachedUnloaded.catch(() => {});
 
 		try {
-			await ModelsService.unload(modelId);
-			await reachedUnloaded;
+			await ModelsService.unload(modelId, backendId);
+
+			if (isLocal) {
+				await reachedUnloaded;
+			} else {
+				await this.waitForRemoteStatus(backendId, modelId, ServerModelStatus.UNLOADED);
+			}
+
 			toast.info(`Model unloaded: ${this.host.toDisplayName(modelId)}`);
 		} catch (error) {
 			this.rejectStatus(modelId, error instanceof Error ? error : new Error('unload failed'));
@@ -775,8 +820,34 @@ export class ModelStatusManager {
 		}
 	}
 
+	/**
+	 * Backend a model belongs to: the one its qualified id names, else whichever
+	 * enabled backend lists it. Loading an external llama-server's model must not
+	 * become a request to the server this UI is served from.
+	 */
+	private backendIdFor(modelId: string): string {
+		const qualified = backendIdFromModelId(modelId);
+
+		if (qualified) return qualified;
+
+		for (const backend of backendsStore.enabled) {
+			const state = backendsModelsStore.get(backend.id);
+
+			if (state.models.some((option) => option.model === modelId)) return backend.id;
+		}
+
+		return backendsStore.active.id;
+	}
+
 	private deletePausedDownload(repoWithTag: string): boolean {
 		return this.pausedDownloads.delete(repoWithTag);
+	}
+	private async ensureLocalTarget(): Promise<void> {
+		if (backendsStore.active.id === LOCAL_BACKEND_ID) return;
+
+		backendsStore.setActive(LOCAL_BACKEND_ID);
+		await backendsModelsStore.ensureLoaded(LOCAL_BACKEND_ID);
+		await this.host.switchBackend();
 	}
 
 	/** True when the option is the model itself, or a sidecar its download pulls. */
@@ -844,6 +915,42 @@ export class ModelStatusManager {
 		if (waiter && waiter.target === status) {
 			this.statusWaiters.delete(modelId);
 			waiter.resolve();
+		}
+	}
+
+	/**
+	 * Wait for an external backend to report a status. Its changes never reach the
+	 * local feed, so its own listing is asked again until the status lands or the
+	 * deadline passes, which leaves the last answer in place.
+	 */
+	private async waitForRemoteStatus(
+		backendId: string,
+		modelId: string,
+		target: ServerModelStatus
+	): Promise<void> {
+		const deadline = Date.now() + REMOTE_STATUS_TIMEOUT_MS;
+
+		while (Date.now() < deadline) {
+			await backendsModelsStore.refresh(backendId);
+
+			const status = this.host.getModelStatus(modelId);
+
+			if (status === ServerModelStatus.FAILED) {
+				throw new Error(
+					target === ServerModelStatus.LOADED
+						? 'the server failed to load it'
+						: 'the server failed to unload it'
+				);
+			}
+
+			const reached =
+				target === ServerModelStatus.LOADED
+					? status === ServerModelStatus.LOADED || status === ServerModelStatus.SLEEPING
+					: status === ServerModelStatus.UNLOADED || status === null;
+
+			if (reached) return;
+
+			await new Promise((resolve) => setTimeout(resolve, REMOTE_STATUS_POLL_MS));
 		}
 	}
 

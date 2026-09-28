@@ -90,7 +90,7 @@ class BackendsModelsStore {
 		const result = await BackendsService.listModels(backend);
 
 		this.states[backend.id] = {
-			drafts: result.raw ? ModelsService.draftSidecarsByRepo(result.raw) : undefined,
+			drafts: result.raw ? ModelsService.sidecarFilesByRepo(result.raw) : undefined,
 			error: result.error ?? null,
 			loaded: result.ok,
 			loading: false,
