@@ -229,6 +229,16 @@ export function readModelContextLength(value: unknown): number | undefined {
 		if (sizes.length > 0) return Math.max(...sizes);
 	}
 
+	// 0 is the server's way of leaving the trained context unknown; a model-mode
+	// listing reports it as meta.n_ctx_train instead
+	const meta = entry.meta;
+
+	if (meta && typeof meta === 'object') {
+		const trained = (meta as Record<string, unknown>).n_ctx_train;
+
+		if (typeof trained === 'number' && trained > 0) return trained;
+	}
+
 	return undefined;
 }
 
