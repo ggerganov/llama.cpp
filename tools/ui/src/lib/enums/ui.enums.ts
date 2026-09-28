@@ -35,7 +35,8 @@ export enum SidebarAction {
 /** View the models dialog renders. */
 export enum ModelsDialogView {
 	DISCOVER = 'discover',
-	MANAGE = 'manage'
+	MANAGE = 'manage',
+	PROVIDERS = 'providers'
 }
 
 export enum McpPromptVariant {
