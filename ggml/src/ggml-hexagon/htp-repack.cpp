@@ -47,6 +47,111 @@ static inline void transpose_tile_to_nibbles(uint8_t tile_quants[32][32], const 
     }
 }
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+static void repack_neon_transpose8x8(const uint8x8_t rows[8], uint8x8_t columns[8]) {
+    const uint8x8x2_t t0 = vtrn_u8(rows[0], rows[1]);
+    const uint8x8x2_t t1 = vtrn_u8(rows[2], rows[3]);
+    const uint8x8x2_t t2 = vtrn_u8(rows[4], rows[5]);
+    const uint8x8x2_t t3 = vtrn_u8(rows[6], rows[7]);
+    const uint16x4x2_t t4 = vtrn_u16(vreinterpret_u16_u8(t0.val[0]), vreinterpret_u16_u8(t1.val[0]));
+    const uint16x4x2_t t5 = vtrn_u16(vreinterpret_u16_u8(t0.val[1]), vreinterpret_u16_u8(t1.val[1]));
+    const uint16x4x2_t t6 = vtrn_u16(vreinterpret_u16_u8(t2.val[0]), vreinterpret_u16_u8(t3.val[0]));
+    const uint16x4x2_t t7 = vtrn_u16(vreinterpret_u16_u8(t2.val[1]), vreinterpret_u16_u8(t3.val[1]));
+    const uint32x2x2_t t8 = vtrn_u32(vreinterpret_u32_u16(t4.val[0]), vreinterpret_u32_u16(t6.val[0]));
+    const uint32x2x2_t t9 = vtrn_u32(vreinterpret_u32_u16(t4.val[1]), vreinterpret_u32_u16(t6.val[1]));
+    const uint32x2x2_t ta = vtrn_u32(vreinterpret_u32_u16(t5.val[0]), vreinterpret_u32_u16(t7.val[0]));
+    const uint32x2x2_t tb = vtrn_u32(vreinterpret_u32_u16(t5.val[1]), vreinterpret_u32_u16(t7.val[1]));
+    columns[0] = vreinterpret_u8_u32(t8.val[0]);
+    columns[1] = vreinterpret_u8_u32(ta.val[0]);
+    columns[2] = vreinterpret_u8_u32(t9.val[0]);
+    columns[3] = vreinterpret_u8_u32(tb.val[0]);
+    columns[4] = vreinterpret_u8_u32(t8.val[1]);
+    columns[5] = vreinterpret_u8_u32(ta.val[1]);
+    columns[6] = vreinterpret_u8_u32(t9.val[1]);
+    columns[7] = vreinterpret_u8_u32(tb.val[1]);
+}
+
+static uint8x8_t repack_neon_pack_4bit_pairs(uint8x8_t first, uint8x8_t second, bool high) {
+    const uint8x8x2_t separated = vuzp_u8(first, second);
+    const uint8x8_t mask = vdup_n_u8(0x0F);
+    uint8x8_t even = separated.val[0];
+    uint8x8_t odd  = separated.val[1];
+
+    if (high) {
+        even = vshr_n_u8(even, 4);
+        odd  = vshr_n_u8(odd, 4);
+    }
+
+    even = vand_u8(even, mask);
+    odd  = vand_u8(odd, mask);
+    return vorr_u8(vshl_n_u8(odd, 4), even);
+}
+
+static void repack_neon_4bit_rows(const uint8_t * qs[8], uint8_t * tile_dst, int row0) {
+    uint8x8_t low_rows[8];
+    uint8x8_t high_rows[8];
+    uint8x8_t columns[8];
+
+    for (int rr = 0; rr < 8; ++rr) {
+        const uint8x16_t packed = vld1q_u8(qs[rr]);
+        const uint8x8_t first = vget_low_u8(packed);
+        const uint8x8_t second = vget_high_u8(packed);
+        low_rows[rr]  = repack_neon_pack_4bit_pairs(first, second, false);
+        high_rows[rr] = repack_neon_pack_4bit_pairs(first, second, true);
+    }
+
+    repack_neon_transpose8x8(low_rows, columns);
+    for (int cp = 0; cp < 8; ++cp) {
+        vst1_u8(tile_dst + cp * 32 + row0, columns[cp]);
+    }
+
+    repack_neon_transpose8x8(high_rows, columns);
+    for (int cp = 0; cp < 8; ++cp) {
+        vst1_u8(tile_dst + (cp + 8) * 32 + row0, columns[cp]);
+    }
+}
+
+static void repack_neon_k4_rows(const uint8_t * qs[8], uint8_t * tile_dst, int row0, bool high) {
+    uint8x8_t first_rows[8];
+    uint8x8_t second_rows[8];
+    uint8x8_t columns[8];
+
+    for (int rr = 0; rr < 8; ++rr) {
+        first_rows[rr] = repack_neon_pack_4bit_pairs(vld1_u8(qs[rr]), vld1_u8(qs[rr] + 8), high);
+        second_rows[rr] = repack_neon_pack_4bit_pairs(vld1_u8(qs[rr] + 16), vld1_u8(qs[rr] + 24), high);
+    }
+
+    repack_neon_transpose8x8(first_rows, columns);
+    for (int cp = 0; cp < 8; ++cp) {
+        vst1_u8(tile_dst + cp * 32 + row0, columns[cp]);
+    }
+
+    repack_neon_transpose8x8(second_rows, columns);
+    for (int cp = 0; cp < 8; ++cp) {
+        vst1_u8(tile_dst + (cp + 8) * 32 + row0, columns[cp]);
+    }
+}
+
+static void repack_neon_q8_rows(const uint8_t * qs[8], uint8_t * tile_dst, int row0) {
+    uint8x8_t rows[8];
+    uint8x8_t columns[8];
+
+    for (int cp = 0; cp < 16; cp += 4) {
+        for (int rr = 0; rr < 8; ++rr) {
+            rows[rr] = vld1_u8(qs[rr] + 2 * cp);
+        }
+        repack_neon_transpose8x8(rows, columns);
+
+        for (int pair = 0; pair < 4; ++pair) {
+            const uint8x8x2_t interleaved = vzip_u8(columns[2 * pair], columns[2 * pair + 1]);
+            uint8_t * dst = tile_dst + (cp + pair) * 64 + 2 * row0;
+            vst1_u8(dst, interleaved.val[0]);
+            vst1_u8(dst + 8, interleaved.val[1]);
+        }
+    }
+}
+#endif
+
 // --- Generic 32x32 tile grid walkers for block-32 and float types ---
 
 template <typename SrcElemT, int ELEMS_PER_KTILE, typename PackTileFn>
@@ -138,46 +243,11 @@ static void repack_q4_0_tiled(ggml_tensor * t, const void * data, size_t offset,
 #if defined(__ARM_NEON) || defined(__aarch64__)
             if (ct * 32 + 32 <= ne1 && kt < ne0 / 32) {
                 for (int row0 = 0; row0 < 32; row0 += 8) {
-                    uint8x8_t low_rows[8];
-                    uint8x8_t high_rows[8];
-
+                    const uint8_t * qs[8];
                     for (int rr = 0; rr < 8; ++rr) {
-                        const block_q4_0 * src_block = &src_slice[(ct * 32 + row0 + rr) * row_stride + kt];
-                        const uint8x16_t packed = vld1q_u8(src_block->qs);
-                        const uint8x8x2_t separated = vuzp_u8(vget_low_u8(packed), vget_high_u8(packed));
-                        const uint8x8_t low_even = vand_u8(separated.val[0], vdup_n_u8(0x0F));
-                        const uint8x8_t low_odd  = vand_u8(separated.val[1], vdup_n_u8(0x0F));
-                        const uint8x8_t high_even = vshr_n_u8(separated.val[0], 4);
-                        const uint8x8_t high_odd  = vshr_n_u8(separated.val[1], 4);
-                        low_rows[rr]  = vorr_u8(vshl_n_u8(low_odd, 4), low_even);
-                        high_rows[rr] = vorr_u8(vshl_n_u8(high_odd, 4), high_even);
+                        qs[rr] = src_slice[(ct * 32 + row0 + rr) * row_stride + kt].qs;
                     }
-
-                    auto transpose8 = [](const uint8x8_t rows[8], uint8_t * dst) {
-                        const uint8x8x2_t t0 = vtrn_u8(rows[0], rows[1]);
-                        const uint8x8x2_t t1 = vtrn_u8(rows[2], rows[3]);
-                        const uint8x8x2_t t2 = vtrn_u8(rows[4], rows[5]);
-                        const uint8x8x2_t t3 = vtrn_u8(rows[6], rows[7]);
-                        const uint16x4x2_t t4 = vtrn_u16(vreinterpret_u16_u8(t0.val[0]), vreinterpret_u16_u8(t1.val[0]));
-                        const uint16x4x2_t t5 = vtrn_u16(vreinterpret_u16_u8(t0.val[1]), vreinterpret_u16_u8(t1.val[1]));
-                        const uint16x4x2_t t6 = vtrn_u16(vreinterpret_u16_u8(t2.val[0]), vreinterpret_u16_u8(t3.val[0]));
-                        const uint16x4x2_t t7 = vtrn_u16(vreinterpret_u16_u8(t2.val[1]), vreinterpret_u16_u8(t3.val[1]));
-                        const uint32x2x2_t t8 = vtrn_u32(vreinterpret_u32_u16(t4.val[0]), vreinterpret_u32_u16(t6.val[0]));
-                        const uint32x2x2_t t9 = vtrn_u32(vreinterpret_u32_u16(t4.val[1]), vreinterpret_u32_u16(t6.val[1]));
-                        const uint32x2x2_t ta = vtrn_u32(vreinterpret_u32_u16(t5.val[0]), vreinterpret_u32_u16(t7.val[0]));
-                        const uint32x2x2_t tb = vtrn_u32(vreinterpret_u32_u16(t5.val[1]), vreinterpret_u32_u16(t7.val[1]));
-                        vst1_u8(dst + 0 * 32, vreinterpret_u8_u32(t8.val[0]));
-                        vst1_u8(dst + 1 * 32, vreinterpret_u8_u32(ta.val[0]));
-                        vst1_u8(dst + 2 * 32, vreinterpret_u8_u32(t9.val[0]));
-                        vst1_u8(dst + 3 * 32, vreinterpret_u8_u32(tb.val[0]));
-                        vst1_u8(dst + 4 * 32, vreinterpret_u8_u32(t8.val[1]));
-                        vst1_u8(dst + 5 * 32, vreinterpret_u8_u32(ta.val[1]));
-                        vst1_u8(dst + 6 * 32, vreinterpret_u8_u32(t9.val[1]));
-                        vst1_u8(dst + 7 * 32, vreinterpret_u8_u32(tb.val[1]));
-                    };
-
-                    transpose8(low_rows, tile_dst + row0);
-                    transpose8(high_rows, tile_dst + 8 * 32 + row0);
+                    repack_neon_4bit_rows(qs, tile_dst, row0);
                 }
 
                 for (int row = 0; row < 32; ++row) {
@@ -222,8 +292,26 @@ static void repack_tiled_q4_0(void * data, const ggml_tensor * t, size_t offset,
 static void repack_q4_1_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
     repack_to_tiled_grid_32<block_q4_1, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
         [](uint8_t * tile_dst, const block_q4_1 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
-            uint8_t tile_quants[32][32];
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            if (ct * 32 + 32 <= ne1 && kt < ne0 / 32) {
+                for (int row0 = 0; row0 < 32; row0 += 8) {
+                    const uint8_t * qs[8];
+                    for (int rr = 0; rr < 8; ++rr) {
+                        qs[rr] = src_slice[(ct * 32 + row0 + rr) * row_stride + kt].qs;
+                    }
+                    repack_neon_4bit_rows(qs, tile_dst, row0);
+                }
+
+                for (int row = 0; row < 32; ++row) {
+                    const block_q4_1 & src_block = src_slice[(ct * 32 + row) * row_stride + kt];
+                    scale_dst[2 * row + 0] = src_block.d;
+                    scale_dst[2 * row + 1] = src_block.m;
+                }
+                return;
+            }
+#endif
+            uint8_t tile_quants[32][32];
             for (int row = 0; row < 32; row++) {
                 const int64_t r = ct * 32 + row;
                 if (r < ne1 && kt < ne0 / 32) {
@@ -262,8 +350,24 @@ static void repack_tiled_q4_1(void * data, const ggml_tensor * t, size_t offset,
 static void repack_mxfp4_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
     repack_to_tiled_grid_32<block_mxfp4, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_MXFP4,
         [](uint8_t * tile_dst, const block_mxfp4 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
-            uint8_t tile_quants[32][32];
             uint8_t * scale_dst = tile_dst + 512;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            if (ct * 32 + 32 <= ne1 && kt < ne0 / 32) {
+                for (int row0 = 0; row0 < 32; row0 += 8) {
+                    const uint8_t * qs[8];
+                    for (int rr = 0; rr < 8; ++rr) {
+                        qs[rr] = src_slice[(ct * 32 + row0 + rr) * row_stride + kt].qs;
+                    }
+                    repack_neon_4bit_rows(qs, tile_dst, row0);
+                }
+
+                for (int row = 0; row < 32; ++row) {
+                    scale_dst[row] = src_slice[(ct * 32 + row) * row_stride + kt].e;
+                }
+                return;
+            }
+#endif
+            uint8_t tile_quants[32][32];
             for (int row = 0; row < 32; row++) {
                 const int64_t r = ct * 32 + row;
                 if (r < ne1 && kt < ne0 / 32) {
@@ -299,6 +403,23 @@ static void repack_tiled_mxfp4(void * data, const ggml_tensor * t, size_t offset
 static void repack_q8_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
     repack_to_tiled_grid_32<block_q8_0, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q8_0,
         [](uint8_t * tile_dst, const block_q8_0 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
+            ggml_half * scale_dst = (ggml_half *) (tile_dst + 1024);
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            if (ct * 32 + 32 <= ne1 && kt < ne0 / 32) {
+                for (int row0 = 0; row0 < 32; row0 += 8) {
+                    const uint8_t * qs[8];
+                    for (int rr = 0; rr < 8; ++rr) {
+                        qs[rr] = (const uint8_t *) src_slice[(ct * 32 + row0 + rr) * row_stride + kt].qs;
+                    }
+                    repack_neon_q8_rows(qs, tile_dst, row0);
+                }
+
+                for (int row = 0; row < 32; ++row) {
+                    scale_dst[row] = src_slice[(ct * 32 + row) * row_stride + kt].d;
+                }
+                return;
+            }
+#endif
             for (int cp = 0; cp < 16; cp++) {
                 const int col0 = cp * 2;
                 const int col1 = col0 + 1;
@@ -309,7 +430,6 @@ static void repack_q8_0_tiled(ggml_tensor * t, const void * data, size_t offset,
                     tile_dst[cp * 64 + 2 * row + 1] = b ? b->qs[col1] : 0;
                 }
             }
-            ggml_half * scale_dst = (ggml_half *) (tile_dst + 1024);
             for (int row = 0; row < 32; row++) {
                 const int64_t r = ct * 32 + row;
                 scale_dst[row] = (r < ne1 && kt < ne0 / 32) ? src_slice[r * row_stride + kt].d : 0;
@@ -901,23 +1021,46 @@ static inline void pack_k4_scales_mins(uint8_t * scales, ggml_half * d, ggml_hal
     }
 }
 
+template <typename BlockT>
+static inline void repack_k4_quants(uint8_t * tile_dst, const BlockT * b, int row, int kt_local,
+                                    int64_t sb_per_row, bool use_neon) {
+#if defined(__ARM_NEON) || defined(__aarch64__)
+    if (use_neon) {
+        if ((row & 7) == 0) {
+            const uint8_t * qs[8];
+            for (int rr = 0; rr < 8; ++rr) {
+                qs[rr] = b[rr * sb_per_row].qs + (kt_local / 2) * 32;
+            }
+            repack_neon_k4_rows(qs, tile_dst, row, (kt_local & 1) != 0);
+        }
+        return;
+    }
+#else
+    GGML_UNUSED(sb_per_row);
+    GGML_UNUSED(use_neon);
+#endif
+    const uint8_t * qs_sub = b->qs + (kt_local / 2) * 32;
+    const int shift = (kt_local & 1) ? 4 : 0;
+
+    for (int cp = 0; cp < 16; cp++) {
+        const uint8_t q0 = (qs_sub[2 * cp + 0] >> shift) & 0x0F;
+        const uint8_t q1 = (qs_sub[2 * cp + 1] >> shift) & 0x0F;
+        tile_dst[cp * 32 + row] = (uint8_t) ((q1 << 4) | q0);
+    }
+}
+
 static void repack_q4_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
+    const int64_t sb_per_row = t->ne[0] / QK_K;
+    const bool    use_neon   = (t->ne[1] % 8 == 0);
     repack_kquant_to_tiled_grid<block_q4_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_K,
-        [](uint8_t * tile_dst, const block_q4_K * b, int row, int kt_local) {
+        [sb_per_row, use_neon](uint8_t * tile_dst, const block_q4_K * b, int row, int kt_local) {
             const float d    = GGML_FP16_TO_FP32(b->d);
             const float dmin = GGML_FP16_TO_FP32(b->dmin);
 
             uint8_t sc, m;
             get_scale_min_k4(kt_local, b->scales, &sc, &m);
 
-            const uint8_t * qs_sub = b->qs + (kt_local / 2) * 32;
-            const int shift = (kt_local & 1) ? 4 : 0;
-
-            for (int cp = 0; cp < 16; cp++) {
-                const uint8_t q0 = (qs_sub[2 * cp + 0] >> shift) & 0x0F;
-                const uint8_t q1 = (qs_sub[2 * cp + 1] >> shift) & 0x0F;
-                tile_dst[cp * 32 + row] = (uint8_t) ((q1 << 4) | q0);
-            }
+            repack_k4_quants(tile_dst, b, row, kt_local, sb_per_row, use_neon);
 
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
             scale_dst[2 * row + 0] = GGML_FP32_TO_FP16(d * (float) sc);
@@ -955,8 +1098,10 @@ static void repack_tiled_q4_K(void * data, const ggml_tensor * t, size_t offset,
 }
 
 static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
+    const int64_t sb_per_row = t->ne[0] / QK_K;
+    const bool    use_neon   = (t->ne[1] % 8 == 0);
     repack_kquant_to_tiled_grid<block_q5_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q5_K,
-        [](uint8_t * tile_dst, const block_q5_K * b, int row, int kt_local) {
+        [sb_per_row, use_neon](uint8_t * tile_dst, const block_q5_K * b, int row, int kt_local) {
             const float d     = GGML_FP16_TO_FP32(b->d);
             const float dmin  = GGML_FP16_TO_FP32(b->dmin);
             uint8_t * plane   = tile_dst + 640;
@@ -964,15 +1109,10 @@ static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset,
             uint8_t sc, m;
             get_scale_min_k4(kt_local, b->scales, &sc, &m);
 
-            const uint8_t * qs_sub = b->qs + (kt_local / 2) * 32;
-            const int shift    = (kt_local & 1) ? 4 : 0;
+            repack_k4_quants(tile_dst, b, row, kt_local, sb_per_row, use_neon);
+
             const uint8_t hbit = (uint8_t) (1 << kt_local);
-
             for (int cp = 0; cp < 16; cp++) {
-                const uint8_t q0 = (qs_sub[2 * cp + 0] >> shift) & 0x0F;
-                const uint8_t q1 = (qs_sub[2 * cp + 1] >> shift) & 0x0F;
-                tile_dst[cp * 32 + row] = (uint8_t) ((q1 << 4) | q0);
-
                 const int i    = cp / 4;
                 const int lane = (cp % 4) * 32 + row;
                 if (b->qh[2 * cp + 0] & hbit) {
