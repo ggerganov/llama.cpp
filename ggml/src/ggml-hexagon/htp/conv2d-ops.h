@@ -36,7 +36,8 @@ struct htp_conv2d_kernel_params {
     uint32_t rt_block;        // row tiles per weight block
     uint32_t seg_tiles;       // col tiles per staged input segment
     uint32_t stage_row;       // staged input row stride (floats)
-    uint32_t stage_size;      // staged input bytes per thread
+    uint32_t stage_size;      // bytes of one staged input buffer
+    uint32_t n_stage;         // 2 when a second stage buffer fits, else 1
     uint32_t wk_chunk;        // K elements per weight packing step
 
     uint32_t off_w;           // VTCM offsets and sizes (bytes)
