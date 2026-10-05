@@ -700,6 +700,8 @@ static inline void conv2d_vshuff_w(HVX_Vector * a, HVX_Vector * b) {
     *b = Q6_V_hi_W(p);
 }
 
+static inline void conv2d_transpose_finish(HVX_Vector * restrict scratch, HVX_Vector * restrict lo, HVX_Vector * restrict hi);
+
 // 32x32 word transpose: out[i] word j = in[j * in_stride] word i; out 0..15 -> lo, 16..31 -> hi
 static inline void conv2d_transpose_w32(const HVX_Vector * restrict in, uint32_t in_stride, HVX_Vector * restrict scratch,
                                         HVX_Vector * restrict lo, HVX_Vector * restrict hi) {
@@ -717,7 +719,10 @@ static inline void conv2d_transpose_w32(const HVX_Vector * restrict in, uint32_t
         scratch[i + 16] = v2;
         scratch[i + 24] = v3;
     }
+    conv2d_transpose_finish(scratch, lo, hi);
+}
 
+static inline void conv2d_transpose_finish(HVX_Vector * restrict scratch, HVX_Vector * restrict lo, HVX_Vector * restrict hi) {
     for (uint32_t g = 0; g < 4; g++) {
         HVX_Vector w0 = scratch[8 * g + 0];
         HVX_Vector w1 = scratch[8 * g + 1];
@@ -751,8 +756,28 @@ static inline void conv2d_transpose_w32(const HVX_Vector * restrict in, uint32_t
     }
 }
 
+// Same transpose, but pixel j is base + j * stride. Skips the vin store/reload.
+static inline void conv2d_transpose_strided(const __fp16 * restrict base, uint32_t stride, HVX_Vector * restrict scratch,
+                                            HVX_Vector * restrict lo, HVX_Vector * restrict hi) {
+    for (uint32_t i = 0; i < 8; i++) {
+        HVX_Vector v0 = hvx_vmemu(base + (i +  0) * stride);
+        HVX_Vector v1 = hvx_vmemu(base + (i +  8) * stride);
+        HVX_Vector v2 = hvx_vmemu(base + (i + 16) * stride);
+        HVX_Vector v3 = hvx_vmemu(base + (i + 24) * stride);
+        conv2d_vshuff_w(&v0, &v2);
+        conv2d_vshuff_w(&v1, &v3);
+        conv2d_vshuff_w(&v0, &v1);
+        conv2d_vshuff_w(&v2, &v3);
+        scratch[i +  0] = v0;
+        scratch[i +  8] = v1;
+        scratch[i + 16] = v2;
+        scratch[i + 24] = v3;
+    }
+    conv2d_transpose_finish(scratch, lo, hi);
+}
+
 // CWHN: k is n_groups groups of k_group contiguous values (per kh, or per (kh, kw) if d0 > 1), each padded to k_group_pad.
-// Pixel j of group g starts at stage16 + goff(g) + j*Cin, so each 32-k half block is one unaligned load per pixel.
+// A full 64-wide block is one vector per pixel and is transposed in place. A partial block is two masked loads.
 static void conv2d_hmx_pack_tile_cwhn(__fp16 * restrict dst, const __fp16 * restrict src, HVX_Vector * restrict vin,
                                       HVX_Vector * restrict scratch, const struct htp_conv2d_kernel_params * kp,
                                       uint32_t gpr, uint32_t Cin, uint32_t d0) {
@@ -791,13 +816,17 @@ static void conv2d_hmx_pack_tile_cwhn(__fp16 * restrict dst, const __fp16 * rest
             }
         }
 
-        const HVX_VectorPred q0 = Q6_Q_vsetq_R(va[0] * sizeof(__fp16));
-        const HVX_VectorPred q1 = Q6_Q_and_QQn(Q6_Q_vsetq2_R(64 + va[1] * sizeof(__fp16)), q64);
-
-        for (uint32_t j = 0; j < 32; j++) {
-            const HVX_Vector v0 = hvx_vmemu(pa[0] + j * Cin);
-            const HVX_Vector v1 = hvx_vmemu(pa[1] + j * Cin);
-            vin[j] = Q6_V_vmux_QVV(q0, v0, Q6_V_vand_QV(q1, v1));
+        if (va[0] == 32 && va[1] == 32 && pa[0] == pa[1]) {
+            conv2d_transpose_strided(pa[0], Cin, scratch, out + 32 * b, out + 32 * b + 16);
+            continue;
+        } else {
+            const HVX_VectorPred q0 = Q6_Q_vsetq_R(va[0] * sizeof(__fp16));
+            const HVX_VectorPred q1 = Q6_Q_and_QQn(Q6_Q_vsetq2_R(64 + va[1] * sizeof(__fp16)), q64);
+            for (uint32_t j = 0; j < 32; j++) {
+                const HVX_Vector v0 = hvx_vmemu(pa[0] + j * Cin);
+                const HVX_Vector v1 = hvx_vmemu(pa[1] + j * Cin);
+                vin[j] = Q6_V_vmux_QVV(q0, v0, Q6_V_vand_QV(q1, v1));
+            }
         }
 
         conv2d_transpose_w32(vin, 1, scratch, out + 32 * b, out + 32 * b + 16);
