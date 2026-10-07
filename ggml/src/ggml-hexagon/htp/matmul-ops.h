@@ -489,7 +489,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
             case HTP_MM_KERNEL_HVX_QUANT_ROW: {
                 size_t q_act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
                 uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
-                uint32_t n_k_tiles = (ne10 + 31) / 32;
+                uint32_t n_k_tiles = (ne10 + htp_tensor_get_tile_k(wtype) - 1) / htp_tensor_get_tile_k(wtype);
                 uint32_t tile_row_size = n_k_tiles * aligned_tile_size;
                 size_t tiled_vtcm_size = htp_mm_round_up(n_prefetch * tile_row_size, 256);
 

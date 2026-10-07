@@ -900,10 +900,125 @@ static void repack_tiled_q5_K(void * data, const ggml_tensor * t, size_t offset,
         });
 }
 
+static inline void q1_0_tiled_bit_location(int k, int row, int & byte_offset, int & bit) {
+    const int quarter = k / 32;
+    const int kq      = k % 32;
+    const int cp      = kq / 2;
+    const int i       = cp / 4;
+    const int lane    = (cp % 4) * 32 + row;
+
+    byte_offset = quarter * 128 + lane;
+    bit         = 2 * i + (kq & 1);
+}
+
+static void repack_q1_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
+    const block_q1_0 * src_matrix = (const block_q1_0 *) data;
+    const int64_t ne0 = t->ne[0];
+    const int64_t ne1 = t->ne[1];
+    const int64_t ne2 = t->ne[2];
+    const int64_t ne3 = t->ne[3];
+    const int n_col_tiles = hex_round_up(ne1, 32) / 32;
+    const int n_k_tiles = ne0 / QK1_0;
+    const size_t tile_size = HTP_TENSOR_TILE_SIZE_Q1_0;
+    const size_t matrix_size = (size_t) n_col_tiles * n_k_tiles * tile_size;
+    const size_t slice_size = ne1 * ggml_row_size(t->type, ne0);
+    const int64_t start_slice = offset / slice_size;
+    const int64_t end_slice = (std::min)((int64_t) ((offset + size + slice_size - 1) / slice_size), ne2 * ne3);
+
+    GGML_ASSERT(ne0 % QK1_0 == 0);
+
+    for (int64_t slice_idx = start_slice; slice_idx < end_slice; slice_idx++) {
+        const block_q1_0 * src_slice = src_matrix + (slice_idx - start_slice) * ne1 * n_k_tiles;
+        uint8_t * matrix_dst = (uint8_t *) t->data + slice_idx * matrix_size;
+
+        for (int ct = 0; ct < n_col_tiles; ct++) {
+            for (int kt = 0; kt < n_k_tiles; kt++) {
+                uint8_t * tile_dst = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
+                ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
+                memset(tile_dst, 0, tile_size);
+
+                for (int row = 0; row < 32; row++) {
+                    const int64_t r = ct * 32 + row;
+                    if (r >= ne1) {
+                        continue;
+                    }
+
+                    const block_q1_0 & block = src_slice[r * n_k_tiles + kt];
+                    scale_dst[row] = block.d;
+                    for (int k = 0; k < QK1_0; k++) {
+                        int byte_offset;
+                        int bit;
+                        q1_0_tiled_bit_location(k, row, byte_offset, bit);
+                        if (block.qs[k / 8] & (1u << (k % 8))) {
+                            tile_dst[byte_offset] |= (uint8_t) (1u << bit);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void repack_tiled_q1_0(void * data, const ggml_tensor * t, size_t offset, size_t size) {
+    block_q1_0 * dst_matrix = (block_q1_0 *) data;
+    const int64_t ne0 = t->ne[0];
+    const int64_t ne1 = t->ne[1];
+    const int64_t ne2 = t->ne[2];
+    const int64_t ne3 = t->ne[3];
+    const int n_col_tiles = hex_round_up(ne1, 32) / 32;
+    const int n_k_tiles = ne0 / QK1_0;
+    const size_t tile_size = HTP_TENSOR_TILE_SIZE_Q1_0;
+    const size_t matrix_size = (size_t) n_col_tiles * n_k_tiles * tile_size;
+    const size_t row_size_bytes = ggml_row_size(t->type, ne0);
+    const size_t slice_size = ne1 * row_size_bytes;
+    const int64_t start_slice = offset / slice_size;
+    const int64_t end_slice = (std::min)((int64_t) ((offset + size + slice_size - 1) / slice_size), ne2 * ne3);
+
+    GGML_ASSERT(ne0 % QK1_0 == 0);
+
+    for (int64_t slice_idx = start_slice; slice_idx < end_slice; slice_idx++) {
+        const size_t cur_start_byte = (std::max)(offset, (size_t) slice_idx * slice_size);
+        const size_t cur_end_byte = (std::min)(offset + size, (size_t) (slice_idx + 1) * slice_size);
+        const int64_t start_row = (cur_start_byte - (size_t) slice_idx * slice_size) / row_size_bytes;
+        const int64_t end_row = (std::min)((int64_t) ((cur_end_byte - (size_t) slice_idx * slice_size + row_size_bytes - 1) / row_size_bytes), ne1);
+        block_q1_0 * dst_slice = dst_matrix + (cur_start_byte - offset) / sizeof(block_q1_0);
+        const uint8_t * matrix_src = (const uint8_t *) t->data + slice_idx * matrix_size;
+
+        for (int ct = start_row / 32; ct < (end_row + 31) / 32; ct++) {
+            for (int kt = 0; kt < n_k_tiles; kt++) {
+                const uint8_t * tile_src = matrix_src + ((size_t) ct * n_k_tiles + kt) * tile_size;
+                const ggml_half * scale_src = (const ggml_half *) (tile_src + 512);
+
+                for (int row = 0; row < 32; row++) {
+                    const int64_t r = ct * 32 + row;
+                    if (r < start_row || r >= end_row) {
+                        continue;
+                    }
+
+                    block_q1_0 & block = dst_slice[(r - start_row) * n_k_tiles + kt];
+                    memset(block.qs, 0, sizeof(block.qs));
+                    block.d = scale_src[row];
+                    for (int k = 0; k < QK1_0; k++) {
+                        int byte_offset;
+                        int bit;
+                        q1_0_tiled_bit_location(k, row, byte_offset, bit);
+                        if (tile_src[byte_offset] & (1u << bit)) {
+                            block.qs[k / 8] |= (uint8_t) (1u << (k % 8));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // --- Top-level Repack / Unpack Dispatchers ---
 
 void htp_repack_tensor_tiled(ggml_tensor * tensor, const void * data, size_t size) {
     switch (tensor->type) {
+        case GGML_TYPE_Q1_0:
+            repack_q1_0_tiled(tensor, data, 0, size);
+            break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_IQ4_NL:
             repack_q4_0_tiled(tensor, data, 0, size);
@@ -953,6 +1068,9 @@ void htp_unpack_tensor_tiled(void * data, const ggml_tensor * tensor, size_t off
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor));
 
     switch (tensor->type) {
+        case GGML_TYPE_Q1_0:
+            repack_tiled_q1_0(data, tensor, offset, size);
+            break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_IQ4_NL:
             repack_tiled_q4_0(data, tensor, offset, size);

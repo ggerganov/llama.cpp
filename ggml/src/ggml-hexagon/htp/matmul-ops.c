@@ -277,8 +277,8 @@ static void hvx_mm_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
     const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
-    uint32_t n_k_tiles_w = ne00 / 32;
-    uint32_t n_k_tiles_a = ne10 / 32;
+    uint32_t n_k_tiles_w = ne00 / htp_tensor_get_tile_k(src0->type);
+    uint32_t n_k_tiles_a = ne10 / htp_tensor_get_tile_k(src0->type);
     uint32_t tile_row_stride = n_k_tiles_w * tile_size;
     uint32_t tile_row_transfer_size_aligned = n_k_tiles_a * aligned_tile_size;
 
@@ -379,8 +379,8 @@ static void hvx_mv_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
     const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
-    uint32_t n_k_tiles_w = ne00 / 32;
-    uint32_t n_k_tiles_a = ne10 / 32;
+    uint32_t n_k_tiles_w = ne00 / htp_tensor_get_tile_k(src0->type);
+    uint32_t n_k_tiles_a = ne10 / htp_tensor_get_tile_k(src0->type);
     uint32_t tile_row_stride = n_k_tiles_w * tile_size;
     uint32_t tile_row_transfer_size_aligned = n_k_tiles_a * aligned_tile_size;
 
@@ -1702,6 +1702,11 @@ static int hvx_mm_init_tiled_vec_dot(struct htp_mm_context * mmctx, enum htp_dat
             mmctx->type         = "mxfp4_tiled-f32";
             mmctx->vec_dot_32x1 = tiled_vec_dot_mxfp4_32x1;
             mmctx->vec_dot_32x2 = tiled_vec_dot_mxfp4_32x2;
+            return 0;
+        case HTP_TYPE_Q1_0:
+            mmctx->type         = "q1_0_tiled-f32";
+            mmctx->vec_dot_32x1 = tiled_vec_dot_q1_0_32x1;
+            mmctx->vec_dot_32x2 = tiled_vec_dot_q1_0_32x2;
             return 0;
         case HTP_TYPE_F16:
             mmctx->type         = "f16_tiled-f16";

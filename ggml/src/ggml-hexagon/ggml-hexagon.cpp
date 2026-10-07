@@ -3952,7 +3952,7 @@ static void ggml_hexagon_precompute_hvx_mm_params(
         kparams->tile_size = htp_tensor_get_tile_size(wtype);
         kparams->aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
 
-        const bool k_align = (ne10 % 32 == 0);
+        const bool k_align = (ne10 % htp_tensor_get_tile_k(wtype) == 0);
 
         if (is_matmul_id) {
             kparams->kernel_type  = (src1_nrows < (int) sess->n_threads)
@@ -4124,7 +4124,7 @@ static void ggml_hexagon_precompute_matmul_params_impl(
 
     const bool is_tiled = ggml_hexagon_tensor_is_tiled(src0);
     const int wtype = (is_tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
-    const int ne00_padded = is_tiled ? hex_round_up(ne00, 32) : ne00;
+    const int ne00_padded = is_tiled ? hex_round_up(ne00, htp_tensor_get_tile_k(wtype)) : ne00;
     const int ne11_padded = hex_round_up(ne11, 32);
     // VTCM has to hold whole 32-row weight tiles, so size for the rounded-up N
     // even when the tensor itself is ragged.
@@ -5372,6 +5372,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
     }
 
     switch (src0->type) {
+        case GGML_TYPE_Q1_0:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q8_0:
@@ -5386,8 +5387,14 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
                 return false;
             }
 
-            if (src0->ne[0] % ((src0->type == GGML_TYPE_Q6_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q4_K ||
-                                src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q2_K) ? QK_K : 32)) {
+            if (src0->type == GGML_TYPE_Q1_0 && src1->type != GGML_TYPE_F32) {
+                return false;
+            }
+
+            const int64_t qk = src0->type == GGML_TYPE_Q1_0 ? QK1_0 :
+                ((src0->type == GGML_TYPE_Q6_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q4_K ||
+                  src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q2_K) ? QK_K : 32);
+            if (src0->ne[0] % qk) {
                 return false;
             }
 
@@ -8316,6 +8323,8 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
     static_assert((unsigned int) HTP_TYPE_Q3_K == (unsigned int) GGML_TYPE_Q3_K,
                   "please update hexagon_type to match ggml_type");
     static_assert((unsigned int) HTP_TYPE_Q2_K == (unsigned int) GGML_TYPE_Q2_K,
+                  "please update hexagon_type to match ggml_type");
+    static_assert((unsigned int) HTP_TYPE_Q1_0 == (unsigned int) GGML_TYPE_Q1_0,
                   "please update hexagon_type to match ggml_type");
     static_assert((unsigned int) HTP_TYPE_BF16 == (unsigned int) GGML_TYPE_BF16,
                   "please update hexagon_type to match ggml_type");

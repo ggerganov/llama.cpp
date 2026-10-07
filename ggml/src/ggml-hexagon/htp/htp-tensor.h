@@ -25,6 +25,8 @@
 #define HTP_TENSOR_TILE_SIZE_Q6_K   896
 #define HTP_TENSOR_TILE_SIZE_Q3_K   512
 #define HTP_TENSOR_TILE_SIZE_Q2_K   336
+#define HTP_TENSOR_TILE_K_Q1_0       128
+#define HTP_TENSOR_TILE_SIZE_Q1_0    576
 
 // Q2_K, Q3_K, Q6_K use vrmpy byte order within each 128B HVX vector:
 //   k = 0..31 is split into 8 groups g = k/4 of 4 k each; byte 4*r + (k%4) holds row r
@@ -168,10 +170,15 @@ static inline uint32_t htp_tensor_get_tile_size(int type) {
         case HTP_TYPE_Q6_K:   return HTP_TENSOR_TILE_SIZE_Q6_K;
         case HTP_TYPE_Q3_K:   return HTP_TENSOR_TILE_SIZE_Q3_K;
         case HTP_TYPE_Q2_K:   return HTP_TENSOR_TILE_SIZE_Q2_K;
+        case HTP_TYPE_Q1_0:   return HTP_TENSOR_TILE_SIZE_Q1_0;
         case HTP_TYPE_MXFP4:  return HTP_TENSOR_TILE_SIZE_MXFP4;
         case HTP_TYPE_F16:    return HTP_TENSOR_TILE_SIZE_F16;
         default:              return 0;
     }
+}
+
+static inline uint32_t htp_tensor_get_tile_k(int type) {
+    return type == HTP_TYPE_Q1_0 ? HTP_TENSOR_TILE_K_Q1_0 : 32;
 }
 
 static inline uint32_t htp_tensor_get_tile_padded_size(int type) {
@@ -197,6 +204,7 @@ static inline uint32_t htp_tensor_get_row_size(int type, uint32_t ne00) {
         case HTP_TYPE_Q4_K:   return (ne00 / 256) * 144;
         case HTP_TYPE_Q5_K:   return (ne00 / 256) * 176;
         case HTP_TYPE_Q6_K:   return (ne00 / 256) * 210;
+        case HTP_TYPE_Q1_0:   return (ne00 / HTP_TENSOR_TILE_K_Q1_0) * 18;
         case HTP_TYPE_I32:    return ne00 * 4;
         case HTP_TYPE_I64:    return ne00 * 8;
         default:              return 0;
