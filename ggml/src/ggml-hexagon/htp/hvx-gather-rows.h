@@ -117,7 +117,7 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
                                         const struct htp_tensor * b, uint32_t nb, dma_addr_t dst, uint32_t rows) {
     const uint32_t ne = na + nb;
     if (ne == 0 || ne > 32 || rows == 0 || octx->ctx->mdev.count > 1 ||
-        (a->nb[1] % 4) != 0 || (b && ((b->nb[0] % 4) != 0 || (b->nb[1] % 4) != 0))) {
+        a->nb[0] != 4 || (a->nb[1] % 4) != 0 || (b && ((b->nb[0] % 4) != 0 || (b->nb[1] % 4) != 0))) {
         return false;
     }
 
