@@ -138,6 +138,7 @@ set(GGML_OPENCL_KERNELS
     mul_mv_mxfp4_f32_flat
     mul_mv_id_q4_0_f32_8x_flat
     mul_mv_id_q8_0_f32
+    mul_mv_id_f16_f32
     mul_mv_id_q8_0_f32_flat
     mul_mv_id_mxfp4_f32
     mul_mv_id_mxfp4_f32_flat
@@ -151,6 +152,7 @@ set(GGML_OPENCL_KERNELS
     gemm_cok8_q4_k_q8_1_dp4a
     gemv_moe_q4_0_f32_ns
     gemm_moe_q8_0_f32_ns
+    gemm_moe_f16_f32_ns
     gemm_moe_q4_1_f32_ns
     gemv_moe_q4_1_f32_ns
     gemm_moe_q5_0_f32_ns
