@@ -33,6 +33,7 @@ inline float softplus_f32(float x) {
 #ifndef SSM_KNAME
 #define SSM_KNAME kernel_ssm_scan_f32_mamba2_d128
 #endif
+#if !defined(GGML_CL_ONLY) || GGML_CL_ONLY == 1
 REQD_SUBGROUP_SIZE_64
 kernel void SSM_KNAME(
     global const char * src0_base, ulong src0_off,
@@ -139,8 +140,10 @@ kernel void SSM_KNAME(
         s_warp[(ulong)r * d_state + tid + 64] = state1[r];
     }
 }
+#endif
 
 // d_state = 256 (Falcon-H1). WG = 64 threads, each holds 4 state elements.
+#if !defined(GGML_CL_ONLY) || GGML_CL_ONLY == 2
 REQD_SUBGROUP_SIZE_64
 kernel void kernel_ssm_scan_f32_mamba2_d256(
     global const char * src0_base, ulong src0_off,
@@ -241,7 +244,9 @@ kernel void kernel_ssm_scan_f32_mamba2_d256(
     s_warp[tid + 128] = state2;
     s_warp[tid + 192] = state3;
 }
+#endif
 
+#if !defined(GGML_CL_ONLY) || GGML_CL_ONLY == 3
 kernel void kernel_ssm_scan_f32(
         global const char * s_buf,
         ulong               s_off,
@@ -371,3 +376,4 @@ kernel void kernel_ssm_scan_f32(
                            seq_idx * d_state * head_dim * n_head;
     dst[state_idx] = state;
 }
+#endif
