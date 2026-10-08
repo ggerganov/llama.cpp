@@ -51,26 +51,33 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
     HVX_Vector * tab = (HVX_Vector *) base;
     HVX_Vector * inc = tab + task->vg;
     HVX_Vector * cur = inc + task->vg;
-    uint8_t * sync   = (uint8_t *) (cur + task->vg);
-    uint8_t * region = sync + 128;
+    uint8_t * region = (uint8_t *) (cur + task->vg);
     uint8_t * out    = region + task->out_off;
 
     htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
+    const int32_t s_a = task->rg * a->nb[1];
+    const int32_t s_b = b ? task->rg * b->nb[1] : 0;
+    const uint32_t b_nb1 = b ? b->nb[1] : 0;
+    uint32_t row = 0;
+    uint32_t col = 0;
+    int32_t t_buf[32] __attribute__((aligned(128)));
+    int32_t s_buf[32] __attribute__((aligned(128)));
     for (uint32_t k = 0; k < task->vg; k++) {
-        int32_t * t = (int32_t *) (tab + k);
-        int32_t * s = (int32_t *) (inc + k);
         for (uint32_t lane = 0; lane < 32; lane++) {
-            const uint32_t e   = k * 32 + lane;
-            const uint32_t row = e / task->ne;
-            const uint32_t col = e - row * task->ne;
             if (col < task->na) {
-                t[lane] = row * a->nb[1] + col * 4;
-                s[lane] = task->rg * a->nb[1];
+                t_buf[lane] = row * a->nb[1] + col * 4;
+                s_buf[lane] = s_a;
             } else {
-                t[lane] = task->v1 + (col - task->na) * task->span1 + row * b->nb[1];
-                s[lane] = task->rg * b->nb[1];
+                t_buf[lane] = task->v1 + (col - task->na) * task->span1 + row * b_nb1;
+                s_buf[lane] = s_b;
+            }
+            if (++col == task->ne) {
+                col = 0;
+                row++;
             }
         }
+        tab[k] = *(const HVX_Vector *) t_buf;
+        inc[k] = *(const HVX_Vector *) s_buf;
     }
     htp_trace_event_stop(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
 
@@ -85,27 +92,30 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
         }
         dma_queue_flush(q);
 
-        for (uint32_t k = 0; k < task->vg; k++) {
-            cur[k] = tab[k];
-        }
-
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
-        const uint32_t nvec = (nr * task->ne + 31) / 32;
-        uint32_t k = 0;
-        for (uint32_t v = 0; v < nvec; v++) {
-            Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, cur[k]);
-            cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
-            if (++k == task->vg) {
-                k = 0;
+        const uint32_t nvec = (nr * task->ne + 31) >> 5;
+        if (task->vg == 1) {
+            HVX_Vector vcur = tab[0];
+            const HVX_Vector vinc = inc[0];
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, vcur);
+                vcur = Q6_Vw_vadd_VwVw(vcur, vinc);
+            }
+        } else {
+            for (uint32_t k = 0; k < task->vg; k++) {
+                cur[k] = tab[k];
+            }
+            uint32_t k = 0;
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, cur[k]);
+                cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
+                if (++k == task->vg) {
+                    k = 0;
+                }
             }
         }
 
-        // vector loads wait for gathers, DMA does not
-        HVX_Vector acc = Q6_V_vzero();
-        for (uint32_t v = 0; v < nvec; v++) {
-            acc = Q6_V_vor_VV(acc, *(const HVX_Vector *) (out + v * 128));
-        }
-        *(HVX_Vector *) sync = acc;
+        hvx_gather_sync(out);
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
 
         hvx_gather_rows_dma(q, task->dst + r * task->ne * 4, (dma_addr_t) out, nr * task->ne * 4);
@@ -137,7 +147,7 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
     task.slice = (uint32_t) (octx->ctx->vtcm_size / n_threads) & ~127u;
     task.rows_per_thread = hex_round_up((rows + n_threads - 1) / n_threads, task.rg);
 
-    const uint32_t fixed   = (3 * task.vg + 1) * 128 + 3 * 128;
+    const uint32_t fixed   = 3 * task.vg * 128 + 3 * 128;
     const uint32_t per_row = a->nb[1] + (b ? nb * b->nb[1] : 0) + ne * 4;
     if (task.slice <= fixed + per_row * task.rg) {
         return false;
