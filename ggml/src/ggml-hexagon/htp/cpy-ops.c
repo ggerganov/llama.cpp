@@ -18,6 +18,7 @@
 #include "htp-ops.h"
 #include "htp-tensor.h"
 #include "hvx-utils.h"
+#include "hvx-gather-rows.h"
 
 struct htp_copy_context {
     struct htp_ops_context *              octx;
@@ -316,6 +317,14 @@ static int cpy_sameshape_sametype(struct htp_ops_context * octx, const struct ht
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
+    if (octx->ctx->mdev.count <= 1 && src0->type == HTP_TYPE_F32 &&
+        htp_tensor_is_contiguous(dst, 4) && !htp_tensor_is_contiguous(src0, 4) &&
+        src0->nb[0] == 4 && src0->ne[0] <= 16 &&
+        src0->ne[2] == 1 && src0->ne[3] == 1 &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, src0->ne[1])) {
+        return HTP_STATUS_OK;
+    }
+
     uint32_t row_start = 0;
     uint32_t nrows     = kparams->total_rows;
 
@@ -399,6 +408,13 @@ static int cpy_sameshape_convert(struct htp_ops_context * octx, const struct htp
 static int cpy_reshape(struct htp_ops_context * octx, const struct htp_copy_kernel_params * kparams) {
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
+
+    if (octx->ctx->mdev.count <= 1 && src0->type == HTP_TYPE_F32 &&
+        htp_tensor_is_contiguous(dst, 4) && src0->nb[0] == 4 && src0->ne[0] <= 16 &&
+        src0->ne[2] == 1 && src0->ne[3] == 1 &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, src0->ne[1])) {
+        return HTP_STATUS_OK;
+    }
 
     if (htp_tensor_is_extended(src0) || htp_tensor_is_extended(dst)) {
         return HTP_STATUS_NO_SUPPORT;

@@ -13,6 +13,7 @@
 #include "htp-vtcm.h"
 #include "hvx-utils.h"
 #include "hvx_hexagon_protos.h"
+#include "hvx-gather-rows.h"
 
 #include <string.h>
 
@@ -318,22 +319,35 @@ static int concat_transposed(struct htp_ops_context * octx, const struct htp_con
 
 int op_concat(struct htp_ops_context * octx) {
     const struct htp_concat_kernel_params * kparams = (const struct htp_concat_kernel_params *) octx->kernel_params;
-    const struct htp_tensor * dst = octx->dst;
-    const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
+    const struct htp_tensor * src0 = octx->src[0];
+    const struct htp_tensor * src1 = octx->src[1];
+    const struct htp_tensor * dst  = octx->dst;
 
     int status = HTP_STATUS_OK;
-    switch (kparams->kernel_type) {
-        case HTP_CONCAT_KERNEL_REGULAR:
-            status = concat_regular(octx, kparams->dim, type_size);
-            break;
 
-        case HTP_CONCAT_KERNEL_TRANSPOSED:
-            status = concat_transposed(octx, kparams, type_size);
-            break;
+    if (octx->ctx->mdev.count <= 1 && kparams->dim == 0 &&
+        dst->type == HTP_TYPE_F32 && src0->type == HTP_TYPE_F32 && src1->type == HTP_TYPE_F32 &&
+        dst->ne[0] <= 16 && dst->nb[0] == 4 && dst->nb[1] == dst->ne[0] * 4 && src0->nb[0] == 4 &&
+        src0->ne[1] == dst->ne[1] && src1->ne[1] == dst->ne[1] &&
+        dst->ne[2] == 1 && dst->ne[3] == 1 && src0->ne[2] == 1 && src0->ne[3] == 1 && src1->ne[2] == 1 && src1->ne[3] == 1 &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], src1, src1->ne[0], dst->data, dst->ne[1])) {
+        // handled via VTCM gather
+    } else {
+        const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
 
-        default:
-            status = HTP_STATUS_NO_SUPPORT;
-            break;
+        switch (kparams->kernel_type) {
+            case HTP_CONCAT_KERNEL_REGULAR:
+                status = concat_regular(octx, kparams->dim, type_size);
+                break;
+
+            case HTP_CONCAT_KERNEL_TRANSPOSED:
+                status = concat_transposed(octx, kparams, type_size);
+                break;
+
+            default:
+                status = HTP_STATUS_NO_SUPPORT;
+                break;
+        }
     }
 
     htp_ops_context_set_status(octx, status);
