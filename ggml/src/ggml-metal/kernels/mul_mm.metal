@@ -327,7 +327,7 @@ kernel void kernel_mul_mm(
             (uint64_t) (r1 + 16*(sgitg >> 1))*args.ne0 + (uint64_t) im*args.ne1*args.ne0;
 
         for (short i = 0; i < 8; i++) {
-            simdgroup_store(mc[i], C + 8*(i%4) + 8*args.ne0*(i/4), args.ne0, 0, false);
+            simdgroup_store(mc[i], C + 8*(i%4) + (uint64_t) 8*args.ne0*(i/4), args.ne0, 0, false);
         }
     } else {
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
@@ -692,7 +692,7 @@ kernel void kernel_mul_mm_id(
     const int id = ids_i32[idb + lr1];
 
     const short i11 = (id % args.ne20) % args.ne11;
-    const short i12 = (id / args.ne20);
+    const int   i12 = (id / args.ne20);
 
     device const block_q * x = (device const block_q *)(src0 + args.nb01*(r0 + lr0) + offset0) + offset1;
 
@@ -925,9 +925,9 @@ kernel void kernel_mul_mm_id(
         const int id = ids_i32[idb + j];
 
         const short ide = id % args.ne20;
-        const short idt = id / args.ne20;
+        const int   idt = id / args.ne20;
 
-        device float  * D  = (device float  *) dst + r0 + ide*args.ne0 + idt*args.ne1*args.ne0;
+        device float  * D  = (device float  *) dst + r0 + (uint64_t) ide*args.ne0 + (uint64_t) idt*args.ne1*args.ne0;
         device float4 * D4 = (device float4 *) D;
 
         threadgroup float  * C  = (threadgroup float  *) shmem + j*NR0;
