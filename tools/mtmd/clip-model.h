@@ -29,11 +29,13 @@ enum patch_merge_type {
     PATCH_MERGE_SPATIAL_UNPAD,
 };
 
-// all algos are Pillow-compatible (matching PIL.Image.resize output)
+// the algos without _TORCH are Pillow-compatible (matching PIL.Image.resize output)
+// the _TORCH algos match torchvision's antialiased resize of uint8 images on the CPU (int16 weights)
 enum resize_algo {
     RESIZE_ALGO_BILINEAR,
     RESIZE_ALGO_BICUBIC,
     RESIZE_ALGO_LANCZOS,
+    RESIZE_ALGO_BILINEAR_TORCH,
 };
 
 // Padding style for img_tool::resize
