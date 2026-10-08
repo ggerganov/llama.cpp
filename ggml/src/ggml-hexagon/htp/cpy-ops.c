@@ -348,10 +348,6 @@ static int cpy_sameshape_convert(struct htp_ops_context * octx, const struct htp
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    if (htp_tensor_is_extended(src0) || htp_tensor_is_extended(dst)) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
         return HTP_STATUS_INVAL_PARAMS;
     }
@@ -414,10 +410,6 @@ static int cpy_reshape(struct htp_ops_context * octx, const struct htp_copy_kern
         src0->ne[2] == 1 && src0->ne[3] == 1 &&
         hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, src0->ne[1])) {
         return HTP_STATUS_OK;
-    }
-
-    if (htp_tensor_is_extended(src0) || htp_tensor_is_extended(dst)) {
-        return HTP_STATUS_NO_SUPPORT;
     }
 
     if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
