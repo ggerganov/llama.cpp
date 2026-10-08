@@ -130,6 +130,46 @@ export class ModelsService {
 	}
 
 	/**
+	 * Sidecar files a listing carries as their own entries, keyed by the repo
+	 * they belong to. The router lists a downloaded sidecar as a model of its
+	 * own, so this keeps the pairing that the model list itself is filtered to
+	 * drop.
+	 */
+	static sidecarFilesByRepo(response: ApiModelsListResponse): Record<string, ModelSidecarFile[]> {
+		const byRepo: Record<string, ModelSidecarFile[]> = {};
+
+		for (const entry of response.data ?? []) {
+			const parsed = ModelsService.parseModelId(entry.id);
+			const sidecar = parsed.sidecar ?? sidecarTokenInFilename(entry.id);
+
+			if (!sidecar || isAuxSidecar(sidecar)) continue;
+
+			// the repo is the id with its quant tag and sidecar token taken off; naming
+			// parts of the id are not touched, a model name may carry `-4b` for instance
+			const model = entry.id
+				.split(MODEL_ID.QUANTIZATION_SEPARATOR)[0]
+				.replace(MODEL_ID.WEIGHT_EXTENSION_REGEX, '')
+				.replace(new RegExp(`[-_ ]?${sidecar}([-_ ]?draft)?$`, 'i'), '');
+
+			if (!model) continue;
+
+			const files = (byRepo[model] ??= []);
+
+			if (files.some((file) => file.kind === sidecar)) continue;
+
+			files.push({
+				id: entry.id,
+				kind: sidecar,
+				model,
+				params: paramsLabel(parsed),
+				quant: parsed.quantization
+			});
+		}
+
+		return byRepo;
+	}
+
+	/**
 	 * Check if a model is loaded based on its metadata.
 	 *
 	 * @param model - Model data entry from the API response
@@ -374,46 +414,6 @@ export class ModelsService {
 		}
 
 		return result;
-	}
-
-	/**
-	 * Sidecar files a listing carries as their own entries, keyed by the repo
-	 * they belong to. The router lists a downloaded sidecar as a model of its
-	 * own, so this keeps the pairing that the model list itself is filtered to
-	 * drop.
-	 */
-	static sidecarFilesByRepo(response: ApiModelsListResponse): Record<string, ModelSidecarFile[]> {
-		const byRepo: Record<string, ModelSidecarFile[]> = {};
-
-		for (const entry of response.data ?? []) {
-			const parsed = ModelsService.parseModelId(entry.id);
-			const sidecar = parsed.sidecar ?? sidecarTokenInFilename(entry.id);
-
-			if (!sidecar || isAuxSidecar(sidecar)) continue;
-
-			// the repo is the id with its quant tag and sidecar token taken off; naming
-			// parts of the id are not touched, a model name may carry `-4b` for instance
-			const model = entry.id
-				.split(MODEL_ID.QUANTIZATION_SEPARATOR)[0]
-				.replace(MODEL_ID.WEIGHT_EXTENSION_REGEX, '')
-				.replace(new RegExp(`[-_ ]?${sidecar}([-_ ]?draft)?$`, 'i'), '');
-
-			if (!model) continue;
-
-			const files = (byRepo[model] ??= []);
-
-			if (files.some((file) => file.kind === sidecar)) continue;
-
-			files.push({
-				id: entry.id,
-				kind: sidecar,
-				model,
-				params: paramsLabel(parsed),
-				quant: parsed.quantization
-			});
-		}
-
-		return byRepo;
 	}
 
 	/**

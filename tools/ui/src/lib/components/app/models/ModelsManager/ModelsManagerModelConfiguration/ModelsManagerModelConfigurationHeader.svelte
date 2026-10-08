@@ -1,16 +1,23 @@
 <script lang="ts">
-	import { canLoadOption } from '../utils';
 	import ModelsManagerModelConfigurationActions from './ModelsManagerModelConfigurationActions.svelte';
-	import { X } from '@lucide/svelte';
-	import { ModelAvatar, ModelId } from '$lib/components/app';
+	import { Server, X } from '@lucide/svelte';
+	import { Logo, ModelAvatar, ModelId } from '$lib/components/app';
+	import { BackendIcon } from '$lib/components/app/backends';
+	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { ServerModelStatus } from '$lib/enums';
+	import { LOCAL_BACKEND_ID } from '$lib/constants';
+	import { ModelCapability, ServerModelStatus } from '$lib/enums';
 	import { deviceStore } from '$lib/stores';
 	import type { ModelOption } from '$lib/types/models';
+	import { getBackend } from '$lib/utils/api-base';
+	import { getBackendCapabilities } from '$lib/utils/backend';
 
 	interface Props {
 		isDownload?: boolean;
 		isDownloadPaused?: boolean;
+		/** A provider that cannot load or unload has no button to offer. */
+		canToggleLoad: boolean;
+		isCustomized: boolean;
 		isLoaded: boolean;
 		onClose: () => void;
 		/** Opens the manager dialog on the Discover view, focused on this model's repo. */
@@ -28,6 +35,8 @@
 	let {
 		isDownload = false,
 		isDownloadPaused = false,
+		canToggleLoad,
+		isCustomized,
 		isLoaded,
 		onClose,
 		onRequestCancelDownload,
@@ -39,12 +48,27 @@
 		option,
 		status
 	}: Props = $props();
+	let supportsToolUse = $derived(option.capabilities.includes(ModelCapability.TOOL_USE));
+	let supportsThinking = $derived(option.capabilities.includes(ModelCapability.REASONING));
+	let backend = $derived(getBackend(option.backendId));
+	let backendName = $derived(backend?.name ?? null);
+	let capabilities = $derived(getBackendCapabilities(backend));
+	// what the provider speaks decides which server endpoints the pane can read
+	let compatTitle = $derived(
+		capabilities.props
+			? 'llama.cpp server: reads /props and /slots'
+			: 'OpenAI-compatible: no /props, /slots, load or unload'
+	);
 
 	let isMobile = $derived(deviceStore.isMobile);
 	let isLoading = $derived(status === ServerModelStatus.LOADING);
 
 	let statusLabel = $derived.by(() => {
 		if (isDownload) return isDownloadPaused ? 'Paused' : 'Downloading';
+
+		// a provider that cannot load or unload reports no load state, so its
+		// models are simply on offer
+		if (!capabilities.loadUnload) return 'Available';
 
 		if (status === ServerModelStatus.LOADING) return 'Loading';
 
@@ -59,6 +83,8 @@
 
 	let statusDot = $derived.by(() => {
 		if (isDownload) return isDownloadPaused ? 'bg-yellow-500' : 'bg-blue-500 animate-pulse';
+
+		if (!capabilities.loadUnload) return 'bg-green-500';
 
 		if (status === ServerModelStatus.FAILED) return 'bg-red-500';
 
@@ -89,17 +115,43 @@
 
 			<div class="min-w-0">
 				<!-- a phone gives the id a row of its own, with its badges and icons under it -->
-				<ModelId
-					aliases={option.aliases}
-					class="min-w-0"
-					modalities={option.modalities}
-					modelId={option.model}
-					stackId={deviceStore.isMobile}
-					tags={option.tags}
-					title={option.model}
-				/>
+				<div class="flex items-center gap-2">
+					<ModelId
+						aliases={option.aliases}
+						class="min-w-0"
+						modalities={option.modalities}
+						modelId={option.model}
+						stackId={deviceStore.isMobile}
+						{supportsThinking}
+						{supportsToolUse}
+						tags={option.tags}
+						title={option.model}
+					/>
 
+					{#if isCustomized}
+						<Badge class="h-5 shrink-0 px-1.5 text-[10px]" variant="secondary">CUSTOMIZED</Badge>
+					{/if}
+				</div>
+
+				<!-- one line, one voice: state, protocol, owner -->
 				<p class="mt-1 flex items-center gap-x-2 text-xs text-muted-foreground">
+					{#if backend && backendName}
+						<span class="flex min-w-0 items-center gap-1" title={compatTitle}>
+							<BackendIcon {backend} class="size-4">
+								{#snippet fallback()}
+									{#if backend.id === LOCAL_BACKEND_ID}
+										<Logo class="shrink-0" style="--size: 0.75rem" />
+									{:else}
+										<Server class="size-4 shrink-0 opacity-70" />
+									{/if}
+								{/snippet}
+							</BackendIcon>
+
+							<!-- a long provider name shortens rather than growing the header -->
+							<span class="truncate">{backendName}</span>
+						</span>
+					{/if}
+
 					<span class="flex shrink-0 items-center gap-1">
 						<span class="h-2 w-2 shrink-0 rounded-full {statusDot}"></span>
 
@@ -123,9 +175,9 @@
 	<!-- a phone floats the actions at the bottom of the pane, where the thumb is -->
 	{#if !isMobile}
 		<ModelsManagerModelConfigurationActions
-			canToggleLoad={canLoadOption(option)}
 			{isDownload}
 			{isDownloadPaused}
+			{canToggleLoad}
 			{isLoaded}
 			{isLoading}
 			{onRequestCancelDownload}
