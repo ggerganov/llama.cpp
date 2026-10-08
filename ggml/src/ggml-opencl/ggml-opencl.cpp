@@ -446,6 +446,7 @@ static void populateProfilingInfo(
 }
 
 struct ggml_backend_opencl_context;
+static bool adreno_e17_compiler_quirks(const ggml_backend_opencl_context *backend_ctx);
 
 #ifdef GGML_OPENCL_USE_ADRENO_KERNELS
 static void ggml_cl_adreno_xmem_attn_release_scratch(ggml_backend_opencl_context * backend_ctx);
@@ -1657,8 +1658,14 @@ static void load_cl_kernels(ggml_backend_opencl_context *backend_ctx) {
 #else
         const std::string kernel_src = read_file("cvt.cl");
 #endif
+        // The Adreno 850 (E17) compiler carries a printf in any program into every program it compiles
+        // later, and the driver then allocates a 1 MB printf buffer on each dispatch of those kernels.
+        // cvt.cl holds the only printfs that compile on E17 (a never-taken workaround), so drop them.
+        const std::string cvt_opts =
+            backend_ctx->adreno_cl_compiler_version.type == E17
+                ? compile_opts + " -DGGML_CL_NO_PRINTF_WA" : compile_opts;
         backend_ctx->program_cvt =
-            build_program_from_source(backend_ctx, kernel_src.c_str(), compile_opts);
+            build_program_from_source(backend_ctx, kernel_src.c_str(), cvt_opts);
 
         CL_CHECK((backend_ctx->kernel_convert_block_q1_0  = clCreateKernel(backend_ctx->program_cvt, "kernel_convert_block_q1_0", &err), err));
         CL_CHECK((backend_ctx->kernel_restore_block_q1_0  = clCreateKernel(backend_ctx->program_cvt, "kernel_restore_block_q1_0", &err), err));
@@ -4121,7 +4128,10 @@ static void load_cl_kernels(ggml_backend_opencl_context *backend_ctx) {
 #else
         const std::string kernel_src = read_file("gemm_noshuffle_q4_0_q8_1_dp4a.cl");
 #endif
-        cl_program prog = build_program_from_source(backend_ctx, kernel_src.c_str(), compile_opts);
+        // E17 (Adreno 850) reads wrong values from the start of the local tiles: pad them.
+        const std::string q4_0_dp4a_opts = adreno_e17_compiler_quirks(backend_ctx)
+            ? compile_opts + " -DGEMM_LM_PAD=1" : compile_opts;
+        cl_program prog = build_program_from_source(backend_ctx, kernel_src.c_str(), q4_0_dp4a_opts);
         CL_CHECK((backend_ctx->kernel_gemm_noshuffle_q4_0_q8_1_dp4a = clCreateKernel(prog, "kernel_gemm_noshuffle_q4_0_q8_1_dp4a", &err), err));
         CL_CHECK(clReleaseProgram(prog));
         GGML_LOG_CONT(".");
@@ -8799,10 +8809,13 @@ inline bool use_adreno_moe_kernels(const ggml_backend_opencl_context *backend_ct
 // LOSS and inverts the ranking. The same box, after a reboot and a gate that
 // waits for policy6 to return to 4396800, reports the +11.9% above with no
 // order bias. A7X regresses hard on this layout and stays off.
+// The Adreno 850 (E17 compiler) stays off too: its batched tiled GEMM gives wrong results on a
+// large lm_head.
 // GGML_OPENCL_{Q4K,Q6K}_GEMV_TILED forces either way (=0 off, any other value on).
 inline bool tiled_gemv_default_on(const ggml_backend_opencl_context *backend_ctx) {
-    return backend_ctx && (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X2E ||
-                           backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X);
+    return backend_ctx && !adreno_e17_compiler_quirks(backend_ctx) &&
+           (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X2E ||
+            backend_ctx->adreno_gen == ADRENO_GPU_GEN::A8X);
 }
 
 // Tiled-wide q6_K GEMV (default OFF; GGML_OPENCL_Q6K_GEMV_TILED forces either
@@ -8936,6 +8949,8 @@ static inline bool q4_K_weight_image_fits(const ggml_backend_opencl_context *bac
 }
 
 static inline bool use_flat_gemv_for_large_m_q4_K(const ggml_backend_opencl_context *backend_ctx, const ggml_tensor *tensor) {
+    // The transposed weight layout tiles rows by 4, so an ne1 it cannot represent has
+    // no noshuffle route either; route those to the flat GEMV ahead of the opt-in gate.
     if (tensor->ne[1] % 4 != 0 && tensor->ne[2] == 1 && tensor->ne[3] == 1) {
         return true;
     }
@@ -20041,11 +20056,12 @@ static void ggml_cl_mul_mat_q4_0_f32_adreno(ggml_backend_t backend, const ggml_t
         CL_CHECK(clReleaseMemObject(b_sub_buf));
         CL_CHECK(clReleaseMemObject(b_img));
     } else {
-        // dp4a (int8) dense prefill GEMM, default off
+        // dp4a (int8) dense prefill GEMM. Default off, except on the Adreno 850 (E17) for wide
+        // outputs, where it beats the f16 GEMM.
         static const char * q4_0_dense_dp4a_env = getenv("GGML_OPENCL_Q4_0_DENSE_DP4A");
         bool q4_0_dense_dp4a_on = q4_0_dense_dp4a_env
             ? (atoi(q4_0_dense_dp4a_env) != 0)
-            : false;
+            : (adreno_e17_compiler_quirks(backend_ctx) && M >= 2048);
         // dot prod has to be available
         q4_0_dense_dp4a_on = backend_ctx->has_integer_dot && q4_0_dense_dp4a_on;
 
@@ -22729,11 +22745,13 @@ static void ggml_cl_mul_mat_q6_K_f32_adreno(ggml_backend_t backend, const ggml_t
         region.size = ne00 * ne1 * sizeof(float);
         CL_CHECK((b_sub_buf = clCreateSubBuffer(extra1->data_device, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err), err));
 
-        // dp4a (int8) dense q6_K prefill GEMM
+        // dp4a (int8) dense q6_K prefill GEMM. Not on the Adreno 850 (E17) compiler: it returns wrong
+        // results there for prefill wider than 8 tokens.
         static const char * q6k_dense_dp4a_env = getenv("GGML_OPENCL_Q6K_DENSE_DP4A");
                      bool   q6k_dense_dp4a_on  = (q6k_dense_dp4a_env != nullptr)
                                                    ? (atoi(q6k_dense_dp4a_env) != 0)
-                                                   : (backend_ctx->adreno_gen != ADRENO_GPU_GEN::X1E);
+                                                   : (backend_ctx->adreno_gen != ADRENO_GPU_GEN::X1E &&
+                                                      !adreno_e17_compiler_quirks(backend_ctx));
         // dot prod has to be available
         q6k_dense_dp4a_on = backend_ctx->has_integer_dot && q6k_dense_dp4a_on;
 
