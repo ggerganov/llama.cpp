@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ModelDownloadProgressBar from '../../ModelDownloadProgressBar.svelte';
-	import { downloadProgressFor } from '../utils';
+	import { canLoadOption, downloadProgressFor } from '../utils';
 	import ModelsManagerModelConfigurationActions from './ModelsManagerModelConfigurationActions.svelte';
 	import ModelsManagerModelConfigurationHeader from './ModelsManagerModelConfigurationHeader.svelte';
 	import ModelsManagerModelConfigurationInformation from './ModelsManagerModelConfigurationInformation.svelte';
@@ -147,6 +147,7 @@
 	{#if deviceStore.isMobile}
 		<div class="shrink-0 border-t border-border/40 px-4 py-3">
 			<ModelsManagerModelConfigurationActions
+				canToggleLoad={canLoadOption(option)}
 				{isDownload}
 				{isDownloadPaused}
 				{isLoaded}
