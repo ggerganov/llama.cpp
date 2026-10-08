@@ -222,16 +222,17 @@ private:
         switch (algo) {
             case RESIZE_ALGO_BILINEAR:
             case RESIZE_ALGO_BILINEAR_TORCH: filter_support = 1.0; break;
-            case RESIZE_ALGO_BICUBIC:        filter_support = 2.0; break;
+            case RESIZE_ALGO_BICUBIC:
+            case RESIZE_ALGO_BICUBIC_TORCH:  filter_support = 2.0; break;
             case RESIZE_ALGO_LANCZOS:        filter_support = 3.0; break;
             default:
                 throw std::runtime_error("Unsupported resize algorithm");
         }
 
-        const bool int16_weights = algo == RESIZE_ALGO_BILINEAR_TORCH;
+        const bool int16_weights = algo == RESIZE_ALGO_BILINEAR_TORCH || algo == RESIZE_ALGO_BICUBIC_TORCH;
 
         // Returns filter weight for distance x from pixel center
-        // Note: for bicubic, Pillow uses a = -0.5 while GGML/PyTorch use a = -0.75
+        // Note: for bicubic, Pillow (and PyTorch with antialias) uses a = -0.5 while GGML (and PyTorch without antialias) uses a = -0.75
         auto resample_filter = [algo](double x) -> double {
             if (algo == RESIZE_ALGO_LANCZOS) {
                 if (-3.0 <= x && x < 3.0) {

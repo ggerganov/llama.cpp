@@ -200,6 +200,8 @@ MAKE_TEST(test_image_preprocessor_lfm2_torch_resize) {
     const std::vector<std::tuple<resize_algo, clip_image_size, uint32_t>> cases = {
         { RESIZE_ALGO_BILINEAR_TORCH, {  620,  410 }, 0xf5e9c941 }, // 608x416
         { RESIZE_ALGO_BILINEAR_TORCH, { 2000, 1500 }, 0x3331f56c }, // 3x2 tiles, 576x416 thumbnail
+        { RESIZE_ALGO_BICUBIC_TORCH,  {  620,  410 }, 0x2b34eac9 },
+        { RESIZE_ALGO_BICUBIC_TORCH,  { 2000, 1500 }, 0xb035d942 },
     };
 
     for (const auto & [algo, size, expected] : cases) {

@@ -36,6 +36,7 @@ enum resize_algo {
     RESIZE_ALGO_BICUBIC,
     RESIZE_ALGO_LANCZOS,
     RESIZE_ALGO_BILINEAR_TORCH,
+    RESIZE_ALGO_BICUBIC_TORCH,
 };
 
 // Padding style for img_tool::resize
