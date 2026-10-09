@@ -105,6 +105,7 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
         if (task->vg == 1) {
             HVX_Vector vcur = tab[0];
             const HVX_Vector vinc = inc[0];
+            #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
                 Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, vcur);
                 vcur = Q6_Vw_vadd_VwVw(vcur, vinc);
@@ -114,6 +115,7 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
                 cur[k] = tab[k];
             }
             uint32_t k = 0;
+            #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
                 Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, cur[k]);
                 cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
