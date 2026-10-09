@@ -316,7 +316,9 @@ int htp_gather_rows(
             total_rows, kparams->rg, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
         r_start = range.start;
         r_count = range.count;
-        rows_per_thread = hex_round_up(fastdiv(r_count + octx->n_threads - 1, &octx->n_threads_div), kparams->rg);
+        assert((kparams->rg & (kparams->rg - 1)) == 0);
+        const uint32_t rpt = fastdiv(r_count + octx->n_threads - 1, &octx->n_threads_div);
+        rows_per_thread = (rpt + kparams->rg - 1) & ~(kparams->rg - 1);
     }
 
     if (r_count == 0) {
