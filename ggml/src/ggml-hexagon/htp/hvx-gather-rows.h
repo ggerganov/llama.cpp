@@ -23,15 +23,36 @@ struct hvx_gather_rows_task {
     uint32_t rows_per_thread;
     uint32_t nr_max;
     uint32_t v1, span1;
-    uint32_t region_size, out_off, slice;
+    uint32_t region_size, out_off, buf_stride, slice;
     bool b_dense;
 };
 
 static inline void hvx_gather_rows_dma(dma_queue * q, dma_addr_t dst, dma_addr_t src, size_t size) {
-    if (!dma_queue_push(q, dma_make_data(dst, src), size, size, size, 1)) {
-        dma_queue_flush(q);
-        dma_queue_push(q, dma_make_data(dst, src), size, size, size, 1);
+    while (!dma_queue_push(q, dma_make_data(dst, src), size, size, size, 1)) {
+        dma_queue_pop(q);
     }
+}
+
+static inline void hvx_gather_rows_dma_in(dma_queue * q, const struct hvx_gather_rows_task * task,
+                                          uint8_t * region, uint32_t r, uint32_t nr, uint32_t elem_size) {
+    const struct htp_tensor * a = task->a;
+    const struct htp_tensor * b = task->b;
+
+    hvx_gather_rows_dma(q, (dma_addr_t) region, a->data + r * a->nb[1], (nr - 1) * a->nb[1] + task->na * elem_size);
+    if (b) {
+        if (task->b_dense) {
+            hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1), b->data + r * b->nb[1], (nr - 1) * b->nb[1] + task->nb * elem_size);
+        } else {
+            for (uint32_t k = 0; k < task->nb; k++) {
+                hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1 + k * task->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + elem_size);
+            }
+        }
+    }
+}
+
+static inline void hvx_gather_rows_dma_out(dma_queue * q, const struct hvx_gather_rows_task * task,
+                                           uint8_t * out, uint32_t r, uint32_t nr, uint32_t elem_size) {
+    hvx_gather_rows_dma(q, task->dst + r * task->ne * elem_size, (dma_addr_t) out, nr * task->ne * elem_size);
 }
 
 static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith, void * data) {
@@ -53,8 +74,10 @@ static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith
     HVX_Vector * tab = (HVX_Vector *) base;
     HVX_Vector * inc = tab + task->vg;
     HVX_Vector * cur = inc + task->vg;
-    uint8_t * region = (uint8_t *) (cur + task->vg);
-    uint8_t * out    = region + task->out_off;
+    uint8_t * region_base = (uint8_t *) (cur + task->vg);
+
+    uint8_t * region[2] = { region_base, region_base + task->buf_stride };
+    uint8_t * out[2]    = { region[0] + task->out_off, region[1] + task->out_off };
 
     htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
     const int32_t s_a = task->rg * a->nb[1];
@@ -85,20 +108,21 @@ static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith
 
     dma_queue * q = task->octx->ctx->dma[ith];
 
-    for (uint32_t r = r_beg; r < r_end; r += task->nr_max) {
-        const uint32_t nr = MIN(task->nr_max, r_end - r);
+    const uint32_t nr_max = task->nr_max;
+    const uint32_t nr0 = MIN(nr_max, r_end - r_beg);
+    hvx_gather_rows_dma_in(q, task, region[0], r_beg, nr0, 4);
+    dma_queue_flush(q);
 
-        hvx_gather_rows_dma(q, (dma_addr_t) region, a->data + r * a->nb[1], (nr - 1) * a->nb[1] + task->na * 4);
-        if (b) {
-            if (task->b_dense) {
-                hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1), b->data + r * b->nb[1], (nr - 1) * b->nb[1] + task->nb * 4);
-            } else {
-                for (uint32_t k = 0; k < task->nb; k++) {
-                    hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1 + k * task->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + 4);
-                }
-            }
-        }
-        dma_queue_flush(q);
+    const uint32_t r1 = r_beg + nr_max;
+    if (r1 < r_end) {
+        const uint32_t nr1 = MIN(nr_max, r_end - r1);
+        hvx_gather_rows_dma_in(q, task, region[1], r1, nr1, 4);
+    }
+
+    uint32_t buf = 0;
+    for (uint32_t r = r_beg; r < r_end; r += nr_max) {
+        const uint32_t nr = MIN(nr_max, r_end - r);
+        const uint32_t next_buf = buf ^ 1;
 
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
         const uint32_t nvec = (nr * task->ne + 31) >> 5;
@@ -107,7 +131,7 @@ static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith
             const HVX_Vector vinc = inc[0];
             #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
-                Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, vcur);
+                Q6_vgather_ARMVw((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], task->region_size, vcur);
                 vcur = Q6_Vw_vadd_VwVw(vcur, vinc);
             }
         } else {
@@ -117,7 +141,7 @@ static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith
             uint32_t k = 0;
             #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
-                Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, cur[k]);
+                Q6_vgather_ARMVw((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], task->region_size, cur[k]);
                 cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
                 if (++k == task->vg) {
                     k = 0;
@@ -125,12 +149,22 @@ static inline void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith
             }
         }
 
-        hvx_gather_sync(out);
+        hvx_gather_sync(out[buf]);
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
 
-        hvx_gather_rows_dma(q, task->dst + r * task->ne * 4, (dma_addr_t) out, nr * task->ne * 4);
         dma_queue_flush(q);
+
+        hvx_gather_rows_dma_out(q, task, out[buf], r, nr, 4);
+
+        const uint32_t r_prefetch = r + 2 * nr_max;
+        if (r_prefetch < r_end) {
+            const uint32_t nr_prefetch = MIN(nr_max, r_end - r_prefetch);
+            hvx_gather_rows_dma_in(q, task, region[buf], r_prefetch, nr_prefetch, 4);
+        }
+
+        buf = next_buf;
     }
+    dma_queue_flush(q);
 }
 
 static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith, void * data) {
@@ -152,8 +186,10 @@ static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith
     HVX_Vector * tab = (HVX_Vector *) base;
     HVX_Vector * inc = tab + task->vg;
     HVX_Vector * cur = inc + task->vg;
-    uint8_t * region = (uint8_t *) (cur + task->vg);
-    uint8_t * out    = region + task->out_off;
+    uint8_t * region_base = (uint8_t *) (cur + task->vg);
+
+    uint8_t * region[2] = { region_base, region_base + task->buf_stride };
+    uint8_t * out[2]    = { region[0] + task->out_off, region[1] + task->out_off };
 
     htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
     const int16_t s_a = (int16_t) (task->rg * a->nb[1]);
@@ -184,20 +220,21 @@ static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith
 
     dma_queue * q = task->octx->ctx->dma[ith];
 
-    for (uint32_t r = r_beg; r < r_end; r += task->nr_max) {
-        const uint32_t nr = MIN(task->nr_max, r_end - r);
+    const uint32_t nr_max = task->nr_max;
+    const uint32_t nr0 = MIN(nr_max, r_end - r_beg);
+    hvx_gather_rows_dma_in(q, task, region[0], r_beg, nr0, 2);
+    dma_queue_flush(q);
 
-        hvx_gather_rows_dma(q, (dma_addr_t) region, a->data + r * a->nb[1], (nr - 1) * a->nb[1] + task->na * 2);
-        if (b) {
-            if (task->b_dense) {
-                hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1), b->data + r * b->nb[1], (nr - 1) * b->nb[1] + task->nb * 2);
-            } else {
-                for (uint32_t k = 0; k < task->nb; k++) {
-                    hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1 + k * task->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + 2);
-                }
-            }
-        }
-        dma_queue_flush(q);
+    const uint32_t r1 = r_beg + nr_max;
+    if (r1 < r_end) {
+        const uint32_t nr1 = MIN(nr_max, r_end - r1);
+        hvx_gather_rows_dma_in(q, task, region[1], r1, nr1, 2);
+    }
+
+    uint32_t buf = 0;
+    for (uint32_t r = r_beg; r < r_end; r += nr_max) {
+        const uint32_t nr = MIN(nr_max, r_end - r);
+        const uint32_t next_buf = buf ^ 1;
 
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
         const uint32_t nvec = (nr * task->ne + 63) >> 6;
@@ -206,7 +243,7 @@ static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith
             const HVX_Vector vinc = inc[0];
             #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
-                Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, vcur);
+                Q6_vgather_ARMVh((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], task->region_size, vcur);
                 vcur = Q6_Vh_vadd_VhVh(vcur, vinc);
             }
         } else {
@@ -216,7 +253,7 @@ static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith
             uint32_t k = 0;
             #pragma unroll(4)
             for (uint32_t v = 0; v < nvec; v++) {
-                Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, task->region_size, cur[k]);
+                Q6_vgather_ARMVh((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], task->region_size, cur[k]);
                 cur[k] = Q6_Vh_vadd_VhVh(cur[k], inc[k]);
                 if (++k == task->vg) {
                     k = 0;
@@ -224,12 +261,22 @@ static inline void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith
             }
         }
 
-        hvx_gather_sync(out);
+        hvx_gather_sync(out[buf]);
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
 
-        hvx_gather_rows_dma(q, task->dst + r * task->ne * 2, (dma_addr_t) out, nr * task->ne * 2);
         dma_queue_flush(q);
+
+        hvx_gather_rows_dma_out(q, task, out[buf], r, nr, 2);
+
+        const uint32_t r_prefetch = r + 2 * nr_max;
+        if (r_prefetch < r_end) {
+            const uint32_t nr_prefetch = MIN(nr_max, r_end - r_prefetch);
+            hvx_gather_rows_dma_in(q, task, region[buf], r_prefetch, nr_prefetch, 2);
+        }
+
+        buf = next_buf;
     }
+    dma_queue_flush(q);
 }
 
 static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const struct htp_tensor * a, uint32_t na,
@@ -283,12 +330,13 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
     const bool b_dense = b && (b->nb[0] == elem_size);
     task.b_dense       = b_dense;
 
-    const uint32_t fixed   = 3 * task.vg * 128 + 3 * 128;
+    const uint32_t fixed   = 3 * task.vg * 128 + 8 * 128;
     const uint32_t per_row = a->nb[1] + (b ? (b_dense ? b->nb[1] : nb * b->nb[1]) : 0) + ne * elem_size;
-    if (task.slice <= fixed + per_row * task.rg) {
+    if (task.slice <= fixed + 2 * per_row * task.rg) {
         return false;
     }
-    task.nr_max = MIN((task.slice - fixed) / per_row, task.rows_per_thread);
+    const uint32_t avail_per_buf = (task.slice - fixed) / 2;
+    task.nr_max = MIN(avail_per_buf / per_row, task.rows_per_thread);
     if (elem_size == 2) {
         const uint32_t per_row_region = a->nb[1] + (b ? (b_dense ? b->nb[1] : nb * b->nb[1]) : 0);
         if (per_row_region > 0) {
@@ -312,6 +360,10 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
         return false;
     }
     task.out_off = hex_round_up(task.region_size, 128);
+    task.buf_stride = hex_round_up(task.out_off + task.nr_max * task.ne * elem_size, 128);
+    if (3 * task.vg * 128 + 2 * task.buf_stride > task.slice) {
+        return false;
+    }
 
     work_queue_func_t worker_func = (elem_size == 2) ? hvx_gather_rows_thread_f16 : hvx_gather_rows_thread_f32;
     work_queue_run(octx->ctx->work_queue, worker_func, &task, n_threads);
