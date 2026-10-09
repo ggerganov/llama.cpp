@@ -102,8 +102,33 @@ struct file_input {
         }
         auto i_tensor_in = gguf_find_tensor(ctx_gguf, name.c_str()); // idx of tensor in the input file
         auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
+
+        // make sure the tensor's data actually fits in the file before
+        // reading - a truncated or otherwise corrupted file would otherwise
+        // cause a short read that is never checked, leaving buf filled with
+        // stale bytes from a previous tensor
+        auto cur = f_in.tellg();
+        f_in.seekg(0, std::ios::end);
+        size_t file_size = f_in.tellg();
+        f_in.seekg(cur);
+        if (offset + len < offset || offset + len > file_size) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                "tensor '%s' data is not within the file bounds (offset=%zu, size=%zu, file_size=%zu); "
+                "the file is corrupted, truncated, or incomplete", name.c_str(), (size_t) offset, (size_t) len, file_size);
+            throw std::runtime_error(msg);
+        }
+
         f_in.seekg(offset);
         f_in.read((char* )buf.data(), len);
+        if ((size_t) f_in.gcount() != len) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                "short read for tensor '%s' (offset=%zu, expected=%zu, got=%zu); "
+                "the file is corrupted, truncated, or incomplete",
+                name.c_str(), (size_t) offset, (size_t) len, (size_t) f_in.gcount());
+            throw std::runtime_error(msg);
+        }
     }
 
     ~file_input() {

@@ -26,6 +26,35 @@
     #include <io.h>
 #endif
 
+// Return the total size of an already-open file without disturbing its
+// current read position.
+static size_t get_file_size(std::ifstream & f) {
+    auto cur = f.tellg();
+    f.seekg(0, std::ios::end);
+    size_t size = f.tellg();
+    f.seekg(cur);
+    return size;
+}
+
+// Validate that [offset, offset+len) lies within the input file before any
+// seek/read of tensor data. GGUF metadata (offsets/sizes) can be inconsistent
+// with the actual file contents -- most commonly when a file was truncated
+// or only partially written/downloaded -- and reading past the end silently
+// returns whatever was already sitting in the (reused) read buffer rather
+// than failing, which would corrupt the tensor data in the output with no
+// error reported. Mirrors the bounds check already used when loading models
+// and LoRA adapters (see llama_tensor_weight() in llama-model-loader.h and
+// llama_adapter_lora_init_impl() in llama-adapter.cpp).
+static void check_tensor_bounds(const char * t_name, size_t offset, size_t len, size_t file_size) {
+    if (offset + len < offset || offset + len > file_size) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+            "tensor '%s' data is not within the file bounds (offset=%zu, size=%zu, file_size=%zu); "
+            "the file is corrupted, truncated, or incomplete", t_name, offset, len, file_size);
+        throw std::runtime_error(msg);
+    }
+}
+
 enum split_operation : uint8_t {
     OP_NONE,
     OP_SPLIT,
@@ -342,6 +371,7 @@ struct split_strategy {
                 // calculate offset
                 auto i_tensor_in = gguf_find_tensor(ctx_gguf, t_name); // idx of tensor in the input file
                 auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
+                check_tensor_bounds(t_name, offset, n_bytes, get_file_size(f_input));
 
                 // copy tensor from input to output file
                 copy_file_to_file(f_input, fout, offset, n_bytes);
@@ -362,6 +392,14 @@ struct split_strategy {
         }
         f_in.seekg(in_offset);
         f_in.read((char *)read_buf.data(), len);
+        if ((size_t) f_in.gcount() != len) {
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                "short read while copying tensor data (offset=%zu, expected=%zu, got=%zu); "
+                "the input file is corrupted, truncated, or incomplete",
+                in_offset, len, (size_t) f_in.gcount());
+            throw std::runtime_error(msg);
+        }
         f_out.write((const char *)read_buf.data(), len);
     }
 };
