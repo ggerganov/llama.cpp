@@ -457,7 +457,7 @@ int op_cpy(struct htp_ops_context * octx) {
             status = cpy_reshape(octx, kparams);
             break;
         case HTP_COPY_KERNEL_GATHER_ROWS:
-            status = htp_gather_rows(octx, octx->src[0], NULL, &kparams->u.gather);
+            status = htp_gather_rows(octx, octx->src[0], NULL, &kparams->u.gather, kparams->n_threads);
             break;
         default:
             status = HTP_STATUS_NO_SUPPORT;

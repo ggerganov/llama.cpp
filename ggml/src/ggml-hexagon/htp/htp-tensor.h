@@ -44,16 +44,6 @@ static inline bool htp_tensor_is_contiguous(const struct htp_tensor * t, uint32_
     return true;
 }
 
-static inline bool htp_tensor_outer_rows_contiguous(const struct htp_tensor * t) {
-    uint32_t next_nb = t->nb[1] * t->ne[1];
-    for (int i = 2; i < HTP_OP_MAX_DIMS; i++) {
-        if (t->ne[i] != 1 && t->nb[i] != next_nb) {
-            return false;
-        }
-        next_nb *= t->ne[i];
-    }
-    return true;
-}
 
 static inline bool htp_tensor_is_permuted(const struct htp_tensor * t) {
     return t->nb[0] > t->nb[1] || t->nb[1] > t->nb[2] || t->nb[2] > t->nb[3];

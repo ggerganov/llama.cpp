@@ -303,9 +303,9 @@ static int concat_transposed(struct htp_ops_context * octx, const struct htp_con
     struct htp_concat_context cctx;
     cctx.octx                  = octx;
     cctx.spad0_base            = vtcm_base;
-    cctx.spad1_base            = vtcm_base + n_threads * kparams->spad0_size_per_thread;
-    cctx.spad0_size_per_thread = kparams->spad0_size_per_thread;
-    cctx.spad1_size_per_thread = kparams->spad1_size_per_thread;
+    cctx.spad1_base            = vtcm_base + n_threads * kparams->u.transposed.spad0_size_per_thread;
+    cctx.spad0_size_per_thread = kparams->u.transposed.spad0_size_per_thread;
+    cctx.spad1_size_per_thread = kparams->u.transposed.spad1_size_per_thread;
     cctx.row_start             = row_start;
     cctx.nrows                 = nrows;
     cctx.nplanes               = dst->ne[2] * dst->ne[3];
@@ -336,7 +336,7 @@ int op_concat(struct htp_ops_context * octx) {
             break;
 
         case HTP_CONCAT_KERNEL_GATHER_ROWS:
-            status = htp_gather_rows(octx, src0, src1, &kparams->gather);
+            status = htp_gather_rows(octx, src0, src1, &kparams->u.gather, kparams->n_threads);
             break;
 
         default:

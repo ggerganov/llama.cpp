@@ -1,5 +1,7 @@
 #include "gather-rows.h"
 
+#include <assert.h>
+
 #include "hex-common.h"
 #include "hex-profile.h"
 #include "hvx-utils.h"
@@ -296,11 +298,14 @@ int htp_gather_rows(
     struct htp_ops_context * octx,
     const struct htp_tensor * a,
     const struct htp_tensor * b,
-    const struct htp_gather_rows_params * kparams) {
+    const struct htp_gather_rows_params * kparams,
+    uint32_t n_threads) {
 
-    if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
+    if (!htp_ops_context_set_n_threads(octx, n_threads)) {
         return HTP_STATUS_INVAL_PARAMS;
     }
+
+    assert(kparams->slice * octx->n_threads <= octx->ctx->vtcm_size);
 
     const uint32_t total_rows = kparams->total_rows;
     uint32_t r_start = 0;

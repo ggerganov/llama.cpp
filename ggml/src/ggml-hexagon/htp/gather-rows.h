@@ -25,8 +25,7 @@ struct htp_gather_rows_params {
     uint32_t total_rows;
     uint32_t rows_per_thread;
     uint8_t  b_dense;
-    uint8_t  n_threads;
-    uint8_t  pad[2];
+    uint8_t  pad[3];
 };
 
 static inline bool htp_gather_rows_solve_layout(
@@ -68,7 +67,9 @@ static inline bool htp_gather_rows_solve_layout(
     uint32_t nr_max = MIN(avail_per_buf / per_row, rows_per_thread);
     if (elem_size == 2) {
         const uint32_t per_row_region = a_nb1 + (nb > 0 ? (b_dense ? b_nb1 : nb * b_nb1) : 0);
-        nr_max = MIN(nr_max, (32768u - 256u) / per_row_region);
+        if (per_row_region > 0) {
+            nr_max = MIN(nr_max, (32768u - 256u) / per_row_region);
+        }
     }
     nr_max = (nr_max / rg) * rg;
     if (nr_max == 0) {
@@ -115,9 +116,9 @@ static inline bool htp_gather_rows_solve_layout(
     kparams->total_rows      = total_rows;
     kparams->rows_per_thread = rows_per_thread;
     kparams->b_dense         = b_dense ? 1 : 0;
-    kparams->n_threads       = (uint8_t) n_threads;
     kparams->pad[0]          = 0;
     kparams->pad[1]          = 0;
+    kparams->pad[2]          = 0;
     return true;
 }
 
@@ -141,7 +142,8 @@ int htp_gather_rows(
     struct htp_ops_context * octx,
     const struct htp_tensor * a,
     const struct htp_tensor * b,
-    const struct htp_gather_rows_params * kparams);
+    const struct htp_gather_rows_params * kparams,
+    uint32_t n_threads);
 #endif
 
 #endif // HTP_GATHER_ROWS_H
