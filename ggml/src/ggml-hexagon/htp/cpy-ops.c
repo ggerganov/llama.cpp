@@ -18,7 +18,7 @@
 #include "htp-ops.h"
 #include "htp-tensor.h"
 #include "hvx-utils.h"
-#include "hvx-gather-rows.h"
+#include "gather-rows.h"
 
 struct htp_copy_context {
     struct htp_ops_context *              octx;
@@ -317,17 +317,6 @@ static int cpy_sameshape_sametype(struct htp_ops_context * octx, const struct ht
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    const uint32_t elem_size  = (src0->type == HTP_TYPE_F16) ? 2 : 4;
-    const uint32_t max_ne0    = 128 / elem_size;
-    const uint32_t total_rows = src0->ne[1] * src0->ne[2] * src0->ne[3];
-    if ((src0->type == HTP_TYPE_F32 || src0->type == HTP_TYPE_F16) &&
-        htp_tensor_is_contiguous(dst, elem_size) && !htp_tensor_is_contiguous(src0, elem_size) &&
-        src0->nb[0] == elem_size && src0->ne[0] <= max_ne0 &&
-        htp_tensor_outer_rows_contiguous(src0) &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, total_rows)) {
-        return HTP_STATUS_OK;
-    }
-
     uint32_t row_start = 0;
     uint32_t nrows     = kparams->total_rows;
 
@@ -408,16 +397,6 @@ static int cpy_reshape(struct htp_ops_context * octx, const struct htp_copy_kern
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    const uint32_t elem_size  = (src0->type == HTP_TYPE_F16) ? 2 : 4;
-    const uint32_t max_ne0    = 128 / elem_size;
-    const uint32_t total_rows = src0->ne[1] * src0->ne[2] * src0->ne[3];
-    if ((src0->type == HTP_TYPE_F32 || src0->type == HTP_TYPE_F16) &&
-        htp_tensor_is_contiguous(dst, elem_size) && src0->nb[0] == elem_size && src0->ne[0] <= max_ne0 &&
-        htp_tensor_outer_rows_contiguous(src0) &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, total_rows)) {
-        return HTP_STATUS_OK;
-    }
-
     if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
         return HTP_STATUS_INVAL_PARAMS;
     }
@@ -476,6 +455,9 @@ int op_cpy(struct htp_ops_context * octx) {
             break;
         case HTP_COPY_KERNEL_RESHAPE:
             status = cpy_reshape(octx, kparams);
+            break;
+        case HTP_COPY_KERNEL_GATHER_ROWS:
+            status = htp_gather_rows(octx, octx->src[0], NULL, &kparams->u.gather);
             break;
         default:
             status = HTP_STATUS_NO_SUPPORT;

@@ -1,0 +1,336 @@
+#include "gather-rows.h"
+
+#include "hex-common.h"
+#include "hex-profile.h"
+#include "hvx-utils.h"
+#include "dma-queue.h"
+#include "htp-ctx.h"
+#include "htp-ops.h"
+#include "htp-tensor.h"
+#include "work-queue.h"
+
+struct hvx_gather_rows_task {
+    struct htp_ops_context *                     octx;
+    const struct htp_tensor *                    a;
+    const struct htp_tensor *                    b;
+    dma_addr_t                                   dst;
+    uint32_t                                     r_start;
+    uint32_t                                     rows;
+    uint32_t                                     rows_per_thread;
+    const struct htp_gather_rows_params *        kparams;
+};
+
+static inline void hvx_gather_rows_dma(dma_queue * q, dma_addr_t dst, dma_addr_t src, size_t size) {
+    while (!dma_queue_push(q, dma_make_data(dst, src), size, size, size, 1)) {
+        dma_queue_pop(q);
+    }
+}
+
+static inline void hvx_gather_rows_dma_in(dma_queue * q, const struct hvx_gather_rows_task * task,
+                                          uint8_t * region, uint32_t r, uint32_t nr, uint32_t elem_size) {
+    const struct htp_tensor * a = task->a;
+    const struct htp_tensor * b = task->b;
+    const struct htp_gather_rows_params * kparams = task->kparams;
+
+    hvx_gather_rows_dma(q, (dma_addr_t) region, a->data + r * a->nb[1], (nr - 1) * a->nb[1] + kparams->na * elem_size);
+    if (b) {
+        if (kparams->b_dense) {
+            hvx_gather_rows_dma(q, (dma_addr_t) (region + kparams->v1), b->data + r * b->nb[1], (nr - 1) * b->nb[1] + kparams->nb * elem_size);
+        } else {
+            for (uint32_t k = 0; k < kparams->nb; k++) {
+                hvx_gather_rows_dma(q, (dma_addr_t) (region + kparams->v1 + k * kparams->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + elem_size);
+            }
+        }
+    }
+}
+
+static inline void hvx_gather_rows_dma_out(dma_queue * q, const struct hvx_gather_rows_task * task,
+                                           uint8_t * out, uint32_t r, uint32_t nr, uint32_t elem_size) {
+    const struct htp_gather_rows_params * kparams = task->kparams;
+    hvx_gather_rows_dma(q, task->dst + r * kparams->ne * elem_size, (dma_addr_t) out, nr * kparams->ne * elem_size);
+}
+
+static __attribute__((noinline)) void hvx_gather_rows_init_tables_f32(
+    HVX_Vector * tab, HVX_Vector * inc,
+    const struct htp_gather_rows_params * kparams,
+    const struct htp_tensor * a, const struct htp_tensor * b) {
+
+    const int32_t s_a = kparams->rg * a->nb[1];
+    const int32_t s_b = b ? kparams->rg * b->nb[1] : 0;
+    const uint32_t b_nb1 = b ? b->nb[1] : 0;
+    uint32_t row = 0;
+    uint32_t col = 0;
+    int32_t t_buf[32] __attribute__((aligned(128)));
+    int32_t s_buf[32] __attribute__((aligned(128)));
+    for (uint32_t k = 0; k < kparams->vg; k++) {
+        for (uint32_t lane = 0; lane < 32; lane++) {
+            if (col < kparams->na) {
+                t_buf[lane] = row * a->nb[1] + col * 4;
+                s_buf[lane] = s_a;
+            } else {
+                t_buf[lane] = kparams->v1 + (col - kparams->na) * kparams->span1 + row * b_nb1;
+                s_buf[lane] = s_b;
+            }
+            if (++col == kparams->ne) {
+                col = 0;
+                row++;
+            }
+        }
+        tab[k] = *(const HVX_Vector *) t_buf;
+        inc[k] = *(const HVX_Vector *) s_buf;
+    }
+}
+
+static __attribute__((noinline)) void hvx_gather_rows_init_tables_f16(
+    HVX_Vector * tab, HVX_Vector * inc,
+    const struct htp_gather_rows_params * kparams,
+    const struct htp_tensor * a, const struct htp_tensor * b) {
+
+    const int16_t s_a = (int16_t) (kparams->rg * a->nb[1]);
+    const int16_t s_b = (int16_t) (b ? kparams->rg * b->nb[1] : 0);
+    const uint32_t b_nb1 = b ? b->nb[1] : 0;
+    uint32_t row = 0;
+    uint32_t col = 0;
+    int16_t t_buf[64] __attribute__((aligned(128)));
+    int16_t s_buf[64] __attribute__((aligned(128)));
+    for (uint32_t k = 0; k < kparams->vg; k++) {
+        for (uint32_t lane = 0; lane < 64; lane++) {
+            if (col < kparams->na) {
+                t_buf[lane] = (int16_t) (row * a->nb[1] + col * 2);
+                s_buf[lane] = s_a;
+            } else {
+                t_buf[lane] = (int16_t) (kparams->v1 + (col - kparams->na) * kparams->span1 + row * b_nb1);
+                s_buf[lane] = s_b;
+            }
+            if (++col == kparams->ne) {
+                col = 0;
+                row++;
+            }
+        }
+        tab[k] = *(const HVX_Vector *) t_buf;
+        inc[k] = *(const HVX_Vector *) s_buf;
+    }
+}
+
+static void hvx_gather_rows_thread_f32(unsigned int nth, unsigned int ith, void * data) {
+    (void) nth;
+    const struct hvx_gather_rows_task * task = (const struct hvx_gather_rows_task *) data;
+    const struct htp_gather_rows_params * kparams = task->kparams;
+    const struct htp_tensor * a = task->a;
+    const struct htp_tensor * b = task->b;
+
+    const uint32_t r_offset = MIN(ith * task->rows_per_thread, task->rows);
+    const uint32_t r_beg    = task->r_start + r_offset;
+    const uint32_t r_end    = task->r_start + MIN(r_offset + task->rows_per_thread, task->rows);
+    if (r_beg >= r_end) {
+        return;
+    }
+
+    struct htp_thread_trace * tr = &task->octx->ctx->trace[ith];
+
+    uint8_t * base   = task->octx->ctx->vtcm_base + ith * kparams->slice;
+    HVX_Vector * tab = (HVX_Vector *) base;
+    HVX_Vector * inc = tab + kparams->vg;
+    HVX_Vector * cur = inc + kparams->vg;
+    uint8_t * region_base = (uint8_t *) (cur + kparams->vg);
+
+    uint8_t * region[2] = { region_base, region_base + kparams->buf_stride };
+    uint8_t * out[2]    = { region[0] + kparams->out_off, region[1] + kparams->out_off };
+
+    htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
+    hvx_gather_rows_init_tables_f32(tab, inc, kparams, a, b);
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
+
+    dma_queue * q = task->octx->ctx->dma[ith];
+
+    const uint32_t nr_max = kparams->nr_max;
+    const uint32_t nr0 = MIN(nr_max, r_end - r_beg);
+    hvx_gather_rows_dma_in(q, task, region[0], r_beg, nr0, 4);
+    dma_queue_flush(q);
+
+    const uint32_t r1 = r_beg + nr_max;
+    if (r1 < r_end) {
+        const uint32_t nr1 = MIN(nr_max, r_end - r1);
+        hvx_gather_rows_dma_in(q, task, region[1], r1, nr1, 4);
+    }
+
+    uint32_t buf = 0;
+    for (uint32_t r = r_beg; r < r_end; r += nr_max) {
+        const uint32_t nr = MIN(nr_max, r_end - r);
+        const uint32_t next_buf = buf ^ 1;
+
+        htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
+        const uint32_t nvec = (nr * kparams->ne + 31) >> 5;
+        if (kparams->vg == 1) {
+            HVX_Vector vcur = tab[0];
+            const HVX_Vector vinc = inc[0];
+            #pragma unroll(4)
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVw((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], kparams->region_size, vcur);
+                vcur = Q6_Vw_vadd_VwVw(vcur, vinc);
+            }
+        } else {
+            for (uint32_t k = 0; k < kparams->vg; k++) {
+                cur[k] = tab[k];
+            }
+            uint32_t k = 0;
+            #pragma unroll(4)
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVw((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], kparams->region_size, cur[k]);
+                cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
+                if (++k == kparams->vg) {
+                    k = 0;
+                }
+            }
+        }
+
+        hvx_gather_sync(out[buf]);
+        htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
+
+        dma_queue_flush(q);
+
+        hvx_gather_rows_dma_out(q, task, out[buf], r, nr, 4);
+
+        const uint32_t r_prefetch = r + 2 * nr_max;
+        if (r_prefetch < r_end) {
+            const uint32_t nr_prefetch = MIN(nr_max, r_end - r_prefetch);
+            hvx_gather_rows_dma_in(q, task, region[buf], r_prefetch, nr_prefetch, 4);
+        }
+
+        buf = next_buf;
+    }
+    dma_queue_flush(q);
+}
+
+static void hvx_gather_rows_thread_f16(unsigned int nth, unsigned int ith, void * data) {
+    (void) nth;
+    const struct hvx_gather_rows_task * task = (const struct hvx_gather_rows_task *) data;
+    const struct htp_gather_rows_params * kparams = task->kparams;
+    const struct htp_tensor * a = task->a;
+    const struct htp_tensor * b = task->b;
+
+    const uint32_t r_offset = MIN(ith * task->rows_per_thread, task->rows);
+    const uint32_t r_beg    = task->r_start + r_offset;
+    const uint32_t r_end    = task->r_start + MIN(r_offset + task->rows_per_thread, task->rows);
+    if (r_beg >= r_end) {
+        return;
+    }
+
+    struct htp_thread_trace * tr = &task->octx->ctx->trace[ith];
+
+    uint8_t * base   = task->octx->ctx->vtcm_base + ith * kparams->slice;
+    HVX_Vector * tab = (HVX_Vector *) base;
+    HVX_Vector * inc = tab + kparams->vg;
+    HVX_Vector * cur = inc + kparams->vg;
+    uint8_t * region_base = (uint8_t *) (cur + kparams->vg);
+
+    uint8_t * region[2] = { region_base, region_base + kparams->buf_stride };
+    uint8_t * out[2]    = { region[0] + kparams->out_off, region[1] + kparams->out_off };
+
+    htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
+    hvx_gather_rows_init_tables_f16(tab, inc, kparams, a, b);
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_INIT, (uint16_t) r_beg);
+
+    dma_queue * q = task->octx->ctx->dma[ith];
+
+    const uint32_t nr_max = kparams->nr_max;
+    const uint32_t nr0 = MIN(nr_max, r_end - r_beg);
+    hvx_gather_rows_dma_in(q, task, region[0], r_beg, nr0, 2);
+    dma_queue_flush(q);
+
+    const uint32_t r1 = r_beg + nr_max;
+    if (r1 < r_end) {
+        const uint32_t nr1 = MIN(nr_max, r_end - r1);
+        hvx_gather_rows_dma_in(q, task, region[1], r1, nr1, 2);
+    }
+
+    uint32_t buf = 0;
+    for (uint32_t r = r_beg; r < r_end; r += nr_max) {
+        const uint32_t nr = MIN(nr_max, r_end - r);
+        const uint32_t next_buf = buf ^ 1;
+
+        htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
+        const uint32_t nvec = (nr * kparams->ne + 63) >> 6;
+        if (kparams->vg == 1) {
+            HVX_Vector vcur = tab[0];
+            const HVX_Vector vinc = inc[0];
+            #pragma unroll(4)
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVh((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], kparams->region_size, vcur);
+                vcur = Q6_Vh_vadd_VhVh(vcur, vinc);
+            }
+        } else {
+            for (uint32_t k = 0; k < kparams->vg; k++) {
+                cur[k] = tab[k];
+            }
+            uint32_t k = 0;
+            #pragma unroll(4)
+            for (uint32_t v = 0; v < nvec; v++) {
+                Q6_vgather_ARMVh((HVX_Vector *) (out[buf] + v * 128), (size_t) region[buf], kparams->region_size, cur[k]);
+                cur[k] = Q6_Vh_vadd_VhVh(cur[k], inc[k]);
+                if (++k == kparams->vg) {
+                    k = 0;
+                }
+            }
+        }
+
+        hvx_gather_sync(out[buf]);
+        htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) r);
+
+        dma_queue_flush(q);
+
+        hvx_gather_rows_dma_out(q, task, out[buf], r, nr, 2);
+
+        const uint32_t r_prefetch = r + 2 * nr_max;
+        if (r_prefetch < r_end) {
+            const uint32_t nr_prefetch = MIN(nr_max, r_end - r_prefetch);
+            hvx_gather_rows_dma_in(q, task, region[buf], r_prefetch, nr_prefetch, 2);
+        }
+
+        buf = next_buf;
+    }
+    dma_queue_flush(q);
+}
+
+int htp_gather_rows(
+    struct htp_ops_context * octx,
+    const struct htp_tensor * a,
+    const struct htp_tensor * b,
+    const struct htp_gather_rows_params * kparams) {
+
+    if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    const uint32_t total_rows = kparams->total_rows;
+    uint32_t r_start = 0;
+    uint32_t r_count = total_rows;
+    uint32_t rows_per_thread = kparams->rows_per_thread;
+    if (octx->ctx->mdev.count > 1) {
+        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(
+            total_rows, kparams->rg, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
+        r_start = range.start;
+        r_count = range.count;
+        rows_per_thread = hex_round_up(fastdiv(r_count + octx->n_threads - 1, &octx->n_threads_div), kparams->rg);
+    }
+
+    if (r_count == 0) {
+        return HTP_STATUS_OK;
+    }
+
+    const uint32_t elem_size = (a->type == HTP_TYPE_F16) ? 2 : 4;
+
+    struct hvx_gather_rows_task task;
+    task.octx            = octx;
+    task.a               = a;
+    task.b               = b;
+    task.dst             = octx->dst->data;
+    task.r_start         = r_start;
+    task.rows            = r_count;
+    task.kparams         = kparams;
+    task.rows_per_thread = rows_per_thread;
+
+    work_queue_func_t worker_func = (elem_size == 2) ? hvx_gather_rows_thread_f16 : hvx_gather_rows_thread_f32;
+    work_queue_run(octx->ctx->work_queue, worker_func, &task, octx->n_threads);
+    return HTP_STATUS_OK;
+}

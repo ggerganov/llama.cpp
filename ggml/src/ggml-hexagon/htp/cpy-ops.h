@@ -3,6 +3,7 @@
 
 #include "hex-common.h"
 #include "hex-fastdiv.h"
+#include "gather-rows.h"
 #include <stdint.h>
 
 enum htp_copy_kernel_type {
@@ -12,6 +13,7 @@ enum htp_copy_kernel_type {
     HTP_COPY_KERNEL_SAMESHAPE_CONVERT  = 3,
     HTP_COPY_KERNEL_RESHAPE            = 4,
     HTP_COPY_KERNEL_SCALAR             = 5,
+    HTP_COPY_KERNEL_GATHER_ROWS        = 6,
 };
 
 struct htp_copy_convert_params {
@@ -48,6 +50,7 @@ struct htp_copy_kernel_params {
     union {
         struct htp_copy_convert_params convert;
         struct htp_copy_reshape_params reshape;
+        struct htp_gather_rows_params  gather;
     } u;
 };
 

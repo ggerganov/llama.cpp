@@ -13,7 +13,7 @@
 #include "htp-vtcm.h"
 #include "hvx-utils.h"
 #include "hvx_hexagon_protos.h"
-#include "hvx-gather-rows.h"
+#include "gather-rows.h"
 
 #include <string.h>
 
@@ -324,38 +324,24 @@ int op_concat(struct htp_ops_context * octx) {
     const struct htp_tensor * dst  = octx->dst;
 
     int status = HTP_STATUS_OK;
+    const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
 
-    const uint32_t type_size  = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
-    const uint32_t max_ne0    = 128 / type_size;
-    const uint32_t total_rows = dst->ne[1] * dst->ne[2] * dst->ne[3];
+    switch (kparams->kernel_type) {
+        case HTP_CONCAT_KERNEL_REGULAR:
+            status = concat_regular(octx, kparams->dim, type_size);
+            break;
 
-    if (kparams->dim == 0 &&
-        (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_F16) &&
-        src0->type == dst->type && src1->type == dst->type &&
-        dst->ne[0] <= max_ne0 && dst->nb[0] == type_size && dst->nb[1] == dst->ne[0] * type_size &&
-        src0->nb[0] == type_size &&
-        src0->ne[1] == dst->ne[1] && src1->ne[1] == dst->ne[1] &&
-        src0->ne[2] == dst->ne[2] && src1->ne[2] == dst->ne[2] &&
-        src0->ne[3] == dst->ne[3] && src1->ne[3] == dst->ne[3] &&
-        htp_tensor_outer_rows_contiguous(dst) &&
-        htp_tensor_outer_rows_contiguous(src0) &&
-        htp_tensor_outer_rows_contiguous(src1) &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], src1, src1->ne[0], dst->data, total_rows)) {
-        // handled via VTCM gather
-    } else {
-        switch (kparams->kernel_type) {
-            case HTP_CONCAT_KERNEL_REGULAR:
-                status = concat_regular(octx, kparams->dim, type_size);
-                break;
+        case HTP_CONCAT_KERNEL_TRANSPOSED:
+            status = concat_transposed(octx, kparams, type_size);
+            break;
 
-            case HTP_CONCAT_KERNEL_TRANSPOSED:
-                status = concat_transposed(octx, kparams, type_size);
-                break;
+        case HTP_CONCAT_KERNEL_GATHER_ROWS:
+            status = htp_gather_rows(octx, src0, src1, &kparams->gather);
+            break;
 
-            default:
-                status = HTP_STATUS_NO_SUPPORT;
-                break;
-        }
+        default:
+            status = HTP_STATUS_NO_SUPPORT;
+            break;
     }
 
     htp_ops_context_set_status(octx, status);
