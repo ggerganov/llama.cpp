@@ -325,16 +325,19 @@ int op_concat(struct htp_ops_context * octx) {
 
     int status = HTP_STATUS_OK;
 
+    const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
+    const uint32_t max_ne0   = 128 / type_size;
+
     if (kparams->dim == 0 &&
-        dst->type == HTP_TYPE_F32 && src0->type == HTP_TYPE_F32 && src1->type == HTP_TYPE_F32 &&
-        dst->ne[0] <= 32 && dst->nb[0] == 4 && dst->nb[1] == dst->ne[0] * 4 && src0->nb[0] == 4 &&
+        (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_F16) &&
+        src0->type == dst->type && src1->type == dst->type &&
+        dst->ne[0] <= max_ne0 && dst->nb[0] == type_size && dst->nb[1] == dst->ne[0] * type_size &&
+        src0->nb[0] == type_size &&
         src0->ne[1] == dst->ne[1] && src1->ne[1] == dst->ne[1] &&
         dst->ne[2] == 1 && dst->ne[3] == 1 && src0->ne[2] == 1 && src0->ne[3] == 1 && src1->ne[2] == 1 && src1->ne[3] == 1 &&
         hvx_gather_rows_sync(octx, src0, src0->ne[0], src1, src1->ne[0], dst->data, dst->ne[1])) {
         // handled via VTCM gather
     } else {
-        const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
-
         switch (kparams->kernel_type) {
             case HTP_CONCAT_KERNEL_REGULAR:
                 status = concat_regular(octx, kparams->dim, type_size);
