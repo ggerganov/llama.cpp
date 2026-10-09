@@ -24,6 +24,7 @@ struct hvx_gather_rows_task {
     uint32_t nr_max;
     uint32_t v1, span1;
     uint32_t region_size, out_off, slice;
+    bool b_dense;
 };
 
 static inline void hvx_gather_rows_dma(dma_queue * q, dma_addr_t dst, dma_addr_t src, size_t size) {
@@ -88,8 +89,14 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
         const uint32_t nr = MIN(task->nr_max, r_end - r);
 
         hvx_gather_rows_dma(q, (dma_addr_t) region, a->data + r * a->nb[1], (nr - 1) * a->nb[1] + task->na * 4);
-        for (uint32_t k = 0; k < task->nb; k++) {
-            hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1 + k * task->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + 4);
+        if (b) {
+            if (task->b_dense) {
+                hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1), b->data + r * b->nb[1], (nr - 1) * b->nb[1] + task->nb * 4);
+            } else {
+                for (uint32_t k = 0; k < task->nb; k++) {
+                    hvx_gather_rows_dma(q, (dma_addr_t) (region + task->v1 + k * task->span1), b->data + k * b->nb[0] + r * b->nb[1], (nr - 1) * b->nb[1] + 4);
+                }
+            }
         }
         dma_queue_flush(q);
 
@@ -163,8 +170,11 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
     task.slice = (uint32_t) (octx->ctx->vtcm_size / n_threads) & ~127u;
     task.rows_per_thread = hex_round_up((r_count + n_threads - 1) / n_threads, task.rg);
 
+    const bool b_dense     = b && (b->nb[0] == 4);
+    task.b_dense           = b_dense;
+
     const uint32_t fixed   = 3 * task.vg * 128 + 3 * 128;
-    const uint32_t per_row = a->nb[1] + (b ? nb * b->nb[1] : 0) + ne * 4;
+    const uint32_t per_row = a->nb[1] + (b ? (b_dense ? b->nb[1] : nb * b->nb[1]) : 0) + ne * 4;
     if (task.slice <= fixed + per_row * task.rg) {
         return false;
     }
@@ -174,10 +184,15 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
         return false;
     }
 
-    task.v1          = hex_round_up((task.nr_max - 1) * a->nb[1] + na * 4, 128);
-    task.span1       = b ? (task.nr_max - 1) * b->nb[1] + 4 : 0;
-    task.region_size = task.v1 + nb * task.span1;
-    task.out_off     = hex_round_up(task.region_size, 128);
+    task.v1 = hex_round_up((task.nr_max - 1) * a->nb[1] + na * 4, 128);
+    if (b_dense) {
+        task.span1       = 4;
+        task.region_size = task.v1 + (task.nr_max - 1) * b->nb[1] + nb * 4;
+    } else {
+        task.span1       = b ? (task.nr_max - 1) * b->nb[1] + 4 : 0;
+        task.region_size = task.v1 + nb * task.span1;
+    }
+    task.out_off = hex_round_up(task.region_size, 128);
 
     work_queue_run(octx->ctx->work_queue, hvx_gather_rows_thread, &task, n_threads);
     return true;
