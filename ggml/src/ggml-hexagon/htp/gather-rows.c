@@ -12,9 +12,9 @@
 #include "work-queue.h"
 
 typedef void (*gather_rows_compute_fn_t)(
-    uint8_t * out, const uint8_t * region, uint32_t nvec,
-    const struct htp_gather_rows_params * kparams,
-    const HVX_Vector * tab, const HVX_Vector * inc, HVX_Vector * cur);
+    uint8_t * restrict out, const uint8_t * restrict region, uint32_t nvec,
+    const struct htp_gather_rows_params * restrict kparams,
+    const HVX_Vector * restrict tab, const HVX_Vector * restrict inc, HVX_Vector * restrict cur);
 
 struct gather_rows_task {
     struct htp_ops_context *              octx;
@@ -28,8 +28,9 @@ struct gather_rows_task {
     gather_rows_compute_fn_t              compute;
 };
 
-static inline void gather_rows_dma_in(dma_queue * q, const struct gather_rows_task * task,
-                                      uint8_t * region, uint32_t r, uint32_t nr, uint32_t elem_size) {
+static inline __attribute__((always_inline)) void gather_rows_dma_in(
+    dma_queue * q, const struct gather_rows_task * task,
+    uint8_t * region, uint32_t r, uint32_t nr, uint32_t elem_size) {
     const struct htp_tensor * a = task->a;
     const struct htp_tensor * b = task->b;
     const struct htp_gather_rows_params * kparams = task->kparams;
@@ -120,64 +121,70 @@ static __attribute__((noinline)) void gather_rows_init_tables_f16(
 }
 
 static void gather_rows_compute_f32_vg1(
-    uint8_t * out, const uint8_t * region, uint32_t nvec,
-    const struct htp_gather_rows_params * kparams,
-    const HVX_Vector * tab, const HVX_Vector * inc, HVX_Vector * cur) {
+    uint8_t * restrict out, const uint8_t * restrict region, uint32_t nvec,
+    const struct htp_gather_rows_params * restrict kparams,
+    const HVX_Vector * restrict tab, const HVX_Vector * restrict inc, HVX_Vector * restrict cur) {
     (void) cur;
+    const uint32_t region_size = kparams->region_size;
     HVX_Vector vcur = tab[0];
     const HVX_Vector vinc = inc[0];
     #pragma unroll(4)
     for (uint32_t v = 0; v < nvec; v++) {
-        Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, kparams->region_size, vcur);
+        Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, region_size, vcur);
         vcur = Q6_Vw_vadd_VwVw(vcur, vinc);
     }
 }
 
 static void gather_rows_compute_f32_vgn(
-    uint8_t * out, const uint8_t * region, uint32_t nvec,
-    const struct htp_gather_rows_params * kparams,
-    const HVX_Vector * tab, const HVX_Vector * inc, HVX_Vector * cur) {
-    for (uint32_t k = 0; k < kparams->vg; k++) {
+    uint8_t * restrict out, const uint8_t * restrict region, uint32_t nvec,
+    const struct htp_gather_rows_params * restrict kparams,
+    const HVX_Vector * restrict tab, const HVX_Vector * restrict inc, HVX_Vector * restrict cur) {
+    const uint32_t vg = kparams->vg;
+    const uint32_t region_size = kparams->region_size;
+    for (uint32_t k = 0; k < vg; k++) {
         cur[k] = tab[k];
     }
     uint32_t k = 0;
     #pragma unroll(4)
     for (uint32_t v = 0; v < nvec; v++) {
-        Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, kparams->region_size, cur[k]);
+        Q6_vgather_ARMVw((HVX_Vector *) (out + v * 128), (size_t) region, region_size, cur[k]);
         cur[k] = Q6_Vw_vadd_VwVw(cur[k], inc[k]);
-        if (++k == kparams->vg) {
+        if (++k == vg) {
             k = 0;
         }
     }
 }
 
 static void gather_rows_compute_f16_vg1(
-    uint8_t * out, const uint8_t * region, uint32_t nvec,
-    const struct htp_gather_rows_params * kparams,
-    const HVX_Vector * tab, const HVX_Vector * inc, HVX_Vector * cur) {
+    uint8_t * restrict out, const uint8_t * restrict region, uint32_t nvec,
+    const struct htp_gather_rows_params * restrict kparams,
+    const HVX_Vector * restrict tab, const HVX_Vector * restrict inc, HVX_Vector * restrict cur) {
     (void) cur;
+    const uint32_t region_size = kparams->region_size;
     HVX_Vector vcur = tab[0];
     const HVX_Vector vinc = inc[0];
     #pragma unroll(4)
     for (uint32_t v = 0; v < nvec; v++) {
-        Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, kparams->region_size, vcur);
+        Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, region_size, vcur);
         vcur = Q6_Vh_vadd_VhVh(vcur, vinc);
     }
 }
 
 static void gather_rows_compute_f16_vgn(
-    uint8_t * out, const uint8_t * region, uint32_t nvec,
-    const struct htp_gather_rows_params * kparams,
-    const HVX_Vector * tab, const HVX_Vector * inc, HVX_Vector * cur) {
-    for (uint32_t k = 0; k < kparams->vg; k++) {
+    uint8_t * restrict out, const uint8_t * restrict region, uint32_t nvec,
+    const struct htp_gather_rows_params * restrict kparams,
+    const HVX_Vector * restrict tab, const HVX_Vector * restrict inc, HVX_Vector * restrict cur) {
+    const uint32_t vg = kparams->vg;
+    const uint32_t region_size = kparams->region_size;
+    for (uint32_t k = 0; k < vg; k++) {
         cur[k] = tab[k];
     }
     uint32_t k = 0;
     #pragma unroll(4)
     for (uint32_t v = 0; v < nvec; v++) {
-        Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, kparams->region_size, cur[k]);
+        Q6_vgather_ARMVh((HVX_Vector *) (out + v * 128), (size_t) region, region_size, cur[k]);
         cur[k] = Q6_Vh_vadd_VhVh(cur[k], inc[k]);
-        if (++k == kparams->vg) {
+        if (++k == vg) {
             k = 0;
         }
     }

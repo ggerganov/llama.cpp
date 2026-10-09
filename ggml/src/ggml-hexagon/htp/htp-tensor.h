@@ -44,7 +44,6 @@ static inline bool htp_tensor_is_contiguous(const struct htp_tensor * t, uint32_
     return true;
 }
 
-
 static inline bool htp_tensor_is_permuted(const struct htp_tensor * t) {
     return t->nb[0] > t->nb[1] || t->nb[1] > t->nb[2] || t->nb[2] > t->nb[3];
 }
