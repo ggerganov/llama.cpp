@@ -57,7 +57,7 @@ static inline bool htp_gather_rows_solve_layout(
     const uint32_t rows_per_dev = (total_rows + mdev_count - 1) / mdev_count;
     const uint32_t rows_per_thread = hex_round_up((rows_per_dev + n_threads - 1) / n_threads, rg);
 
-    const uint32_t fixed = 3 * vg * 128 + 8 * 128;
+    const uint32_t fixed = 3 * vg * 128;
     const uint32_t per_row = a_nb1 + (nb > 0 ? (b_dense ? b_nb1 : nb * b_nb1) : 0) + ne * elem_size;
     if (slice <= fixed + 2 * per_row * rg) {
         return false;
@@ -72,32 +72,39 @@ static inline bool htp_gather_rows_solve_layout(
         }
     }
     nr_max = (nr_max / rg) * rg;
-    if (nr_max == 0) {
-        return false;
-    }
 
-    const uint32_t v1 = hex_round_up((nr_max - 1) * a_nb1 + na * elem_size, 128);
-    uint32_t span1 = 0;
+    uint32_t v1          = 0;
+    uint32_t span1       = 0;
     uint32_t region_size = 0;
-    if (nb > 0) {
-        if (b_dense) {
-            span1       = elem_size;
-            region_size = v1 + (nr_max - 1) * b_nb1 + nb * elem_size;
+    uint32_t out_off     = 0;
+    uint32_t buf_stride  = 0;
+
+    while (nr_max > 0) {
+        v1 = hex_round_up((nr_max - 1) * a_nb1 + na * elem_size, 128);
+        if (nb > 0) {
+            if (b_dense) {
+                span1       = elem_size;
+                region_size = v1 + (nr_max - 1) * b_nb1 + nb * elem_size;
+            } else {
+                span1       = (nr_max - 1) * b_nb1 + elem_size;
+                region_size = v1 + nb * span1;
+            }
         } else {
-            span1       = (nr_max - 1) * b_nb1 + elem_size;
-            region_size = v1 + nb * span1;
+            span1       = 0;
+            region_size = v1;
         }
-    } else {
-        region_size = v1;
+
+        out_off    = hex_round_up(region_size, 128);
+        buf_stride = hex_round_up(out_off + nr_max * ne * elem_size, 128);
+
+        if ((elem_size != 2 || region_size <= 32768) && fixed + 2 * buf_stride <= slice) {
+            break;
+        }
+
+        nr_max -= rg;
     }
 
-    if (elem_size == 2 && region_size > 32768) {
-        return false;
-    }
-
-    const uint32_t out_off = hex_round_up(region_size, 128);
-    const uint32_t buf_stride = hex_round_up(out_off + nr_max * ne * elem_size, 128);
-    if (fixed + 2 * buf_stride > slice) {
+    if (nr_max == 0) {
         return false;
     }
 
