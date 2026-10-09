@@ -317,13 +317,14 @@ static int cpy_sameshape_sametype(struct htp_ops_context * octx, const struct ht
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    const uint32_t elem_size = (src0->type == HTP_TYPE_F16) ? 2 : 4;
-    const uint32_t max_ne0   = 128 / elem_size;
+    const uint32_t elem_size  = (src0->type == HTP_TYPE_F16) ? 2 : 4;
+    const uint32_t max_ne0    = 128 / elem_size;
+    const uint32_t total_rows = src0->ne[1] * src0->ne[2] * src0->ne[3];
     if ((src0->type == HTP_TYPE_F32 || src0->type == HTP_TYPE_F16) &&
         htp_tensor_is_contiguous(dst, elem_size) && !htp_tensor_is_contiguous(src0, elem_size) &&
         src0->nb[0] == elem_size && src0->ne[0] <= max_ne0 &&
-        src0->ne[2] == 1 && src0->ne[3] == 1 &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, src0->ne[1])) {
+        htp_tensor_outer_rows_contiguous(src0) &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, total_rows)) {
         return HTP_STATUS_OK;
     }
 
@@ -407,12 +408,13 @@ static int cpy_reshape(struct htp_ops_context * octx, const struct htp_copy_kern
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    const uint32_t elem_size = (src0->type == HTP_TYPE_F16) ? 2 : 4;
-    const uint32_t max_ne0   = 128 / elem_size;
+    const uint32_t elem_size  = (src0->type == HTP_TYPE_F16) ? 2 : 4;
+    const uint32_t max_ne0    = 128 / elem_size;
+    const uint32_t total_rows = src0->ne[1] * src0->ne[2] * src0->ne[3];
     if ((src0->type == HTP_TYPE_F32 || src0->type == HTP_TYPE_F16) &&
         htp_tensor_is_contiguous(dst, elem_size) && src0->nb[0] == elem_size && src0->ne[0] <= max_ne0 &&
-        src0->ne[2] == 1 && src0->ne[3] == 1 &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, src0->ne[1])) {
+        htp_tensor_outer_rows_contiguous(src0) &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], NULL, 0, dst->data, total_rows)) {
         return HTP_STATUS_OK;
     }
 

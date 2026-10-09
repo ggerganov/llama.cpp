@@ -325,8 +325,9 @@ int op_concat(struct htp_ops_context * octx) {
 
     int status = HTP_STATUS_OK;
 
-    const uint32_t type_size = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
-    const uint32_t max_ne0   = 128 / type_size;
+    const uint32_t type_size  = (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_I32) ? 4 : 2;
+    const uint32_t max_ne0    = 128 / type_size;
+    const uint32_t total_rows = dst->ne[1] * dst->ne[2] * dst->ne[3];
 
     if (kparams->dim == 0 &&
         (dst->type == HTP_TYPE_F32 || dst->type == HTP_TYPE_F16) &&
@@ -334,8 +335,12 @@ int op_concat(struct htp_ops_context * octx) {
         dst->ne[0] <= max_ne0 && dst->nb[0] == type_size && dst->nb[1] == dst->ne[0] * type_size &&
         src0->nb[0] == type_size &&
         src0->ne[1] == dst->ne[1] && src1->ne[1] == dst->ne[1] &&
-        dst->ne[2] == 1 && dst->ne[3] == 1 && src0->ne[2] == 1 && src0->ne[3] == 1 && src1->ne[2] == 1 && src1->ne[3] == 1 &&
-        hvx_gather_rows_sync(octx, src0, src0->ne[0], src1, src1->ne[0], dst->data, dst->ne[1])) {
+        src0->ne[2] == dst->ne[2] && src1->ne[2] == dst->ne[2] &&
+        src0->ne[3] == dst->ne[3] && src1->ne[3] == dst->ne[3] &&
+        htp_tensor_outer_rows_contiguous(dst) &&
+        htp_tensor_outer_rows_contiguous(src0) &&
+        htp_tensor_outer_rows_contiguous(src1) &&
+        hvx_gather_rows_sync(octx, src0, src0->ne[0], src1, src1->ne[0], dst->data, total_rows)) {
         // handled via VTCM gather
     } else {
         switch (kparams->kernel_type) {
