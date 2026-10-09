@@ -325,7 +325,7 @@ int op_concat(struct htp_ops_context * octx) {
 
     int status = HTP_STATUS_OK;
 
-    if (octx->ctx->mdev.count <= 1 && kparams->dim == 0 &&
+    if (kparams->dim == 0 &&
         dst->type == HTP_TYPE_F32 && src0->type == HTP_TYPE_F32 && src1->type == HTP_TYPE_F32 &&
         dst->ne[0] <= 32 && dst->nb[0] == 4 && dst->nb[1] == dst->ne[0] * 4 && src0->nb[0] == 4 &&
         src0->ne[1] == dst->ne[1] && src1->ne[1] == dst->ne[1] &&

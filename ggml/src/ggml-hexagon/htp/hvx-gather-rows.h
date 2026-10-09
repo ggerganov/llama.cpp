@@ -18,7 +18,7 @@ struct hvx_gather_rows_task {
     const struct htp_tensor * b;
     dma_addr_t dst;
     uint32_t na, nb, ne;
-    uint32_t rows;
+    uint32_t r_start, rows;
     uint32_t rg, vg;
     uint32_t rows_per_thread;
     uint32_t nr_max;
@@ -39,8 +39,9 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
     const struct htp_tensor * a = task->a;
     const struct htp_tensor * b = task->b;
 
-    const uint32_t r_beg = MIN(ith * task->rows_per_thread, task->rows);
-    const uint32_t r_end = MIN(r_beg + task->rows_per_thread, task->rows);
+    const uint32_t r_offset = MIN(ith * task->rows_per_thread, task->rows);
+    const uint32_t r_beg    = task->r_start + r_offset;
+    const uint32_t r_end    = task->r_start + MIN(r_offset + task->rows_per_thread, task->rows);
     if (r_beg >= r_end) {
         return;
     }
@@ -126,7 +127,7 @@ static inline void hvx_gather_rows_thread(unsigned int nth, unsigned int ith, vo
 static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const struct htp_tensor * a, uint32_t na,
                                         const struct htp_tensor * b, uint32_t nb, dma_addr_t dst, uint32_t rows) {
     const uint32_t ne = na + nb;
-    if (ne == 0 || ne > 32 || rows == 0 || octx->ctx->mdev.count > 1 ||
+    if (ne == 0 || ne > 32 || rows == 0 ||
         a->nb[0] != 4 || (a->nb[1] % 4) != 0 || (b && ((b->nb[0] % 4) != 0 || (b->nb[1] % 4) != 0))) {
         return false;
     }
@@ -139,13 +140,28 @@ static inline bool hvx_gather_rows_sync(struct htp_ops_context * octx, const str
     task.na   = na;
     task.nb   = nb;
     task.ne   = ne;
-    task.rows = rows;
     task.vg   = ne / hex_gcd_u32(ne, 32);
     task.rg   = task.vg * 32 / ne;
 
+    uint32_t r_start = 0;
+    uint32_t r_count = rows;
+    if (octx->ctx->mdev.count > 1) {
+        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(
+            rows, task.rg, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
+        r_start = range.start;
+        r_count = range.count;
+    }
+
+    if (r_count == 0) {
+        return true;
+    }
+
+    task.r_start = r_start;
+    task.rows    = r_count;
+
     const uint32_t n_threads = octx->n_threads;
     task.slice = (uint32_t) (octx->ctx->vtcm_size / n_threads) & ~127u;
-    task.rows_per_thread = hex_round_up((rows + n_threads - 1) / n_threads, task.rg);
+    task.rows_per_thread = hex_round_up((r_count + n_threads - 1) / n_threads, task.rg);
 
     const uint32_t fixed   = 3 * task.vg * 128 + 3 * 128;
     const uint32_t per_row = a->nb[1] + (b ? nb * b->nb[1] : 0) + ne * 4;
