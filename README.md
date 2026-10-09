@@ -69,6 +69,7 @@ a wide range of hardware - locally and in the cloud.
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP and Moore Threads GPUs via MUSA)
 - Vulkan and SYCL backend support
+- OpenVINO backend for execution across Intel CPU, GPU and NPU, using OpenVINO's optimized low-bit kernels (refer to [Choosing a backend for Intel hardware](docs/build.md#choosing-a-backend-for-intel-hardware))
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
 The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-org/ggml) library.
@@ -89,7 +90,7 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 | [OpenCL](docs/backend/OPENCL.md) | Adreno GPU |
 | [OpenVINO [In Progress]](docs/backend/OPENVINO.md) | Intel CPUs, GPUs, and NPUs |
 | [RPC](https://github.com/ggml-org/llama.cpp/tree/master/tools/rpc) | All |
-| [SYCL](docs/backend/SYCL.md) | Intel GPU |
+| [SYCL](docs/backend/SYCL.md) | Intel Data Center GPU (Max and Flex Series) and discrete Arc hardware in cluster/server environments|
 | [VirtGPU](docs/backend/VirtGPU.md) | VirtGPU APIR |
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [WebGPU](docs/build.md#webgpu) | All |
