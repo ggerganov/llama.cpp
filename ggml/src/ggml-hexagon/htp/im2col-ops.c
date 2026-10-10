@@ -64,6 +64,12 @@ static inline uint16_t im2col_convert_f16(float value) {
     return (uint16_t) Q6_R_vextract_VR(dst, 0);
 }
 
+static __attribute__((noinline)) void im2col_copy_f16_f32_uu(uint8_t * restrict dst,
+                                                              const uint8_t * restrict src,
+                                                              uint32_t n) {
+    hvx_copy_f16_f32_uu(dst, src, n);
+}
+
 static inline void htp_im2col_vtcm_layout_build(struct htp_im2col_vtcm_layout * L,
                                                 size_t                          src_row_bytes,
                                                 size_t                          dst_row_bytes,
@@ -397,7 +403,7 @@ IM2COL_BLOCKED_DMA_BODY(im2col_blocked_dma_f32_thread, float,    hvx_copy_f32_uu
         }                                                                                                        \
     }
 
-IM2COL_PATCHEMBED_DMA_BODY(im2col_patchembed_dma_thread,     uint16_t, hvx_copy_f16_f32_uu, hvx_splat_u16_u, sizeof(__fp16), "pe-dma-f16")
+IM2COL_PATCHEMBED_DMA_BODY(im2col_patchembed_dma_thread,     uint16_t, im2col_copy_f16_f32_uu, hvx_splat_u16_u, sizeof(__fp16), "pe-dma-f16")
 IM2COL_PATCHEMBED_DMA_BODY(im2col_patchembed_dma_f32_thread, float,  hvx_copy_f32_uu,     hvx_splat_f32_u, sizeof(float),  "pe-dma-f32")
 
 static bool im2col_use_patchembed_dma(const struct htp_ops_context * octx) {
@@ -807,7 +813,7 @@ IM2COL_3D_BLOCKED_DMA_BODY(im2col_3d_blocked_dma_f32_thread, float, hvx_copy_f32
         }                                                                                                      \
     }
 
-IM2COL_3D_PATCHEMBED_DMA_BODY(im2col_3d_patchembed_dma_f16_thread, uint16_t, hvx_copy_f16_f32_uu, sizeof(__fp16))
+IM2COL_3D_PATCHEMBED_DMA_BODY(im2col_3d_patchembed_dma_f16_thread, uint16_t, im2col_copy_f16_f32_uu, sizeof(__fp16))
 IM2COL_3D_PATCHEMBED_DMA_BODY(im2col_3d_patchembed_dma_f32_thread, float,  hvx_copy_f32_uu,     sizeof(float))
 
 static bool im2col_3d_use_patchembed_dma(const struct htp_ops_context * octx) {
