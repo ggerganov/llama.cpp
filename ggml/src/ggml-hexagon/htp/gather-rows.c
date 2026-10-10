@@ -297,13 +297,13 @@ static void gather_rows_thread_f16(unsigned int nth, unsigned int ith, void * da
 
     const uint32_t nr_max = kparams->nr_max;
     const uint32_t nr0 = MIN(nr_max, r_end - r_beg);
-    dma_queue_push(q, dma_make_data(task->dst, out[0]), 0, 0, 0, 0);
+    dma_queue_push(q, dma_make_data(task->dst, out[0]), 0, 0, 0, 0); // dummy out
     gather_rows_dma_in(q, task, region[0], r_beg, nr0, 2);
 
     const uint32_t r1 = r_beg + nr_max;
     if (r1 < r_end) {
         const uint32_t nr1 = MIN(nr_max, r_end - r1);
-        dma_queue_push(q, dma_make_data(task->dst, out[1]), 0, 0, 0, 0);
+        dma_queue_push(q, dma_make_data(task->dst, out[1]), 0, 0, 0, 0); // dummy out
         gather_rows_dma_in(q, task, region[1], r1, nr1, 2);
     }
 
@@ -312,7 +312,7 @@ static void gather_rows_thread_f16(unsigned int nth, unsigned int ith, void * da
         const uint32_t nr = MIN(nr_max, r_end - r);
         const uint32_t next_buf = buf ^ 1;
 
-        dma_queue_pop(q);
+        dma_queue_pop(q); // complete out
         for (uint32_t i = 0; i < n_in; i++) {
             dma_queue_pop(q);
         }
