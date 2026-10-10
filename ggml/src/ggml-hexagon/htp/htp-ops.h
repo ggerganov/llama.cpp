@@ -115,6 +115,7 @@ enum htp_op_code {
     HTP_OP_UNARY_GELU_QUICK,
     HTP_OP_IM2COL_3D,
     HTP_OP_HADAMARD,
+    HTP_OP_DSV4_HC_PRE,
 
     HTP_OP_INVALID
 };
