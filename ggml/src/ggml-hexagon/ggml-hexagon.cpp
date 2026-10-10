@@ -7713,6 +7713,14 @@ static bool ggml_hexagon_supported_im2col(const struct ggml_hexagon_session * se
     return true;
 }
 
+static bool ggml_hexagon_im2col_mul_u64(uint64_t & value, uint64_t factor) {
+    if (factor != 0 && value > UINT64_MAX / factor) {
+        return false;
+    }
+    value *= factor;
+    return true;
+}
+
 static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
     const struct ggml_tensor * src1 = op->src[1];
     const struct ggml_tensor * dst  = op;
@@ -7723,11 +7731,6 @@ static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session *
     }
 
     if (!ggml_is_contiguous(src1) || !ggml_is_contiguous(dst)) {
-        return false;
-    }
-
-    if (opt_dma64 && src1->buffer &&
-        ggml_backend_buffer_get_usage(src1->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
         return false;
     }
 
@@ -7742,7 +7745,49 @@ static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session *
         return false;
     }
 
-    GGML_UNUSED(sess);
+    if (opt_dma64 && src1->buffer &&
+        ggml_backend_buffer_get_usage(src1->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+        const ggml_tensor * src0 = op->src[0];
+        const bool exact = params[0] == src0->ne[0] && params[1] == src0->ne[1] && params[2] == src0->ne[2] &&
+                           params[3] == 0 && params[4] == 0 && params[5] == 0 &&
+                           params[6] == 1 && params[7] == 1 && params[8] == 1;
+        uint64_t src_width = src1->ne[0];
+        uint64_t dst_width = dst->ne[1];
+        if (!exact) {
+            src_width = src0->ne[0] - 1;
+            if (!ggml_hexagon_im2col_mul_u64(src_width, params[6]) || src_width == UINT64_MAX) {
+                return false;
+            }
+            src_width += 1;
+            dst_width = 1;
+        }
+
+        uint64_t src_bytes = ic;
+        uint64_t dst_bytes = dst->ne[0];
+        if (!ggml_hexagon_im2col_mul_u64(src_bytes, src0->ne[2]) ||
+            !ggml_hexagon_im2col_mul_u64(src_bytes, src0->ne[1]) ||
+            !ggml_hexagon_im2col_mul_u64(src_bytes, src_width) ||
+            !ggml_hexagon_im2col_mul_u64(src_bytes, sizeof(float)) ||
+            !ggml_hexagon_im2col_mul_u64(dst_bytes, dst_width) ||
+            !ggml_hexagon_im2col_mul_u64(dst_bytes, ggml_type_size(dst->type))) {
+            return false;
+        }
+
+        if (src_bytes > sess->vtcm_size || dst_bytes > sess->vtcm_size) {
+            return false;
+        }
+        const uint32_t src_bytes_aligned = hex_round_up((uint32_t) src_bytes, 256);
+        const uint32_t dst_bytes_aligned = hex_round_up((uint32_t) dst_bytes, 256);
+        if ((uint64_t) dst->ne[2] > UINT32_MAX / (uint64_t) dst->ne[3]) {
+            return false;
+        }
+        const uint32_t total_rows = (uint32_t) (dst->ne[2] * dst->ne[3]);
+        const uint32_t n_threads = std::min(sess->n_threads, total_rows);
+        if (2ULL * n_threads * (src_bytes_aligned + dst_bytes_aligned) > sess->vtcm_size) {
+            return false;
+        }
+    }
+
     return true;
 }
 
