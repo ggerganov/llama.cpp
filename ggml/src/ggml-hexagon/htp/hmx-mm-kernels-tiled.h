@@ -26,6 +26,7 @@ struct tiled_dequantize_state {
 
     struct fastdiv_values     n_k_tiles_div;
     uint32_t                  n_k_tiles;
+    uint32_t                  n_weight_tiles;
     uint32_t                  n_tot_tiles;
     uint32_t                  n_tiles_per_task;
     uint32_t                  tile_size;
@@ -36,6 +37,48 @@ struct tiled_dequantize_state {
     size_t                    row_stride;
     uint32_t                  weight_type;
 };
+
+static void dequantize_tiled_weight_to_fp16_task_q1_0(
+        const tiled_dequantize_state_t *state,
+        uint32_t start_tile, uint32_t end_tile) {
+
+    const HVX_Vector v_neg_one = Q6_Vb_vsplat_R(-1);
+    const HVX_Vector v_pos_one = Q6_Vb_vsplat_R(1);
+
+    for (uint32_t t = start_tile; t < end_tile; t++) {
+        const uint32_t col_tile = t / state->n_weight_tiles;
+        const uint32_t k_tile = t - col_tile * state->n_weight_tiles;
+        const uint8_t * tile_src = state->src + t * state->aligned_tile_size;
+        __fp16 * dst_ptr = state->dst + (col_tile * state->n_k_tiles + 4 * k_tile) * HTP_MM_HMX_TILE_N_ELMS;
+
+        const HVX_Vector v_sc = hvx_vmem(tile_src + 512);
+        const HVX_Vector v_scale = Q6_V_lo_W(Q6_W_vshuff_VVR(v_sc, v_sc, -2));
+
+        for (uint32_t q = 0; q < 4; q++) {
+            const HVX_Vector v_plane = hvx_vmem(tile_src + q * 128);
+            __fp16 * quarter_dst = dst_ptr + q * HTP_MM_HMX_TILE_N_ELMS;
+
+            for (int g = 0; g < 4; g++) {
+                const HVX_VectorPred q_lo = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * g));
+                const HVX_VectorPred q_hi = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * g + 1));
+                const HVX_VectorPair v_q = Q6_W_vshuff_VVR(
+                    Q6_V_vmux_QVV(q_hi, v_pos_one, v_neg_one),
+                    Q6_V_vmux_QVV(q_lo, v_pos_one, v_neg_one), -1);
+                const HVX_VectorPair v_lo = Q6_Wh_vunpack_Vb(Q6_V_lo_W(v_q));
+                const HVX_VectorPair v_hi = Q6_Wh_vunpack_Vb(Q6_V_hi_W(v_q));
+
+                hvx_vmem(quarter_dst + (4 * g + 0) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(v_lo)), v_scale));
+                hvx_vmem(quarter_dst + (4 * g + 1) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(v_lo)), v_scale));
+                hvx_vmem(quarter_dst + (4 * g + 2) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(v_hi)), v_scale));
+                hvx_vmem(quarter_dst + (4 * g + 3) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(v_hi)), v_scale));
+            }
+        }
+    }
+}
 
 // Dequantize a single tile from tiled weight data (already in VTCM) to tile-major FP16.
 static void dequantize_tiled_weight_to_fp16_task_q4_0(

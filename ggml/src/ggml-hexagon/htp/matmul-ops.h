@@ -227,8 +227,8 @@ static inline void htp_mm_hmx_get_2d_chunk_costs(
     const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32 && wtype != HTP_TYPE_BF16);
     const size_t row_stride = htp_tensor_get_row_size(wtype, k);
     const size_t vec_dot_size = k * sizeof(uint16_t);
-    const uint32_t n_k_tiles = k / HTP_MM_HMX_TILE_N_COLS;
-    const size_t qweight_row_stride = is_quant ? (size_t)(n_k_tiles * aligned_tile_size) / 32 : 0;
+    const uint32_t n_weight_tiles = k / htp_tensor_get_tile_k(wtype);
+    const size_t qweight_row_stride = is_quant ? (size_t)(n_weight_tiles * aligned_tile_size) / 32 : 0;
 
     *size_per_n_out = (pipeline ? 2 : 1) * (is_quant ? qweight_row_stride : row_stride) +
                       (pipeline ? 2 * vec_dot_size : vec_dot_size);
@@ -359,11 +359,11 @@ static inline void htp_mm_hmx_vtcm_layout_build(
         const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32 && wtype != HTP_TYPE_BF16);
         const size_t row_stride = htp_tensor_get_row_size(wtype, k);
         const size_t vec_dot_size = k * sizeof(uint16_t);
-        const uint32_t n_k_tiles = k / HTP_MM_HMX_TILE_N_COLS;
+        const uint32_t n_weight_tiles = k / htp_tensor_get_tile_k(wtype);
 
         const size_t min_f32_size = hex_align_up(act_threads * HTP_MM_DMA_ACT_MULTIPLIER * k * sizeof(float), 128);
         const size_t weight_area_size = is_quant
-            ? hex_align_up((nc / 32) * n_k_tiles * aligned_tile_size, HTP_MM_HMX_TILE_SIZE)
+            ? hex_align_up((nc / 32) * n_weight_tiles * aligned_tile_size, HTP_MM_HMX_TILE_SIZE)
             : hex_align_up(nc * row_stride, HTP_MM_HMX_TILE_SIZE);
         const size_t act_area_size    = hex_align_up(mc * vec_dot_size, HTP_MM_HMX_TILE_SIZE);
         const size_t output_area_size = hex_align_up(mc * nc * sizeof(__fp16), HTP_MM_HMX_TILE_SIZE);

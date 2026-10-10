@@ -3769,6 +3769,13 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     bool is_matmul_id,
     bool is_batched
 ) {
+    if (src0->type == GGML_TYPE_Q1_0) {
+        if (!dst || dst->op != GGML_OP_MUL_MAT || dst->type != GGML_TYPE_F32 || src1->type != GGML_TYPE_F32 ||
+            !ggml_is_contiguous(src0) || !ggml_is_contiguous(src1) || !ggml_is_contiguous(dst) ||
+            is_matmul_id || is_batched || src0->ne[0] % QK1_0 != 0) {
+            return false;
+        }
+    }
     if (src1->type != GGML_TYPE_F32 && (src1->type != GGML_TYPE_F16 || is_matmul_id)) {
         return false;
     }
@@ -4221,7 +4228,7 @@ static void ggml_hexagon_precompute_matmul_params(
     const struct ggml_tensor * dst,
     struct htp_mm_kernel_params * kparams
 ) {
-    if (ggml_hexagon_matmul_can_collapse(src0, src1, dst)) {
+    if (src0->type != GGML_TYPE_Q1_0 && ggml_hexagon_matmul_can_collapse(src0, src1, dst)) {
         const ggml_tensor src1_collapsed = ggml_hexagon_tensor_collapse_rows(src1);
         const ggml_tensor dst_collapsed  = ggml_hexagon_tensor_collapse_rows(dst);
         ggml_hexagon_precompute_matmul_params_impl(sess, src0, &src1_collapsed, &dst_collapsed, 0, 0, kparams);
@@ -5382,7 +5389,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q3_K:
-        case GGML_TYPE_Q2_K:
+        case GGML_TYPE_Q2_K: {
             if (!ggml_is_contiguous(src0) || ggml_is_permuted(src0) || ggml_is_view(src0)) {
                 return false;
             }
@@ -5390,7 +5397,6 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
             if (src0->type == GGML_TYPE_Q1_0 && src1->type != GGML_TYPE_F32) {
                 return false;
             }
-
             const int64_t qk = src0->type == GGML_TYPE_Q1_0 ? QK1_0 :
                 ((src0->type == GGML_TYPE_Q6_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q4_K ||
                   src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q2_K) ? QK_K : 32);
@@ -5405,6 +5411,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
                 return false;
             }
             break;
+        }
 
         case GGML_TYPE_F16:
             if (src0->nb[1] < src0->nb[0]) {
