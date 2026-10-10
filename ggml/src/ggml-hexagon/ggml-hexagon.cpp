@@ -7713,6 +7713,39 @@ static bool ggml_hexagon_supported_im2col(const struct ggml_hexagon_session * se
     return true;
 }
 
+static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
+    const struct ggml_tensor * src1 = op->src[1];
+    const struct ggml_tensor * dst  = op;
+    const int32_t * params = (const int32_t *) op->op_params;
+
+    if (src1->type != GGML_TYPE_F32 || (dst->type != GGML_TYPE_F16 && dst->type != GGML_TYPE_F32)) {
+        return false;
+    }
+
+    if (!ggml_is_contiguous(src1) || !ggml_is_contiguous(dst)) {
+        return false;
+    }
+
+    if (opt_dma64 && src1->buffer &&
+        ggml_backend_buffer_get_usage(src1->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+        return false;
+    }
+
+    const int32_t ic = params[9];
+    if (params[0] <= 0 || params[1] <= 0 || params[2] <= 0 ||
+        params[3] < 0 || params[4] < 0 || params[5] < 0 ||
+        params[6] <= 0 || params[7] <= 0 || params[8] <= 0 || ic <= 0) {
+        return false;
+    }
+
+    if (src1->ne[3] % ic != 0) {
+        return false;
+    }
+
+    GGML_UNUSED(sess);
+    return true;
+}
+
 static bool ggml_hexagon_supported_pad(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
     const struct ggml_tensor * src0 = op->src[0];
     const struct ggml_tensor * dst  = op;
@@ -7875,6 +7908,7 @@ static htp_op_code op_remap_to_htp(const ggml_tensor * t) {
         case GGML_OP_TRI:             return HTP_OP_TRI;
         case GGML_OP_PAD:             return HTP_OP_PAD;
         case GGML_OP_IM2COL:          return HTP_OP_IM2COL;
+        case GGML_OP_IM2COL_3D:       return HTP_OP_IM2COL_3D;
         case GGML_OP_ROLL:            return HTP_OP_ROLL;
 
         case GGML_OP_UNARY:
@@ -9016,6 +9050,10 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
 
         case GGML_OP_IM2COL:
             supp = ggml_hexagon_supported_im2col(sess, op);
+            break;
+
+        case GGML_OP_IM2COL_3D:
+            supp = ggml_hexagon_supported_im2col_3d(sess, op);
             break;
 
         case GGML_OP_GATED_DELTA_NET:

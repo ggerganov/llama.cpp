@@ -492,6 +492,193 @@ static bool im2col_blocked_dma_fits(struct htp_ops_context *    octx,
     return false;
 }
 
+#define IM2COL_3D_BODY(FNAME, DST_CTYPE)                                                                      \
+    static void FNAME(unsigned int nth, unsigned int ith, void * data) {                                      \
+        struct htp_im2col_context * ictx        = (struct htp_im2col_context *) data;                         \
+        struct htp_ops_context *    octx        = ictx->octx;                                                 \
+        struct htp_thread_trace * restrict tr   = &octx->ctx->trace[ith];                                     \
+        const struct htp_tensor * restrict src0 = octx->src[0];                                               \
+        const struct htp_tensor * restrict src1 = octx->src[1];                                               \
+        const struct htp_tensor * restrict dst  = octx->dst;                                                  \
+        const int32_t s0 = octx->op_params[0], s1 = octx->op_params[1], s2 = octx->op_params[2];             \
+        const int32_t p0 = octx->op_params[3], p1 = octx->op_params[4], p2 = octx->op_params[5];             \
+        const int32_t d0 = octx->op_params[6], d1 = octx->op_params[7], d2 = octx->op_params[8];             \
+        const uint32_t IC = (uint32_t) octx->op_params[9];                                                    \
+        const uint32_t N  = src1->ne[3] / IC;                                                                 \
+        const uint32_t ID = src1->ne[2], IH = src1->ne[1], IW = src1->ne[0];                                 \
+        const uint32_t KD = src0->ne[2], KH = src0->ne[1], KW = src0->ne[0];                                 \
+        const uint32_t OD = dst->ne[3] / N, OH = dst->ne[2], OW = dst->ne[1];                                \
+        const uint32_t patch_stride = dst->ne[0];                                                             \
+        const float * restrict src_data = (const float *) (uintptr_t) src1->data;                             \
+        DST_CTYPE * restrict dst_data   = (DST_CTYPE *) (uintptr_t) dst->data;                                \
+        const uint64_t patch_end   = (uint64_t) ictx->patch_base + ictx->npatches;                            \
+        const uint64_t patch_start = (uint64_t) ictx->patch_base + (uint64_t) ictx->npatches_per_thread * ith; \
+        const uint64_t patch_stop  = MIN(patch_start + ictx->npatches_per_thread, patch_end);                 \
+        if (patch_start >= patch_stop) {                                                                      \
+            return;                                                                                           \
+        }                                                                                                     \
+        htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, patch_start);                                       \
+        for (uint64_t patch = patch_start; patch < patch_stop; patch++) {                                     \
+            uint32_t rem = patch;                                                                             \
+            const uint32_t iow = rem % OW;                                                                    \
+            rem /= OW;                                                                                        \
+            const uint32_t ioh = rem % OH;                                                                    \
+            rem /= OH;                                                                                        \
+            const uint32_t iod = rem % OD;                                                                    \
+            const uint32_t in  = rem / OD;                                                                    \
+            DST_CTYPE * restrict dst_patch = dst_data + (uint64_t) patch * patch_stride;                      \
+            for (uint32_t iic = 0; iic < IC; iic++) {                                                         \
+                const float * restrict src_volume = src_data + (uint64_t) (in * IC + iic) * ID * IH * IW;    \
+                for (uint32_t ikd = 0; ikd < KD; ikd++) {                                                     \
+                    const int64_t iid = (int64_t) iod * s2 + (int64_t) ikd * d2 - p2;                         \
+                    for (uint32_t ikh = 0; ikh < KH; ikh++) {                                                 \
+                        const int64_t iih = (int64_t) ioh * s1 + (int64_t) ikh * d1 - p1;                     \
+                        DST_CTYPE * restrict out_run = dst_patch +                                           \
+                            ((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * KW;                      \
+                        for (uint32_t ikw = 0; ikw < KW; ikw++) {                                             \
+                            const int64_t iiw = (int64_t) iow * s0 + (int64_t) ikw * d0 - p0;                 \
+                            if (iid < 0 || iid >= ID || iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {      \
+                                out_run[ikw] = (DST_CTYPE) 0.0f;                                              \
+                            } else {                                                                          \
+                                out_run[ikw] = (DST_CTYPE) src_volume[((uint64_t) iid * IH + iih) * IW + iiw]; \
+                            }                                                                                 \
+                        }                                                                                     \
+                    }                                                                                         \
+                }                                                                                             \
+            }                                                                                                 \
+        }                                                                                                     \
+        htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, patch_start);                                        \
+    }
+
+IM2COL_3D_BODY(im2col_3d_f16_thread, __fp16)
+IM2COL_3D_BODY(im2col_3d_f32_thread, float)
+
+static bool im2col_3d_output_size(uint32_t input, uint32_t kernel, int32_t stride, int32_t padding,
+                                  int32_t dilation, uint32_t * output) {
+    if (stride <= 0 || padding < 0 || dilation <= 0 || kernel == 0) {
+        return false;
+    }
+
+    const int64_t numerator = (int64_t) input + 2LL * padding - (int64_t) dilation * (kernel - 1) - 1;
+    if (numerator < 0) {
+        return false;
+    }
+
+    const uint64_t size = (uint64_t) (numerator / stride) + 1;
+    if (size == 0 || size > UINT32_MAX) {
+        return false;
+    }
+
+    *output = (uint32_t) size;
+    return true;
+}
+
+static bool im2col_3d_mul_u32(uint64_t * value, uint32_t factor) {
+    if (factor != 0 && *value > UINT64_MAX / factor) {
+        return false;
+    }
+    *value *= factor;
+    return true;
+}
+
+int op_im2col_3d(struct htp_ops_context * octx) {
+    const struct htp_tensor * src0 = octx->src[0];
+    const struct htp_tensor * src1 = octx->src[1];
+    const struct htp_tensor * dst  = octx->dst;
+
+    if (src1->type != HTP_TYPE_F32 || (dst->type != HTP_TYPE_F16 && dst->type != HTP_TYPE_F32)) {
+        FARF(ERROR, "im2col_3d: only (F32 image -> F16/F32 columns) supported");
+        return HTP_STATUS_NO_SUPPORT;
+    }
+    if (!htp_tensor_is_contiguous(src1, sizeof(float)) ||
+        !htp_tensor_is_contiguous(dst, dst->type == HTP_TYPE_F16 ? sizeof(__fp16) : sizeof(float))) {
+        return HTP_STATUS_NO_SUPPORT;
+    }
+    if (htp_tensor_is_extended(src1) || htp_tensor_is_extended(dst)) {
+        return HTP_STATUS_NO_SUPPORT;
+    }
+
+    const int32_t s0 = octx->op_params[0], s1 = octx->op_params[1], s2 = octx->op_params[2];
+    const int32_t p0 = octx->op_params[3], p1 = octx->op_params[4], p2 = octx->op_params[5];
+    const int32_t d0 = octx->op_params[6], d1 = octx->op_params[7], d2 = octx->op_params[8];
+    const int32_t ic = octx->op_params[9];
+    if (ic <= 0 || src1->ne[3] % (uint32_t) ic != 0) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    const uint32_t IC = (uint32_t) ic;
+    const uint32_t N  = src1->ne[3] / IC;
+    if (N == 0) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    uint32_t OW, OH, OD;
+    if (!im2col_3d_output_size(src1->ne[0], src0->ne[0], s0, p0, d0, &OW) ||
+        !im2col_3d_output_size(src1->ne[1], src0->ne[1], s1, p1, d1, &OH) ||
+        !im2col_3d_output_size(src1->ne[2], src0->ne[2], s2, p2, d2, &OD)) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    uint64_t src_elements = 1;
+    uint64_t patch_stride = IC;
+    uint64_t total_patches = N;
+    uint64_t dst_ne3 = N;
+    if (!im2col_3d_mul_u32(&src_elements, src1->ne[0]) ||
+        !im2col_3d_mul_u32(&src_elements, src1->ne[1]) ||
+        !im2col_3d_mul_u32(&src_elements, src1->ne[2]) ||
+        !im2col_3d_mul_u32(&src_elements, src1->ne[3]) ||
+        !im2col_3d_mul_u32(&patch_stride, src0->ne[2]) ||
+        !im2col_3d_mul_u32(&patch_stride, src0->ne[1]) ||
+        !im2col_3d_mul_u32(&patch_stride, src0->ne[0]) ||
+        !im2col_3d_mul_u32(&total_patches, OD) ||
+        !im2col_3d_mul_u32(&total_patches, OH) ||
+        !im2col_3d_mul_u32(&total_patches, OW) ||
+        !im2col_3d_mul_u32(&dst_ne3, OD)) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+    if (patch_stride > UINT32_MAX || total_patches > UINT32_MAX || dst_ne3 > UINT32_MAX ||
+        dst->ne[0] != patch_stride || dst->ne[1] != OW || dst->ne[2] != OH || dst->ne[3] != dst_ne3) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    if (src_elements > src1->size / sizeof(float)) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    const uint32_t dst_elem = dst->type == HTP_TYPE_F16 ? sizeof(__fp16) : sizeof(float);
+    const uint64_t patch_bytes = patch_stride * dst_elem;
+    if (patch_bytes > dst->size || total_patches > dst->size / patch_bytes) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
+    uint32_t patch_base = 0;
+    uint32_t npatches   = (uint32_t) total_patches;
+    if (octx->ctx->mdev.count > 1) {
+        const uint32_t patch_size = dst->nb[1];
+        const uint32_t patches_per_chunk =
+            (patch_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(patch_size, HEX_L2_LINE_SIZE)) : 1;
+        const struct htp_tensor_mdev_range range =
+            htp_tensor_mdev_partition(npatches, htp_tensor_mdev_data_aligned(dst) ? patches_per_chunk : 0,
+                                      octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
+        patch_base = range.start;
+        npatches   = range.count;
+    }
+    if (npatches == 0) {
+        return HTP_STATUS_OK;
+    }
+
+    const uint32_t n_threads = MIN(octx->n_threads, npatches);
+    struct htp_im2col_context ictx = { 0 };
+    ictx.octx                = octx;
+    ictx.patch_base          = patch_base;
+    ictx.npatches            = npatches;
+    ictx.npatches_per_thread = npatches / n_threads + (npatches % n_threads != 0);
+
+    work_queue_run(octx->ctx->work_queue,
+        dst->type == HTP_TYPE_F16 ? im2col_3d_f16_thread : im2col_3d_f32_thread, &ictx, n_threads);
+    return HTP_STATUS_OK;
+}
+
 int op_im2col(struct htp_ops_context * octx) {
     const struct htp_tensor * src1 = octx->src[1];
     const struct htp_tensor * dst  = octx->dst;
