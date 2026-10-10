@@ -9,6 +9,7 @@
 
 // unit tests for server internal components, no model required
 // NOTE: end-to-end tests live in tools/server/tests
+// see skills/code-review/SKILL.md for more
 
 //
 // server_tokens (text only, has_mtmd = false)
