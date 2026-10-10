@@ -346,9 +346,5 @@ int op_concat(struct htp_ops_context * octx) {
 
     htp_ops_context_set_status(octx, status);
 
-    if (octx->ctx->mdev.count > 1) {
-        htp_mdev_group_barrier(octx);
-    }
-
     return octx->status;
 }

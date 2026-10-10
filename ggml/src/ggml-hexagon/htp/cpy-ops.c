@@ -466,11 +466,11 @@ int op_cpy(struct htp_ops_context * octx) {
 
     htp_ops_context_set_status(octx, status);
 
-    if (octx->ctx->mdev.count > 1) {
-        htp_mdev_group_barrier(octx);
-    }
-
     if (octx->op == HTP_OP_CPY_FENCE) {
+        if (octx->ctx->mdev.count > 1) {
+            htp_mdev_group_barrier(octx);
+        }
+
         if (octx->ctx->mdev.idx == 0) {
             const struct htp_tensor * sync = octx->src[1];
             const uint32_t seq = (uint32_t) octx->op_params[0];
