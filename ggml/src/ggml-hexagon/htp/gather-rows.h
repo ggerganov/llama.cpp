@@ -54,8 +54,12 @@ static inline bool htp_gather_rows_solve_layout(
     const uint32_t vg      = ne / g;
 
     const uint32_t slice = (vtcm_size / n_threads) & ~127u;
-    const uint32_t rows_per_dev = (total_rows + mdev_count - 1) / mdev_count;
-    const uint32_t rows_per_thread = hex_round_up((rows_per_dev + n_threads - 1) / n_threads, rg);
+    const uint32_t total_chunks = total_rows / rg;
+    const uint32_t chunks_per_dev = (total_chunks + mdev_count - 1) / mdev_count;
+    const uint32_t max_rows_per_dev = (mdev_count > 1 && total_chunks >= mdev_count)
+        ? (chunks_per_dev * rg + (total_rows % rg))
+        : total_rows;
+    const uint32_t rows_per_thread = hex_round_up((max_rows_per_dev + n_threads - 1) / n_threads, rg);
 
     const uint32_t fixed = 3 * vg * 128;
     const uint32_t per_row = a_nb1 + (nb > 0 ? (b_dense ? b_nb1 : nb * b_nb1) : 0) + ne * elem_size;

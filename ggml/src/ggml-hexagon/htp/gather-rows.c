@@ -352,15 +352,11 @@ int htp_gather_rows(
     const uint32_t total_rows = kparams->total_rows;
     uint32_t r_start = 0;
     uint32_t r_count = total_rows;
-    uint32_t rows_per_thread = kparams->rows_per_thread;
     if (octx->ctx->mdev.count > 1) {
         const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(
             total_rows, kparams->rg, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
         r_start = range.start;
         r_count = range.count;
-        assert((kparams->rg & (kparams->rg - 1)) == 0);
-        const uint32_t rpt = fastdiv(r_count + octx->n_threads - 1, &octx->n_threads_div);
-        rows_per_thread = (rpt + kparams->rg - 1) & ~(kparams->rg - 1);
     }
 
     if (r_count == 0) {
@@ -377,7 +373,7 @@ int htp_gather_rows(
     task.r_start         = r_start;
     task.rows            = r_count;
     task.kparams         = kparams;
-    task.rows_per_thread = rows_per_thread;
+    task.rows_per_thread = kparams->rows_per_thread;
 
     if (elem_size == 2) {
         task.compute = (kparams->vg == 1) ? gather_rows_compute_f16_vg1 : gather_rows_compute_f16_vgn;
