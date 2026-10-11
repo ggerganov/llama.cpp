@@ -24,6 +24,7 @@ from .constants import (
     GGUFEndian,
     GGUFValueType,
     Keys,
+    RopeSectionOrder,
     RopeScalingType,
     PoolingType,
     TokenType,
@@ -1154,6 +1155,9 @@ class GGUFWriter:
     def add_rope_dimension_sections(self, dims: Sequence[int]) -> None:
         self.add_array(Keys.Rope.DIMENSION_SECTIONS.format(arch=self.arch), dims)
 
+    def add_rope_section_order(self, value: RopeSectionOrder) -> None:
+        self.add_string(Keys.Rope.SECTION_ORDER.format(arch=self.arch), value.value)
+
     def add_rope_freq_base(self, value: float) -> None:
         self.add_float32(Keys.Rope.FREQ_BASE.format(arch=self.arch), value)
 
@@ -1462,6 +1466,9 @@ class GGUFWriter:
     def add_vision_projector_scale_factor(self, value: int) -> None:
         self.add_uint32(Keys.ClipVision.Projector.SCALE_FACTOR, value)
 
+    def add_vision_max_slice_nums(self, value: int) -> None:
+        self.add_uint32(Keys.ClipVision.MAX_SLICE_NUMS, value)
+
     def add_vision_n_wa_pattern(self, value: int) -> None:
         """Add window attention pattern interval for vision models.
 
@@ -1626,6 +1633,39 @@ class GGUFWriter:
 
     def add_xielu_eps(self, values: Sequence[float]):
         self.add_array(Keys.xIELU.EPS, values)
+
+    def add_prism_hadamard_version(self, value: int) -> None:
+        self.add_uint32(Keys.PrismHadamard.VERSION, value)
+
+    def add_prism_hadamard_tied_output(self, value: bool) -> None:
+        self.add_bool(Keys.PrismHadamard.TIED_OUTPUT, value)
+
+    def add_prism_hadamard_block_size(self, value: int) -> None:
+        self.add_uint32(Keys.PrismHadamard.BLOCK_SIZE, value)
+
+    def add_prism_hadamard_transform(self, value: str) -> None:
+        self.add_string(Keys.PrismHadamard.TRANSFORM, value)
+
+    def add_prism_hadamard_axis(self, value: str) -> None:
+        self.add_string(Keys.PrismHadamard.AXIS, value)
+
+    def add_prism_hadamard_sign_mode(self, value: str) -> None:
+        self.add_string(Keys.PrismHadamard.SIGN_MODE, value)
+
+    def add_prism_hadamard_sign_widths(self, values: Sequence[int]) -> None:
+        self.add_array(Keys.PrismHadamard.SIGN_WIDTHS, values)
+
+    def add_prism_hadamard_sign_values(self, values: Sequence[int]) -> None:
+        self.add_array(Keys.PrismHadamard.SIGN_VALUES, values)
+
+    def add_prism_hadamard_weight_names(self, names: Sequence[str]) -> None:
+        self.add_array(Keys.PrismHadamard.WEIGHT_NAMES, names)
+
+    def add_prism_hadamard_inverse_weight_names(self, names: Sequence[str]) -> None:
+        self.add_array(Keys.PrismHadamard.INVERSE_WEIGHT_NAMES, names)
+
+    def add_prism_hadamard_gdn_v_grouped(self, value: bool) -> None:
+        self.add_bool(Keys.PrismHadamard.GDN_V_GROUPED, value)
 
     def add_attention_value_expert_count(self, count: int):
         self.add_uint32(Keys.Attention.VALUE_EXPERT_COUNT.format(arch=self.arch), count)

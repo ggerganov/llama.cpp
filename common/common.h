@@ -970,9 +970,13 @@ enum common_decision_type {
 
 common_decision_type common_get_decision_type(const struct llama_model * model);
 
-// same as above, but reads a GGUF file; it does not load the model
-// returns COMMON_DECISION_TYPE_UNKNOWN if the file is missing, unreadable, or invalid
-common_decision_type common_get_decision_type(const std::string & fname);
+// metadata of a GGUF file, read without loading the model
+struct common_gguf_info {
+    common_decision_type decision_type = COMMON_DECISION_TYPE_UNKNOWN; // UNKNOWN if the file is missing, unreadable, or invalid
+    uint32_t             n_ctx_train   = 0;                            // 0 if unknown
+};
+
+common_gguf_info common_get_gguf_info(const std::string & fname);
 
 // note: defines the model, context, samplers, ets. lifetimes
 struct common_init_result {
@@ -1070,6 +1074,7 @@ struct common_batch {
         llama_seq_id seq_id; // the first sequence id, see add_seq()
         bool         output;
         llama_embd   embd; // non-owning view of the data passed to add_embd()/set_embd(), data == NULL if none
+        llama_embd   state; // non-owning view of the data passed to set_embd_state(), data == NULL if none
         std::vector<llama_seq_id> seq_ids_extra; // see add_seq()
         int32_t      decision_order = 0; // see llama_batch_ext_set_decision_order()
     };
@@ -1106,6 +1111,9 @@ struct common_batch {
 
     // attach a token embedding to the entry at idx, can only be set once per entry
     bool set_embd(int32_t idx, llama_embd embd);
+
+    // attach a state embedding (e.g. the target hidden state for MTP) to the entry at idx, can only be set once per entry
+    bool set_embd_state(int32_t idx, llama_embd state);
 
     // add an embedding-only entry (no token id)
     // pos points to n_pos positions
