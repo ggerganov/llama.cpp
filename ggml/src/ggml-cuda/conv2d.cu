@@ -379,7 +379,7 @@ void ggml_cuda_op_conv2d(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const bool   use_mma =
         turing_mma_available(device.cc) || amd_wmma_available(device.cc) || amd_mfma_available(device.cc);
     // Devices without a native fragment implementation in mma.cuh can share the tiling.
-    const bool use_simt   = GGML_CUDA_CC_IS_MTHREADS(device.cc) || (GGML_CUDA_CC_IS_AMD(device.cc) && !use_mma);
+    const bool use_simt   = GGML_CUDA_CC_IS_MTHREADS(device.cc) || (GGML_CUDA_CC_IS_AMD(device.cc) && !use_mma && IC * KW * KH >= 64);
     const bool pointwise  = KW == 1 && KH == 1 && ST_X == 1 && ST_Y == 1 && PD_X == 0 && PD_Y == 0;
     const bool use_blas   = pointwise && fast_fp16_hardware_available(device.cc);
     // Short reductions on small maps do not amortize conversion and launch costs.
