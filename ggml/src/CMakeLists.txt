@@ -484,6 +484,10 @@ function(ggml_add_cpu_backend_variant tag_name)
     ggml_add_cpu_backend_variant_impl(${tag_name})
 endfunction()
 
+if (GGML_DMABUF)
+    add_subdirectory(ggml-dmabuf)
+endif()
+
 ggml_add_backend(CPU)
 
 if (GGML_CPU_ALL_VARIANTS)
