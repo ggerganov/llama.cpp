@@ -118,6 +118,15 @@ static inline HVX_Vector hvx_vec_step_f32(HVX_Vector v) {
     return Q6_V_vmux_QVV(q, one, zero);
 }
 
+static inline HVX_Vector hvx_vec_sgn_f32(HVX_Vector v) {
+    const HVX_Vector zero    = Q6_V_vzero();
+    const HVX_Vector one     = hvx_vec_splat_f32(1.0f);
+    const HVX_Vector neg_one = hvx_vec_splat_f32(-1.0f);
+    HVX_VectorPred pos = Q6_Q_vcmp_gt_VsfVsf(v, zero);
+    HVX_VectorPred neg = Q6_Q_vcmp_gt_VsfVsf(zero, v);
+    return Q6_V_vmux_QVV(pos, one, Q6_V_vmux_QVV(neg, neg_one, zero));
+}
+
 static inline HVX_Vector hvx_vec_step_f16(HVX_Vector v) {
     const HVX_Vector zero = Q6_V_vzero();
     const HVX_Vector one  = hvx_vec_splat_f16((_Float16) 1.0f);

@@ -976,6 +976,20 @@ static void ceil_f32(const void * restrict src,
     }
 }
 
+static void sgn_f32(const void * restrict src,
+                    void * restrict dst,
+                    const uint32_t num_rows,
+                    const struct htp_unary_context * uctx) {
+    htp_unary_op_preamble;
+
+    for (uint32_t ir = 0; ir < num_rows; ir++) {
+        const uint8_t * restrict src_local = (const uint8_t *)src + (ir * src0_row_size_aligned);
+        uint8_t * restrict dst_local       = (uint8_t *)dst + (ir * dst_row_size_aligned);
+
+        hvx_sgn_f32_aa(dst_local, src_local, ne0);
+    }
+}
+
 static void log_f32(const void * restrict src,
                     void * restrict dst,
                     const uint32_t num_rows,
@@ -1089,9 +1103,15 @@ static void tile_step_f32(void * restrict dst, const void * restrict src, uint32
     hvx_step_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
 }
 
+<<<<<<< HEAD
 static void tile_ceil_f32(void * restrict dst, const void * restrict src, uint32_t tw, const struct htp_unary_context * uctx) {
     (void) uctx;
     hvx_ceil_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
+=======
+static void tile_sgn_f32(void * restrict dst, const void * restrict src, uint32_t tw, const struct htp_unary_context * uctx) {
+    (void) uctx;
+    hvx_sgn_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
+>>>>>>> e6d401df1 (hexagon : add SGN support)
 }
 
 static void tri_apply_tile_f32(const void * restrict src, void * restrict dst,
@@ -1738,6 +1758,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         case HTP_OP_UNARY_RELU:      op_type = "relu-f32";                                   break;
         case HTP_OP_UNARY_STEP:      op_type = is_f16 ? "step-f16"     : "step-f32";         break;
         case HTP_OP_UNARY_CEIL:      op_type = is_f16 ? "ceil-f16"     : "ceil-f32";         break;
+        case HTP_OP_UNARY_SGN:       op_type = "sgn-f32";                                    break;
         case HTP_OP_L2_NORM:         op_type = is_f16 ? "l2norm-f16"   : "l2norm-f32";       break;
         case HTP_OP_TRI:             op_type = "tri-f32";                                    break;
         case HTP_OP_HADAMARD:        op_type = is_f16 ? "hadamard-f16" : "hadamard-f32";     break;
@@ -1752,11 +1773,18 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
-    const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const bool flatten = kparams->flatten;
+    const uint32_t src0_ne0 = flatten ? src0->size / sizeof(float) : src0->ne[0];
+    const uint32_t dst_ne0  = flatten ? dst->size  / sizeof(float) : dst->ne[0];
+    const uint64_t src0_nrows64 = (uint64_t) src0->ne[1] * src0->ne[2] * src0->ne[3];
+    if (!flatten && src0_nrows64 > UINT32_MAX) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+    const uint32_t src0_nrows = flatten ? 1 : (uint32_t) src0_nrows64;
     const size_t src0_elem_size = is_f16 ? sizeof(_Float16) : sizeof(float);
     const size_t dst_elem_size  = (dst->type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
-    const size_t src0_data_row_size = src0->ne[0] * src0_elem_size;
-    const size_t dst_data_row_size  = dst->ne[0]  * dst_elem_size;
+    const size_t src0_data_row_size = src0_ne0 * src0_elem_size;
+    const size_t dst_data_row_size  = dst_ne0  * dst_elem_size;
 
     uint32_t row_start = 0;
     uint32_t nrows     = src0_nrows;
@@ -1832,7 +1860,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         .dst_vtcm_half_size    = L.dst_bytes >> 1,
 
         .block                 = kparams->block,
-        .nc                    = src0->ne[0],
+        .nc                    = src0_ne0,
         .col_tile              = col_tile,
         .broadcast_weight      = broadcast_weight,
 
@@ -1871,7 +1899,11 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_LOG:       compute_func = (void *) tile_log_f32;            break;
             case HTP_OP_UNARY_RELU:      compute_func = (void *) tile_relu_f32;           break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) tile_step_f32;           break;
+<<<<<<< HEAD
             case HTP_OP_UNARY_CEIL:      compute_func = (void *) tile_ceil_f32;           break;
+=======
+            case HTP_OP_UNARY_SGN:       compute_func = (void *) tile_sgn_f32;            break;
+>>>>>>> e6d401df1 (hexagon : add SGN support)
             case HTP_OP_TRI:
                 task_func    = unary_thread_tiled_tri_f32;
                 compute_func = (void *) tri_apply_tile_f32;
@@ -1922,7 +1954,11 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_LOG:       compute_func = (void *) log_f32;                 break;
             case HTP_OP_UNARY_RELU:      compute_func = (void *) relu_f32;                break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) step_f32;                break;
+<<<<<<< HEAD
             case HTP_OP_UNARY_CEIL:      compute_func = (void *) ceil_f32;                break;
+=======
+            case HTP_OP_UNARY_SGN:       compute_func = (void *) sgn_f32;                 break;
+>>>>>>> e6d401df1 (hexagon : add SGN support)
             case HTP_OP_L2_NORM:         compute_func = (void *) l2_norm_f32;             break;
             case HTP_OP_HADAMARD:        compute_func = (void *) hadamard_f32;            break;
             case HTP_OP_TRI:
