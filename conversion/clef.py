@@ -4,7 +4,7 @@ import json
 import math
 
 from pathlib import Path
-from typing import Any, Iterable, Iterator, TYPE_CHECKING
+from typing import Any, Callable, Iterable, Iterator, TYPE_CHECKING
 
 import torch
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from .base import ModelBase, gguf, logger
 from .qwen import Qwen3_5TextModel
-from .qwen3vl import Qwen3VLVisionModel
+from .qwen3vl import Qwen3OmniMmprojModel, Qwen3OmniMoeTextModel, Qwen3VLVisionModel
 
 
 def _is_clef_checkpoint(dir_model: Path) -> bool:
@@ -24,16 +24,16 @@ def _is_clef_checkpoint(dir_model: Path) -> bool:
 def _load_clef_hparams(dir_model: Path) -> dict[str, Any]:
     logger.info("gguf: detected Clef checkpoint")
     hparams = ModelBase.load_hparams(dir_model, False, guess=False)
-    hparams["architectures"] = ["ClefModel"]
+    # clef-omni has the same head on the Qwen3-Omni thinker
+    is_omni = hparams["architectures"][0] == "Qwen3OmniMoeForConditionalGeneration"
+    hparams["architectures"] = ["ClefOmniModel" if is_omni else "ClefModel"]
     with open(dir_model / "joint_head_config.json", encoding="utf-8") as f:
         hparams["decision"] = json.load(f)
     return hparams
 
 
-@ModelBase.register("ClefModel")
-class ClefModel(Qwen3_5TextModel):
-    model_arch = gguf.MODEL_ARCH.CLEF
-    no_mtp = True  # the checkpoint has no MTP head
+class _ClefHeadMixin:
+    # the joint schema head, on top of the text model of the class that uses this mixin
 
     # prompt follows joint_schema_model.py of the model repo
     _SYSTEM_PROMPT = (
@@ -42,6 +42,16 @@ class ClefModel(Qwen3_5TextModel):
     )
     # torch.nn.LayerNorm default, used by the head
     _HEAD_NORM_EPS = 1e-5
+    # clef-omni puts a newline after each image, clef after all of them
+    _NEWLINE_PER_IMAGE = False
+
+    model_arch: gguf.MODEL_ARCH
+    hparams: dict[str, Any]
+    block_count: int
+    gguf_writer: gguf.GGUFWriter
+    dir_model: Path
+    format_tensor_name: Callable[..., str]
+    map_tensor_name: Callable[..., str]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,7 +62,7 @@ class ClefModel(Qwen3_5TextModel):
         self._scales: dict[str, float] = {}
 
     def set_vocab(self):
-        super().set_vocab()
+        super().set_vocab()  # ty: ignore[unresolved-attribute]
         self.gguf_writer.add_chat_template([{"name": "systemone", "template": self._systemone_template()}])
 
     @classmethod
@@ -75,9 +85,13 @@ class ClefModel(Qwen3_5TextModel):
             "{% endif %}"
             "{{ ({'option_id': o.key} if d is none else {'description': d, 'option_id': o.key}) | tojson(separators=[',', ':']) }}"
         )
+        if cls._NEWLINE_PER_IMAGE:
+            images = "{% for image in images %}{{ image }}" + text("\n") + "{% endfor %}"
+        else:
+            images = "{% for image in images %}{{ image }}{% endfor %}" + text("\n")
         return (
             text(f"<|im_start|>system\n{cls._SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\nSTATE:\n")
-            + "{% if images %}{{ sep }}{% for image in images %}{{ image }}{% endfor %}" + text("\n") + "{% endif %}"
+            + "{% if images %}{{ sep }}" + images + "{% endif %}"
             + "{{ sep }}" + render("state")
             + "{{ sep }}" + text("\n\nSCHEMA FIELDS:\n")
             + "{% for q in questions %}"
@@ -96,7 +110,7 @@ class ClefModel(Qwen3_5TextModel):
         )
 
     def set_gguf_parameters(self):
-        super().set_gguf_parameters()
+        super().set_gguf_parameters()  # ty: ignore[unresolved-attribute]
         head = self.hparams["decision"]
         self.gguf_writer.add_decision_type(gguf.DecisionType.CLEF)
         self.gguf_writer.add_decision_routing_block_count(head["routing_layers"])
@@ -105,14 +119,14 @@ class ClefModel(Qwen3_5TextModel):
         self.gguf_writer.add_layer_norm_eps(self._HEAD_NORM_EPS)
 
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
-        yield from super().get_tensors()
+        yield from super().get_tensors()  # ty: ignore[unresolved-attribute]
         from safetensors.torch import load_file
         for name, data in load_file(self.dir_model / "joint_head.safetensors").items():
             yield "joint_head." + name, data
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         if not name.startswith("joint_head."):
-            yield from super().modify_tensors(data_torch, name, bid)
+            yield from super().modify_tensors(data_torch, name, bid)  # ty: ignore[unresolved-attribute]
             return
 
         parts = name.split(".")
@@ -146,5 +160,22 @@ class ClefModel(Qwen3_5TextModel):
 
 
 @ModelBase.register("ClefModel")
+class ClefModel(_ClefHeadMixin, Qwen3_5TextModel):
+    model_arch = gguf.MODEL_ARCH.CLEF
+    no_mtp = True  # the checkpoint has no MTP head
+
+
+@ModelBase.register("ClefModel")
 class ClefVisionModel(Qwen3VLVisionModel):
+    pass
+
+
+@ModelBase.register("ClefOmniModel")
+class ClefOmniModel(_ClefHeadMixin, Qwen3OmniMoeTextModel):
+    model_arch = gguf.MODEL_ARCH.CLEF_OMNI
+    _NEWLINE_PER_IMAGE = True
+
+
+@ModelBase.register("ClefOmniModel")
+class ClefOmniMmprojModel(Qwen3OmniMmprojModel):
     pass

@@ -4,9 +4,7 @@
 
 #include <cmath>
 
-void llama_model_clef::load_arch_hparams(llama_model_loader & ml) {
-    llama_model_qwen35::load_arch_hparams(ml);
-
+void llama_clef_head::load_hparams(llama_model_loader & ml, llama_hparams & hparams) {
     ml.get_key(LLM_KV_DECISION_ROUTING_BLOCK_COUNT, n_layer_routing);
     ml.get_key(LLM_KV_DECISION_BLOCK_COUNT,         n_layer_joint);
     ml.get_key(LLM_KV_DECISION_HEAD_COUNT,          n_head_decision);
@@ -22,10 +20,13 @@ void llama_model_clef::load_arch_hparams(llama_model_loader & ml) {
     hparams.n_embd_out_impl = 1;
 }
 
-void llama_model_clef::load_arch_tensors(llama_model_loader & ml) {
-    llama_model_qwen35::load_arch_tensors(ml);
+void llama_clef_head::load_tensors(llama_model_loader & ml, llama_model_base & model) {
+    const auto & tn = model.tn;
+    const int64_t n_embd = model.hparams.n_embd;
 
-    LLAMA_LOAD_LOCALS;
+    auto create_tensor = [&](const LLM_TN_IMPL & name, const std::initializer_list<int64_t> & ne, int flags) {
+        return model.create_tensor(ml, name, ne, flags);
+    };
 
     const auto * w_memory = ml.get_weight(tn(LLM_TENSOR_DECISION_PROJ_MEMORY, "weight").str().c_str());
     const auto * w_ffn    = ml.get_weight(tn(LLM_TENSOR_DEC_FFN_UP, "weight", 0).str().c_str());
@@ -95,6 +96,16 @@ void llama_model_clef::load_arch_tensors(llama_model_loader & ml) {
     scorer_b     = create_tensor(tn(LLM_TENSOR_DECISION_SCORER,     "bias"),   {n_embd_h}, 0);
     scorer_out   = create_tensor(tn(LLM_TENSOR_DECISION_SCORER_OUT, "weight"), {n_embd_h, 1}, 0);
     scorer_out_b = create_tensor(tn(LLM_TENSOR_DECISION_SCORER_OUT, "bias"),   {1}, 0);
+}
+
+void llama_model_clef::load_arch_hparams(llama_model_loader & ml) {
+    llama_model_qwen35::load_arch_hparams(ml);
+    head.load_hparams(ml, hparams);
+}
+
+void llama_model_clef::load_arch_tensors(llama_model_loader & ml) {
+    llama_model_qwen35::load_arch_tensors(ml);
+    head.load_tensors(ml, *this);
 }
 
 std::unique_ptr<llm_graph_context> llama_model_clef::build_arch_graph(const llm_graph_params & params) const {
@@ -173,7 +184,7 @@ static clef_spans clef_get_spans(const llama_ubatch & ubatch) {
 }
 
 // pooling matrices and indices computed from the spans
-class llama_model_clef::input_decision : public llm_graph_input_i {
+class llama_clef_head::input_decision : public llm_graph_input_i {
 public:
     input_decision(const llama_ubatch & ubatch) : n_tokens(ubatch.n_tokens) {
         const auto spans = clef_get_spans(ubatch);
@@ -258,11 +269,7 @@ llama_model_clef::graph::graph(const llama_model & model_base, const llm_graph_p
 
     ggml_tensor * inp_pos = build_inp_pos();
 
-    auto * inp_attn = build_attn_inp_causal();
-
-    auto inp_decision_ptr = std::make_unique<input_decision>(ubatch);
-    auto * inp_decision   = inp_decision_ptr.get();
-    res->add_input(std::move(inp_decision_ptr));
+    auto * inp_attn = llama_clef_head::build_attn_inp_causal(*this);
 
     for (int il = 0; il < n_layer; ++il) {
         ggml_tensor * inpSA = inpL;
@@ -302,12 +309,7 @@ llama_model_clef::graph::graph(const llama_model & model_base, const llm_graph_p
     cb(cur, "result_norm", -1);
 
     // the head is always evaluated, so that the graph has the same nodes for every batch
-    cur = build_head(cur, inp_decision);
-
-    // row i of the output is the score of option i
-    cur = ggml_pad(ctx0, cur, 0, n_tokens - cur->ne[1], 0, 0);
-    cur = ggml_add(ctx0, cur, inp_decision->status);
-    cb(cur, "result_decision", -1);
+    cur = model.head.build(*this, cur, model.output);
 
     res->t_embd = cur;
 
@@ -341,18 +343,18 @@ public:
 };
 
 // same as build_attn_inp_no_cache(), with a causal mask even if the batch is processed by the encoder path
-llm_graph_input_attn_no_cache * llama_model_clef::graph::build_attn_inp_causal() {
-    auto inp = std::make_unique<llm_graph_input_attn_clef>(hparams, cparams);
+llm_graph_input_attn_no_cache * llama_clef_head::build_attn_inp_causal(const llm_graph_context & ctx) {
+    auto inp = std::make_unique<llm_graph_input_attn_clef>(ctx.hparams, ctx.cparams);
 
-    const auto type_mask = cparams.flash_attn ? GGML_TYPE_F16 : GGML_TYPE_F32;
+    const auto type_mask = ctx.cparams.flash_attn ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    inp->self_kq_mask = ggml_new_tensor_4d(ctx0, type_mask, n_tokens, n_tokens, 1, 1);
+    inp->self_kq_mask = ggml_new_tensor_4d(ctx.ctx0, type_mask, ctx.n_tokens, ctx.n_tokens, 1, 1);
     ggml_set_input(inp->self_kq_mask);
-    cb(inp->self_kq_mask, "self_kq_mask", -1);
+    ctx.cb(inp->self_kq_mask, "self_kq_mask", -1);
 
     inp->self_kq_mask_cnv = inp->self_kq_mask;
 
-    return (llm_graph_input_attn_no_cache *) res->add_input(std::move(inp));
+    return (llm_graph_input_attn_no_cache *) ctx.res->add_input(std::move(inp));
 }
 
 ggml_tensor * llama_model_clef::graph::build_layer_attn(
@@ -495,14 +497,16 @@ ggml_tensor * llama_model_clef::graph::build_layer_attn_linear(
     return ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
 }
 
-ggml_tensor * llama_model_clef::graph::build_head_norm(ggml_tensor * cur, const norm & n) {
-    return build_norm(cur, n.w, n.b, LLM_NORM, -1);
+ggml_tensor * llama_clef_head::build_head_norm(const llm_graph_context & ctx, ggml_tensor * cur, const norm & n) const {
+    return ctx.build_norm(cur, n.w, n.b, LLM_NORM, -1);
 }
 
 // q: [n_embd_h, n_q], kv: [n_embd_h, n_kv], no mask
-ggml_tensor * llama_model_clef::graph::build_head_attn(ggml_tensor * q, ggml_tensor * kv, const attn & a) {
+ggml_tensor * llama_clef_head::build_head_attn(const llm_graph_context & ctx, ggml_tensor * q, ggml_tensor * kv, const attn & a) const {
+    ggml_context * ctx0 = ctx.ctx0;
+
     const int64_t n_embd_h = q->ne[0];
-    const int64_t n_head_h = model.n_head_decision;
+    const int64_t n_head_h = n_head_decision;
     const int64_t d_head   = n_embd_h / n_head_h;
     const int64_t n_q      = q->ne[1];
     const int64_t n_kv     = kv->ne[1];
@@ -525,15 +529,26 @@ ggml_tensor * llama_model_clef::graph::build_head_attn(ggml_tensor * q, ggml_ten
     return ggml_add(ctx0, ggml_mul_mat(ctx0, a.wo, cur), a.bo);
 }
 
-ggml_tensor * llama_model_clef::graph::build_head_ffn(ggml_tensor * cur, const head_layer & layer) {
-    cur = build_head_norm(cur, layer.ffn_norm);
+ggml_tensor * llama_clef_head::build_head_ffn(const llm_graph_context & ctx, ggml_tensor * cur, const head_layer & layer) const {
+    ggml_context * ctx0 = ctx.ctx0;
+
+    cur = build_head_norm(ctx, cur, layer.ffn_norm);
     cur = ggml_add(ctx0, ggml_mul_mat(ctx0, layer.ffn_up, cur), layer.ffn_up_b);
     cur = ggml_gelu_erf(ctx0, cur);
     return ggml_add(ctx0, ggml_mul_mat(ctx0, layer.ffn_down, cur), layer.ffn_down_b);
 }
 
 // ref: JointSchemaHead in joint_schema_model.py of the model repo
-ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_decision * inp) {
+ggml_tensor * llama_clef_head::build(const llm_graph_context & ctx, ggml_tensor * hidden, ggml_tensor * output) const {
+    ggml_context * ctx0 = ctx.ctx0;
+
+    const int64_t n_embd   = hidden->ne[0];
+    const int64_t n_tokens = hidden->ne[1];
+
+    auto inp_ptr = std::make_unique<input_decision>(ctx.ubatch);
+    auto * inp   = inp_ptr.get();
+    ctx.res->add_input(std::move(inp_ptr));
+
     const int64_t n_questions = inp->n_questions;
     const int64_t n_options   = inp->n_options;
 
@@ -548,9 +563,9 @@ ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_de
         ggml_set_input(t);
     }
 
-    hidden = build_head_norm(hidden, model.hidden_norm);
+    hidden = build_head_norm(ctx, hidden, hidden_norm);
 
-    ggml_tensor * memory = ggml_mul_mat(ctx0, model.proj_memory, hidden); // [n_embd_h, n_tokens]
+    ggml_tensor * memory = ggml_mul_mat(ctx0, proj_memory, hidden); // [n_embd_h, n_tokens]
 
     const int64_t n_embd_h = memory->ne[0];
 
@@ -563,29 +578,29 @@ ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_de
     ggml_tensor * opt_ctx  = ggml_mul_mat(ctx0, hidden_t, inp->pool_o); // [n_embd, n_options]
 
     // mean of the output embeddings of the tokens of each option
-    ggml_tensor * lexical = ggml_get_rows(ctx0, model.output, inp->tokens);
+    ggml_tensor * lexical = ggml_get_rows(ctx0, output, inp->tokens);
     lexical = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, lexical)), inp->pool_o); // [n_embd, n_options]
 
     // one query per option
-    ggml_tensor * options = ggml_mul_mat(ctx0, model.proj_option_context, opt_ctx);
-    options = ggml_add(ctx0, options, ggml_mul_mat(ctx0, model.proj_option_lexical, lexical));
-    options = ggml_add(ctx0, options, ggml_get_rows(ctx0, ggml_mul_mat(ctx0, model.proj_option_question, question), inp->option_question));
+    ggml_tensor * options = ggml_mul_mat(ctx0, proj_option_context, opt_ctx);
+    options = ggml_add(ctx0, options, ggml_mul_mat(ctx0, proj_option_lexical, lexical));
+    options = ggml_add(ctx0, options, ggml_get_rows(ctx0, ggml_mul_mat(ctx0, proj_option_question, question), inp->option_question));
 
     // the options read the prompt
-    for (uint32_t il = 0; il < model.n_layer_routing; ++il) {
-        const auto & layer = model.head_layers[il];
+    for (uint32_t il = 0; il < n_layer_routing; ++il) {
+        const auto & layer = head_layers[il];
 
-        ggml_tensor * cur = build_head_attn(
-                build_head_norm(options, layer.cross_norm),
-                build_head_norm(memory,  layer.cross_norm_kv),
+        ggml_tensor * cur = build_head_attn(ctx,
+                build_head_norm(ctx, options, layer.cross_norm),
+                build_head_norm(ctx, memory,  layer.cross_norm_kv),
                 layer.cross_attn);
         options = ggml_add(ctx0, options, cur);
-        options = ggml_add(ctx0, options, build_head_ffn(options, layer));
+        options = ggml_add(ctx0, options, build_head_ffn(ctx, options, layer));
     }
-    cb(options, "decision_options", -1);
+    ctx.cb(options, "decision_options", -1);
 
     // one vector per question: its text, a summary of its options, the end of the prompt and its type
-    ggml_tensor * fields = ggml_mul_mat(ctx0, model.proj_question, question); // [n_embd_h, n_questions]
+    ggml_tensor * fields = ggml_mul_mat(ctx0, proj_question, question); // [n_embd_h, n_questions]
     {
         // each question weights its own options
         ggml_tensor * weights = ggml_mul_mat(ctx0, options, fields); // [n_options, n_questions]
@@ -594,25 +609,25 @@ ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_de
 
         ggml_tensor * summary = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, options)), weights);
 
-        fields = ggml_add(ctx0, fields, build_head_norm(summary, model.option_summary_norm));
-        fields = ggml_add(ctx0, fields, ggml_mul_mat(ctx0, model.proj_global, global));
-        fields = ggml_add(ctx0, fields, ggml_get_rows(ctx0, model.type_embd, inp->question_type));
+        fields = ggml_add(ctx0, fields, build_head_norm(ctx, summary, option_summary_norm));
+        fields = ggml_add(ctx0, fields, ggml_mul_mat(ctx0, proj_global, global));
+        fields = ggml_add(ctx0, fields, ggml_get_rows(ctx0, type_embd, inp->question_type));
     }
 
     // the questions read each other and the prompt
-    for (uint32_t il = model.n_layer_routing; il < model.head_layers.size(); ++il) {
-        const auto & layer = model.head_layers[il];
+    for (uint32_t il = n_layer_routing; il < head_layers.size(); ++il) {
+        const auto & layer = head_layers[il];
 
-        ggml_tensor * cur = build_head_norm(fields, layer.self_norm);
-        fields = ggml_add(ctx0, fields, build_head_attn(cur, cur, layer.self_attn));
+        ggml_tensor * cur = build_head_norm(ctx, fields, layer.self_norm);
+        fields = ggml_add(ctx0, fields, build_head_attn(ctx, cur, cur, layer.self_attn));
 
-        cur = build_head_norm(fields, layer.cross_norm);
-        fields = ggml_add(ctx0, fields, build_head_attn(cur, memory, layer.cross_attn));
+        cur = build_head_norm(ctx, fields, layer.cross_norm);
+        fields = ggml_add(ctx0, fields, build_head_attn(ctx, cur, memory, layer.cross_attn));
 
-        fields = ggml_add(ctx0, fields, build_head_ffn(fields, layer));
+        fields = ggml_add(ctx0, fields, build_head_ffn(ctx, fields, layer));
     }
-    fields = build_head_norm(fields, model.field_norm);
-    cb(fields, "decision_fields", -1);
+    fields = build_head_norm(ctx, fields, field_norm);
+    ctx.cb(fields, "decision_fields", -1);
 
     const float eps = 1e-12f;
 
@@ -622,7 +637,7 @@ ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_de
     ggml_tensor * prior = ggml_sum_rows(ctx0, ggml_mul(ctx0, ggml_l2_norm(ctx0, lexical, eps), anchor)); // [1, n_options]
 
     // joint: each option against the vector of its question
-    options = build_head_norm(options, model.option_norm);
+    options = build_head_norm(ctx, options, option_norm);
     ggml_tensor * field = ggml_get_rows(ctx0, fields, inp->option_question); // [n_embd_h, n_options]
 
     ggml_tensor * cosine = ggml_sum_rows(ctx0, ggml_mul(ctx0, ggml_l2_norm(ctx0, field, eps), ggml_l2_norm(ctx0, options, eps)));
@@ -631,15 +646,22 @@ ggml_tensor * llama_model_clef::graph::build_head(ggml_tensor * hidden, input_de
     features = ggml_concat(ctx0, features, ggml_mul(ctx0, field, options), 0);
     features = ggml_concat(ctx0, features, ggml_abs(ctx0, ggml_sub(ctx0, field, options)), 0);
 
-    ggml_tensor * residual = ggml_add(ctx0, ggml_mul_mat(ctx0, model.scorer, features), model.scorer_b);
+    ggml_tensor * residual = ggml_add(ctx0, ggml_mul_mat(ctx0, scorer, features), scorer_b);
     residual = ggml_gelu_erf(ctx0, residual);
-    residual = ggml_add(ctx0, ggml_mul_mat(ctx0, model.scorer_out, residual), model.scorer_out_b); // [1, n_options]
+    residual = ggml_add(ctx0, ggml_mul_mat(ctx0, scorer_out, residual), scorer_out_b); // [1, n_options]
 
     auto scale = [&](int i) {
-        return ggml_view_1d(ctx0, model.scales, 1, i * ggml_element_size(model.scales));
+        return ggml_view_1d(ctx0, scales, 1, i * ggml_element_size(scales));
     };
 
     ggml_tensor * joint = ggml_add(ctx0, ggml_mul(ctx0, cosine, scale(1)), residual);
 
-    return ggml_add(ctx0, ggml_mul(ctx0, prior, scale(0)), ggml_mul(ctx0, joint, scale(2)));
+    ggml_tensor * cur = ggml_add(ctx0, ggml_mul(ctx0, prior, scale(0)), ggml_mul(ctx0, joint, scale(2)));
+
+    // row i of the output is the score of option i
+    cur = ggml_pad(ctx0, cur, 0, n_tokens - cur->ne[1], 0, 0);
+    cur = ggml_add(ctx0, cur, inp->status);
+    ctx.cb(cur, "result_decision", -1);
+
+    return cur;
 }

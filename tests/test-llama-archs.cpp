@@ -660,6 +660,7 @@ static bool moe_mandatory(const llm_arch arch) {
         case LLM_ARCH_QWEN3MOE:
         case LLM_ARCH_QWEN3NEXT:
         case LLM_ARCH_QWEN3VLMOE:
+        case LLM_ARCH_CLEF_OMNI:
         case LLM_ARCH_QWEN35MOE:
         case LLM_ARCH_QWEN4EXP:
         case LLM_ARCH_PHIMOE:
@@ -757,7 +758,7 @@ static bool arch_supported(const llm_arch arch) {
     if (arch == LLM_ARCH_PLM) {
         return false; // TODO tensor shapes
     }
-    if (arch == LLM_ARCH_CLEF) {
+    if (arch == LLM_ARCH_CLEF || arch == LLM_ARCH_CLEF_OMNI) {
         return false; // TODO decision head tensors
     }
     if (arch == LLM_ARCH_DEEPSEEK2OCR) {

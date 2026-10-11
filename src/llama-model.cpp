@@ -330,6 +330,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_qwen35moe(params);
         case LLM_ARCH_CLEF:
             return new llama_model_clef(params);
+        case LLM_ARCH_CLEF_OMNI:
+            return new llama_model_clef_omni(params);
         case LLM_ARCH_QWEN4EXP:
             return new llama_model_qwen4exp(params);
         case LLM_ARCH_MISTRAL3:
@@ -2441,6 +2443,7 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
         case LLM_ARCH_LLADA_MOE:
         case LLM_ARCH_RND1:
         case LLM_ARCH_CLEF:
+        case LLM_ARCH_CLEF_OMNI:
             {
                 res = nullptr;
             } break;
@@ -3275,6 +3278,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_QWEN35:
         case LLM_ARCH_QWEN35MOE:
         case LLM_ARCH_CLEF:
+        case LLM_ARCH_CLEF_OMNI:
         case LLM_ARCH_QWEN4EXP:
         case LLM_ARCH_QWEN3TTS:
             return LLAMA_ROPE_TYPE_IMROPE;

@@ -2419,12 +2419,8 @@ struct llama_model_qwen35 : public llama_model_base {
 };
 
 
-// Qwen3.5 backbone evaluated without memory, with a joint decision head on top of its hidden states
-struct llama_model_clef : public llama_model_qwen35 {
-    llama_model_clef(const struct llama_model_params & params) : llama_model_qwen35(params) {}
-    void load_arch_hparams(llama_model_loader & ml) override;
-    void load_arch_tensors(llama_model_loader & ml) override;
-
+// joint decision head of clef, on top of the final hidden states of a backbone evaluated without memory
+struct llama_clef_head {
     struct attn {
         ggml_tensor * wq = nullptr;
         ggml_tensor * bq = nullptr;
@@ -2473,6 +2469,7 @@ struct llama_model_clef : public llama_model_qwen35 {
     ggml_tensor * proj_option_context  = nullptr;
     ggml_tensor * proj_option_lexical  = nullptr;
     ggml_tensor * scales               = nullptr; // prior scale, joint scale, residual gate
+    ggml_tensor * type_embd            = nullptr;
     ggml_tensor * scorer               = nullptr;
     ggml_tensor * scorer_b             = nullptr;
     ggml_tensor * scorer_out           = nullptr;
@@ -2480,11 +2477,33 @@ struct llama_model_clef : public llama_model_qwen35 {
 
     class input_decision;
 
+    void load_hparams(llama_model_loader & ml, llama_hparams & hparams);
+    void load_tensors(llama_model_loader & ml, llama_model_base & model);
+
+    // causal mask by batch order, for the attention layers of the backbone
+    static llm_graph_input_attn_no_cache * build_attn_inp_causal(const llm_graph_context & ctx);
+
+    // hidden: [n_embd, n_tokens], output: the output embeddings of the backbone
+    // returns [1, n_tokens], row i is the score of option i
+    ggml_tensor * build(const llm_graph_context & ctx, ggml_tensor * hidden, ggml_tensor * output) const;
+
+private:
+    ggml_tensor * build_head_norm(const llm_graph_context & ctx, ggml_tensor * cur, const norm & n) const;
+    ggml_tensor * build_head_attn(const llm_graph_context & ctx, ggml_tensor * q, ggml_tensor * kv, const attn & a) const;
+    ggml_tensor * build_head_ffn (const llm_graph_context & ctx, ggml_tensor * cur, const head_layer & layer) const;
+};
+
+// Qwen3.5 backbone evaluated without memory, with a joint decision head on top of its hidden states
+struct llama_model_clef : public llama_model_qwen35 {
+    llama_model_clef(const struct llama_model_params & params) : llama_model_qwen35(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    llama_clef_head head;
+
     struct graph : public llm_build_delta_net_base {
         graph(const llama_model & model, const llm_graph_params & params);
     private:
-        llm_graph_input_attn_no_cache * build_attn_inp_causal();
-
         ggml_tensor * build_layer_attn(
         llm_graph_input_attn_no_cache * inp_attn,
                     ggml_tensor * cur,
@@ -2496,16 +2515,22 @@ struct llama_model_clef : public llama_model_qwen35 {
                     ggml_tensor * cur,
                             int   il);
 
-        // hidden: [n_embd, n_tokens], returns one score per option: [1, n_options]
-        ggml_tensor * build_head(
-                    ggml_tensor * hidden,
-                 input_decision * inp);
-
-        ggml_tensor * build_head_norm(ggml_tensor * cur, const norm & n);
-        ggml_tensor * build_head_attn(ggml_tensor * q, ggml_tensor * kv, const attn & a);
-        ggml_tensor * build_head_ffn (ggml_tensor * cur, const head_layer & layer);
-
         const llama_model_clef & model;
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+// Qwen3-Omni thinker (Qwen3 MoE) backbone evaluated without memory, with the clef decision head
+struct llama_model_clef_omni : public llama_model_qwen3vlmoe {
+    llama_model_clef_omni(const struct llama_model_params & params) : llama_model_qwen3vlmoe(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    llama_clef_head head;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
     };
 
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
