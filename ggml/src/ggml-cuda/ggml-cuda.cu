@@ -92,6 +92,10 @@
 #include <string>
 #include <vector>
 
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+#include "ggml-dmabuf.h"
+#endif
+
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 #define GGML_LOG_WARN_ONCE(str) \
@@ -137,6 +141,184 @@ int ggml_cuda_get_device() {
     CUDA_CHECK(cudaGetDevice(&id));
     return id;
 }
+
+static bool ggml_cuda_is_dmabuf(const ggml_tensor * tensor) {
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    return tensor && tensor->buffer && strcmp(ggml_backend_buft_name(tensor->buffer->buft), GGML_DMABUF_NAME) == 0;
+#else
+    GGML_UNUSED(tensor);
+    return false;
+#endif
+}
+
+static bool ggml_cuda_unpadded_dmabuf(const ggml_tensor * tensor) {
+    // Shared allocations do not include the extra padding used by quantized kernels.
+    return ggml_cuda_is_dmabuf(tensor) && ggml_is_quantized(tensor->type) && tensor->ne[0] % MATRIX_ROW_PADDING != 0;
+}
+
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+struct ggml_cuda_dmabuf_mapping {
+    int fd;
+    size_t size;
+    hipExternalMemory_t memory;
+    void * ptr;
+};
+
+struct ggml_cuda_dmabuf_device {
+    std::mutex mutex;
+    bool registered = false;
+    std::unordered_map<void *, ggml_cuda_dmabuf_mapping> mappings;
+};
+
+static ggml_cuda_dmabuf_device ggml_cuda_dmabuf_devices[GGML_CUDA_MAX_DEVICES];
+
+static void ggml_cuda_dmabuf_add(void * user_data, void * ptr, size_t size, int fd) {
+    const int device = (int) (uintptr_t) user_data;
+    const int previous_device = ggml_cuda_get_device();
+    ggml_cuda_set_device(device);
+
+    hipExternalMemoryHandleDesc desc = {};
+    desc.type = hipExternalMemoryHandleTypeOpaqueFd;
+    desc.handle.fd = fd;
+    desc.size = size;
+    hipExternalMemory_t memory;
+    hipError_t err = hipImportExternalMemory(&memory, &desc);
+    if (err != hipSuccess) {
+        GGML_ABORT("%s: failed to import dma-buf on ROCm%d (fd=%d, size=%zu): %s\n", __func__, device, fd, size, hipGetErrorString(err));
+    }
+
+    hipExternalMemoryBufferDesc buffer_desc = {};
+    buffer_desc.size = size;
+    void * device_ptr;
+    CUDA_CHECK(hipExternalMemoryGetMappedBuffer(&device_ptr, memory, &buffer_desc));
+
+    auto & state = ggml_cuda_dmabuf_devices[device];
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.mappings.emplace(ptr, ggml_cuda_dmabuf_mapping { fd, size, memory, device_ptr });
+    CUDA_CHECK(cudaSetDevice(previous_device));
+}
+
+static void ggml_cuda_dmabuf_remove(void * user_data, int fd) {
+    const int device = (int) (uintptr_t) user_data;
+    auto & state = ggml_cuda_dmabuf_devices[device];
+    std::lock_guard<std::mutex> lock(state.mutex);
+    for (auto it = state.mappings.begin(); it != state.mappings.end(); ++it) {
+        if (it->second.fd == fd) {
+            const int previous_device = ggml_cuda_get_device();
+            ggml_cuda_set_device(device);
+            CUDA_CHECK(cudaDeviceSynchronize());
+            CUDA_CHECK(hipFree(it->second.ptr));
+            CUDA_CHECK(hipDestroyExternalMemory(it->second.memory));
+            state.mappings.erase(it);
+            CUDA_CHECK(cudaSetDevice(previous_device));
+            return;
+        }
+    }
+}
+
+static bool ggml_cuda_register_dmabuf_importer(int device) {
+    auto & state = ggml_cuda_dmabuf_devices[device];
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (state.registered) {
+        return true;
+    }
+    static const ggml_backend_dmabuf_importer importer = { ggml_cuda_dmabuf_add, ggml_cuda_dmabuf_remove };
+    ggml_backend_dmabuf_register_importer(&importer, (void *) (uintptr_t) device);
+    state.registered = true;
+    return true;
+}
+
+static void * ggml_cuda_dmabuf_pointer(int device, const ggml_tensor * tensor) {
+    if (!ggml_cuda_is_dmabuf(tensor)) {
+        return tensor->data;
+    }
+    auto & state = ggml_cuda_dmabuf_devices[device];
+    std::lock_guard<std::mutex> lock(state.mutex);
+    void * base = ggml_backend_buffer_get_base(tensor->buffer);
+    auto it = state.mappings.find(base);
+    if (it == state.mappings.end()) {
+        GGML_ABORT("%s: dma-buf for %s was not imported on ROCm%d\n", __func__, tensor->name, device);
+    }
+    const size_t offset = (uintptr_t) tensor->data - (uintptr_t) base;
+    GGML_ASSERT(offset <= it->second.size && ggml_nbytes(tensor) <= it->second.size - offset);
+    return (char *) it->second.ptr + offset;
+}
+
+static bool ggml_cuda_graph_has_dmabuf(const ggml_cgraph * graph) {
+    for (int i = 0; i < graph->n_nodes; ++i) {
+        if (ggml_cuda_is_dmabuf(graph->nodes[i])) {
+            return true;
+        }
+        for (const auto * src : graph->nodes[i]->src) {
+            if (ggml_cuda_is_dmabuf(src)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+struct ggml_cuda_dmabuf_graph {
+    ggml_cgraph graph = {};
+    std::vector<ggml_tensor *> nodes;
+    std::vector<int32_t> use_counts;
+
+    void init(ggml_backend_cuda_context & ctx, const ggml_cgraph * src_graph) {
+        std::unordered_map<const ggml_tensor *, size_t> indices;
+        std::vector<const ggml_tensor *> tensors;
+        auto add = [&](const ggml_tensor * tensor) {
+            if (tensor && indices.emplace(tensor, tensors.size()).second) {
+                tensors.push_back(tensor);
+            }
+        };
+        for (int i = 0; i < src_graph->n_nodes; ++i) {
+            add(src_graph->nodes[i]);
+        }
+        for (size_t i = 0; i < tensors.size(); ++i) {
+            const ggml_tensor * tensor = tensors[i];
+            for (const auto * src : tensor->src) {
+                add(src);
+            }
+            add(tensor->view_src);
+        }
+
+        // Keep descriptor addresses stable for HIP graph capture. Shared tensors keep their CPU pointers.
+        ctx.dmabuf_tensors.resize(tensors.size());
+        auto resolve = [&](const ggml_tensor * tensor) -> ggml_tensor * {
+            return tensor ? &ctx.dmabuf_tensors[indices.at(tensor)] : nullptr;
+        };
+        graph = *src_graph;
+        graph.uid = 0;
+        graph.visited_hash_set = ggml_hash_set_new(tensors.size());
+        use_counts.resize(graph.visited_hash_set.size);
+        for (size_t i = 0; i < tensors.size(); ++i) {
+            ggml_tensor & tensor = ctx.dmabuf_tensors[i];
+            tensor = *tensors[i];
+            tensor.data = ggml_cuda_dmabuf_pointer(ctx.device, &tensor);
+            for (auto & src : tensor.src) {
+                src = resolve(src);
+            }
+            tensor.view_src = resolve(tensor.view_src);
+            const size_t slot = ggml_hash_insert(&graph.visited_hash_set, &tensor);
+            const size_t old_slot = ggml_hash_find(&src_graph->visited_hash_set, tensors[i]);
+            if (old_slot != GGML_HASHSET_FULL && ggml_bitset_get(src_graph->visited_hash_set.used, old_slot)) {
+                use_counts[slot] = src_graph->use_counts[old_slot];
+            }
+        }
+        for (int i = 0; i < src_graph->n_nodes; ++i) {
+            nodes.push_back(resolve(src_graph->nodes[i]));
+        }
+        graph.nodes = nodes.data();
+        graph.use_counts = use_counts.data();
+    }
+
+    ~ggml_cuda_dmabuf_graph() {
+        if (graph.visited_hash_set.size) {
+            ggml_hash_set_free(&graph.visited_hash_set);
+        }
+    }
+};
+#endif
 
 static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
     ggml_cuda_set_device(device);
@@ -932,6 +1114,11 @@ static const ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface 
 };
 
 ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    if (device >= 0 && device < ggml_backend_cuda_get_device_count()) {
+        ggml_cuda_register_dmabuf_importer(device);
+    }
+#endif
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -1827,6 +2014,10 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
     ggml_tensor *       src1 = tensor->src[1];
     const ggml_tensor * dst  = tensor;
 
+    if (ggml_cuda_unpadded_dmabuf(src0)) {
+        return false;
+    }
+
     const bool bad_padding_clear = ggml_backend_buffer_get_usage(src0->buffer) == GGML_BACKEND_BUFFER_USAGE_COMPUTE &&
                                    ggml_nbytes(src0) != ggml_backend_buffer_get_alloc_size(src0->buffer, src0) &&
                                    src0->view_src;
@@ -1915,7 +2106,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
     // Therefore, in such cases use cuBLAS.
     const bool bad_padding_clear = ggml_backend_buffer_get_usage(src0->buffer) == GGML_BACKEND_BUFFER_USAGE_COMPUTE
         && ggml_nbytes(src0) != ggml_backend_buffer_get_alloc_size(src0->buffer, src0) && src0->view_src;
-    if (bad_padding_clear || src1->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) {
+    if (bad_padding_clear || ggml_cuda_unpadded_dmabuf(src0) || src1->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) {
         ggml_cuda_mul_mat_cublas(ctx, src0, src1, dst);
         return;
     }
@@ -1961,6 +2152,9 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
 // returns true when ggml_cuda_mul_mat_id takes the fallback path that requires stream synchronization
 // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
 static bool ggml_cuda_mul_mat_id_needs_sync(const ggml_tensor * dst, const int cc) {
+    if (ggml_cuda_unpadded_dmabuf(dst->src[0])) {
+        return true;
+    }
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
 
@@ -2002,7 +2196,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
     // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
-    if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+    if (!ggml_cuda_unpadded_dmabuf(src0) && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
         static_assert(MMVQ_MAX_BATCH_SIZE == MMVF_MAX_BATCH_SIZE);
         if (ne2 <= MMVQ_MAX_BATCH_SIZE) {
             if (ggml_is_quantized(src0->type)) {
@@ -2521,6 +2715,15 @@ static const char * ggml_backend_cuda_get_name(ggml_backend_t backend) {
     return cuda_ctx->name.c_str();
 }
 
+static void * ggml_cuda_tensor_pointer(int device, const ggml_tensor * tensor) {
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    return ggml_cuda_dmabuf_pointer(device, tensor);
+#else
+    GGML_UNUSED(device);
+    return tensor->data;
+#endif
+}
+
 static void ggml_backend_cuda_free(ggml_backend_t backend) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
@@ -2532,18 +2735,18 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT((buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) || ggml_cuda_is_dmabuf(tensor)) && "unsupported buffer type");
 
-    CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+    CUDA_CHECK(cudaMemcpyAsync((char *) ggml_cuda_tensor_pointer(cuda_ctx->device, tensor) + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
 
 static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT((buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) || ggml_cuda_is_dmabuf(tensor)) && "unsupported buffer type");
 
-    CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+    CUDA_CHECK(cudaMemcpyAsync(data, (const char *) ggml_cuda_tensor_pointer(cuda_ctx->device, tensor) + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
 
 static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct ggml_tensor * tensor, const void * data,
@@ -2551,10 +2754,10 @@ static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT((buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) || ggml_cuda_is_dmabuf(tensor)) && "unsupported buffer type");
 
     CUDA_CHECK(cudaMemcpy2DAsync(
-        (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
+        (char *) ggml_cuda_tensor_pointer(cuda_ctx->device, tensor) + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
 
 static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const struct ggml_tensor * tensor, void * data,
@@ -2562,10 +2765,10 @@ static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const 
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT((buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) || ggml_cuda_is_dmabuf(tensor)) && "unsupported buffer type");
 
     CUDA_CHECK(cudaMemcpy2DAsync(
-        data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+        data, stride_data, (const char *) ggml_cuda_tensor_pointer(cuda_ctx->device, tensor) + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
 
 static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const ggml_tensor * src, ggml_tensor * dst) {
@@ -2678,10 +2881,9 @@ static const void * ggml_cuda_graph_get_key(ggml_cgraph * cgraph) {
     return cgraph->nodes[0];
 }
 
-static bool ggml_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph) {
+static bool ggml_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, const void * graph_key) {
     bool res = false;
 
-    const void * graph_key = ggml_cuda_graph_get_key(cgraph);
     ggml_cuda_graph * graph = cuda_ctx->cuda_graph(graph_key);
 
     if (cgraph->uid != 0 &&
@@ -4553,11 +4755,13 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                 // node's output on the host-visible buffer, which the compute path
                 // handles. Allow that here, mirroring the src-tensor check below.
                 assert(node->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
+                       ggml_cuda_is_dmabuf(node) ||
                        (integrated && ggml_backend_buft_is_cuda_host(node->buffer->buft)));
                 for (int j = 0; j < GGML_MAX_SRC; j++) {
                     if (node->src[j] != nullptr) {
                         assert(node->src[j]->buffer);
                         assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
+                               ggml_cuda_is_dmabuf(node->src[j]) ||
                                (integrated && ggml_backend_buft_is_cuda_host(node->src[j]->buffer->buft)));
                     }
                 }
@@ -4638,18 +4842,25 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
 
     bool use_cuda_graph             = false;
     bool cuda_graph_update_required = false;
-    const void * graph_key = nullptr;
+    const void * graph_key = cgraph->n_nodes > 0 ? cgraph->nodes[0] : nullptr;
+
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    ggml_cuda_dmabuf_graph dmabuf_graph;
+    if (ggml_cuda_graph_has_dmabuf(cgraph)) {
+        cuda_ctx->stream_context().reset();
+        dmabuf_graph.init(*cuda_ctx, cgraph);
+        cgraph = &dmabuf_graph.graph;
+    }
+#endif
 
 #ifdef USE_CUDA_GRAPH
-    graph_key = ggml_cuda_graph_get_key(cgraph);
-
     ggml_cuda_graph_set_enabled(cuda_ctx, graph_key);
 
     ggml_cuda_graph * graph = cuda_ctx->cuda_graph(graph_key);
     if (graph->is_enabled()) {
         const bool graph_compatible = ggml_cuda_graph_check_compability(cgraph);
         if (graph_compatible) {
-            const bool properties_changed = ggml_cuda_graph_update_required(cuda_ctx, cgraph);
+            const bool properties_changed = ggml_cuda_graph_update_required(cuda_ctx, cgraph, graph_key);
 
             if (!graph->warmup_complete) {
                 // Warmup: need at least 2 calls with no property change on the 2nd call
@@ -4827,6 +5038,13 @@ static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph
             }
         }
     }
+
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    if (ggml_cuda_graph_has_dmabuf(cgraph)) {
+        cuda_ctx->stream_context().reset();
+        return;
+    }
+#endif
 
 #ifdef USE_CUDA_GRAPH
     const void * graph_key = ggml_cuda_graph_get_key(cgraph);
@@ -5354,6 +5572,13 @@ static ggml_backend_t ggml_backend_cuda_device_init_backend(ggml_backend_dev_t d
 
 static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_buffer_type(ggml_backend_dev_t dev) {
     ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *)dev->context;
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    static const bool use_dmabuf = getenv("GGML_CUDA_DMABUFT") && atoi(getenv("GGML_CUDA_DMABUFT")) != 0;
+    if (use_dmabuf) {
+        GGML_ASSERT(ggml_cuda_register_dmabuf_importer(ctx->device));
+        return ggml_backend_dmabuf_buffer_type();
+    }
+#endif
     return ggml_backend_cuda_buffer_type(ctx->device);
 }
 
@@ -5841,6 +6066,11 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
 
 static bool ggml_backend_cuda_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
     ggml_backend_cuda_device_context * dev_ctx = (ggml_backend_cuda_device_context *) dev->context;
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    if (strcmp(ggml_backend_buft_name(buft), GGML_DMABUF_NAME) == 0) {
+        return ggml_cuda_register_dmabuf_importer(dev_ctx->device);
+    }
+#endif
     const bool integrated = ggml_cuda_info().devices[dev_ctx->device].integrated;
     return (ggml_backend_buft_is_cuda(buft) && buft->device == dev) || (integrated && ggml_backend_buft_is_cuda_host(buft));
 }
@@ -5994,7 +6224,21 @@ static ggml_backend_feature * ggml_backend_cuda_get_features(ggml_backend_reg_t 
     GGML_UNUSED(reg);
 }
 
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+static ggml_backend_buffer_type_t * ggml_backend_cuda_device_get_extra_bufts(ggml_backend_dev_t dev) {
+    ggml_backend_cuda_device_context * ctx = (ggml_backend_cuda_device_context *) dev->context;
+    ggml_cuda_register_dmabuf_importer(ctx->device);
+    static ggml_backend_buffer_type_t bufts[] = { ggml_backend_dmabuf_buffer_type(), nullptr };
+    return bufts;
+}
+#endif
+
 static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    if (strcmp(name, "ggml_backend_dev_get_extra_bufts") == 0) {
+        return (void *) ggml_backend_cuda_device_get_extra_bufts;
+    }
+#endif
     GGML_UNUSED(reg);
     if (strcmp(name, "ggml_backend_comm_init") == 0) {
         return (void *)ggml_backend_cuda_comm_init;
@@ -6085,6 +6329,10 @@ ggml_backend_t ggml_backend_cuda_init(int device) {
         GGML_LOG_ERROR("%s: invalid device %d\n", __func__, device);
         return nullptr;
     }
+
+#if defined(GGML_USE_HIP) && defined(GGML_USE_DMABUF)
+    ggml_cuda_register_dmabuf_importer(device);
+#endif
 
     ggml_backend_cuda_context * ctx = new ggml_backend_cuda_context(device);
     if (ctx == nullptr) {
