@@ -397,6 +397,12 @@ static void ggml_hexagon_precompute_gated_delta_net_params(
     struct htp_gdn_kernel_params * kparams
 );
 
+static void ggml_hexagon_precompute_dsv4_hc_pre_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_dsv4_hc_pre_kernel_params * kparams
+);
+
 static void ggml_hexagon_precompute_sort_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
@@ -4857,6 +4863,41 @@ static void ggml_hexagon_precompute_gated_delta_net_params(
     if (kparams->n_threads > 0) kparams->div_n_threads = init_fastdiv_values(kparams->n_threads);
 }
 
+static void ggml_hexagon_precompute_dsv4_hc_pre_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_dsv4_hc_pre_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * x = op->src[0];
+    const uint32_t n_tokens = (uint32_t) x->ne[2];
+
+    kparams->n_chunks       = ((uint32_t) x->ne[0] + HTP_DSV4_HC_CHUNK_ELEMS - 1) / HTP_DSV4_HC_CHUNK_ELEMS;
+    kparams->total_jobs     = n_tokens * kparams->n_chunks;
+    if (kparams->total_jobs == 0) {
+        return;
+    }
+    kparams->n_threads      = (std::min)((uint32_t) sess->n_threads, kparams->total_jobs);
+    kparams->jobs_per_thread = (kparams->total_jobs + kparams->n_threads - 1) / kparams->n_threads;
+
+    kparams->dma_block_chunks = (std::min)((uint32_t) HTP_DSV4_HC_DMA_CHUNKS, kparams->n_chunks);
+    kparams->dma_row_stride   = kparams->dma_block_chunks * 128;
+    kparams->dma_buffer_size  = 4*kparams->dma_row_stride;
+    kparams->dma_input_size   = 2*kparams->dma_buffer_size*kparams->n_threads;
+    kparams->dma_vtcm_size    = 2*kparams->dma_input_size;
+
+    const bool gated = ggml_get_op_params_i32(op, 1) != 0;
+    kparams->dma_eligible = gated &&
+                            n_tokens > 1 &&
+                            x->ne[0] % HTP_DSV4_HC_CHUNK_ELEMS == 0 &&
+                            kparams->jobs_per_thread >= 2*kparams->dma_block_chunks &&
+                            kparams->dma_vtcm_size <= sess->vtcm_size;
+
+    kparams->div_n_chunks  = init_fastdiv_values(kparams->n_chunks);
+    kparams->div_n_threads = init_fastdiv_values(kparams->n_threads);
+}
+
 static void ggml_hexagon_precompute_sort_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
@@ -7061,6 +7102,11 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 ggml_hexagon_precompute_gated_delta_net_params(sess,
                     node.node,
                     (struct htp_gdn_kernel_params *)node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_DSV4_HC_PRE) {
+                ggml_hexagon_precompute_dsv4_hc_pre_params(sess,
+                    node.node,
+                    (struct htp_dsv4_hc_pre_kernel_params *)node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
                 ggml_hexagon_precompute_sort_params(sess,
