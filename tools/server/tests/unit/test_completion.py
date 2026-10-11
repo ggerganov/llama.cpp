@@ -669,7 +669,7 @@ def test_completion_prompt_cache():
 
 
 # validate that tails of prompts that share a long prefix are not discarded
-# if the tails is longer than the batch size
+# if the tails are longer than the batch size
 # ref: https://github.com/ggml-org/llama.cpp/pull/30319
 @pytest.mark.parametrize("n_batch,is_restored", [
     (8,   True),
@@ -687,7 +687,6 @@ def test_completion_prompt_cache_shared_prefix(n_batch: int, is_restored: bool):
         "this is very long prefix such as a system prompt or agent instructions, "
         "this is very long prefix such as a system prompt or agent instructions, "
     )
-    # the suffixes must be shorter than 50% of the prefix for this test to work
     prompt_a = prefix + " this is a set of instructions given to agent A"
     prompt_b = prefix + " agent B received a different set of instructions"
 
