@@ -1103,15 +1103,14 @@ static void tile_step_f32(void * restrict dst, const void * restrict src, uint32
     hvx_step_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
 }
 
-<<<<<<< HEAD
 static void tile_ceil_f32(void * restrict dst, const void * restrict src, uint32_t tw, const struct htp_unary_context * uctx) {
     (void) uctx;
     hvx_ceil_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
-=======
+}
+
 static void tile_sgn_f32(void * restrict dst, const void * restrict src, uint32_t tw, const struct htp_unary_context * uctx) {
     (void) uctx;
     hvx_sgn_f32_aa((uint8_t *) dst, (const uint8_t *) src, tw);
->>>>>>> e6d401df1 (hexagon : add SGN support)
 }
 
 static void tri_apply_tile_f32(const void * restrict src, void * restrict dst,
@@ -1899,11 +1898,8 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_LOG:       compute_func = (void *) tile_log_f32;            break;
             case HTP_OP_UNARY_RELU:      compute_func = (void *) tile_relu_f32;           break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) tile_step_f32;           break;
-<<<<<<< HEAD
             case HTP_OP_UNARY_CEIL:      compute_func = (void *) tile_ceil_f32;           break;
-=======
             case HTP_OP_UNARY_SGN:       compute_func = (void *) tile_sgn_f32;            break;
->>>>>>> e6d401df1 (hexagon : add SGN support)
             case HTP_OP_TRI:
                 task_func    = unary_thread_tiled_tri_f32;
                 compute_func = (void *) tri_apply_tile_f32;
@@ -1954,11 +1950,8 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_LOG:       compute_func = (void *) log_f32;                 break;
             case HTP_OP_UNARY_RELU:      compute_func = (void *) relu_f32;                break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) step_f32;                break;
-<<<<<<< HEAD
             case HTP_OP_UNARY_CEIL:      compute_func = (void *) ceil_f32;                break;
-=======
             case HTP_OP_UNARY_SGN:       compute_func = (void *) sgn_f32;                 break;
->>>>>>> e6d401df1 (hexagon : add SGN support)
             case HTP_OP_L2_NORM:         compute_func = (void *) l2_norm_f32;             break;
             case HTP_OP_HADAMARD:        compute_func = (void *) hadamard_f32;            break;
             case HTP_OP_TRI:
