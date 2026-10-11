@@ -143,12 +143,10 @@ extern float ggml_table_f32_ue4m3[1 << 8];
 // Pre AVX512 CPUs (AVX2 with F16C, such as i5-8th gen or i7-4790)
 // do not produce codegen as checks below don't test for __F16C__
 // but this check does.
-// Only FP32 -> FP16 goes through F16C here. FP16 -> FP32 stays on the lookup table:
-// in the quantized dot products (one FP16 scale per block) Clang 20.1.8 lowers the scalar
-// F16C conversion to a vpinsrw that merges into a live register (the accumulator),
-// creating a loop-carried dependency that made the Q8_0/Q4_0 kernels 45-65% slower
-// (https://github.com/ggml-org/llama.cpp/issues/30342).
 #if defined(__F16C__)
+// force FP16 -> FP32 conversion to use LUT instead
+// see: https://github.com/ggml-org/llama.cpp/issues/30342
+//#define GGML_CPU_FP16_TO_FP32(x) GGML_CPU_COMPUTE_FP16_TO_FP32(x)
 #define GGML_CPU_FP32_TO_FP16(x) GGML_CPU_COMPUTE_FP32_TO_FP16(x)
 #endif
 
