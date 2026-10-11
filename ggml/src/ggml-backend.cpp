@@ -919,6 +919,9 @@ struct ggml_backend_sched_split {
     struct ggml_tensor ** inputs;
     int n_inputs;
     int inputs_capacity;
+    // backends whose buffers this split reads directly (zero-copy)
+    int shared_producers[GGML_SCHED_MAX_BACKENDS];
+    int n_shared_producers;
     // graph view of this split
     struct ggml_cgraph graph;
 };
@@ -1452,6 +1455,7 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
         }
         split->i_start = 0;
         split->n_inputs = 0;
+        split->n_shared_producers = 0;
         int cur_backend_id = split->backend_id;
         for (; i < graph->n_nodes; i++) {
             struct ggml_tensor * node = graph->nodes[i];
@@ -1501,6 +1505,7 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
                 split->backend_id = node_backend_id;
                 split->i_start = i;
                 split->n_inputs = 0;
+                split->n_shared_producers = 0;
                 cur_backend_id = node_backend_id;
             }
 
@@ -1536,6 +1541,18 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
                         split->inputs[n_inputs] = src;
                     }
                     node->src[j] = tensor_id_copy(src_id, cur_backend_id, sched->cur_copy);
+                } else if (src_backend_id != cur_backend_id) {
+                    // zero-copy input from another backend: it must finish before this split runs
+                    bool seen = false;
+                    for (int k = 0; k < split->n_shared_producers; k++) {
+                        if (split->shared_producers[k] == src_backend_id) {
+                            seen = true;
+                            break;
+                        }
+                    }
+                    if (!seen && split->n_shared_producers < GGML_SCHED_MAX_BACKENDS) {
+                        split->shared_producers[split->n_shared_producers++] = src_backend_id;
+                    }
                 }
             }
         }
@@ -1881,6 +1898,16 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
         for (int input_id = 0; input_id < split->n_inputs; input_id++) {
             if (ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
                 ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
+            }
+        }
+
+        // synchronize the backends whose buffers this split reads directly
+        for (int k = 0; k < split->n_shared_producers; k++) {
+            const int producer_backend_id = split->shared_producers[k];
+            if (sched->events[producer_backend_id][sched->cur_copy] != NULL) {
+                ggml_backend_event_synchronize(sched->events[producer_backend_id][sched->cur_copy]);
+            } else {
+                ggml_backend_synchronize(sched->backends[producer_backend_id]);
             }
         }
 
