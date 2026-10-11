@@ -33,6 +33,7 @@ struct ModelParams {
     bool has_rs_rollback = false;
     bool mixed_rope_params = false;
     bool is_cacheless_attn = false;
+    bool v_trans = false;
     std::vector<int> swa_layers;
     // The sliding-window mask tensor, identified in compute_llm_params() by grouping attention
     // layers on the mask they consume. Only used to tell the two masks apart when naming OV
@@ -294,6 +295,8 @@ public:
         }
         return m_model_params.n_heads_kv;
     }
+
+    bool has_v_trans() const { return m_model_params.v_trans;}
 
     int get_past_kv_len() const { return m_compute_params.past_kv_len; }
 
