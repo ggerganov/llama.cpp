@@ -2641,6 +2641,11 @@ static bool ggml_cuda_is_view_or_noop(const ggml_tensor * t) {
 }
 
 #ifdef USE_CUDA_GRAPH
+static bool ggml_cuda_graph_debug_enabled() {
+    static const bool enabled = getenv("GGML_CUDA_GRAPH_DEBUG") != nullptr && std::atoi(getenv("GGML_CUDA_GRAPH_DEBUG")) != 0;
+    return enabled;
+}
+
 static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
 
     bool use_cuda_graph = true;
@@ -2661,7 +2666,9 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
                 // ref: https://github.com/ggml-org/llama.cpp/pull/18958
                 use_cuda_graph = false;
 #ifndef NDEBUG
-                GGML_LOG_DEBUG("%s: disabling CUDA graphs due to unsupported node type\n", __func__);
+                if (ggml_cuda_graph_debug_enabled()) {
+                    GGML_LOG_DEBUG("%s: disabling CUDA graphs due to unsupported node type\n", __func__);
+                }
 #endif
             }
         }
@@ -2686,7 +2693,9 @@ static bool ggml_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx
 
     if (cgraph->uid != 0 &&
         cgraph->uid == graph->uid) {
-        GGML_LOG_DEBUG("CUDA Graph id %zu reused\n", cgraph->uid);
+        if (ggml_cuda_graph_debug_enabled()) {
+            GGML_LOG_DEBUG("CUDA Graph id %zu reused\n", cgraph->uid);
+        }
         GGML_ASSERT((int)graph->node_props.size() == cgraph->n_nodes);
         return false;
     }
@@ -2734,7 +2743,9 @@ static void ggml_cuda_graph_update_executable(ggml_backend_cuda_context * cuda_c
 
     if (stat == cudaErrorGraphExecUpdateFailure) {
 #ifndef NDEBUG
-        GGML_LOG_DEBUG("%s: CUDA graph update failed\n", __func__);
+        if (ggml_cuda_graph_debug_enabled()) {
+            GGML_LOG_DEBUG("%s: CUDA graph update failed\n", __func__);
+        }
 #endif
 
         // The pre-existing graph exec cannot be updated due to violated constraints
@@ -4620,7 +4631,7 @@ static bool ggml_cuda_graph_set_enabled(ggml_backend_cuda_context * cuda_ctx, co
 
     if (graph->graph == nullptr) {
         if (ggml_cuda_info().devices[cuda_ctx->device].cc < GGML_CUDA_CC_VOLTA) {
-            if (!graph->disable_due_to_gpu_arch) {
+            if (!graph->disable_due_to_gpu_arch && ggml_cuda_graph_debug_enabled()) {
                 GGML_LOG_DEBUG("%s: disabling CUDA graphs due to GPU architecture\n", __func__);
             }
             graph->disable_due_to_gpu_arch = true;
@@ -4655,7 +4666,9 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
                 // Warmup: need at least 2 calls with no property change on the 2nd call
                 if (!properties_changed) {
                     graph->warmup_complete = true;
-                    GGML_LOG_DEBUG("%s: CUDA graph warmup complete\n", __func__);
+                    if (ggml_cuda_graph_debug_enabled()) {
+                        GGML_LOG_DEBUG("%s: CUDA graph warmup complete\n", __func__);
+                    }
                     use_cuda_graph = true;
                     cuda_graph_update_required = true;
                 }
@@ -4665,7 +4678,9 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
                 if (properties_changed) {
                     // Properties changed - reset warmup, execute directly until stable again
                     graph->warmup_complete = false;
-                    GGML_LOG_DEBUG("%s: CUDA graph warmup reset\n", __func__);
+                    if (ggml_cuda_graph_debug_enabled()) {
+                        GGML_LOG_DEBUG("%s: CUDA graph warmup reset\n", __func__);
+                    }
                 } else {
                     use_cuda_graph = true;
                     cuda_graph_update_required = graph->instance == nullptr;
