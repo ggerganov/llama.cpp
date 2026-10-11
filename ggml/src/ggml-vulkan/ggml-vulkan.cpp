@@ -7991,9 +7991,9 @@ bool ggml_vk_flash_attn_coopmat_shmem_support(const vk_device& device, const vk_
     const uint32_t Br = params.block_rows;
     const uint32_t Bc = params.block_cols;
 
-    const uint32_t MatBr = 16, MatBc = 16;
+    const uint32_t MatBr = device->coopmat_n, MatBc = device->coopmat_m;
 
-    const uint32_t row_split = Bc / MatBc;
+    const uint32_t row_split = params.row_split;
 
     const uint32_t hsk_pad = ROUNDUP_POW2(hsk, 16);
     const uint32_t hsv_pad = ROUNDUP_POW2(hsv, 16);
@@ -8001,7 +8001,7 @@ bool ggml_vk_flash_attn_coopmat_shmem_support(const vk_device& device, const vk_
     const uint32_t acctype = f32acc ? 4 : 2;
     const uint32_t f16vec4 = 8;
 
-    const uint32_t tmpsh = (Bc / MatBc) * sizeof(float);
+    const uint32_t tmpsh = row_split * sizeof(float);
     // DATA_A_IQ4_NL is compiled into the FA shaders unconditionally, so its shared table is always allocated.
     const uint32_t iq_shmem = 16 * sizeof(ggml_fp16_t);
 
@@ -8015,13 +8015,13 @@ bool ggml_vk_flash_attn_coopmat_shmem_support(const vk_device& device, const vk_
     const uint32_t sfsh = Bc * sfshstride * acctype;
 
     const uint32_t kvshstride = (params.shmem_staging ? std::max(hsk_pad, hsv_pad) : MatBr) / 4 + 2;
-    const uint32_t vsh_stride = MatBc / 4 * row_split;
+    const uint32_t vsh_stride = MatBr / 4 * row_split;
     const uint32_t ksh = ((kvshstride >= vsh_stride) ? (Bc * kvshstride) : (Bc * vsh_stride)) * f16vec4;
 
     // BF16 PVMat accumulator is f32 (no bf16 accumulator support), so pvsh is vec4 (16 bytes)
     const uint32_t pvsh_elem_size = (k_type == GGML_TYPE_BF16) ? 16u : f16vec4;
-    const uint32_t osh_stride = params.row_split * MatBr / 4;
-    const uint32_t pvsh = MatBc * osh_stride * pvsh_elem_size;
+    const uint32_t osh_stride = row_split * MatBr / 4;
+    const uint32_t pvsh = Br * osh_stride * pvsh_elem_size;
 
     const uint32_t slope = Br * acctype;
 
