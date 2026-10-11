@@ -397,7 +397,8 @@ static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_spa
 
 static constexpr bool ggml_cuda_fattn_tile_sparse_supported(
         const int DKQ, const int DV, const int ncols2, const bool use_logit_softcap) {
-    return DKQ != 40 && DKQ != 64 && ncols2 > 1 && !use_logit_softcap &&
+    return ggml_cuda_fattn_tile_get_sparse_config_vega20(DKQ, DV, 1).min_kv > 0 &&
+           ncols2 > 1 && !use_logit_softcap &&
            ggml_cuda_fattn_tile_get_config_amd(DKQ, DV, ncols2) != 0 &&
            ggml_cuda_fattn_tile_get_config_amd_rdna(DKQ, DV, ncols2) != 0;
 }
