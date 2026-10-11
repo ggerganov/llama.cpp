@@ -67,6 +67,9 @@ std::optional<ov::Tensor> try_make_kv_sliced_tensor(const std::shared_ptr<GgmlOv
     if (!GgmlOvDecoder::is_kvcache(ggml_tensor, op)) {
         return std::nullopt;
     }
+    if (ggml_decoder->has_v_trans() && std::string(name).rfind("cache_v", 0) == 0) {
+        return std::nullopt;
+    }
 
     const auto & compute_params = ggml_decoder->get_compute_params();
     if (compute_params.n_seq_active != 1 || compute_params.seq_active_start != 0) {
@@ -858,6 +861,12 @@ enum ggml_status ov_graph_compute_dynamic(ggml_cgraph * cgraph, const std::share
     const int64_t graph_param_compute_time = ggml_time_us() - graph_param_compute_start_time;
 
     const bool cache_enabled = !model_is_splitted && !cache_disabled;
+     if (r_ctx->stateful && m_params.v_trans) {
+        GGML_LOG_WARN(
+            "ggml-openvino: disabling stateful execution for this context: the graph writes a "
+            "transposed V cache (Flash Attention is off), which stateful KV does not support\n");
+        r_ctx->stateful = false;
+    }
     const bool stateful_recurrent = r_ctx->stateful && m_params.state_size >= 0;
     const bool stateful_kv_only = r_ctx->stateful && !stateful_recurrent;
     if (r_ctx->stateful &&
