@@ -1289,8 +1289,8 @@ static vk_fa_tuning_params get_fa_tuning_params_coopmat1(const vk_device& device
 
     const uint32_t D = hsk | hsv;
 
-    const uint32_t coopmat_block_rows = 16;
-    const uint32_t coopmat_block_cols = 16;
+    const uint32_t coopmat_block_rows = device->coopmat_n;
+    const uint32_t coopmat_block_cols = device->coopmat_m;
 
     const uint32_t num_subgroups = 4;
 
@@ -1353,8 +1353,11 @@ vk_fa_tuning_params get_fa_tuning_params(const vk_device& device, uint32_t hsk, 
     }
 
     if (path == FA_COOPMAT1) {
-        bool shape_ok = (f32acc && device->coopmat_support_16x16x16_f32acc) ||
-                        (!f32acc && device->coopmat_support_16x16x16_f16acc);
+        bool shape_ok = device->coopmat_k == 16 && device->coopmat_n == 16 &&
+                        device->coopmat_m != 0 && (device->coopmat_m % 4) == 0 &&
+                        (device->coopmat_n % device->coopmat_m) == 0 &&
+                        ((f32acc && device->coopmat_acc_f32_support) ||
+                        (!f32acc && device->coopmat_acc_f16_support));
         const vk_fa_tuning_params params = get_fa_tuning_params_coopmat1(device, hsk, hsv, n_rows, n_kv, k_type, v_type, f32acc);
         bool shmem_ok = ggml_vk_flash_attn_coopmat_shmem_support(device, params, hsk, hsv, f32acc, k_type, v_type);
 
