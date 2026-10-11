@@ -1613,6 +1613,16 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
         sched->n_splits = i_split + 1;
     }
 
+    {
+        int n_zero_copy = 0;
+        for (int s = 0; s < sched->n_splits; s++) {
+            if (sched->splits[s].n_shared_producers > 0) {
+                n_zero_copy++;
+            }
+        }
+        GGML_LOG_DEBUG("%s: %d splits (%d zero-copy)\n", __func__, sched->n_splits, n_zero_copy);
+    }
+
     if (sched->debug) {
         ggml_backend_sched_print_assignments(sched, graph);
     }
