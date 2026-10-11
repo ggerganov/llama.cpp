@@ -6,6 +6,7 @@
 
 #include <array>
 #include <climits>
+#include <cmath>
 #include <cstdarg>
 #include <cinttypes>
 #include <string>
@@ -57,14 +58,17 @@
 #define KEY_PATCH_SIZE              "clip.vision.patch_size"
 #define KEY_IMAGE_MEAN              "clip.vision.image_mean"
 #define KEY_IMAGE_STD               "clip.vision.image_std"
+#define KEY_IMAGE_RESIZE_ALGO       "clip.vision.image_resize_algo"
 #define KEY_PROJ_SCALE_FACTOR       "clip.vision.projector.scale_factor"
 #define KEY_PROJ_SAMPLE_QUERY_SIDE  "clip.vision.projector.query_side"
 #define KEY_PROJ_SAMPLE_WINDOW_SIDE "clip.vision.projector.window_side"
 #define KEY_PROJ_SPATIAL_OFFSETS    "clip.vision.projector.spatial_offsets"
 #define KEY_SPATIAL_MERGE_SIZE      "clip.vision.spatial_merge_size"
+#define KEY_SWIGLU_CLAMP            "clip.vision.swiglu_clamp"
 
 #define KEY_MM_PATCH_MERGE_TYPE    "clip.vision.mm_patch_merge_type"
 #define KEY_IMAGE_GRID_PINPOINTS   "clip.vision.image_grid_pinpoints"
+#define KEY_MAX_SLICE_NUMS         "clip.vision.max_slice_nums"
 #define KEY_WIN_ATTN_PATTERN       "clip.vision.n_wa_pattern"
 #define KEY_WIN_ATTN_LAYER_INDEXES "clip.vision.wa_layer_indexes"
 #define KEY_WA_PATTERN_MODE        "clip.vision.wa_pattern_mode"
@@ -74,6 +78,7 @@
 #define KEY_SAM_N_HEAD             "clip.vision.sam.head_count"
 #define KEY_SAM_N_BLOCK            "clip.vision.sam.block_count"
 #define KEY_SAM_N_EMBD             "clip.vision.sam.embedding_length"
+#define KEY_VISION_N_EXPERT_USED   "clip.vision.expert_used_count"
 // audio-specific
 #define KEY_AUDIO_PROJ_TYPE        "clip.audio.projector_type" // for models with mixed modalities
 #define KEY_A_NUM_MEL_BINS         "clip.audio.num_mel_bins"
@@ -92,7 +97,9 @@
 #define KEY_A_LOCAL_GROUP_SIZE     "clip.audio.local_group_size"     // mimo-v2.5: input_local_transformer grouping size
 // audio generation (gen-audio)-specific
 #define KEY_GEN_AUDIO_PROJ_TYPE    "clip.gen.audio.projector_type" // for models with mixed modalities
-#define KEY_AUDIO_SUBSAMPLING_FACTOR "clip.audio.subsampling_factor"
+// name of the weight variant, for settings that are not in the checkpoint
+#define KEY_GEN_AUDIO_VARIANT      "clip.gen.audio.model_variant"
+#define KEY_AUDIO_SUBSMPL_FACTOR   "clip.audio.subsampling_factor"
 
 //
 // tensor name constants
@@ -116,7 +123,11 @@
 #define TN_FFN_DOWN        "%s.blk.%d.ffn_down.%s"
 #define TN_FFN_GATE        "%s.blk.%d.ffn_gate.%s"
 #define TN_FFN_UP          "%s.blk.%d.ffn_up.%s"
-#define TN_FFN_GATE        "%s.blk.%d.ffn_gate.%s"
+#define TN_FFN_GATE_INP    "%s.blk.%d.ffn_gate_inp.%s"    // MoE router (dots3note)
+#define TN_FFN_GATE_EXPS   "%s.blk.%d.ffn_gate_exps.%s"
+#define TN_FFN_UP_EXPS     "%s.blk.%d.ffn_up_exps.%s"
+#define TN_FFN_DOWN_EXPS   "%s.blk.%d.ffn_down_exps.%s"
+#define TN_FFN_EXP_PROBS_B "%s.blk.%d.exp_probs_b.%s"
 #define TN_LN_1            "%s.blk.%d.ln1.%s" // layer norm
 #define TN_LN_2            "%s.blk.%d.ln2.%s" // layer norm
 #define TN_LS_1            "%s.blk.%d.ls1.%s"         // layer scale
@@ -136,6 +147,7 @@
 #define TN_MVLM_PROJ_PEG   "mm.model.peg.%d.%s"
 #define TN_IMAGE_NEWLINE   "v.image_newline"
 #define TN_IMAGE_SEPERATOR "v.view_seperator"
+#define TN_TOK_EMBD_SEP    "v.tok_embd_sep"
 #define TN_MM_INP_NORM     "mm.input_norm.weight"
 #define TN_MM_INP_NORM_B   "mm.input_norm.bias"
 #define TN_MM_INP_PROJ     "mm.input_projection.weight" // gemma3
@@ -145,6 +157,9 @@
 #define TN_MM_MERGER_FC1   "mm.merger.fc1.%s"            // minimax-m3 patch-merge MLP
 #define TN_MM_MERGER_FC2   "mm.merger.fc2.%s"
 #define TN_TOK_IMG_BREAK   "v.token_embd.img_break"     // pixtral
+#define TN_TOK_IMG_START   "v.token_embd.img_start"     // deepseek4v
+#define TN_TOK_IMG_END     "v.token_embd.img_end"       // deepseek4v
+#define TN_TOK_IMG_PAD     "v.token_embd.img_pad"       // deepseek4v
 #define TN_TOK_GLM_BOI     "adapter.boi"                // glm-edge (these embeddings are not in text model)
 #define TN_TOK_GLM_EOI     "adapter.eoi"                // glm-edge (these embeddings are not in text model)
 #define TN_DEEPSTACK_NORM  "v.deepstack.%d.norm.%s"     // qwen3vl deepstack
@@ -246,6 +261,38 @@
 #define TN_A_GEN_WAV_DAC_POST_SNAKE  "a.gen.wav.dac.post_snake.%s"
 #define TN_A_GEN_WAV_DAC_POST_CONV   "a.gen.wav.dac.post_conv.%s"
 
+// pocket-tts
+#define TN_A_SEANET_CONV_IN      "a.seanet.conv_in.%s"
+#define TN_A_SEANET_CONV_OUT     "a.seanet.conv_out.%s"
+#define TN_A_SEANET_RES_CONV1    "a.seanet.blk.%d.res_conv1.%s"
+#define TN_A_SEANET_RES_CONV2    "a.seanet.blk.%d.res_conv2.%s"
+#define TN_A_SEANET_SCALE_CONV   "a.seanet.blk.%d.scale_conv.%s"
+#define TN_A_SPEAKER_PROJ        "a.speaker_proj.%s"
+#define TN_A_DOWNSAMPLE_CONV     "a.downsample.conv.%s"
+#define TN_A_GEN_FLOW_INPUT_PROJ "a.gen.flow.input_proj.%s"
+#define TN_A_GEN_FLOW_COND_EMBD  "a.gen.flow.cond_embd.%s"
+#define TN_A_GEN_FLOW_TIME_FREQS "a.gen.flow.time.%d.freqs"
+#define TN_A_GEN_FLOW_TIME_UP    "a.gen.flow.time.%d.up.%s"
+#define TN_A_GEN_FLOW_TIME_DOWN  "a.gen.flow.time.%d.down.%s"
+#define TN_A_GEN_FLOW_TIME_NORM  "a.gen.flow.time.%d.norm"
+#define TN_A_GEN_FLOW_BLK_NORM   "a.gen.flow.blk.%d.norm.%s"
+#define TN_A_GEN_FLOW_BLK_UP     "a.gen.flow.blk.%d.up.%s"
+#define TN_A_GEN_FLOW_BLK_DOWN   "a.gen.flow.blk.%d.down.%s"
+#define TN_A_GEN_FLOW_BLK_ADA    "a.gen.flow.blk.%d.ada.%s"
+#define TN_A_GEN_FLOW_FINAL_ADA  "a.gen.flow.final.ada.%s"
+#define TN_A_GEN_FLOW_FINAL_PROJ "a.gen.flow.final.proj.%s"
+#define TN_A_GEN_OUT_EOS         "a.gen.out_eos.%s"
+#define TN_A_GEN_INPUT_LINEAR    "a.gen.input_linear.%s"
+#define TN_A_GEN_EMB_MEAN        "a.gen.emb_mean"
+#define TN_A_GEN_EMB_STD         "a.gen.emb_std"
+#define TN_A_GEN_WAV_QUANT_OUT   "a.gen.wav.quant_out.%s"
+#define TN_A_GEN_WAV_UPSAMPLE    "a.gen.wav.upsample.%s"
+#define TN_A_GEN_WAV_SEANET_CONV_IN    "a.gen.wav.seanet.conv_in.%s"
+#define TN_A_GEN_WAV_SEANET_CONV_OUT   "a.gen.wav.seanet.conv_out.%s"
+#define TN_A_GEN_WAV_SEANET_RES_CONV1  "a.gen.wav.seanet.blk.%d.res_conv1.%s"
+#define TN_A_GEN_WAV_SEANET_RES_CONV2  "a.gen.wav.seanet.blk.%d.res_conv2.%s"
+#define TN_A_GEN_WAV_SEANET_SCALE_CONV "a.gen.wav.seanet.blk.%d.scale_conv.%s"
+
 // cogvlm
 #define TN_MM_POST_FC_NORM "mm.post_fc_norm.%s"
 #define TN_MM_H_TO_4H      "mm.up.%s"
@@ -256,8 +303,8 @@
 
 // hunyuanvl (shared GGUF tensor names)
 #define TN_MM_PRE_NORM     "mm.pre_norm.%s"
-#define TN_TOK_IMG_BEGIN   "mm.image_begin"
-#define TN_TOK_IMG_END     "mm.image_end"
+#define TN_MM_IMG_BEGIN    "mm.image_begin" // note: legacy name, new models should use v.token_embd.*
+#define TN_MM_IMG_END      "mm.image_end"   // note: legacy name, new models should use v.token_embd.*
 
 // deepseek-ocr
 #define TN_SAM_POS_EMBD   "v.sam.pos_embd.%s"
@@ -407,6 +454,7 @@ enum projector_type {
     PROJECTOR_TYPE_GLM_EDGE,
     PROJECTOR_TYPE_QWEN2VL,
     PROJECTOR_TYPE_QWEN3VL,
+    PROJECTOR_TYPE_LING3VL,
     PROJECTOR_TYPE_STEP3VL,
     PROJECTOR_TYPE_GEMMA3,
     PROJECTOR_TYPE_GEMMA3NV,
@@ -430,16 +478,22 @@ enum projector_type {
     PROJECTOR_TYPE_MERALION,
     PROJECTOR_TYPE_MUSIC_FLAMINGO,
     PROJECTOR_TYPE_LFM2,
+    PROJECTOR_TYPE_D1OMNI_V,
     PROJECTOR_TYPE_KIMIVL,
     PROJECTOR_TYPE_PADDLEOCR,
     PROJECTOR_TYPE_LIGHTONOCR,
     PROJECTOR_TYPE_COGVLM,
     PROJECTOR_TYPE_JANUS_PRO,
     PROJECTOR_TYPE_DOTS_OCR,
+    PROJECTOR_TYPE_DOTS3NOTE_V,
+    PROJECTOR_TYPE_DOTS3NOTE_A,
     PROJECTOR_TYPE_DEEPSEEKOCR,
     PROJECTOR_TYPE_DEEPSEEKOCR2,
+    PROJECTOR_TYPE_DEEPSEEK4V,
     PROJECTOR_TYPE_LFM2A,
+    PROJECTOR_TYPE_D1OMNI_A,
     PROJECTOR_TYPE_GLM4V,
+    PROJECTOR_TYPE_GLM5V,
     PROJECTOR_TYPE_YOUTUVL,
     PROJECTOR_TYPE_YASA2,
     PROJECTOR_TYPE_KIMIK25,
@@ -448,6 +502,7 @@ enum projector_type {
     PROJECTOR_TYPE_PARAKEET,
     PROJECTOR_TYPE_EXAONE4_5,
     PROJECTOR_TYPE_MINICPMV4_6,
+    PROJECTOR_TYPE_MINICPMV4_7,
     PROJECTOR_TYPE_GRANITE_SPEECH,
     PROJECTOR_TYPE_MIMOVL,
     PROJECTOR_TYPE_MINIMAX_M3,
@@ -455,7 +510,10 @@ enum projector_type {
     PROJECTOR_TYPE_MIMO_AUDIO,
     PROJECTOR_TYPE_QWEN3TTS_SPKENC,
     PROJECTOR_TYPE_QWEN3TTS_GEN,
+    PROJECTOR_TYPE_POCKETTTS_SPKENC,
+    PROJECTOR_TYPE_POCKETTTS_GEN,
     PROJECTOR_TYPE_MUSE_GLIMMER,
+    PROJECTOR_TYPE_COHERE2V,
     PROJECTOR_TYPE_UNKNOWN,
 };
 
@@ -468,6 +526,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_QWEN2VL,           "qwen2vl_merger"},
     { PROJECTOR_TYPE_QWEN25VL,          "qwen2.5vl_merger"},
     { PROJECTOR_TYPE_QWEN3VL,           "qwen3vl_merger"},
+    { PROJECTOR_TYPE_LING3VL,           "ling3vl"},
     { PROJECTOR_TYPE_STEP3VL,           "step3vl"},
     { PROJECTOR_TYPE_GEMMA3,            "gemma3"},
     { PROJECTOR_TYPE_GEMMA3NV,          "gemma3nv"},
@@ -490,16 +549,22 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_MERALION,          "meralion"},
     { PROJECTOR_TYPE_MUSIC_FLAMINGO,    "musicflamingo"},
     { PROJECTOR_TYPE_LFM2,              "lfm2"},
+    { PROJECTOR_TYPE_D1OMNI_V,          "d1omni_v"},
     { PROJECTOR_TYPE_KIMIVL,            "kimivl"},
     { PROJECTOR_TYPE_PADDLEOCR,         "paddleocr"},
     { PROJECTOR_TYPE_LIGHTONOCR,        "lightonocr"},
     { PROJECTOR_TYPE_COGVLM,            "cogvlm"},
     { PROJECTOR_TYPE_JANUS_PRO,         "janus_pro"},
     { PROJECTOR_TYPE_DOTS_OCR,          "dots_ocr"},
+    { PROJECTOR_TYPE_DOTS3NOTE_V,       "dots3note_v"},
+    { PROJECTOR_TYPE_DOTS3NOTE_A,       "dots3note_a"},
     { PROJECTOR_TYPE_DEEPSEEKOCR,       "deepseekocr"},
     { PROJECTOR_TYPE_DEEPSEEKOCR2,      "deepseekocr2"},
+    { PROJECTOR_TYPE_DEEPSEEK4V,        "deepseek4v"},
     { PROJECTOR_TYPE_LFM2A,             "lfm2a"},
+    { PROJECTOR_TYPE_D1OMNI_A,          "d1omni_a"},
     { PROJECTOR_TYPE_GLM4V,             "glm4v"},
+    { PROJECTOR_TYPE_GLM5V,             "glm5v"},
     { PROJECTOR_TYPE_YOUTUVL,           "youtuvl"},
     { PROJECTOR_TYPE_YASA2,             "yasa2"},
     { PROJECTOR_TYPE_KIMIK25,           "kimik25"},
@@ -507,6 +572,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_EXAONE4_5,         "exaone4_5"},
     { PROJECTOR_TYPE_HUNYUANVL,         "hunyuanvl"},
     { PROJECTOR_TYPE_MINICPMV4_6,       "minicpmv4_6"},
+    { PROJECTOR_TYPE_MINICPMV4_7,       "minicpmv4_7"},
     { PROJECTOR_TYPE_GRANITE_SPEECH,    "granite_speech"},
     { PROJECTOR_TYPE_MIMOVL,            "mimovl"},
     { PROJECTOR_TYPE_MINIMAX_M3,        "minimax_m3"},
@@ -515,7 +581,10 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_PARAKEET,          "parakeet"},
     { PROJECTOR_TYPE_QWEN3TTS_SPKENC,   "qwen3tts_spkenc"},
     { PROJECTOR_TYPE_QWEN3TTS_GEN,      "qwen3tts_gen"},
+    { PROJECTOR_TYPE_POCKETTTS_SPKENC,  "pockettts_spkenc"},
+    { PROJECTOR_TYPE_POCKETTTS_GEN,     "pockettts_gen"},
     { PROJECTOR_TYPE_MUSE_GLIMMER,      "muse-glimmer"},
+    { PROJECTOR_TYPE_COHERE2V,          "cohere2v"},
 };
 
 static projector_type clip_projector_type_from_string(const std::string & str) {
@@ -565,7 +634,7 @@ struct clip_image_u8 {
             // return a dummy value, so that legacy code can still process image without errors
             return { 0, 0, 0 };
         }
-        int idx = (y * nx + x) * 3;
+        size_t idx = ((size_t) y * (size_t) nx + (size_t) x) * 3;
         return { buf[idx], buf[idx + 1], buf[idx + 2] };
     }
 
@@ -573,8 +642,8 @@ struct clip_image_u8 {
         if (is_placeholder()) {
             return; // no-op
         }
-        int idx = (y * nx + x) * 3;
-        buf[idx] = rgb[0];
+        size_t idx = ((size_t) y * (size_t) nx + (size_t) x) * 3;
+        buf[idx]     = rgb[0];
         buf[idx + 1] = rgb[1];
         buf[idx + 2] = rgb[2];
     }
@@ -595,6 +664,38 @@ struct clip_image_u8 {
 
 struct mtmd_serialization; // forward declaration
 
+// separators appended after the image tokens of one entry, as rows of v.tok_embd_sep
+enum clip_suffix_type : int32_t {
+    CLIP_SUFFIX_NONE = 0,
+    // MiniCPM-V 4.7 tiles
+    CLIP_SUFFIX_MINICPMV_OV,       // </image>
+    CLIP_SUFFIX_MINICPMV_OV_SLICE, // </image><slice>
+    CLIP_SUFFIX_MINICPMV_SLICE,    // </slice><slice>
+    CLIP_SUFFIX_MINICPMV_ROW_END,  // </slice>\n<slice>
+    CLIP_SUFFIX_MINICPMV_LAST,     // </slice>
+    CLIP_SUFFIX_COUNT,
+};
+
+// rows of v.tok_embd_sep for each suffix type
+// MiniCPM-V 4.7 rows (set by the converter): 0 = </image>, 1 = <slice>, 2 = </slice>, 3 = \n
+static inline const std::vector<int> & clip_suffix_rows(clip_suffix_type type) {
+    static const std::vector<int> none;
+    static const std::vector<int> minicpmv_ov       = { 0 };
+    static const std::vector<int> minicpmv_ov_slice = { 0, 1 };
+    static const std::vector<int> minicpmv_slice    = { 2, 1 };
+    static const std::vector<int> minicpmv_row_end  = { 2, 3, 1 };
+    static const std::vector<int> minicpmv_last     = { 2 };
+    switch (type) {
+        case CLIP_SUFFIX_NONE:              return none;
+        case CLIP_SUFFIX_MINICPMV_OV:       return minicpmv_ov;
+        case CLIP_SUFFIX_MINICPMV_OV_SLICE: return minicpmv_ov_slice;
+        case CLIP_SUFFIX_MINICPMV_SLICE:    return minicpmv_slice;
+        case CLIP_SUFFIX_MINICPMV_ROW_END:  return minicpmv_row_end;
+        case CLIP_SUFFIX_MINICPMV_LAST:     return minicpmv_last;
+        default: GGML_ABORT("invalid suffix type");
+    }
+}
+
 // For images, buf.size() == nx*ny*3
 //     Memory layout: RGBRGBRGB...
 // For seq, buf.size() == nx*ny*3*nt
@@ -604,8 +705,29 @@ struct mtmd_serialization; // forward declaration
 struct clip_image_f32 {
     // marks the global view in e.g., DeepSeek-OCR Models
     bool add_viewsep = false;
-    // whether a learned newline (or EOI) token should be appended after the image (eg Granite4 Vision)
+    // appends a learned newline (or EOI) token after the image
+    // no model uses it now (Granite4 Vision moved to anyres), kept for future models
     bool add_newline = false;
+    // deepseek4v: number of leading IMAGE_PAD embeddings, aligns IMAGE_START to the LLM compressor ratio
+    // depends on the chunk position, set at tokenize time (see mtmd_tokenizer::add_media)
+    int32_t lead_pad = 0;
+    // separators appended after the image tokens
+    clip_suffix_type suffix_type = CLIP_SUFFIX_NONE;
+
+    // tile grid of the image group this entry belongs to
+    // llava-next "anyres" (Granite4 Vision): the whole grid is encoded and assembled in a single graph
+    // MiniCPM-V 4.7: set on the overview entry, the decoder positions of all tiles are derived from it
+    struct anyres_info {
+        int grid_x = 0; // tiles per row, 0 means the image is not tiled
+        int grid_y = 0; // tiles per column
+        int orig_nx = 0; // size of the source image, used to drop the padding tokens
+        int orig_ny = 0;
+
+        bool is_tiled() const {
+            return grid_x > 0 && grid_y > 0;
+        }
+    };
+    anyres_info anyres;
 
     clip_image_size get_size() const {
         return { nx_, ny_ };
@@ -687,6 +809,41 @@ struct clip_image_f32 {
         return (size_t) nx_ * (size_t) ny_;
     }
 };
+
+// token area kept after removing the padding added by the anyres resize
+// ref: https://github.com/huggingface/transformers/blob/v5.0.0/src/transformers/models/llava_next/modeling_llava_next.py#L109
+static inline void clip_anyres_unpad(int cur_w, int cur_h, int orig_w, int orig_h,
+                                     int & off_x, int & off_y, int & out_w, int & out_h) {
+    off_x = 0;
+    off_y = 0;
+    out_w = cur_w;
+    out_h = cur_h;
+    if ((float) orig_w / orig_h > (float) cur_w / cur_h) {
+        const int new_h = (int) std::floor((double) orig_h * cur_w / orig_w + 1e-7);
+        off_y = (cur_h - new_h) / 2;
+        out_h = cur_h - 2 * off_y;
+    } else {
+        const int new_w = (int) std::floor((double) orig_w * cur_h / orig_h + 1e-7);
+        off_x = (cur_w - new_w) / 2;
+        out_w = cur_w - 2 * off_x;
+    }
+}
+
+// deepseek4v: layout of the LLM token block built from the aligner grid
+struct dsv4_block_layout {
+    int rows;     // grid rows, padded to an even count
+    int row_len;  // grid width + 1 newline
+    int pad_last; // trailing pads
+    int n_out;    // total block size, including lead pads and the start/end sentinels
+};
+static inline dsv4_block_layout dsv4_get_block_layout(int n_llm_w, int n_llm_h, int lead_pad) {
+    dsv4_block_layout bl;
+    bl.rows     = n_llm_h + (n_llm_h % 2);
+    bl.row_len  = n_llm_w + 1;
+    bl.pad_last = (bl.rows / 2 * bl.row_len) % 2 * 2;
+    bl.n_out    = lead_pad + 1 + bl.rows * bl.row_len + bl.pad_last + 1;
+    return bl;
+}
 
 //
 // logging
@@ -784,6 +941,9 @@ static std::ifstream open_ifstream_binary(const std::string & fname) {
 }
 #endif
 
+// in test-mtmd-impl, we include woth common.h and this file, and these functions are duplicated
+// this is a quick fix to avoid compilation errors
+#ifndef DIRECTORY_SEPARATOR
 static std::string string_format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -841,6 +1001,7 @@ inline bool string_ends_with(std::string_view str, std::string_view suffix) {
     return str.size() >= suffix.size() &&
            str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
+#endif
 
 //
 // gguf utils

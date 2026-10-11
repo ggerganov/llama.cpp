@@ -944,6 +944,47 @@ static void dequantize_block_q2_K(const void * __restrict__ vx, dst_t * __restri
 }
 
 template<typename dst_t>
+static void dequantize_block_q2_K_reorder(const void * __restrict__ vx, dst_t * __restrict__ yy,
+                                          const sycl::nd_item<3> & item_ct1, int64_t n_blocks) {
+#if QK_K == 256
+    const int64_t i = item_ct1.get_group(2);
+    if (i >= n_blocks) {
+        return;
+    }
+
+    const uint8_t * base          = static_cast<const uint8_t *>(vx);
+    const size_t    qs_offset     = i * (QK_K / 4);
+    const size_t    scales_offset = n_blocks * (QK_K / 4) + i * (QK_K / 16);
+    const size_t    dm_offset     = n_blocks * (QK_K / 4) + n_blocks * (QK_K / 16) + i * sizeof(ggml_half2);
+
+    const uint8_t *     qs     = base + qs_offset;
+    const uint8_t *     scales = base + scales_offset;
+    const ggml_half2 * dm     = reinterpret_cast<const ggml_half2 *>(base + dm_offset);
+
+    const int64_t tid = item_ct1.get_local_id(2);
+    const int64_t n    = tid / 32;
+    const int64_t l    = tid - 32 * n;
+    const int64_t is   = 8 * n + l / 16;
+
+    const uint8_t q = qs[32 * n + l];
+    dst_t * y = yy + i * QK_K + 128 * n;
+
+    const float dall = (*dm)[0];
+    const float dmin = (*dm)[1];
+    y[l+ 0] = dall * (scales[is+0] & 0xF) * ((q >> 0) & 3) - dmin * (scales[is+0] >> 4);
+    y[l+32] = dall * (scales[is+2] & 0xF) * ((q >> 2) & 3) - dmin * (scales[is+2] >> 4);
+    y[l+64] = dall * (scales[is+4] & 0xF) * ((q >> 4) & 3) - dmin * (scales[is+4] >> 4);
+    y[l+96] = dall * (scales[is+6] & 0xF) * ((q >> 6) & 3) - dmin * (scales[is+6] >> 4);
+#else
+    GGML_UNUSED(vx);
+    GGML_UNUSED(yy);
+    GGML_UNUSED(item_ct1);
+    GGML_UNUSED(n_blocks);
+    GGML_ABORT("Q2_K reorder dequantize not supported for QK_K != 256");
+#endif
+}
+
+template<typename dst_t>
 static void dequantize_block_q3_K(const void * __restrict__ vx, dst_t * __restrict__ yy,
                                   const sycl::nd_item<3> &item_ct1) {
 
@@ -1602,6 +1643,26 @@ static void dequantize_block_mxfp4(const void * __restrict__ vx, dst_t * __restr
     for (int j = 0; j < 4; ++j) {
         y[j+ 0] = d * kvalues_mxfp4[q4[j] & 0xf]*0.5f;
         y[j+16] = d * kvalues_mxfp4[q4[j] >>  4]*0.5f;
+    }
+}
+
+// Reordered MXFP4 ([qs...][e...], see ggml_sycl_reordered::block_q_t<MXFP4>): one work-item per block.
+template <typename dst_t>
+static void dequantize_block_mxfp4_reorder(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
+                                           const sycl::nd_item<3> & item_ct1) {
+    const int64_t ib = (int64_t) item_ct1.get_group(2) * WARP_SIZE + item_ct1.get_local_id(2);
+    if (ib >= k / QK_MXFP4) {
+        return;
+    }
+
+    const uint8_t * qs = (const uint8_t *) vx + ib * (QK_MXFP4 / 2);
+    const float     d  = ggml_sycl_e8m0_to_fp32(((const uint8_t *) vx)[k / 2 + ib]) * 0.5f;
+    dst_t *         y  = yy + ib * QK_MXFP4;
+
+#pragma unroll
+    for (int j = 0; j < QK_MXFP4 / 2; ++j) {
+        y[j]                = d * kvalues_mxfp4[qs[j] & 0xf];
+        y[j + QK_MXFP4 / 2] = d * kvalues_mxfp4[qs[j] >> 4];
     }
 }
 
