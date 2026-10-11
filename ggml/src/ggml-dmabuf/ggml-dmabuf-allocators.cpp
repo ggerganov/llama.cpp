@@ -63,10 +63,14 @@ static int allocate_dmabuf_amdgpu(size_t size) {
         return -1;
     }
 
+    // default to GTT (system memory); set GGML_DMABUF_AMDGPU_VRAM=1 to allocate from VRAM
+    const char * vram_env = getenv("GGML_DMABUF_AMDGPU_VRAM");
+    const bool vram = vram_env != nullptr && atoi(vram_env) == 1;
+
     union drm_amdgpu_gem_create params = {};
     params.in.bo_size = size;
     params.in.alignment = ggml_dmabuf_page_align(1);
-    params.in.domains = AMDGPU_GEM_DOMAIN_GTT;
+    params.in.domains = vram ? AMDGPU_GEM_DOMAIN_VRAM : AMDGPU_GEM_DOMAIN_GTT;
     params.in.domain_flags = AMDGPU_GEM_CREATE_EXPLICIT_SYNC;
     if (ioctl(drm_fd, DRM_IOCTL_AMDGPU_GEM_CREATE, &params) < 0) {
         GGML_LOG_ERROR("%s: DRM_IOCTL_AMDGPU_GEM_CREATE failed: %s\n", __func__, strerror(errno));
