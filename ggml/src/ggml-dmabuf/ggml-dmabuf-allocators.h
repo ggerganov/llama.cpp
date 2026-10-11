@@ -6,5 +6,5 @@
 size_t ggml_dmabuf_page_align(size_t size);
 
 // allocate a dma-buf, returns a file descriptor or -1
-// the source is selected with GGML_DMABUF_HEAP
+// the source is selected with GGML_DMABUF_HEAP and GGML_DMABUF_AMDGPU_DEVICE
 int ggml_backend_dmabuf_alloc(size_t size);

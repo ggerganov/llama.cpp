@@ -12,3 +12,8 @@ target_sources(ggml-base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ggml-dmabuf.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ggml-dmabuf-allocators.cpp)
 target_compile_definitions(ggml-base PUBLIC GGML_USE_DMABUF)
+
+check_include_file("drm/amdgpu_drm.h" GGML_DMABUF_HAVE_AMDGPU)
+if (GGML_DMABUF_HAVE_AMDGPU)
+    target_compile_definitions(ggml-base PRIVATE GGML_DMABUF_AMDGPU)
+endif()
