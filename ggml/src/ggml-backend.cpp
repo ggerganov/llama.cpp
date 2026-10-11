@@ -977,6 +977,9 @@ struct ggml_backend_sched {
 
     bool op_offload;
 
+    // preferred backend for the current graph, or -1, used to keep batched and non-batched graphs on one backend
+    int preferred_backend_id;
+
     int debug;
 
     // used for debugging graph reallocations [GGML_SCHED_DEBUG_REALLOC]
@@ -1038,6 +1041,17 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, co
     }
 
     // find highest prio backend that supports the buffer type and the op
+    // never override graph inputs: they go through the normal staging/copy path
+    const bool prefer = sched->preferred_backend_id >= 0 &&
+        !(tensor->flags & GGML_TENSOR_FLAG_INPUT) && !(op->flags & GGML_TENSOR_FLAG_INPUT);
+    if (prefer) {
+        const int i = sched->preferred_backend_id;
+        if (ggml_backend_supports_buft(sched->backends[i], buffer->buft) &&
+            ggml_backend_supports_op(sched->backends[i], op)) {
+            return i;
+        }
+    }
+
     for (int i = 0; i < sched->n_backends; i++) {
         if (ggml_backend_supports_buft(sched->backends[i], buffer->buft) &&
             ggml_backend_supports_op(sched->backends[i], op)) {
@@ -1361,6 +1375,45 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
             continue;
         }
         int * node_backend_id = &tensor_backend_id(node);
+
+        // when the graph has a preferred backend, move every compatible node to it, so that
+        // a single compute device serves the whole graph. this overrides weight-based placement,
+        // but only when the weight sources are already usable on the preferred backend
+        if (sched->preferred_backend_id >= 0) {
+            const int b = sched->preferred_backend_id;
+            if (*node_backend_id != b && ggml_backend_supports_op(sched->backends[b], node)) {
+                bool supported = true;
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * src = node->src[j];
+                    if (src == NULL) {
+                        continue;
+                    }
+                    ggml_backend_buffer_t src_buf = src->view_src ? src->view_src->buffer : src->buffer;
+                    if (src_buf && src_buf->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+                        if (!ggml_backend_sched_buffer_supported(sched, src, b)) {
+                            supported = false;
+                            break;
+                        }
+                        continue;
+                    }
+                    // non-weight source: only allow moving when it is on the CPU, so the normal
+                    // staging path copies it. sources on another GPU are left where they are.
+                    const int src_id = tensor_backend_id(src);
+                    const bool src_cpu = src_id >= 0 &&
+                        ggml_backend_dev_type(ggml_backend_get_device(sched->backends[src_id])) == GGML_BACKEND_DEVICE_TYPE_CPU;
+                    if (!src_cpu && !ggml_backend_sched_buffer_supported(sched, src, b)) {
+                        supported = false;
+                        break;
+                    }
+                }
+                if (supported) {
+                    *node_backend_id = b;
+                    SET_CAUSE(node, "3.pref");
+                }
+            }
+            continue;
+        }
+
         if (*node_backend_id == -1) {
             // unassigned node: find the backend with the most supported inputs
             int n_supported_best = -1;
@@ -2027,6 +2080,7 @@ ggml_backend_sched_t ggml_backend_sched_new(
 
     sched->galloc = ggml_gallocr_new_n(sched->bufts, n_backends);
     sched->op_offload = op_offload;
+    sched->preferred_backend_id = -1;
 
     ggml_backend_sched_reset(sched);
 
@@ -2214,6 +2268,21 @@ void ggml_backend_sched_set_tensor_backend(ggml_backend_sched_t sched, struct gg
     tensor_backend_id(node) = backend_index;
     SET_CAUSE(node, "usr");
     sched->is_reset = false;
+}
+
+void ggml_backend_sched_set_preferred_backend(ggml_backend_sched_t sched, ggml_backend_t backend) {
+    GGML_ASSERT(sched);
+    sched->preferred_backend_id = -1;
+    if (backend == NULL) {
+        return;
+    }
+    for (int i = 0; i < sched->n_backends; i++) {
+        if (sched->backends[i] == backend) {
+            sched->preferred_backend_id = i;
+            return;
+        }
+    }
+    GGML_ABORT("%s: backend is not part of the scheduler\n", __func__);
 }
 
 ggml_backend_t ggml_backend_sched_get_tensor_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {

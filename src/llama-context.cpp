@@ -512,6 +512,18 @@ llama_context::llama_context(
 
         LLAMA_LOG_DEBUG("%s: backend_ptrs.size() = %zu\n", __func__, backend_ptrs.size());
 
+        // opt-in: pin pp and tg graphs to specific devices, e.g. GGML_SPLIT_PPTG_DEVICES=ROCm0,Vulkan0
+        if (const char * env = getenv("GGML_SPLIT_PPTG_DEVICES")) {
+            const std::string value = env;
+            const size_t comma = value.find(',');
+            if (comma != std::string::npos) {
+                split_pptg_pp = value.substr(0, comma);
+                split_pptg_tg = value.substr(comma + 1);
+            } else if (!value.empty()) {
+                LLAMA_LOG_WARN("%s: GGML_SPLIT_PPTG_DEVICES expects '<pp_dev>,<tg_dev>'\n", __func__);
+            }
+        }
+
         // TODO: move these checks to ggml_backend_sched
         // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
         bool pipeline_parallel =
@@ -1523,6 +1535,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
         gf_res_prev_active = nullptr;
         res->reset();
 
+        sched_update_preferred_backend(ubatch.n_tokens);
         ggml_backend_sched_reset(sched.get());
         ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
 
@@ -2655,6 +2668,7 @@ ggml_cgraph * llama_context::graph_reserve(
     this->n_outputs = save_n_outputs;
 
     // initialize scheduler with the specified graph
+    sched_update_preferred_backend(n_tokens);
     if (split_only) {
         if (sizes) {
             ggml_backend_sched_reserve_size(sched.get(), gf, sizes);
@@ -2695,6 +2709,32 @@ llm_graph_params llama_context::graph_params(
         /*.cb          =*/ graph_get_cb(),
         /*.res         =*/ res,
     };
+}
+
+void llama_context::sched_update_preferred_backend(uint32_t n_tokens) {
+    // opt-in via GGML_SPLIT_PPTG_DEVICES=pp_dev,tg_dev: pin pp graphs to pp_dev and
+    // tg graphs to tg_dev, so each phase runs on a single device without cross-backend handoffs
+    if (split_pptg_pp.empty() && split_pptg_tg.empty()) {
+        graph_pinned_backend = false;
+        ggml_backend_sched_set_preferred_backend(sched.get(), nullptr);
+        return;
+    }
+
+    const std::string & name = n_tokens > 1 ? split_pptg_pp : split_pptg_tg;
+
+    ggml_backend_t preferred = nullptr;
+    for (ggml_backend_t backend : backend_ptrs) {
+        if (name == ggml_backend_name(backend)) {
+            preferred = backend;
+            break;
+        }
+    }
+    if (preferred == nullptr) {
+        LLAMA_LOG_WARN("%s: device '%s' is not in the selected device list\n", __func__, name.c_str());
+    }
+
+    graph_pinned_backend = preferred != nullptr;
+    ggml_backend_sched_set_preferred_backend(sched.get(), preferred);
 }
 
 ggml_status llama_context::graph_compute(
@@ -2824,7 +2864,7 @@ llm_graph_cb llama_context::graph_get_cb() const {
         // - force the last op of the layer on the specified backend to avoid running it on the backend of the next layer due to scheduling
         // FIXME: fix in ggml_backend_sched
         const bool full_offload = model.n_gpu_layers() > model.hparams.n_layer_all;
-        if (ubatch.n_tokens < 32 || full_offload) {
+        if ((ubatch.n_tokens < 32 || full_offload) && !graph_pinned_backend) {
             if (il != -1 && (strcmp(name, "norm") == 0 || strcmp(name, "l_last") == 0)) {
                 const auto & dev_layer = model.dev_layer(il);
                 for (const auto & backend : backends) {

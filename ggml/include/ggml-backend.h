@@ -346,6 +346,8 @@ extern "C" {
 
     GGML_API void                 ggml_backend_sched_set_tensor_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend);
     GGML_API ggml_backend_t       ggml_backend_sched_get_tensor_backend(ggml_backend_sched_t sched, struct ggml_tensor * node);
+    // prefer a backend for the next graph, so that all compatible ops stay on it. pass NULL to clear
+    GGML_API void                 ggml_backend_sched_set_preferred_backend(ggml_backend_sched_t sched, ggml_backend_t backend);
 
     // Split graph without allocating it
     GGML_API void                 ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
