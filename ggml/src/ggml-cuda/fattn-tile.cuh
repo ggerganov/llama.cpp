@@ -456,10 +456,10 @@ static __device__ __forceinline__ void flash_attn_tile_load_tile(
                     const int j = j0*cpy_ne + (stride_j == warp_size ? threadIdx.x : threadIdx.x % stride_j)*cpy_ne;
 
                     const __align__(16) half2 zero[cpy_ne] = {{0.0f, 0.0f}};
-                    const int i_KV = use_sparse && (!oob_check || i < i_sup) ? sparse_indices[k_VKQ_0 + i] - k_VKQ_0 : i;
+                    const int i_KV_offset = use_sparse && (!oob_check || i < i_sup) ? sparse_indices[k_VKQ_0 + i] - k_VKQ_0 : i;
                     ggml_cuda_memcpy_1<cpy_nb>(
                         tile_KV + i*(J/2 + J_padding) + j,
-                        !oob_check || i < i_sup ? KV + i_KV*stride_KV + j : zero);
+                        !oob_check || i < i_sup ? KV + i_KV_offset*stride_KV + j : zero);
                 }
             }
         }
@@ -507,10 +507,10 @@ static __device__ __forceinline__ void flash_attn_tile_load_tile(
                     const int j = j0*(cpy_ne/2) + (stride_j == warp_size ? threadIdx.x : threadIdx.x % stride_j)*(cpy_ne/2);
 
                     const half2 zero[cpy_ne/2] = {{0.0f, 0.0f}};
-                    const int i_KV = use_sparse && (!oob_check || i < i_sup) ? sparse_indices[k_VKQ_0 + i] - k_VKQ_0 : i;
+                    const int i_KV_offset = use_sparse && (!oob_check || i < i_sup) ? sparse_indices[k_VKQ_0 + i] - k_VKQ_0 : i;
                     __align__(16) half2 tmp_h2[cpy_ne/2];
                     ggml_cuda_memcpy_1<sizeof(tmp_h2)>(
-                        tmp_h2, !oob_check || i < i_sup ? KV + i_KV*stride_KV + j : zero);
+                        tmp_h2, !oob_check || i < i_sup ? KV + i_KV_offset*stride_KV + j : zero);
 
                     __align__(16) float2 tmp_f2[cpy_ne/2];
 #pragma unroll
