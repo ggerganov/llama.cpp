@@ -392,7 +392,7 @@ static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_spa
     if (DKQ == 512 && DV == 512) return {65536, 16};
     if (DKQ == 576 && DV == 512) return {65536, 32};
 
-    return {0, 0};
+    return {0, 0}; // Unsupported geometry.
 }
 
 static constexpr bool ggml_cuda_fattn_tile_sparse_supported(
@@ -1006,6 +1006,7 @@ static __global__ void flash_attn_tile(
     __syncthreads();
 
     // Main loop over KV cache:
+    // Sparse KV_max stores ne11 indices per list, followed by one count per list.
     const int list = use_sparse ? (sequence % ne33)*gridDim.x + blockIdx.x : 0;
     const int * sparse_indices = use_sparse ? KV_max + int64_t(list)*ne11 : nullptr;
     const int k_VKQ_max = use_sparse ? KV_max[int64_t(gridDim.x)*ne33*ne11 + list] :
