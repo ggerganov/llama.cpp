@@ -475,19 +475,18 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe, const 
     ms.add_kv(LLM_KV_KDA_GATE_LOWER_BOUND,        -5.0f);
 
     if (arch == LLM_ARCH_DORY) {
-        gguf_set_val_u32(ms.gguf_ctx, "dory.input_layer_count", 2);
-        gguf_set_val_u32(ms.gguf_ctx, "dory.recurrent_layer_count", 2);
-        gguf_set_val_u32(ms.gguf_ctx, "dory.output_layer_count", 2);
-        gguf_set_val_u32(ms.gguf_ctx, "dory.recurrent_loop_count", 4);
-        gguf_set_val_str(ms.gguf_ctx, "dory.layer_pattern", "*-S-*-");
-        gguf_set_val_str(ms.gguf_ctx, "dory.recurrent_kv_cache_mode", "per_loop");
-        const uint32_t profile[] = {1, 1, 2, 1, 1, 1};
-        gguf_set_arr_data(ms.gguf_ctx, "dory.rope.profile", GGUF_TYPE_UINT32, profile, 6);
-        gguf_set_val_f32(ms.gguf_ctx, "dory.init_std", stdev);
-        gguf_set_val_f32(ms.gguf_ctx, "dory.alpha_init", 0.05f);
-        gguf_set_val_f32(ms.gguf_ctx, "dory.gate_init", sqrtf(n_embd));
+        ms.add_kv(LLM_KV_INPUT_LAYER_COUNT, uint32_t(2));
+        ms.add_kv(LLM_KV_RECURRENT_LAYER_COUNT, uint32_t(2));
+        ms.add_kv(LLM_KV_OUTPUT_LAYER_COUNT, uint32_t(2));
+        ms.add_kv(LLM_KV_NUM_LOOPS, uint32_t(4));
+        ms.add_kv(LLM_KV_LAYER_PATTERN, "*-S-*-");
+        ms.add_kv(LLM_KV_RECURRENT_KV_CACHE_MODE, "per_loop");
+        ms.add_kv(LLM_KV_ROPE_PROFILE, std::vector<uint32_t>({1, 1, 2, 1, 1, 1}));
+        ms.add_kv(LLM_KV_INIT_STD, stdev);
+        ms.add_kv(LLM_KV_ALPHA_INIT, 0.05f);
+        ms.add_kv(LLM_KV_GATE_INIT, sqrtf(n_embd));
         ms.add_kv(LLM_KV_ROPE_FREQ_BASE, 10000000.0f);
-        gguf_set_val_f32(ms.gguf_ctx, "dory.rope.freq_base_2", 10000.0f);
+        ms.add_kv(LLM_KV_ROPE_FREQ_BASE_2, 10000.0f);
         ms.add_kv(LLM_KV_ATTENTION_KEY_LENGTH, n_embd_head);
         ms.add_kv(LLM_KV_ATTENTION_VALUE_LENGTH, n_embd_head);
         ms.add_kv(LLM_KV_ROPE_DIMENSION_COUNT, n_embd_head);
@@ -988,15 +987,21 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
         }
 
         const bool encode = arch == LLM_ARCH_T5 || arch == LLM_ARCH_DREAM || arch == LLM_ARCH_LLADA || arch == LLM_ARCH_LLADA_MOE || arch == LLM_ARCH_RND1;
-        for (bool moe : {false, true}) {
+        for (int config = 0; config < (arch == LLM_ARCH_DORY ? 8 : 2); ++config) {
+            const bool moe = arch != LLM_ARCH_DORY && config != 0;
             if (moe && !moe_implemented(arch)) {
                 continue;
             }
             if (!moe && moe_mandatory(arch)) {
                 continue;
             }
-            const std::string config_name = moe ? "MoE" : "Dense";
+            const std::string config_name = arch == LLM_ARCH_DORY ? "K" + std::to_string(config % 4 + 1) + (config < 4 ? "/P" : "/L") : moe ? "MoE" : "Dense";
             gguf_context_ptr gguf_ctx = get_gguf_ctx(arch, moe, stdev);
+            if (arch == LLM_ARCH_DORY) {
+                llama_model_saver ms(arch, gguf_ctx.get());
+                ms.add_kv(LLM_KV_NUM_LOOPS, uint32_t(config % 4 + 1));
+                ms.add_kv(LLM_KV_RECURRENT_KV_CACHE_MODE, config < 4 ? "per_loop" : "last_loop");
+            }
             if (arch == LLM_ARCH_BAILINGMOE3) {
                 GGML_ASSERT(gguf_remove_key(gguf_ctx.get(), "bailingmoe3.kda.safe_gate") >= 0);
             }
@@ -1052,7 +1057,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                             std::vector<float> logits_mixed;
                             std::vector<float> logits_chunks;
                             if (llm_arch_supports_mixed_batch(arch)) {
-                                if (get_logits_mixed(model_and_ctx_dev.first.get(), lctx_dev, tokens, embd_mixed, false, logits_chunks) != 0 ||
+                                // Shared final-loop KV depends on chunk boundaries; compare the same mixed batch across backends.
+                                const bool shared_kv = arch == LLM_ARCH_DORY && config >= 4;
+                                llama_model * reference_model = shared_kv ? model_and_ctx_cpu.first.get() : model_and_ctx_dev.first.get();
+                                llama_context * reference_ctx = shared_kv ? model_and_ctx_cpu.second.get() : lctx_dev;
+                                if (get_logits_mixed(reference_model, reference_ctx, tokens, embd_mixed, shared_kv, logits_chunks) != 0 ||
                                     get_logits_mixed(model_and_ctx_dev.first.get(), lctx_dev, tokens, embd_mixed, true,  logits_mixed)  != 0) {
                                     throw std::runtime_error("failed to decode mixed batch");
                                 }

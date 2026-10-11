@@ -3,26 +3,26 @@
 #include <stdexcept>
 
 void llama_model_dory::load_arch_hparams(llama_model_loader & ml) {
-    ml.get_key("dory.input_layer_count", n_input);
-    ml.get_key("dory.recurrent_layer_count", n_recurrent);
-    ml.get_key("dory.output_layer_count", n_output);
-    ml.get_key("dory.recurrent_loop_count", n_loops);
-    ml.get_key("dory.recurrent_kv_cache_mode", recurrent_kv_cache_mode, false);
+    ml.get_key(LLM_KV_INPUT_LAYER_COUNT, n_input);
+    ml.get_key(LLM_KV_RECURRENT_LAYER_COUNT, n_recurrent);
+    ml.get_key(LLM_KV_OUTPUT_LAYER_COUNT, n_output);
+    ml.get_key(LLM_KV_NUM_LOOPS, n_loops);
+    ml.get_key(LLM_KV_RECURRENT_KV_CACHE_MODE, recurrent_kv_cache_mode, false);
     if (recurrent_kv_cache_mode != "per_loop" && recurrent_kv_cache_mode != "last_loop") {
         throw std::runtime_error("Dory recurrent_kv_cache_mode must be per_loop or last_loop");
     }
-    ml.get_key("dory.layer_pattern", pattern);
+    ml.get_key(LLM_KV_LAYER_PATTERN, pattern);
     uint32_t n_profile = 0;
-    ml.get_arr_n("dory.rope.profile", n_profile);
+    ml.get_arr_n(LLM_KV_ROPE_PROFILE, n_profile);
     if (n_profile > LLAMA_MAX_LAYERS) {
         throw std::runtime_error("Dory RoPE profile is too large");
     }
-    ml.get_arr("dory.rope.profile", profile);
-    ml.get_key("dory.init_std", init_std);
-    ml.get_key("dory.alpha_init", alpha_init);
-    ml.get_key("dory.gate_init", gate_init);
-    ml.get_key("dory.rope.freq_base", theta_1);
-    ml.get_key("dory.rope.freq_base_2", theta_2);
+    ml.get_arr(LLM_KV_ROPE_PROFILE, profile);
+    ml.get_key(LLM_KV_INIT_STD, init_std);
+    ml.get_key(LLM_KV_ALPHA_INIT, alpha_init);
+    ml.get_key(LLM_KV_GATE_INIT, gate_init);
+    ml.get_key(LLM_KV_ROPE_FREQ_BASE, theta_1);
+    ml.get_key(LLM_KV_ROPE_FREQ_BASE_2, theta_2);
     ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa);
 
     const uint64_t n_physical = uint64_t(n_input) + n_recurrent + n_output;
@@ -84,7 +84,7 @@ void llama_model_dory::load_arch_tensors(llama_model_loader &) {
     LLAMA_LOAD_LOCALS;
     tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
     output = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, 0);
-    logit_scale = create_tensor(tn(LLM_TENSOR_DORY_LOGIT_SCALE, "weight"), {n_vocab}, 0);
+    logit_scale = create_tensor(tn(LLM_TENSOR_OUTPUT_SCALE, "weight"), {n_vocab}, 0);
     scale.resize(n_layer);
     std::vector<int> first(pattern.size(), -1);
     for (int il = 0; il < n_layer; ++il) {
@@ -97,13 +97,13 @@ void llama_model_dory::load_arch_tensors(llama_model_loader &) {
         first[p] = il;
         auto & l = layers[il];
         auto & s = scale[il];
-        s.alpha = create_tensor(tn(LLM_TENSOR_DORY_ALPHA, "weight", p), {n_embd}, 0);
+        s.alpha = create_tensor(tn(LLM_TENSOR_RESIDUAL_ALPHA, "weight", p), {n_embd}, 0);
         if (pattern[p] == '-') {
             l.ffn_gate = create_tensor(tn(LLM_TENSOR_FFN_GATE, "weight", p), {n_embd, n_ff}, 0);
             l.ffn_up = create_tensor(tn(LLM_TENSOR_FFN_UP, "weight", p), {n_embd, n_ff}, 0);
             l.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "weight", p), {n_ff, n_embd}, 0);
-            s.suv_gate = create_tensor(tn(LLM_TENSOR_DORY_SUV_GATE, "weight", p), {n_ff}, 0);
-            s.suv_up = create_tensor(tn(LLM_TENSOR_DORY_SUV_UP, "weight", p), {n_ff}, 0);
+            s.suv_gate = create_tensor(tn(LLM_TENSOR_FFN_GATE_SCALE, "weight", p), {n_ff}, 0);
+            s.suv_up = create_tensor(tn(LLM_TENSOR_FFN_UP_SCALE, "weight", p), {n_ff}, 0);
         } else {
             const int64_t nq = n_head * n_embd_head_k;
             const int64_t nkv = hparams.n_head_kv(il) * n_embd_head_k;
@@ -112,8 +112,8 @@ void llama_model_dory::load_arch_tensors(llama_model_loader &) {
             l.wv = create_tensor(tn(LLM_TENSOR_ATTN_V, "weight", p), {n_embd, nkv}, 0);
             l.wo = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", p), {nq, n_embd}, 0);
             l.wqkv_gate = create_tensor(tn(LLM_TENSOR_ATTN_GATE, "weight", p), {n_embd, nq}, 0);
-            s.sqk = create_tensor(tn(LLM_TENSOR_DORY_SQK, "weight", p), {nq}, 0);
-            s.gate = create_tensor(tn(LLM_TENSOR_DORY_S_GATE, "weight", p), {nq}, 0);
+            s.sqk = create_tensor(tn(LLM_TENSOR_ATTN_QK_SCALE, "weight", p), {nq}, 0);
+            s.gate = create_tensor(tn(LLM_TENSOR_ATTN_GATE_SCALE, "weight", p), {nq}, 0);
         }
     }
 }

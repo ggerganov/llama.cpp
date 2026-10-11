@@ -6,15 +6,21 @@ from .base import ModelBase, TextModel, gguf
 @ModelBase.register("DoryForCausalLM")
 class DoryModel(TextModel):
     model_arch = gguf.MODEL_ARCH.DORY
-    allow_non_f32_vectors = True
 
     def tensor_force_quant(self, name, new_name, bid, n_dims):
-        if n_dims <= 1:
+        if n_dims == 1 and any(self.match_model_tensor_name(new_name, key, bid) for key in (
+            gguf.MODEL_TENSOR.RESIDUAL_ALPHA,
+            gguf.MODEL_TENSOR.ATTN_QK_SCALE,
+            gguf.MODEL_TENSOR.ATTN_GATE_SCALE,
+            gguf.MODEL_TENSOR.FFN_GATE_SCALE,
+            gguf.MODEL_TENSOR.FFN_UP_SCALE,
+            gguf.MODEL_TENSOR.OUTPUT_SCALE,
+        )):
             return {
                 gguf.LlamaFileType.MOSTLY_BF16: gguf.GGMLQuantizationType.BF16,
                 gguf.LlamaFileType.MOSTLY_F16: gguf.GGMLQuantizationType.F16,
             }.get(self.ftype, gguf.GGMLQuantizationType.F32)
-        return False
+        return super().tensor_force_quant(name, new_name, bid, n_dims)
 
     def set_vocab(self):
         self._set_vocab_gpt2()
@@ -58,15 +64,17 @@ class DoryModel(TextModel):
         w.add_rope_dimension_count(h["attention_head_dim"])
         w.add_rope_freq_base(h["rope_theta"])
         w.add_sliding_window(h["swa_window_size"])
-        for dest, source in (("input_layer_count", "n_input_layers"), ("recurrent_layer_count", "n_recurrent_layers"), ("output_layer_count", "n_output_layers"), ("recurrent_loop_count", "n_recurrent_loops")):
-            w.add_uint32(f"dory.{dest}", h[source])
-        w.add_string("dory.layer_pattern", pattern)
-        w.add_string("dory.recurrent_kv_cache_mode", cache_mode)
-        w.add_array("dory.rope.profile", [0 if no_rope[i] else p for i, p in enumerate(profiles)])
-        w.add_float32("dory.rope.freq_base_2", h["rope_theta_2"])
-        w.add_float32("dory.init_std", h["init_method_std"])
-        w.add_float32("dory.alpha_init", h["ngpt_alpha_init"])
-        w.add_float32("dory.gate_init", h["attention_output_gate_logit_scale_init"] or h["hidden_size"]**0.5)
+        w.add_input_layer_count(h["n_input_layers"])
+        w.add_recurrent_layer_count(h["n_recurrent_layers"])
+        w.add_output_layer_count(h["n_output_layers"])
+        w.add_num_loops(h["n_recurrent_loops"])
+        w.add_layer_pattern(pattern)
+        w.add_recurrent_kv_cache_mode(cache_mode)
+        w.add_rope_profile(profiles)
+        w.add_rope_freq_base_2(h["rope_theta_2"])
+        w.add_init_std(h["init_method_std"])
+        w.add_alpha_init(h["ngpt_alpha_init"])
+        w.add_gate_init(h["attention_output_gate_logit_scale_init"] or h["hidden_size"]**0.5)
 
     def modify_tensors(self, data_torch, name, bid):
         # Scale vectors have no suffix in the HF export.

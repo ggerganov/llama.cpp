@@ -152,6 +152,14 @@ class Keys:
         INTERLEAVE_MOE_LAYER_STEP         = "{arch}.interleave_moe_layer_step"
         FULL_ATTENTION_INTERVAL           = "{arch}.full_attention_interval"
         NUM_LOOPS                         = "{arch}.num_loops"
+        INPUT_LAYER_COUNT                 = "{arch}.input_layer_count"
+        RECURRENT_LAYER_COUNT             = "{arch}.recurrent_layer_count"
+        OUTPUT_LAYER_COUNT                = "{arch}.output_layer_count"
+        RECURRENT_KV_CACHE_MODE            = "{arch}.recurrent_kv_cache_mode"
+        LAYER_PATTERN                     = "{arch}.layer_pattern"
+        INIT_STD                          = "{arch}.init_std"
+        ALPHA_INIT                        = "{arch}.alpha_init"
+        GATE_INIT                         = "{arch}.gate_init"
         SKIP_LOOP_FINAL_NORM              = "{arch}.skip_loop_final_norm"
         HASH_LAYER_COUNT                  = "{arch}.hash_layer_count"
         ACTIVATION_SPARSITY_SCALE         = "{arch}.activation_sparsity_scale"
@@ -260,6 +268,8 @@ class Keys:
         DIMENSION_COUNT_SWA       = "{arch}.rope.dimension_count_swa"
         DIMENSION_SECTIONS        = "{arch}.rope.dimension_sections"
         FREQ_BASE                 = "{arch}.rope.freq_base"
+        FREQ_BASE_2               = "{arch}.rope.freq_base_2"
+        PROFILE                   = "{arch}.rope.profile"
         FREQ_BASE_SWA             = "{arch}.rope.freq_base_swa"
         SCALING_TYPE              = "{arch}.rope.scaling.type"
         SCALING_FACTOR            = "{arch}.rope.scaling.factor"
@@ -682,12 +692,12 @@ class VISION_PROJECTOR_TYPE(IntEnum):
 
 
 class MODEL_TENSOR(IntEnum):
-    DORY_ALPHA          = auto()
-    DORY_SQK            = auto()
-    DORY_S_GATE         = auto()
-    DORY_SUV_GATE       = auto()
-    DORY_SUV_UP         = auto()
-    DORY_LOGIT_SCALE    = auto()
+    RESIDUAL_ALPHA       = auto()
+    ATTN_QK_SCALE        = auto()
+    ATTN_GATE_SCALE      = auto()
+    FFN_GATE_SCALE       = auto()
+    FFN_UP_SCALE         = auto()
+    OUTPUT_SCALE         = auto()
     TOKEN_EMBD           = auto()
     TOKEN_EMBD_NORM      = auto()
     MASKED_EMBD_CENTROIDS= auto()
@@ -1471,12 +1481,12 @@ VISION_PROJECTOR_TYPE_NAMES: dict[VISION_PROJECTOR_TYPE, str] = {
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
-    MODEL_TENSOR.DORY_ALPHA: "blk.{bid}.dory_alpha",
-    MODEL_TENSOR.DORY_SQK: "blk.{bid}.dory_sqk",
-    MODEL_TENSOR.DORY_S_GATE: "blk.{bid}.dory_s_gate",
-    MODEL_TENSOR.DORY_SUV_GATE: "blk.{bid}.dory_suv_gate",
-    MODEL_TENSOR.DORY_SUV_UP: "blk.{bid}.dory_suv_up",
-    MODEL_TENSOR.DORY_LOGIT_SCALE: "dory_logit_scale",
+    MODEL_TENSOR.RESIDUAL_ALPHA:            "blk.{bid}.residual_alpha",
+    MODEL_TENSOR.ATTN_QK_SCALE:             "blk.{bid}.attn_qk_scale",
+    MODEL_TENSOR.ATTN_GATE_SCALE:           "blk.{bid}.attn_gate_scale",
+    MODEL_TENSOR.FFN_GATE_SCALE:            "blk.{bid}.ffn_gate_scale",
+    MODEL_TENSOR.FFN_UP_SCALE:              "blk.{bid}.ffn_up_scale",
+    MODEL_TENSOR.OUTPUT_SCALE:              "output_scale",
     MODEL_TENSOR.TOKEN_EMBD:                "token_embd",
     MODEL_TENSOR.TOKEN_EMBD_NORM:           "token_embd_norm",
     MODEL_TENSOR.TOKEN_TYPES:               "token_types",
@@ -2086,8 +2096,8 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_Q, MODEL_TENSOR.ATTN_K, MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT, MODEL_TENSOR.ATTN_GATE,
         MODEL_TENSOR.FFN_GATE, MODEL_TENSOR.FFN_UP, MODEL_TENSOR.FFN_DOWN,
-        MODEL_TENSOR.DORY_ALPHA, MODEL_TENSOR.DORY_SQK, MODEL_TENSOR.DORY_S_GATE,
-        MODEL_TENSOR.DORY_SUV_GATE, MODEL_TENSOR.DORY_SUV_UP, MODEL_TENSOR.DORY_LOGIT_SCALE,
+        MODEL_TENSOR.RESIDUAL_ALPHA, MODEL_TENSOR.ATTN_QK_SCALE, MODEL_TENSOR.ATTN_GATE_SCALE,
+        MODEL_TENSOR.FFN_GATE_SCALE, MODEL_TENSOR.FFN_UP_SCALE, MODEL_TENSOR.OUTPUT_SCALE,
     ],
     MODEL_ARCH.MMPROJ: [
         MODEL_TENSOR.V_MMPROJ,

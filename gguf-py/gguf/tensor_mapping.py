@@ -7,7 +7,7 @@ from .constants import MODEL_ARCH, MODEL_TENSOR, MODEL_TENSORS, TENSOR_NAMES
 
 class TensorNameMap:
     mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
-        MODEL_TENSOR.DORY_LOGIT_SCALE: ("lm_head.logit_scale",),
+        MODEL_TENSOR.OUTPUT_SCALE: ("lm_head.logit_scale",),
         # Token embeddings
         MODEL_TENSOR.TOKEN_EMBD: (
             "gpt_neox.embed_in",                         # gptneox
@@ -186,11 +186,11 @@ class TensorNameMap:
     }
 
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
-        MODEL_TENSOR.DORY_ALPHA: ("backbone.layers.{bid}.attn_alpha", "backbone.layers.{bid}.mlp_alpha"),
-        MODEL_TENSOR.DORY_SQK: ("backbone.layers.{bid}.mixer.sqk",),
-        MODEL_TENSOR.DORY_S_GATE: ("backbone.layers.{bid}.mixer.s_gate",),
-        MODEL_TENSOR.DORY_SUV_GATE: ("backbone.layers.{bid}.mixer.suv_gate",),
-        MODEL_TENSOR.DORY_SUV_UP: ("backbone.layers.{bid}.mixer.suv_up",),
+        MODEL_TENSOR.RESIDUAL_ALPHA: ("backbone.layers.{bid}.attn_alpha", "backbone.layers.{bid}.mlp_alpha"),
+        MODEL_TENSOR.ATTN_QK_SCALE: ("backbone.layers.{bid}.mixer.sqk",),
+        MODEL_TENSOR.ATTN_GATE_SCALE: ("backbone.layers.{bid}.mixer.s_gate",),
+        MODEL_TENSOR.FFN_GATE_SCALE: ("backbone.layers.{bid}.mixer.suv_gate",),
+        MODEL_TENSOR.FFN_UP_SCALE: ("backbone.layers.{bid}.mixer.suv_up",),
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
             "gpt_neox.layers.{bid}.input_layernorm",                # gptneox
