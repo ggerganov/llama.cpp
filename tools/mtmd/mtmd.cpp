@@ -630,18 +630,18 @@ struct mtmd_context {
         }
 
         // if both vision and audio mmproj are present, we need to validate their n_embd
+        // vision deepstack (e.g. Qwen3-Omni) appends extra paths, audio embeddings are then zero-padded
         if (ctx_v && ctx_a) {
             int n_embd_v = clip_n_mmproj_embd(ctx_v);
             int n_embd_a = clip_n_mmproj_embd(ctx_a);
-            if (n_embd_v != n_embd_a) {
+            if (n_embd_v % n_embd_a != 0) {
                 throw std::runtime_error(string_format(
                     "mismatch between vision and audio mmproj (n_embd_v = %d, n_embd_a = %d)\n",
                     n_embd_v, n_embd_a));
             }
         }
 
-        // since we already validate n_embd of vision and audio mmproj,
-        // we can safely assume that they are the same
+        // vision n_embd is a multiple of audio n_embd, so the vision one is the output size
         int n_embd_clip = clip_n_mmproj_embd(ctx_v ? ctx_v : ctx_a);
         if (n_embd_text > 0 && n_embd_text != n_embd_clip) {
             throw std::runtime_error(string_format(
@@ -1983,13 +1983,23 @@ static int32_t mtmd_encode_chunk_impl(mtmd_context * ctx, const mtmd_input_chunk
             LOG_ERR("%s: audio tokens batch is placeholder\n", __func__);
             return 1;
         }
-        int n_mmproj_embd = ctx->n_embd_out();
-        out_embd.resize((size_t)chunk->tokens_audio->n_tokens * n_mmproj_embd);
+        const size_t n_tokens = chunk->tokens_audio->n_tokens;
+        const size_t n_embd_a = clip_n_mmproj_embd(ctx->ctx_a);
+        const size_t n_embd   = ctx->n_embd_out();
+        out_embd.resize(n_tokens * n_embd_a);
         bool ok = clip_image_batch_encode(
             ctx->ctx_a,
             ctx->n_threads,
             &chunk->tokens_audio->batch_f32,
             out_embd);
+        // zero-pad the audio rows to the vision width (deepstack paths)
+        if (ok && n_embd_a != n_embd) {
+            out_embd.resize(n_tokens * n_embd);
+            for (size_t i = n_tokens; i-- > 0;) {
+                std::copy_backward(out_embd.begin() + i * n_embd_a, out_embd.begin() + (i + 1) * n_embd_a, out_embd.begin() + i * n_embd + n_embd_a);
+                std::fill(out_embd.begin() + i * n_embd + n_embd_a, out_embd.begin() + (i + 1) * n_embd, 0.0f);
+            }
+        }
         return ok ? 0 : 1;
     }
 

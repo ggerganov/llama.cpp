@@ -198,7 +198,7 @@ class Qwen3OmniMmprojModel(Qwen3VLVisionModel, Qwen25AudioModel):
             if not self.has_vision_encoder:
                 raise ValueError(f"Model does not have vision encoder, but found tensor {name}")
             # need to transform vision tensor naming, so that modify_tensors() logic can be used correctly
-            name = name.replace("thinker.visual.", "model.visual.")
+            name = name.replace("thinker.visual.", "visual.")
             if ".merger_list." in name:
                 name = name.replace(".merger_list.", ".deepstack_merger_list.")
                 name = name.replace(".ln_q", ".norm")
@@ -307,7 +307,10 @@ class Qwen3VLMoeTextModel(Qwen3MoeModel):
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        vision_config = self.hparams.get("vision_config", {})
+        if "thinker_config" in self.hparams:
+            vision_config = self.hparams["thinker_config"].get("vision_config", {})
+        else:
+            vision_config = self.hparams.get("vision_config", {})
         deepstack_layer_num = len(vision_config.get("deepstack_visual_indexes", []))
         self.gguf_writer.add_num_deepstack_layers(deepstack_layer_num)
 
@@ -366,10 +369,6 @@ class Qwen3OmniMoeTextModel(Qwen3VLMoeTextModel):
                     self.gguf_writer.add_bos_token_id(int(token_id))
                     self.gguf_writer.add_eos_token_id(int(token_id))
                     break
-
-    def set_gguf_parameters(self):
-        super().set_gguf_parameters()
-        self.gguf_writer.add_num_deepstack_layers(0)
 
 
 @ModelBase.register("Qwen3ASRForConditionalGeneration")
