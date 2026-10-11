@@ -44,6 +44,7 @@ struct server_decision_context {
             case COMMON_DECISION_TYPE_NIMBLE:
             case COMMON_DECISION_TYPE_PPLX_DECIDER:
             case COMMON_DECISION_TYPE_LFM2_D1:
+            case COMMON_DECISION_TYPE_H2O_LIGHTNING:
                 return true;
             default:
                 return false;
@@ -63,6 +64,7 @@ struct server_decision_context {
             case COMMON_DECISION_TYPE_PPLX_DECIDER:
             case COMMON_DECISION_TYPE_LFM2_D1:
             case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
+            case COMMON_DECISION_TYPE_H2O_LIGHTNING:
                 return true;
             default:
                 return false;
@@ -71,6 +73,9 @@ struct server_decision_context {
 
     // throw std::invalid_argument on bad input
     std::vector<server_decision_question> parse_questions(const json & body) const;
+
+    // the state as the model reads it, done once per request; returns the state for most models
+    json prepare_state(const json & state, size_t n_images) const;
 
     // returns the state without its images, they are appended to files in order
     // images come from "files" (alias "images") and from the image_url and input_audio parts of a state made of chat messages
@@ -114,7 +119,7 @@ private:
     bool   noul_true_first = false; // noul options are [true, false] instead of [false, true]
     bool   choice_sorted   = false; // choice options are in the order of their keys
 
-    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER
+    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER, H2O_LIGHTNING
     std::vector<llama_token> labels;
     std::vector<std::string> label_texts; // only if the label of an option is given to the template
 
@@ -124,6 +129,10 @@ private:
     std::string text_marker;
     size_t      max_head_tokens   = 0; // question + options
     size_t      max_option_tokens = 48;
+
+    // H2O_LIGHTNING
+    std::vector<std::string> quoted_spellings; // texts of the special tokens, quoted in the input, longest first
+    std::string              quoted_first;     // the first bytes of these texts
 
     std::string render(
             const json & state,
@@ -136,6 +145,10 @@ private:
     size_t n_outputs(const server_decision_question & question) const;
     // LFM2_D1: label text and tokens of each option
     void d1_labels(const server_decision_question & question, std::vector<std::string> & texts, std::vector<llama_tokens> & groups) const;
+    // H2O_LIGHTNING: the input of the template, its texts are rendered as the reference shim does
+    json render_h2o(const json & state, const server_decision_question & question, size_t n_images) const;
+    std::string h2o_cut_state(const std::string & text) const;
+    std::string h2o_quote(const std::string & text, size_t n_images) const;
     void fill_task_laya(llama_tokens & tokens, const server_decision_question & question, server_task & task) const;
     void fill_task_d1omni(
             const json & state,

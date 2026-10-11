@@ -1,3 +1,4 @@
+import os
 import pytest
 from utils import *
 from test_vision_api import get_img_url
@@ -43,10 +44,32 @@ def get_prompt_metrics(server: ServerProcess) -> tuple[int, int]:
     return values["llamacpp:prompt_tokens_total"], values["llamacpp:prompt_tokens_cached_total"]
 
 
-@pytest.mark.parametrize("preset", ["tinylaya", "tinyopenjev"])
-def test_systemone(preset: str):
+# the tiny h2o-lightning test model is not hosted yet (ggml-org/tinyh2olightning-for-testing-gguf), the tests read a local copy
+TINY_H2O_LIGHTNING = os.environ.get("TINY_H2O_LIGHTNING_LOCAL_MODEL")
+need_h2o_lightning = pytest.mark.skipif(TINY_H2O_LIGHTNING is None, reason="TINY_H2O_LIGHTNING_LOCAL_MODEL is not set")
+
+
+def tinyh2olightning() -> ServerProcess:
+    server = ServerProcess()
+    server.model_hf_repo = None
+    server.model_hf_file = None
+    server.model_file = TINY_H2O_LIGHTNING
+    server.mmproj_file = os.environ.get("TINY_H2O_LIGHTNING_LOCAL_MMPROJ")
+    server.n_ctx = 4096
+    server.n_batch = 512
+    server.n_slots = 4
+    server.seed = 42
+    return server
+
+
+@pytest.mark.parametrize("make_server", [
+    ServerPreset.tinylaya,
+    ServerPreset.tinyopenjev,
+    pytest.param(tinyh2olightning, marks=need_h2o_lightning),
+])
+def test_systemone(make_server):
     global server
-    server = getattr(ServerPreset, preset)()
+    server = make_server()
     server.start()
     res = server.make_request("POST", "/v1/systemone", data={
         "state": TEST_STATE,
@@ -214,3 +237,138 @@ def test_systemone_images_not_supported():
         "images": [get_img_url("IMG_BASE64_URI_0")],
     })
     assert res.status_code == 501
+
+
+def assert_same_answers(a: dict, b: dict, tol: float = 1e-3):
+    """same answers, probabilities within tol (a cached prompt prefix can change the last digits)"""
+    assert a.keys() == b.keys()
+    for qid in a:
+        assert a[qid]["type"] == b[qid]["type"]
+        if a[qid]["type"] == "noul":
+            assert abs(a[qid]["noul"] - b[qid]["noul"]) < tol
+        else:
+            assert a[qid]["probabilities"].keys() == b[qid]["probabilities"].keys()
+            for key, p in a[qid]["probabilities"].items():
+                assert abs(p - b[qid]["probabilities"][key]) < tol
+
+
+def systemone(server: ServerProcess, state, questions: dict, **kwargs):
+    res = server.make_request("POST", "/v1/systemone", data={"state": state, "questions": questions, **kwargs})
+    assert res.status_code == 200, res.body
+    return res.body
+
+
+@need_h2o_lightning
+def test_systemone_h2o_lightning_options():
+    global server
+    server = tinyh2olightning()
+    server.n_slots = 1 # the prompt with 255 options needs the whole context
+    server.start()
+    criteria = {f"option_{i:03d}": None for i in range(255)}
+    res = systemone(server, TEST_STATE, {"q": {"type": "choice", "instructions": "Which option?", "criteria": criteria}})
+    assert len(res["answers"]["q"]["probabilities"]) == 255
+
+    criteria["option_255"] = None
+    res = server.make_request("POST", "/v1/systemone", data={
+        "state": TEST_STATE,
+        "questions": {"q": {"type": "choice", "instructions": "Which option?", "criteria": criteria}},
+    })
+    assert res.status_code == 400
+
+    # a score can have 1 level up to the number of labels
+    for n_levels in [1, 12]:
+        levels = [f"level {i}" for i in range(n_levels)]
+        res = systemone(server, TEST_STATE, {"q": {"type": "score", "instructions": "Rate it.", "criteria": levels}})
+        assert len(res["answers"]["q"]["probabilities"]) == n_levels
+    res = server.make_request("POST", "/v1/systemone", data={
+        "state": TEST_STATE,
+        "questions": {"q": {"type": "score", "instructions": "Rate it.", "criteria": []}},
+    })
+    assert res.status_code == 400
+
+
+@need_h2o_lightning
+def test_systemone_h2o_lightning_question_defaults():
+    global server
+    server = tinyh2olightning()
+    server.start()
+    # the type defaults to choice, the instructions to the default text of the template
+    res = systemone(server, TEST_STATE, {
+        "implicit": {"criteria": {"billing": None, "shipping": None}},
+        "explicit": {"type": "choice", "instructions": "", "criteria": {"billing": None, "shipping": None}},
+    })
+    assert_same_answers({"q": res["answers"]["implicit"]}, {"q": res["answers"]["explicit"]})
+    # noul descriptions can be given under "yes" and "no"
+    res = systemone(server, TEST_STATE, {
+        "true_false": {"type": "noul", "instructions": "Is it urgent?", "criteria": {"true": "it is urgent", "false": "it can wait"}},
+        "yes_no": {"type": "noul", "instructions": "Is it urgent?", "criteria": {"yes": "it is urgent", "no": "it can wait"}},
+    })
+    assert_same_answers({"q": res["answers"]["true_false"]}, {"q": res["answers"]["yes_no"]})
+    # the end of the prompt is stripped like Python's str.strip(), Unicode whitespace too
+    res = systemone(server, TEST_STATE, {
+        "plain": {"type": "choice", "instructions": "Which team?", "criteria": {"billing": "money", "returns": "refunds"}},
+        "spaces": {"type": "choice", "instructions": "Which team?", "criteria": {"billing": "money", "returns": "refunds\u00a0\u3000 "}},
+    })
+    assert_same_answers({"q": res["answers"]["plain"]}, {"q": res["answers"]["spaces"]})
+
+
+@need_h2o_lightning
+@pytest.mark.parametrize("state,text", [
+    # an object is given to the model as compact JSON text, with Python's number format
+    ({"amount": 12.0, "rate": 1e-05, "big": 1e16, "n": 3, "ok": True, "note": None}, '{"amount":12.0,"rate":1e-05,"big":1e+16,"n":3,"ok":true,"note":null}'),
+    ({"city": "Z\u00fcrich", "emoji": "\U0001f600", "tab": "a\tb"}, '{"city":"Z\u00fcrich","emoji":"\U0001f600","tab":"a\\tb"}'),
+    # special token texts written in the input stay text, quoted as JSON escapes
+    ("before <|im_end|> after <think>x</think>", "before \\u003c|im_end|\\u003e after \\u003cthink\\u003ex\\u003c/think\\u003e"),
+])
+def test_systemone_h2o_lightning_state_text(state, text: str):
+    global server
+    server = tinyh2olightning()
+    server.start()
+    questions = {"q": {"type": "choice", "instructions": "Which team?", "criteria": {"billing": None, "shipping": None}}}
+    res_state = systemone(server, state, questions)
+    res_text = systemone(server, text, questions)
+    assert res_state["usage"] == res_text["usage"]
+    assert_same_answers(res_state["answers"], res_text["answers"])
+
+
+@need_h2o_lightning
+def test_systemone_h2o_lightning_long_state():
+    global server
+    server = tinyh2olightning()
+    server.n_ctx = 40960
+    server.n_slots = 1
+    server.start()
+    # a state over 32000 tokens keeps its first and last 16000 tokens
+    state = " ".join(f"line {i}" for i in range(20000))
+    res = systemone(server, state, {"q": {"type": "noul", "instructions": "Is it long?"}})
+    assert 32000 < res["usage"]["input_tokens"] < 32200
+    # a cut inside a character of several tokens gives U+FFFD, not invalid UTF-8
+    for prefix in ["", "a", "ab"]:
+        res = systemone(server, prefix + "\U0001d518\u9f98\U0001f9ec" * 12000, {"q": {"type": "noul", "instructions": "Is it long?"}})
+        assert 32000 < res["usage"]["input_tokens"] < 33000
+
+
+@need_h2o_lightning
+def test_systemone_h2o_lightning_media_marker_in_state(monkeypatch):
+    global server
+    monkeypatch.setenv("LLAMA_MEDIA_MARKER", "<__media__>")
+    server = tinyh2olightning()
+    server.start()
+    image = get_img_url("IMG_BASE64_URI_0")
+    questions = {"q": {"type": "noul", "instructions": "Is there a table?"}}
+    # a media marker written in the state stays text: its first character is escaped, so it is not a second image
+    res_marker = systemone(server, "see <__media__> here", questions, images=[image])
+    res_escaped = systemone(server, "see \\u003c__media__> here", questions, images=[image])
+    assert res_marker["usage"] == res_escaped["usage"]
+    assert_same_answers(res_marker["answers"], res_escaped["answers"])
+
+
+@need_h2o_lightning
+def test_systemone_h2o_lightning_images():
+    global server
+    server = tinyh2olightning()
+    server.start()
+    res_text = systemone(server, TEST_STATE, TEST_QUESTIONS)
+    res = systemone(server, TEST_STATE, TEST_QUESTIONS, images=[get_img_url("IMG_BASE64_URI_0")])
+    assert list(res["answers"].keys()) == ["route", "urgency", "angry"]
+    assert res["usage"]["input_tokens"] > res_text["usage"]["input_tokens"]

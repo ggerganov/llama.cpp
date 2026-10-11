@@ -1172,6 +1172,7 @@ static const std::map<common_decision_type, std::string> COMMON_DECISION_TYPE_NA
     { COMMON_DECISION_TYPE_PPLX_DECIDER,   "pplx-decider"  },
     { COMMON_DECISION_TYPE_LFM2_D1,        "lfm2-d1"       },
     { COMMON_DECISION_TYPE_LFM2_D1_OMNI,   "lfm2-d1-omni"  },
+    { COMMON_DECISION_TYPE_H2O_LIGHTNING,  "h2o-lightning" },
 };
 
 static common_decision_type common_decision_type_from_string(const std::string & str) {
