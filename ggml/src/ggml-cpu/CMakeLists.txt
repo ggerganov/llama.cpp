@@ -485,6 +485,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         if (GGML_CPU_RISCV64_SPACEMIT)
             include(ggml-cpu/cmake/FindSMTIME.cmake)
             target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_CPU_RISCV64_SPACEMIT ${RISCV64_SPACEMIT_IME_SPEC})
+            target_compile_definitions(ggml INTERFACE GGML_USE_CPU_RISCV64_SPACEMIT)
             list(APPEND GGML_CPU_SOURCES
                 ggml-cpu/spacemit/ime.cpp
                 ggml-cpu/spacemit/ime.h
