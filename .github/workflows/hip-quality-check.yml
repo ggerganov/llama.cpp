@@ -62,6 +62,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git cmake rocblas-dev hipblas-dev libssl-dev python3 python3-venv python3-pip jq
 
+      - name: ccache
+        id: ccache
+        uses: ggml-org/ccache-action@v1.2.24
+        with:
+          restore: false
+          save: false
+
+      - name: ccache-buckets-restore
+        id: ccache_restore
+        uses: ./.github/actions/ccache-buckets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN_CI }}
+        with:
+          key: hip-quality-check-ubuntu-22.04-${{ matrix.gpu_target }}
+          folder: llama.cpp
+          hf_bucket: ggml-org/cache
+
       - name: Build with Werror and metrics
         id: cmake_build
         shell: bash
@@ -69,6 +86,9 @@ jobs:
           set -euo pipefail
           cmake -S . -B build \
             -DCMAKE_HIP_COMPILER="$(hipconfig -l)/clang" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             -DGPU_TARGETS=${{ matrix.gpu_target }} \
             -DGGML_HIP=ON \
             -DGGML_HIP_EXPORT_METRICS=ON \
@@ -83,3 +103,16 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/hip/gcn-cdna-vgpr-check.py metrics.log
+
+      - name: ccache-buckets-save
+        id: ccache_save
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        uses: ./.github/actions/ccache-buckets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN_CACHE_OUTPUT }}
+        with:
+          key: hip-quality-check-ubuntu-22.04-${{ matrix.gpu_target }}
+          folder: llama.cpp
+          evict-old-files: 1d
+          hf_bucket: ggml-org/cache
+          save: true
