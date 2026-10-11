@@ -3,11 +3,12 @@
 // Log infrastructure for the RPC backend: all RPC logging goes through this header.
 //
 // LOG_ERROR / LOG_WARN / LOG_INFO are unconditional severity logs.
+//
 // LOG_DBG* are debug logs gated by the GGML_RPC_DEBUG verbosity variable:
 //   unset / 0 - disabled (only warnings and errors are printed)
-//   1         - high-level events: connections, handshake, buffer operations, tensor transfers, graph computes
-//   2         - per-command trace: every RPC message sent/received, cache hits/misses, queue events
-//   3         - transport detail: byte counts, per-command timings, graph node details
+//   1         - high-level events: connections, handshake, buffer allocations, graph computes, cache evictions
+//   2         - per-command trace: every RPC message sent/received, tensor transfers, cache hits/misses
+//   3         - fine detail: per-command timings, graph node dumps, transport byte counts
 // non-numeric values fall back to 1
 
 #include "ggml-impl.h"

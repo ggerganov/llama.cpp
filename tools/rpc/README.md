@@ -117,14 +117,21 @@ The `GGML_RPC_DEBUG` environment variable controls the verbosity of the logs emi
 It can be set on the server, on the client (e.g. `llama-cli`), or both. Larger values produce more detailed output:
 
 - unset / `0` - disabled (only warnings and errors are printed)
-- `1` - high-level events: connections, handshake, buffer operations, tensor transfers, graph computes
-- `2` - per-command trace: every RPC message sent/received, cache hits/misses, queue events
-- `3` - transport detail: byte counts, per-command timings, graph node details
+- `1` - high-level events: connections, handshake, buffer allocations, graph computes, cache evictions
+- `2` - per-command trace: every RPC message sent/received, tensor transfers, cache hits/misses
+- `3` - fine detail: per-command timings, graph node dumps, transport byte counts
 
 Non-numeric values are treated as `1`.
 
 ```bash
 $ GGML_RPC_DEBUG=1 bin/ggml-rpc-server
-$ GGML_RPC_DEBUG=2 bin/llama-cli -hf ggml-org/gemma-3-1b-it-GGUF -ngl 99 --rpc 192.168.88.10:50052
+```
+
+> [!NOTE]
+> The debug levels are emitted as `ggml` debug records, which `llama.cpp` applications drop unless the
+> global verbosity threshold is raised. On the client, pass `-lv 5` together with `GGML_RPC_DEBUG`:
+
+```bash
+$ GGML_RPC_DEBUG=2 bin/llama-cli -hf ggml-org/gemma-3-1b-it-GGUF -ngl 99 --rpc 192.168.88.10:50052 -lv 5
 ```
 

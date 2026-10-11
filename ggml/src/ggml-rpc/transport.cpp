@@ -577,7 +577,7 @@ bool socket_t::impl::recv_data(void * data, size_t size) {
             return false;
         }
         if (n == 0) {
-            LOG_DBG("recv returned 0 (peer closed?)\n");
+            LOG_WARN("recv returned 0 (peer closed?)\n");
             return false;
         }
         bytes_recv += (size_t)n;
@@ -625,7 +625,7 @@ void socket_t::impl::update_caps(const uint8_t * remote_caps) {
     }
     if (!rdma || !remote_rdma) {
         if (rdma && !remote_rdma) {
-            LOG_DBG("[%s] peer does not support RDMA, continuing with TCP\n", __func__);
+            LOG_WARN("[%s] peer does not support RDMA, continuing with TCP\n", __func__);
         }
         rdma.reset();
         return;
@@ -640,7 +640,7 @@ void socket_t::impl::update_caps(const uint8_t * remote_caps) {
     if (activated) {
         use_rdma = true;
     } else {
-        LOG_ERROR("RDMA activate failed, staying on TCP\n");
+        LOG_WARN("RDMA activate failed, staying on TCP\n");
         rdma.reset();
     }
 #else
