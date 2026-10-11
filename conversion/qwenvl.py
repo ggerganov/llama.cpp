@@ -11,6 +11,15 @@ if TYPE_CHECKING:
 from .base import MmprojModel, ModelBase, TextModel, gguf
 
 
+def add_qwen_image_min_pixels(model: MmprojModel):
+    # min image size of the HF processor, in pixels (min_pixels takes precedence over size)
+    # the max is not written, mtmd keeps its own token cap to avoid OOM on large images
+    pc = model.preprocessor_config
+    min_pixels = pc.get("min_pixels", (pc.get("size") or {}).get("shortest_edge"))
+    if min_pixels is not None:
+        model.gguf_writer.add_vision_min_pixels(int(min_pixels))
+
+
 @ModelBase.register(
     "Qwen2VLModel",
     "Qwen2VLForConditionalGeneration",
@@ -80,6 +89,7 @@ class Qwen2VLVisionModel(MmprojModel):
             raise ValueError(f"Unknown QwenVL model type: {self.global_config['model_type']}")
         # default values below are taken from HF tranformers code
         self.gguf_writer.add_vision_attention_layernorm_eps(self.global_config.get("rms_norm_eps", 1e-6))
+        add_qwen_image_min_pixels(self)
 
     def tensor_force_quant(self, name, new_name, bid, n_dims):
         if ".position_embd." in new_name:

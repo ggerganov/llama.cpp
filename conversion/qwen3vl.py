@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from .base import MmprojModel, ModelBase, gguf, logger
 
 from .qwen import Qwen3Model, Qwen3MoeModel
-from .qwenvl import Qwen25AudioModel
+from .qwenvl import Qwen25AudioModel, add_qwen_image_min_pixels
 
 
 @ModelBase.register("Qwen3VLForConditionalGeneration", "Qwen3VLMoeForConditionalGeneration", "Qwen3_5ForConditionalGeneration", "Qwen3_5MoeForConditionalGeneration", "OpenJevModel")
@@ -58,6 +58,8 @@ class Qwen3VLVisionModel(MmprojModel):
 
         if self.is_deepstack_layers:
             self.gguf_writer.add_vision_is_deepstack_layers(self.is_deepstack_layers)
+
+        add_qwen_image_min_pixels(self)
 
     @classmethod
     def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:

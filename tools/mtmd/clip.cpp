@@ -1733,11 +1733,13 @@ struct clip_model_loader {
                         // ref: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/blob/main/preprocessor_config.json
                         hparams.set_limit_image_tokens(8, 4096);
                         // optional limits of the model, the custom values take precedence
-                        if (hparams.custom_image_min_tokens <= 0) {
-                            get_u32(KEY_IMAGE_MIN_PIXELS, hparams.image_min_pixels, false);
-                        }
                         if (hparams.custom_image_max_tokens <= 0) {
                             get_u32(KEY_IMAGE_MAX_PIXELS, hparams.image_max_pixels, false);
+                        }
+                        if (hparams.custom_image_min_tokens <= 0) {
+                            get_u32(KEY_IMAGE_MIN_PIXELS, hparams.image_min_pixels, false);
+                            // a custom max below the model min lowers the min
+                            hparams.image_min_pixels = std::min(hparams.image_min_pixels, hparams.image_max_pixels);
                         }
                         hparams.set_warmup_n_tokens(46*46); // avoid OOM on warmup
                         const int warn_min_pixels = 1024 * hparams.n_merge * hparams.n_merge * hparams.patch_size * hparams.patch_size;

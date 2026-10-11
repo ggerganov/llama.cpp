@@ -95,7 +95,5 @@ class PplxDeciderModel(Qwen3_5TextModel):
 class PplxDeciderVisionModel(Qwen3VLVisionModel):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        # the image size limits of the processor are in pixels
-        size = self.preprocessor_config["size"]
-        self.gguf_writer.add_vision_min_pixels(int(size["shortest_edge"]))
-        self.gguf_writer.add_vision_max_pixels(int(size["longest_edge"]))
+        # the max image size of the processor in pixels, the min is written by the base class
+        self.gguf_writer.add_vision_max_pixels(int(self.preprocessor_config["size"]["longest_edge"]))
