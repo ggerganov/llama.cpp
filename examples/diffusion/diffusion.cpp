@@ -547,7 +547,9 @@ void diffusion_generate_entropy_bound(llama_context *             ctx,
                 batch.pos[i]       = i;
                 batch.n_seq_id[i]  = 1;
                 batch.seq_id[i][0] = 0;
-                batch.logits[i]    = 1;
+                // only the canvas rows are read: a context capping n_outputs_max at the canvas (the visual
+                // server) aborts in output_reserve when every [prompt|canvas] row asks for logits
+                batch.logits[i]    = i >= n_input ? 1 : 0;
             }
         }
 
@@ -564,9 +566,9 @@ void diffusion_generate_entropy_bound(llama_context *             ctx,
         // Stage-1: when on, skip the 268 MB logits D2H + host reductions and sample on the GPU from sc_dev.
         const bool gpu_reduce  = dev_sc && device_sample_ok;
         const bool want_logits = !gpu_reduce;
-        const float * logits = nullptr;                           // canvas rows packed: [C or max_length, n_vocab]
+        const float * logits = nullptr;                           // first canvas row; canvas rows are contiguous
         if (want_logits) {
-            logits = llama_get_logits(ctx);
+            logits = llama_get_logits_ith(ctx, logit_off);
         } else {
             llama_synchronize(ctx);                               // sc_dev write must complete before we read it
         }
@@ -580,7 +582,7 @@ void diffusion_generate_entropy_bound(llama_context *             ctx,
         // per position: argmax, entropy of softmax(raw/t), and a multinomial sample; stash raw row for SC
         auto worker = [&](int32_t p0, int32_t p1) {
             for (int32_t pos = p0; pos < p1; pos++) {
-                const float * row = logits + (size_t) (logit_off + pos) * n_vocab;
+                const float * row = logits + (size_t) pos * n_vocab;
                 float m = -INFINITY; int32_t amax = 0;
                 for (int32_t v = 0; v < n_vocab; v++) {
                     const float z = row[v] * temp_inv;
@@ -631,7 +633,7 @@ void diffusion_generate_entropy_bound(llama_context *             ctx,
                     LOG_WRN("%s: on-device sampling unsupported on this backend; using host sampling\n", __func__);
                     device_sample_ok = false;
                 }
-                if (!logits) { logits = llama_get_logits(ctx); }
+                if (!logits) { logits = llama_get_logits_ith(ctx, logit_off); }
                 run_host_worker();
             }
         } else {

@@ -21,7 +21,7 @@
 //
 // Startup line: "READY <n_vocab> <MAXTOK>" (MAXTOK is the resolved per-turn context budget; see auto-size).
 //
-// Usage: llama-diffusion-gemma-visual-server <model.gguf>
+// Usage: llama-diffusion-gemma-visual-server <model.gguf>   (or --capabilities: print supported features, exit)
 //   env: NGL (gpu layers), MAXTOK (0/unset = auto-size the largest context that fits VRAM, else RAM), FA
 //   diagnostics: DG_FREE_VRAM_MB / DG_FREE_RAM_MB override the probe's memory budgets (testing only)
 
@@ -113,6 +113,9 @@ static int32_t meta_i(llama_model * m, const char * key, int32_t def) {
 }
 
 int main(int argc, char ** argv) {
+    // Callers probe this before handing the server more than one GPU: older builds abort on the first request
+    // once the model is split (every [prompt|canvas] row asked for logits past the canvas-sized output cap).
+    if (argc == 2 && std::string(argv[1]) == "--capabilities") { printf("multi_gpu_split\n"); return 0; }
     if (argc < 2) { fprintf(stderr, "usage: %s <model.gguf>\n", argv[0]); return 1; }
     // MAXTOK <= 0 (or unset) => auto-size: probe the largest non-causal ubatch that fits VRAM, else RAM.
     const int MAXTOK_ENV = atoi(getenv("MAXTOK") ? getenv("MAXTOK") : "0");
