@@ -683,14 +683,13 @@ def test_completion_prompt_cache_shared_prefix(n_batch: int, is_restored: bool):
     server.start()
 
     prefix = (
-        "Once upon a time in a land far away, there lived a brave knight "
-        "who traveled across mountains and rivers to find the legendary "
-        "golden sword hidden deep within the enchanted forest of whispers. "
-        "He met many creatures along the way including dragons and fairies "
-        "and wizards who helped him on his noble quest to save the kingdom."
+        "this is very long prefix such as a system prompt or agent instructions, "
+        "this is very long prefix such as a system prompt or agent instructions, "
+        "this is very long prefix such as a system prompt or agent instructions, "
     )
-    prompt_a = prefix + " The knight finally reached the castle gates and opened them."
-    prompt_b = prefix + " A dragon was sleeping on a big pile of shiny gold coins."
+    # the suffixes must be shorter than 50% of the prefix for this test to work
+    prompt_a = prefix + " this is a set of instructions given to agent A"
+    prompt_b = prefix + " agent B received a different set of instructions"
 
     res = server.make_request("POST", "/completion", data={"prompt": prompt_a})
     assert res.status_code == 200
