@@ -78,6 +78,7 @@ typedef struct VkPhysicalDeviceCooperativeMatrixDecodeVectorFeaturesNV {
 #include <unordered_map>
 
 #include <shared_mutex>
+#include <atomic>
 
 #include <mutex>
 
@@ -699,6 +700,8 @@ struct vk_device_struct {
     uint64_t suballocation_block_size;
     uint64_t min_imported_host_pointer_alignment;
     bool external_memory_host {};
+    bool external_memory_fd {};
+    bool external_memory_dma_buf {};
     bool fp16;
     bool bf16;
     bool pipeline_robustness;
@@ -1020,6 +1023,11 @@ struct vk_device_struct {
     std::vector<vk_pipeline_ref> all_pipelines;
 
     std::vector<std::tuple<void*, size_t, vk_buffer>> pinned_memory;
+
+    // imported dma-buf buffers, tuple of (base ptr, size, fd, vk_buffer)
+    mutable std::shared_mutex dmabuf_memory_mutex;
+    std::vector<std::tuple<void*, size_t, int, vk_buffer>> dmabuf_memory;
+    std::atomic<bool> has_dmabuf { false };
 
     vk::Fence fence;
     vk_buffer sync_staging;

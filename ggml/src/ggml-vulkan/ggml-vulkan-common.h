@@ -44,6 +44,7 @@ void ggml_vk_destroy_buffer(vk_buffer& buf);
 void * ggml_vk_host_malloc(vk_device& device, size_t size);
 void ggml_vk_host_free(vk_device& device, void* ptr);
 void ggml_vk_host_get(const vk_device& device, const void * ptr, vk_buffer& buf, size_t& buf_offset);
+vk_buffer ggml_vk_import_dmabuf(vk_device& device, int fd, size_t size);
 void ggml_vk_ensure_sync_staging_buffer(vk_device& device, size_t size);
 void ggml_vk_ensure_sync_staging_buffer(ggml_backend_vk_context * ctx, size_t size);
 bool ggml_vk_buffer_write_2d_async(vk_context subctx, vk_buffer& dst, size_t offset, const void * src, size_t spitch, size_t dpitch, size_t width, size_t height, bool sync_staging = false);
