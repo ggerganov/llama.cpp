@@ -138,7 +138,6 @@ int ggml_cuda_get_device() {
     return id;
 }
 
-// env var helpers: the variable is read exactly once
 static bool ggml_cuda_env_flag(const char * name) {
     const char * env = getenv(name);
     return env != nullptr && std::atoi(env) != 0;
@@ -149,12 +148,10 @@ static int ggml_cuda_env_int(const char * name, int default_value) {
     return env != nullptr ? std::atoi(env) : default_value;
 }
 
-// set if the env var is present at all, regardless of its value
 static bool ggml_cuda_env_set(const char * name) {
     return getenv(name) != nullptr;
 }
 
-// env-derived configuration flags, read once on first use
 static bool ggml_cuda_unified_memory_enabled() {
     static const bool enabled = ggml_cuda_env_flag("GGML_CUDA_ENABLE_UNIFIED_MEMORY");
     return enabled;
@@ -176,7 +173,6 @@ static bool ggml_cuda_fusion_disabled() {
 }
 
 static bool ggml_cuda_p2p_enabled() {
-    // presence-only check, consistent with the pre-refactor behavior
     static const bool enabled = ggml_cuda_env_set("GGML_CUDA_P2P");
     return enabled;
 }
