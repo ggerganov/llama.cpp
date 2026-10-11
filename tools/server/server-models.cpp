@@ -7,6 +7,7 @@
 #include "build-info.h"
 #include "preset.h"
 #include "download.h"
+#include "fit.h"
 #include "hf-cache.h"
 #include "http.h"
 #include "subproc.h"
@@ -24,6 +25,7 @@
 #include <cstdlib>
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <queue>
 #include <filesystem>
 #include <random>
@@ -70,12 +72,16 @@ struct server_monitor {
     }
 
     // thread-safe
-    void watch(const std::string & name, std::shared_ptr<server_subproc> proc, server_child_mode mode, int port) {
+    // kill_after > 0 force-kills the child after that many seconds, for a child that must not outlive its task
+    void watch(const std::string & name, std::shared_ptr<server_subproc> proc, server_child_mode mode, int port, int kill_after = 0) {
         child_t c;
         c.name = name;
         c.proc = std::move(proc);
         c.mode = mode;
         c.port = port;
+        if (kill_after > 0) {
+            c.deadline = ggml_time_ms() + (int64_t) kill_after * 1000;
+        }
         if (!c.proc->has_output()) {
             SRV_ERR("failed to get stdout/stderr of child process for name=%s\n", name.c_str());
             c.eof = true;
@@ -130,7 +136,8 @@ private:
                 case cmd_t::STOP:
                     // the newest child with this name is the one the registry knows
                     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-                        if (it->name != cmd.name) {
+                        // a measure child shares the model's name but is not the instance
+                        if (it->name != cmd.name || it->mode == SERVER_CHILD_MODE_MEASURE) {
                             continue;
                         }
                         if (cmd.send_exit && !it->eof) {
@@ -239,7 +246,7 @@ private:
             now = ggml_time_ms();
             for (auto it = children.begin(); it != children.end();) {
                 if (it->deadline && now >= it->deadline && !it->proc->stopped.load(std::memory_order_acquire)) {
-                    SRV_WRN("force-killing model instance name=%s after timeout\n", it->name.c_str());
+                    SRV_WRN("force-killing child process for name=%s after timeout\n", it->name.c_str());
                     it->proc->terminate();
                     it->deadline = 0;
                 }
@@ -620,35 +627,6 @@ server_models::server_models(
         SRV_WRN("using original argv[0] as fallback: %s\n", argv[0]);
     }
 
-    const size_t memory_margin = (size_t) base_params.models_memory_margin * 1024 * 1024;
-
-    if (memory_margin > 0) {
-        ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-        ggml_backend_buffer_type_t cpu_buft = cpu_dev ? ggml_backend_dev_buffer_type(cpu_dev) : nullptr;
-
-        const size_t n_devs = ggml_backend_dev_count();
-        for (size_t i = 0; i < n_devs; i++) {
-            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-            ggml_backend_buffer_type_t dev_buft = ggml_backend_dev_buffer_type(dev);
-            if (dev_buft) {
-                buft_by_name[ggml_backend_buft_name(dev_buft)] = dev_buft;
-            }
-            ggml_backend_buffer_type_t host_buft = ggml_backend_dev_host_buffer_type(dev);
-            if (host_buft && cpu_buft) {
-                buft_by_name[ggml_backend_buft_name(host_buft)] = cpu_buft;
-            }
-
-            size_t free, total;
-            ggml_backend_dev_memory(dev, &free, &total);
-            if (total > 0 && dev_buft) {
-                const size_t available = (free > memory_margin) ? free - memory_margin : 0;
-                bmm_available[dev_buft] = available;
-                SRV_DBG("buft %s: available memory after margin=%zu MiB\n",
-                    ggml_backend_buft_name(dev_buft), available / (1024 * 1024));
-            }
-        }
-    }
-
     load_models();
     debug_fake_timing = !common_get_env("LLAMA_SERVER_DEBUG_FAKE_TIMING").empty();
 }
@@ -715,6 +693,7 @@ void server_models::add_model(server_model_meta && meta) {
         /* subproc */ std::make_shared<server_subproc>(),
         /* meta    */ std::move(meta)
     };
+    enqueue_measure(name);
 }
 
 void server_models::notify_sse(const std::string & event, const std::string & model_id, const json & data) {
@@ -894,7 +873,6 @@ void server_models::load_models() {
                 /* port          */ 0,
                 /* status        */ SERVER_MODEL_STATUS_UNLOADED,
                 /* last_used     */ 0,
-                /* bmm_req       */ {},
                 /* args          */ std::vector<std::string>(),
                 /* loaded_info   */ {},
                 /* progress      */ {},
@@ -982,6 +960,13 @@ void server_models::load_models() {
             auto it = final_presets.find(name);
             if (it == final_presets.end()) continue; // erased above
 
+            if (preset_options_for_compare(inst.meta.preset) != preset_options_for_compare(it->second)) {
+                // different args, different memory: measure again
+                inst.meta.memory_status = SERVER_MODEL_MEMORY_UNMEASURED;
+                inst.meta.memory_min.reset();
+                inst.meta.memory_max.reset();
+                inst.meta.memory_measure_attempts = 0;
+            }
             inst.meta.preset = it->second;
 
             // re-parse aliases, then validate against other models
@@ -1021,6 +1006,7 @@ void server_models::load_models() {
             inst.meta.exit_code = 0; // clear failed state so the model can be reloaded
             inst.meta.update_args(ctx_preset, bin_path);
             inst.meta.update_caps(base_params);
+            enqueue_measure(name);
         }
 
         // add models that are new in this reload, load-on-startup is not honored here since a
@@ -1036,7 +1022,6 @@ void server_models::load_models() {
                     /* port          */ 0,
                     /* status        */ SERVER_MODEL_STATUS_UNLOADED,
                     /* last_used     */ 0,
-                    /* bmm_req       */ {},
                     /* args          */ std::vector<std::string>(),
                     /* loaded_info   */ {},
                     /* progress      */ {},
@@ -1137,81 +1122,341 @@ std::vector<server_model_meta> server_models::get_all_meta() {
     return result;
 }
 
-int server_models::can_fit(const buft_memory_map & bmm_req) const {
-    buft_memory_map bmm_total;
-    for (const auto & m : mapping) {
-        if (m.second.meta.is_running()) {
-            for (const auto & [buft, mem] : m.second.meta.bmm_req) {
-                bmm_total[buft] += mem;
+//
+// memory accounting (--models-memory-margin)
+//
+
+static constexpr int MEASURE_TIMEOUT = 300; // seconds before a measure child is force-killed
+
+server_model_memory::server_model_memory(uint32_t n_ctx, const std::vector<common_memory_breakdown_row> & rows) : n_ctx(n_ctx) {
+    for (const auto & row : rows) {
+        device_t d;
+        switch (row.kind) {
+            case common_memory_breakdown_row::DEVICE:      d.kind = "device";      break;
+            case common_memory_breakdown_row::HOST:        d.kind = "host";        break;
+            case common_memory_breakdown_row::BUFFER_TYPE: d.kind = "buffer_type"; break;
+        }
+        d.name    = row.name;
+        d.total   = row.total;
+        d.free    = row.free;
+        d.model   = row.model;
+        d.context = row.context;
+        d.compute = row.compute;
+        devices.push_back(std::move(d));
+    }
+}
+
+json server_model_memory::to_json() const {
+    json devs = json::array();
+    for (const auto & d : devices) {
+        json jd = {
+            {"kind",    d.kind},
+            {"name",    d.name},
+            {"model",   d.model},
+            {"context", d.context},
+            {"compute", d.compute},
+        };
+        if (d.is_device()) {
+            jd["total"] = d.total;
+            jd["free"]  = d.free;
+        }
+        devs.push_back(std::move(jd));
+    }
+    return {
+        {"n_ctx",   n_ctx},
+        {"devices", devs},
+    };
+}
+
+server_model_memory server_model_memory::from_json(const json & j) {
+    server_model_memory mem;
+    mem.n_ctx = j.at("n_ctx").get<uint32_t>();
+    for (const auto & jd : j.at("devices")) {
+        device_t d;
+        d.kind    = jd.at("kind").get<std::string>();
+        d.name    = jd.at("name").get<std::string>();
+        d.total   = json_value(jd, "total", (size_t) 0);
+        d.free    = json_value(jd, "free",  (size_t) 0);
+        d.model   = jd.at("model").get<size_t>();
+        d.context = jd.at("context").get<size_t>();
+        d.compute = jd.at("compute").get<size_t>();
+        mem.devices.push_back(std::move(d));
+    }
+    return mem;
+}
+
+json server_model_meta::memory_to_json() const {
+    return {
+        {"status",    server_model_memory_status_to_string(memory_status)},
+        {"min",       memory_min       ? memory_min->to_json()       : json(nullptr)},
+        {"max",       memory_max       ? memory_max->to_json()       : json(nullptr)},
+        {"effective", memory_effective ? memory_effective->to_json() : json(nullptr)},
+    };
+}
+
+void server_models::enqueue_measure(const std::string & name, bool front) {
+    if (!memory_limits_enabled()) {
+        return;
+    }
+    auto it = mapping.find(name);
+    if (it == mapping.end() || it->second.meta.memory_status != SERVER_MODEL_MEMORY_UNMEASURED) {
+        return;
+    }
+    auto pos = std::find(measure_queue.begin(), measure_queue.end(), name);
+    if (pos != measure_queue.end()) {
+        if (!front) {
+            return; // already queued
+        }
+        measure_queue.erase(pos);
+    }
+    if (front) {
+        measure_queue.push_front(name);
+    } else {
+        measure_queue.push_back(name);
+    }
+    measure_next();
+}
+
+void server_models::measure_next() {
+    if (!measuring.empty()) {
+        return; // one measure child at a time
+    }
+    while (!measure_queue.empty()) {
+        std::string name = std::move(measure_queue.front());
+        measure_queue.pop_front();
+        auto it = mapping.find(name);
+        if (it == mapping.end() || it->second.meta.memory_status != SERVER_MODEL_MEMORY_UNMEASURED) {
+            continue; // removed or measured meanwhile
+        }
+        auto & meta = it->second.meta;
+
+        // same args as an instance; the child resolves the model path from the cache and never downloads
+        std::vector<std::string> child_args = meta.args;
+        child_args.push_back("--offline");
+        std::vector<std::string> child_env = base_env;
+        child_env.push_back("LLAMA_SERVER_ROUTER_PORT=" + std::to_string(base_params.port));
+        child_env.push_back("LLAMA_SERVER_CHILD_MODE=measure");
+
+        auto proc = std::make_shared<server_subproc>();
+        if (!proc->sproc.create(child_args, subprocess_option_no_window, child_env)) {
+            SRV_ERR("failed to spawn measure process for model name=%s\n", name.c_str());
+            meta.memory_status = SERVER_MODEL_MEMORY_FAILED;
+            continue;
+        }
+        SRV_INF("measuring memory for model name=%s\n", name.c_str());
+        meta.memory_status = SERVER_MODEL_MEMORY_MEASURING;
+        meta.memory_measure_attempts++;
+        measuring    = name;
+        measure_proc = proc;
+        monitor->watch(name, proc, SERVER_CHILD_MODE_MEASURE, 0, MEASURE_TIMEOUT);
+        return;
+    }
+}
+
+void server_models::on_measure_exit(const std::string & name, const std::shared_ptr<server_subproc> & proc, int exit_code) {
+    std::lock_guard<std::mutex> lk(mutex);
+    if (measure_proc != proc) {
+        return; // not the child we are waiting for
+    }
+    measure_proc.reset();
+    measuring.clear();
+    auto it = mapping.find(name);
+    if (it != mapping.end() && it->second.meta.memory_status == SERVER_MODEL_MEMORY_MEASURING) {
+        // exited without a result: crashed, or killed after the timeout
+        SRV_WRN("measure process for model name=%s exited with status %d before reporting, memory limits will not apply to it\n",
+            name.c_str(), exit_code);
+        it->second.meta.memory_status = SERVER_MODEL_MEMORY_FAILED;
+        notify_sse("model_memory", name, it->second.meta.memory_to_json());
+    }
+    cv.notify_all();
+    measure_next();
+}
+
+void server_models::handle_measured(const std::string & name, const json & payload) {
+    std::lock_guard<std::mutex> lk(mutex);
+    auto it = mapping.find(name);
+    if (it == mapping.end()) {
+        return;
+    }
+    auto & meta = it->second.meta;
+    const std::string result = json_value(payload, "result", std::string());
+
+    bool ok = result == "measured";
+    if (ok) {
+        try {
+            meta.memory_min = server_model_memory::from_json(payload.at("min"));
+            meta.memory_max = server_model_memory::from_json(payload.at("max"));
+        } catch (const std::exception & e) {
+            SRV_ERR("malformed memory measurement for model name=%s: %s\n", name.c_str(), e.what());
+            meta.memory_min.reset();
+            meta.memory_max.reset();
+            ok = false;
+        }
+    } else {
+        SRV_WRN("measuring memory for model name=%s failed: %s\n",
+            name.c_str(), json_value(payload, "error", std::string("unknown error")).c_str());
+    }
+
+    if (ok) {
+        meta.memory_status = SERVER_MODEL_MEMORY_MEASURED;
+        calibrate_device_memory(*meta.memory_max, ""); // the freshest view of the devices
+        const auto & mn = *meta.memory_min;
+        const auto & mx = *meta.memory_max;
+        for (size_t i = 0; i < mn.devices.size() && i < mx.devices.size(); i++) {
+            if (!mn.devices[i].is_device() || mn.devices[i].name != mx.devices[i].name) {
+                continue;
+            }
+            SRV_INF("model name=%s needs on %s: %zu MiB at n_ctx=%u (min), %zu MiB at n_ctx=%u (max), %zu MiB free\n",
+                name.c_str(), mn.devices[i].name.c_str(),
+                mn.devices[i].self() / (1024 * 1024), mn.n_ctx,
+                mx.devices[i].self() / (1024 * 1024), mx.n_ctx,
+                mx.devices[i].free   / (1024 * 1024));
+        }
+    } else {
+        meta.memory_status = SERVER_MODEL_MEMORY_FAILED;
+    }
+    notify_sse("model_memory", name, meta.memory_to_json());
+    cv.notify_all();
+}
+
+void server_models::calibrate_device_memory(const server_model_memory & mem, const std::string & reporter) {
+    for (const auto & d : mem.devices) {
+        if (!d.is_device() || d.total == 0) {
+            continue;
+        }
+        // what the other instances hold is in the reporter's free figure on a backend that reports system-wide,
+        // and not on one that reports per process; either way it is not external
+        int64_t tracked = 0;
+        for (const auto & [name, inst] : mapping) {
+            if (name == reporter) {
+                continue;
+            }
+            auto held = inst.memory_held.find(d.name);
+            if (held != inst.memory_held.end()) {
+                tracked += (int64_t) held->second;
             }
         }
+        auto & dm = device_memory[d.name];
+        dm.total    = (int64_t) d.total;
+        dm.external = std::max<int64_t>(0, dm.total - (int64_t) d.free - (int64_t) d.self() - tracked);
+        SRV_DBG("device %s: total=%" PRId64 " MiB, external=%" PRId64 " MiB, available=%" PRId64 " MiB\n",
+            d.name.c_str(), dm.total / (1024 * 1024), dm.external / (1024 * 1024), device_memory_available(d.name) / (1024 * 1024));
     }
-
-    auto get = [](const buft_memory_map & dmm, ggml_backend_buffer_type_t buft) -> size_t {
-        auto it = dmm.find(buft);
-        return it != dmm.end() ? it->second : 0;
-    };
-
-    int res = 0;
-
-    for (const auto & [buft, limit] : bmm_available) {
-        const size_t mem_total = get(bmm_total, buft);
-        const size_t mem_new   = get(bmm_req,   buft);
-
-        SRV_DBG("buft %s: total=%zu MiB, new=%zu MiB, limit=%zu MiB\n",
-            ggml_backend_buft_name(buft),
-            mem_total / (1024 * 1024), mem_new / (1024 * 1024), limit / (1024 * 1024));
-
-        if (mem_total + mem_new > limit) {
-            res++;
-        }
-    }
-
-    return res;
 }
 
-bool server_models::limits_exceeded(const buft_memory_map & bmm_req) const {
-    const bool check_active = base_params.models_max > 0;
-    const bool check_memory = base_params.models_memory_margin > 0;
+void server_models::reserve_memory(const std::string & name) {
+    auto it = mapping.find(name);
+    if (it == mapping.end() || !it->second.memory_held.empty()) {
+        return;
+    }
+    auto & inst = it->second;
+    // what the instance reported beats the estimate
+    const auto & mem = inst.meta.memory_effective ? inst.meta.memory_effective : inst.meta.memory_min;
+    if (!mem) {
+        return;
+    }
+    for (const auto & d : mem->devices) {
+        if (d.is_device() && d.total > 0) {
+            inst.memory_held[d.name] = d.self();
+        }
+    }
+}
 
-    if (!check_active && !check_memory) {
+void server_models::release_memory(const std::string & name) {
+    auto it = mapping.find(name);
+    if (it != mapping.end()) {
+        it->second.memory_held.clear();
+    }
+}
+
+int64_t server_models::device_memory_available(const std::string & dev) const {
+    auto dm = device_memory.find(dev);
+    if (dm == device_memory.end()) {
+        return INT64_MAX; // never reported, nothing to check against
+    }
+    int64_t held = 0;
+    for (const auto & [name, inst] : mapping) {
+        auto h = inst.memory_held.find(dev);
+        if (h != inst.memory_held.end()) {
+            held += (int64_t) h->second;
+        }
+    }
+    return dm->second.total - dm->second.external - held;
+}
+
+std::map<std::string, size_t> server_models::memory_deficit(const std::string & name) const {
+    std::map<std::string, size_t> deficit;
+    auto it = mapping.find(name);
+    if (it == mapping.end() || !it->second.meta.memory_min) {
+        return deficit;
+    }
+    const int64_t margin = (int64_t) base_params.models_memory_margin * 1024 * 1024;
+    for (const auto & d : it->second.meta.memory_min->devices) {
+        // host memory is assumed unlimited, same as --fit
+        if (!d.is_device() || d.total == 0) {
+            continue;
+        }
+        if (device_memory.find(d.name) == device_memory.end()) {
+            continue;
+        }
+        const int64_t available = device_memory_available(d.name) - margin;
+        if ((int64_t) d.self() > available) {
+            deficit[d.name] = (size_t) ((int64_t) d.self() - available);
+        }
+    }
+    return deficit;
+}
+
+bool server_models::limits_exceeded(std::unique_lock<std::mutex> & lk, const std::string & name, bool verbose) {
+    if (!sched->has_capacity(lk)) {
+        return true;
+    }
+    if (!memory_limits_enabled()) {
         return false;
     }
-
-    int count_active = 0;
+    const auto deficit = memory_deficit(name);
+    if (deficit.empty()) {
+        return false;
+    }
+    bool any_running = false;
     for (const auto & m : mapping) {
         if (m.second.meta.is_running()) {
-            count_active++;
+            any_running = true;
+            break;
         }
     }
-
-    const bool active_exceeded = check_active && count_active >= base_params.models_max;
-    const bool memory_exceeded = check_memory && can_fit(bmm_req) > 0;
-
-    return active_exceeded || memory_exceeded;
+    for (const auto & [dev, bytes] : deficit) {
+        if (!verbose) {
+            break;
+        }
+        if (any_running) {
+            SRV_DBG("model name=%s is short by %zu MiB on %s\n", name.c_str(), bytes / (1024 * 1024), dev.c_str());
+        } else {
+            // nothing left to unload: the minimum is pessimistic (it assumes the placement in the preset),
+            // let the instance and --fit have a go instead of refusing forever
+            SRV_WRN("model name=%s is projected to be short by %zu MiB on %s with nothing else loaded, loading anyway\n",
+                name.c_str(), bytes / (1024 * 1024), dev.c_str());
+        }
+    }
+    return any_running;
 }
 
-void server_models::unload_lru(const buft_memory_map & bmm_req) {
-    if (base_params.models_memory_margin > 0) {
-        GGML_ASSERT(!bmm_available.empty());
-    }
-
+void server_models::unload_lru(const std::string & name) {
     while (true) {
         std::string lru_model_name;
         {
             std::unique_lock<std::mutex> lk(mutex);
-            if (!limits_exceeded(bmm_req)) {
-                break;
+            if (!limits_exceeded(lk, name)) {
+                return;
             }
             lru_model_name = sched->pick_victim(lk);
         }
-
         if (lru_model_name.empty()) {
-            break;
+            return; // every running model is busy, load() reports the limit
         }
-
-        SRV_INF("limits exceeded, removing LRU name=%s\n", lru_model_name.c_str());
+        SRV_INF("limits reached, removing LRU name=%s\n", lru_model_name.c_str());
         unload(lru_model_name);
+        // wait for unload to complete
         {
             std::unique_lock<std::mutex> lk(mutex);
             cv.wait(lk, [this, &lru_model_name]() {
@@ -1220,83 +1465,6 @@ void server_models::unload_lru(const buft_memory_map & bmm_req) {
         }
     }
 }
-
-buft_memory_map server_models::estimate_model_memory(const std::string & name) {
-    std::vector<std::string> child_args;
-    std::vector<std::string> child_env;
-    {
-        std::lock_guard<std::mutex> lk(mutex);
-        auto & meta = mapping[name].meta;
-        child_args = meta.preset.to_args(bin_path);
-        child_env  = base_env;
-    }
-    child_args.push_back("--measure-only");
-    child_args.push_back("--offline");
-
-    SRV_INF("estimating memory for model name=%s\n", name.c_str());
-
-    common_subproc proc;
-    int options = subprocess_option_no_window | subprocess_option_combined_stdout_stderr;
-    if (!proc.create(child_args, options, child_env)) {
-        SRV_ERR("failed to spawn measure process for model name=%s\n", name.c_str());
-        return {};
-    }
-
-    buft_memory_map result;
-    FILE * out = proc.stdout_file();
-    if (out) {
-        char buffer[4096];
-        while (fgets(buffer, sizeof(buffer), out) != nullptr) {
-            LOG("[measure:%s] %s", name.c_str(), buffer);
-            std::string line(buffer);
-            if (string_starts_with(line, "measure:")) {
-                std::istringstream iss(line.substr(strlen("measure:")));
-                std::string buft_name;
-                size_t size = 0;
-                if (iss >> buft_name >> size) {
-                    auto it = buft_by_name.find(buft_name);
-                    if (it != buft_by_name.end()) {
-                        result[it->second] += size;
-                    } else {
-                        SRV_WRN("unknown buft name '%s' from measure child for model name=%s\n",
-                            buft_name.c_str(), name.c_str());
-                    }
-                }
-            }
-        }
-    }
-
-    int exit_code = proc.join();
-
-    if (exit_code != 0) {
-        SRV_ERR("measure process for model name=%s exited with code %d\n", name.c_str(), exit_code);
-        return {};
-    }
-
-    SRV_INF("memory estimation complete for model name=%s\n", name.c_str());
-    return result;
-}
-
-void server_models::join_completed_bg_tasks() {
-    std::vector<std::unique_ptr<bg_task>> to_join;
-    {
-        std::lock_guard<std::mutex> lk(mutex);
-        for (auto it = bg_tasks.begin(); it != bg_tasks.end(); ) {
-            if (it->second->done.load()) {
-                to_join.push_back(std::move(it->second));
-                it = bg_tasks.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
-    for (auto & task : to_join) {
-        if (task->th.joinable()) {
-            task->th.join();
-        }
-    }
-}
-
 
 void server_models::load(const std::string & name) {
     load(name, load_options{});
@@ -1308,31 +1476,26 @@ void server_models::load(const std::string & name, const load_options & opts) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 
-    join_completed_bg_tasks();
-
-    buft_memory_map bmm_req;
     if (!opts.custom_meta.has_value()) {
         if (!has_model(name)) {
             throw std::runtime_error("model name=" + name + " is not found");
         }
-        // download workers never allocate model memory, only measure for normal loads
-        if (opts.mode == SERVER_CHILD_MODE_NORMAL && base_params.models_memory_margin > 0) {
-            {
-                std::lock_guard<std::mutex> lk(mutex);
-                bmm_req = mapping[name].meta.bmm_req;
-            }
-            if (bmm_req.empty()) {
-                bmm_req = estimate_model_memory(name);
-                if (bmm_req.empty()) {
-                    SRV_WRN("failed to estimate memory for model %s, memory limits will not apply\n", name.c_str());
-                }
-                {
-                    std::lock_guard<std::mutex> lk(mutex);
-                    mapping[name].meta.bmm_req = bmm_req;
-                }
+        if (opts.mode == SERVER_CHILD_MODE_NORMAL && memory_limits_enabled()) {
+            // the measurement decides what to unload, so it has to be in; once per model, seconds at most
+            std::unique_lock<std::mutex> lk(mutex);
+            enqueue_measure(name, /* front */ true);
+            auto measured = [this, &name]() {
+                auto it = mapping.find(name);
+                return it == mapping.end()
+                    || it->second.meta.memory_status == SERVER_MODEL_MEMORY_MEASURED
+                    || it->second.meta.memory_status == SERVER_MODEL_MEMORY_FAILED;
+            };
+            if (!measured()) {
+                SRV_INF("waiting for the memory measurement of model name=%s\n", name.c_str());
+                cv.wait(lk, measured);
             }
         }
-        unload_lru(bmm_req);
+        unload_lru(name);
     }
 
     std::unique_lock<std::mutex> lk(mutex);
@@ -1351,7 +1514,7 @@ void server_models::load(const std::string & name, const load_options & opts) {
     // releasing its lock and this lock_guard acquiring allows multiple
     // threads to each observe capacity and all proceed to load.
     // Download workers do not use models_max slots.
-    if (opts.mode == SERVER_CHILD_MODE_NORMAL && limits_exceeded(bmm_req)) {
+    if (opts.mode == SERVER_CHILD_MODE_NORMAL && limits_exceeded(lk, name, /* verbose */ false)) {
         throw std::runtime_error("model limit reached, try again later");
     }
 
@@ -1412,6 +1575,9 @@ void server_models::load(const std::string & name, const load_options & opts) {
     auto proc = inst.subproc;
     int  port = inst.meta.port;
     mapping[name] = std::move(inst);
+    if (opts.mode == SERVER_CHILD_MODE_NORMAL) {
+        reserve_memory(name); // counted at its minimum until it reports
+    }
     monitor->watch(name, proc, opts.mode, port);
     cv.notify_all();
 }
@@ -1426,6 +1592,10 @@ void server_models::request_stop(const std::string & name, bool send_exit) {
 }
 
 void server_models::on_child_exit(const std::string & name, const std::shared_ptr<server_subproc> & proc, server_child_mode mode, int exit_code) {
+    if (mode == SERVER_CHILD_MODE_MEASURE) {
+        on_measure_exit(name, proc, exit_code);
+        return;
+    }
     {
         std::lock_guard<std::mutex> lk(mutex);
         auto it = mapping.find(name);
@@ -1475,8 +1645,13 @@ void server_models::unload(const std::string & name) {
 }
 
 void server_models::unload_all() {
-    std::vector<std::unique_ptr<bg_task>> bg_to_join;
     std::unique_lock<std::mutex> lk(mutex);
+    measure_queue.clear();
+    if (measure_proc) {
+        SRV_INF("stopping measure process for model name=%s\n", measuring.c_str());
+        measure_proc->terminate();
+        // the monitor reaps it and clears measuring
+    }
     for (auto & [name, inst] : mapping) {
         if (inst.meta.status == SERVER_MODEL_STATUS_DOWNLOADING) {
             SRV_INF("cancelling download for model name=%s\n", name.c_str());
@@ -1490,12 +1665,11 @@ void server_models::unload_all() {
             request_stop(name, !loading);
         }
     }
-    for (auto & [name, task] : bg_tasks) {
-        bg_to_join.push_back(std::move(task));
-    }
-    bg_tasks.clear();
     // wait for every child to exit, the monitor force-kills the ones that ignore the exit command
     cv.wait(lk, [this]() {
+        if (!measuring.empty()) {
+            return false;
+        }
         for (const auto & [name, inst] : mapping) {
             if (inst.meta.is_running() || inst.meta.status == SERVER_MODEL_STATUS_DOWNLOADING) {
                 return false;
@@ -1503,17 +1677,9 @@ void server_models::unload_all() {
         }
         return true;
     });
-    lk.unlock();
-    for (auto & task : bg_to_join) {
-        if (task && task->th.joinable()) {
-            task->th.join();
-        }
-    }
 }
 
 void server_models::update_status(const std::string & name, const update_status_args & args) {
-    join_completed_bg_tasks();
-
     std::unique_lock<std::mutex> lk(mutex);
     auto it = mapping.find(name);
     if (it != mapping.end()) {
@@ -1550,6 +1716,35 @@ void server_models::update_status(const std::string & name, const update_status_
         if (!args.progress.is_null()) {
             meta.progress = args.progress;
         }
+        if (memory_limits_enabled()) {
+            switch (args.status) {
+                case SERVER_MODEL_STATUS_LOADED:
+                    if (args.memory.has_value()) {
+                        // the instance knows best: its report replaces the estimate
+                        meta.memory_effective = args.memory;
+                        it->second.memory_held.clear();
+                        reserve_memory(name);
+                        calibrate_device_memory(*args.memory, name);
+                        if (meta.memory_status == SERVER_MODEL_MEMORY_FAILED && meta.memory_measure_attempts < 2) {
+                            // the model may not have been downloaded when it was measured, it is now
+                            meta.memory_status = SERVER_MODEL_MEMORY_UNMEASURED;
+                            enqueue_measure(name);
+                        }
+                    } else {
+                        reserve_memory(name); // woke up from sleep
+                    }
+                    break;
+                case SERVER_MODEL_STATUS_SLEEPING:
+                    release_memory(name); // a sleeping instance frees its model and context
+                    break;
+                case SERVER_MODEL_STATUS_UNLOADED:
+                    release_memory(name);
+                    meta.memory_effective.reset();
+                    break;
+                default:
+                    break;
+            }
+        }
         // a model that comes up idle or goes down changes the slot count for queued requests
         sched->tick(lk);
     }
@@ -1566,6 +1761,9 @@ void server_models::update_status(const std::string & name, const update_status_
         }
         if (!args.progress.is_null()) {
             data["progress"] = args.progress;
+        }
+        if (args.memory.has_value()) {
+            data["memory"] = args.memory->to_json();
         }
         // note: notify_sse doesn't acquire the lock, so no deadlock here
         notify_sse("status_change", name, data);
@@ -1900,14 +2098,29 @@ void server_models::handle_child_state(const std::string & name, const std::stri
                     payload,
                 });
             } break;
+        case SERVER_STATE_MEASURING:
+            {
+                handle_measured(name, payload);
+            } break;
         case SERVER_STATE_READY:
             {
+                std::optional<server_model_memory> memory;
+                json info = payload;
+                if (info.contains("memory")) {
+                    try {
+                        memory = server_model_memory::from_json(info.at("memory"));
+                    } catch (const std::exception & e) {
+                        SRV_WRN("malformed memory report from model name=%s: %s\n", name.c_str(), e.what());
+                    }
+                    info.erase("memory");
+                }
                 update_status(name, {
                     SERVER_MODEL_STATUS_LOADED,
                     0,
                     // note: payload can be empty if this is a wakeup from sleep
-                    payload.size() > 0 ? payload : nullptr,
+                    info.size() > 0 ? info : nullptr,
                     {}, // reset progress info
+                    memory,
                 });
             } break;
         case SERVER_STATE_SLEEPING:
@@ -1946,6 +2159,8 @@ server_child_mode server_child::get_mode() {
     std::string mode_str(mode ? mode : "");
     if (mode_str == "download") {
         return SERVER_CHILD_MODE_DOWNLOAD;
+    } else if (mode_str == "measure") {
+        return SERVER_CHILD_MODE_MEASURE;
     } else {
         return SERVER_CHILD_MODE_NORMAL;
     }
@@ -2023,6 +2238,33 @@ int server_child::run_download(common_params & params) {
     }
 
     SRV_INF("download completed %s\n", ok ? "successfully" : "with errors");
+    return 0;
+}
+
+int server_child::run_measure(common_params & params) {
+    const std::string model_name = params.model.get_name();
+
+    // TODO: mmproj buffers are not part of llama_get_memory_breakdown, a multimodal model is underestimated by its projector
+    json payload;
+    try {
+        common_memory_measurements m = common_measure_memory(params);
+        payload = {
+            {"result",      "measured"},
+            {"n_ctx_train", m.n_ctx_train},
+            {"min",         server_model_memory(m.min.n_ctx, m.min.rows).to_json()},
+            {"max",         server_model_memory(m.max.n_ctx, m.max.rows).to_json()},
+        };
+        SRV_INF("memory measured for model name=%s at n_ctx=%u (min) and n_ctx=%u (max)\n",
+            model_name.c_str(), m.min.n_ctx, m.max.n_ctx);
+    } catch (const std::exception & e) {
+        SRV_ERR("failed to measure memory for model name=%s: %s\n", model_name.c_str(), e.what());
+        payload = {
+            {"result", "failed"},
+            {"error",  e.what()},
+        };
+    }
+
+    notify_to_router(server_state_to_str(SERVER_STATE_MEASURING), payload);
     return 0;
 }
 
@@ -2323,6 +2565,10 @@ void server_models_routes::init_routes() {
 
             if (meta.n_ctx_train > 0) {
                 model_info["context_length"] = meta.n_ctx_train;
+            }
+
+            if (models.memory_limits_enabled()) {
+                model_info["memory"] = meta.memory_to_json();
             }
 
             // merge with loaded_info from the child process if available

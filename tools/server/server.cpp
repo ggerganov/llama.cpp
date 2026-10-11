@@ -12,8 +12,6 @@
 #include "llama.h"
 #include "log.h"
 
-#include "../../src/llama-ext.h"
-
 #include <atomic>
 #include <clocale>
 #include <exception>
@@ -198,40 +196,6 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
 
     // struct that contains llama context and inference
     server_context ctx_server;
-
-    if (params.measure_only) {
-        llama_model_params mparams = common_model_params_to_llama(params);
-        mparams.no_alloc  = true;
-        mparams.load_mode = LLAMA_LOAD_MODE_NONE;
-
-        llama_model_ptr model{llama_model_load_from_file(params.model.path.c_str(), mparams)};
-        if (!model) {
-            LOG_ERR("%s: failed to load model for measurement\n", __func__);
-            llama_backend_free();
-            return 1;
-        }
-
-        llama_context_params cparams = common_context_params_to_llama(params);
-        llama_context_ptr ctx{llama_init_from_model(model.get(), cparams)};
-        if (!ctx) {
-            LOG_ERR("%s: failed to create context for measurement\n", __func__);
-            llama_backend_free();
-            return 1;
-        }
-
-        common_log_pause(common_log_main());
-        for (const auto & [buft, data] : llama_get_memory_breakdown(ctx.get())) {
-            size_t total = data.total();
-            if (total > 0) {
-                fprintf(stdout, "measure:%s %zu\n", ggml_backend_buft_name(buft), total);
-            }
-        }
-        fflush(stdout);
-        common_log_resume(common_log_main());
-
-        llama_backend_free();
-        return 0;
-    }
 
     //
     // Router
@@ -437,6 +401,15 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
 
     if (child.is_child() && child.get_mode() == SERVER_CHILD_MODE_DOWNLOAD) {
         return child.run_download(params);
+    } else if (child.is_child() && child.get_mode() == SERVER_CHILD_MODE_MEASURE) {
+        // the router passes --offline, so this only resolves the path of an already downloaded model
+        try {
+            common_models_handler_apply(models_handler, params);
+        } catch (const std::exception & e) {
+            SRV_ERR("failed to resolve model: %s\n", e.what());
+            return 1;
+        }
+        return child.run_measure(params);
     } else if (!is_router_server && !is_run_by_cli) {
         // single-model mode (NOT spawned by router)
         // if this is invoked by CLI, model downloading should be already handled
@@ -576,7 +549,12 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
         std::thread monitor_thread;
         if (child.is_child()) {
             monitor_thread = child.setup(shutdown_handler);
-            child.notify_to_router(server_state_to_str(SERVER_STATE_READY), routes.get_model_info());
+            json info = routes.get_model_info();
+            // the router keeps track of device memory from what its instances report
+            if (const auto * ll_ctx = ctx_server.get_llama_context()) {
+                info["memory"] = server_model_memory(llama_n_ctx(ll_ctx), common_memory_breakdown_rows(ll_ctx)).to_json();
+            }
+            child.notify_to_router(server_state_to_str(SERVER_STATE_READY), info);
         }
 
         // this call blocks the main thread until queue_tasks.terminate() is called
