@@ -4402,10 +4402,10 @@ int clip_n_output_tokens(const clip_ctx * ctx, const clip_image_f32 * img) {
             } break;
         case PROJECTOR_TYPE_QWEN3A:
             {
-                // chunk_size=100 frames --> 3x stride-2 conv2d --> 13 tokens per chunk
-                const int chunk_size       = 100;
-                const int tokens_per_chunk = 13;
-                n_patches = (img->nx() / chunk_size) * tokens_per_chunk;
+                // chunk_size=100 frames --> 3x stride-2 conv2d --> 13 tokens per chunk, the last chunk may be shorter
+                const int chunk_size = 100;
+                const int n_tail     = img->nx() % chunk_size;
+                n_patches = (img->nx() / chunk_size) * 13 + (n_tail > 0 ? (((n_tail + 1) / 2 + 1) / 2 + 1) / 2 : 0);
             } break;
         case PROJECTOR_TYPE_GLMA:
             {
