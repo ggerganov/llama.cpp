@@ -721,6 +721,9 @@ jobs:
             -DGGML_OPENVINO=ON \
             -DCMAKE_INSTALL_RPATH='$ORIGIN' \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_BACKEND_DL=ON \
+            -DGGML_NATIVE=OFF \
+            -DGGML_CPU_ALL_VARIANTS=ON \
             ${{ env.CMAKE_ARGS }}
           cmake --build build/ReleaseOV --config Release --parallel
 
@@ -838,6 +841,9 @@ jobs:
             -A x64 ^
             -DCMAKE_BUILD_TYPE=Release ^
             -DGGML_OPENVINO=ON ^
+            -DGGML_BACKEND_DL=ON ^
+            -DGGML_NATIVE=OFF ^
+            -DGGML_CPU_ALL_VARIANTS=ON ^
             -DLLAMA_BUILD_BORINGSSL=ON ^
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             ${{ env.CMAKE_ARGS }}
