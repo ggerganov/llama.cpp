@@ -19,6 +19,23 @@
 export { default as DialogMcpServerAddNew } from './DialogMcpServerAddNew.svelte';
 
 /**
+ * **DialogMcpServers** - MCP servers dialog shown from the chat form
+ *
+ * Shows the same MCP server list as the `/mcp-servers` route inside a modal
+ * dialog.
+ */
+export { default as DialogMcpServers } from './DialogMcpServers.svelte';
+
+/**
+ * **DialogSettingsChat** - Chat settings shown in a modal dialog
+ *
+ * Wraps the full SettingsChat layout (sidebar, mobile header, fields, footer)
+ * inside a ShadCN Dialog instead of a dedicated route. Section switching is
+ * handled in-app via `onSectionChange` rather than URL navigation.
+ */
+export { default as DialogSettingsChat } from './DialogSettingsChat.svelte';
+
+/**
  * **DialogExportSettings** - Settings export dialog with sensitive data warning
  *
  * Dialog for exporting settings with an option to include or exclude
@@ -92,33 +109,47 @@ export { default as DialogExportSettings } from './DialogExportSettings.svelte';
 export { default as DialogConfirmation } from './DialogConfirmation.svelte';
 
 /**
- * **DialogConversationTitleUpdate** - Conversation rename confirmation
+ * **DialogConfirmDownload** - Confirm a destructive download action
  *
- * Confirmation dialog shown when editing the first user message in a conversation.
- * Asks user whether to update the conversation title to match the new message content.
+ * Shared confirmation for stopping/cancelling an in-flight download or deleting
+ * a downloaded model, used by the discover quant chips and the model selector's
+ * download rows so both word the action identically. Owns the copy and the
+ * default store removal; render one instance per surface keyed by the acted-on
+ * repo:tag.
+ */
+export { default as DialogConfirmDownload } from './DialogConfirmDownload.svelte';
+
+/**
+ * **DialogConversationRename** - Rename a conversation
+ *
+ * Modal dialog for renaming a conversation. Replaces the prior
+ * `window.prompt()`-based flow with a styled, accessible AlertDialog
+ * containing an editable input. Triggered from the sidebar conversation
+ * item's "Edit" action.
  *
  * **Architecture:**
  * - Uses ShadCN AlertDialog
- * - Shows current vs proposed title comparison
- * - Triggered by ChatMessages when first message is edited
+ * - Bindable `value` keeps the new title in sync with parent state
+ * - Submit is gated on a non-empty trimmed value that differs from the current title
  *
  * **Features:**
- * - Side-by-side display of current and new title
- * - "Keep Current Title" and "Update Title" action buttons
- * - Styled title previews in muted background boxes
+ * - Autofocus on open with text selected for quick overwrite
+ * - Disabled Save button when value is empty or unchanged
+ * - Trim-on-submit normalization
+ * - Cancel via AlertDialog.Cancel or `onOpenChange(false)`
  *
  * @example
  * ```svelte
- * <DialogConversationTitleUpdate
- *   bind:open={showTitleUpdate}
+ * <DialogConversationRename
+ *   bind:open={showRename}
  *   currentTitle={conversation.name}
- *   newTitle={truncatedMessageContent}
- *   onConfirm={updateTitle}
- *   onCancel={() => showTitleUpdate = false}
+ *   bind:value={renameDraft}
+ *   onConfirm={handleRenameConfirm}
+ *   onCancel={() => (showRename = false)}
  * />
  * ```
  */
-export { default as DialogConversationTitleUpdate } from './DialogConversationTitleUpdate.svelte';
+export { default as DialogConversationRename } from './DialogConversationRename.svelte';
 
 /**
  *
@@ -380,45 +411,7 @@ export { default as DialogConversationSelection } from './DialogConversationSele
  *
  */
 
-/**
- * **DialogModelInformation** - Model details display
- *
- * Dialog showing comprehensive information about the currently loaded model
- * and server configuration. Displays model metadata, capabilities, and
- * server settings in a structured table format.
- *
- * **Architecture:**
- * - Uses ShadCN Dialog with wide layout for table display
- * - Fetches data from serverStore (props) and modelsStore (metadata)
- * - Auto-fetches models when dialog opens if not loaded
- *
- * **Information Displayed:**
- * - **Model**: Name with copy button
- * - **File Path**: Full path to model file with copy button
- * - **Context Size**: Current context window size
- * - **Training Context**: Original training context (if available)
- * - **Model Size**: File size in human-readable format
- * - **Parameters**: Parameter count (e.g., "7B", "70B")
- * - **Embedding Size**: Embedding dimension
- * - **Vocabulary Size**: Token vocabulary size
- * - **Vocabulary Type**: Tokenizer type (BPE, etc.)
- * - **Parallel Slots**: Number of concurrent request slots
- * - **Modalities**: Supported input types (text, vision, audio)
- * - **Build Info**: Server build information
- * - **Chat Template**: Full Jinja template in scrollable code block
- *
- * **Features:**
- * - Copy buttons for model name and path
- * - Modality badges with icons
- * - Responsive table layout with container queries
- * - Loading state while fetching model info
- * - Scrollable chat template display
- *
- * @example
- * ```svelte
- * <DialogModelInformation bind:open={showModelInfo} />
- * ```
- */
+/** **DialogModelInformation** - model details a phone opens instead of the manager pane. */
 export { default as DialogModelInformation } from './DialogModelInformation.svelte';
 
 /**
@@ -506,3 +499,6 @@ export { default as DialogMcpResourcePreview } from './DialogMcpResourcePreview.
  * ```
  */
 export { default as DialogMermaidPreview } from './DialogMermaidPreview.svelte';
+
+/** **DialogManageModels** - shell for the models manager. */
+export { default as DialogManageModels } from './DialogManageModels.svelte';

@@ -1,6 +1,5 @@
 #include "common.cuh"
 #include "fattn-common.cuh"
-#include "fattn-wmma-f16.cuh"
 
 // nbatch_fa == number of KQ rows to process per iteration
 // nbatch_K == number of K columns to load in parallel for KQ calculation
@@ -20,41 +19,41 @@
     }                                                                                                 \
 
 static constexpr __host__ __device__ uint32_t ggml_cuda_fattn_tile_get_config_nvidia_fp16(const int DKQ, const int DV, const int ncols) {
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  2,  64, 2,  64,  40)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  4, 128, 2,  64,  40)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  8, 256, 2,  64,  40)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  2, 128, 3, 128,  40)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  4, 128, 2, 128,  40)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40,  8, 128, 3, 128,  40)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40, 16, 256, 2,  64,  40)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 40,  40, 32, 256, 2,  64,  40)
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64,  2,  64, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64,  4, 128, 2,  64,  64)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64,  8, 256, 2,  64,  64)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64,  8, 256, 3, 128,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64, 16, 256, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 64,  64, 32, 256, 2,  64,  64)
 
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72,  2,  64, 2,  64,  72)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72,  4, 128, 2,  64,  72)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72,  2, 128, 2,  64,  72)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72,  4, 128, 3, 128,  72)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72,  8, 256, 2,  64,  72)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72, 16, 256, 2,  64,  72)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 72,  72, 32, 256, 2,  64,  72)
 
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80,  2,  64, 2,  64,  40)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80,  2, 128, 2,  64,  40)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80,  4, 128, 2,  64,  40)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80,  8, 256, 2,  64,  40)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80, 16, 256, 2,  64,  40)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80, 32, 256, 2,  64,  40)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 80,  80, 32, 256, 2, 128,  40)
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96,  2,  64, 2,  64,  48)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96,  4, 128, 2,  64,  48)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96,  8, 256, 2,  64,  48)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96, 16, 256, 2,  64,  48)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96, 32, 256, 2,  64,  48)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE( 96,  96, 32, 256, 2, 128,  24)
 
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112,  2,  64, 2,  64,  56)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112,  2, 128, 3,  64,  56)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112,  4, 128, 2,  64,  56)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112,  8, 256, 2,  64,  56)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112, 16, 256, 2,  64,  56)
-    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112, 32, 256, 2,  64,  56)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112,  8, 256, 3,  64, 112)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112, 16, 256, 2,  32, 112)
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(112, 112, 32, 256, 2, 128,  56)
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(128, 128,  2,  64, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(128, 128,  4, 128, 2,  64,  64)
@@ -76,6 +75,7 @@ static constexpr __host__ __device__ uint32_t ggml_cuda_fattn_tile_get_config_nv
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(320, 256, 16, 256, 2,  64,  64)
 
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  2,  64, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  4, 128, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  8, 256, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512, 16, 256, 2,  64,  64)
@@ -144,6 +144,7 @@ static constexpr __host__ __device__ uint32_t ggml_cuda_fattn_tile_get_config_nv
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(320, 256, 16, 256, 2,  32,  64)
 
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  2,  64, 2,  32,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  4, 128, 2,  32,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  8, 256, 2,  32,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512, 16, 256, 2,  32,  64)
@@ -219,6 +220,7 @@ static constexpr __host__ __device__ uint32_t ggml_cuda_fattn_tile_get_config_am
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(320, 256, 32, 512, 1, 128,  64)
 
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  2,  64, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  4, 128, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  8, 256, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512, 16, 256, 2,  64,  64)
@@ -296,6 +298,7 @@ static constexpr __host__ __device__ uint32_t ggml_cuda_fattn_tile_get_config_am
 
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(320, 256, 32, 256, 2, 128,  64)
 
+    GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  2,  64, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  4, 128, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512,  8, 256, 2,  64,  64)
     GGML_CUDA_FATTN_TILE_CONFIG_CASE(512, 512, 16, 256, 4,  64,  64)
@@ -821,12 +824,7 @@ static __global__ void flash_attn_tile(
 
     // Skip unused kernel variants for faster compilation:
 
-    if (
-#ifdef GGML_USE_WMMA_FATTN
-            (ncols2 != 1 && DV != 40 && DV != 72 && DV != 512) ||
-#endif // GGML_USE_WMMA_FATTN
-            (use_logit_softcap && !(DV == 128 || DV == 256 || DV == 512))
-    ) {
+    if ((use_logit_softcap && !(DV == 128 || DV == 256 || DV == 512))) {
         GGML_UNUSED_VARS(Q, K, V, mask, sinks, KV_max, dst, dst_meta, scale,
             max_bias, m0, m1, n_head_log2, logit_softcap,
             ne00, ne01, ne02, ne03,
@@ -1165,7 +1163,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
             const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
             fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
             launch_fattn<DV, cols_per_block/ncols2, ncols2>
-                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
             return;
         }
     }
@@ -1181,7 +1179,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
             const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
             fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
             launch_fattn<DV, cols_per_block/ncols2, ncols2>
-                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
             return;
         }
     }
@@ -1193,7 +1191,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
             const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
             fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
             launch_fattn<DV, cols_per_block/ncols2, ncols2>
-                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
             return;
         }
     }
@@ -1205,7 +1203,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
             const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
             fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
             launch_fattn<DV, cols_per_block/ncols2, ncols2>
-                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
             return;
         }
     }
@@ -1217,7 +1215,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
             const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
             fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
             launch_fattn<DV, cols_per_block/ncols2, ncols2>
-                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+                (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
             return;
         }
     }
@@ -1228,7 +1226,7 @@ static void launch_fattn_tile_switch_ncols1(ggml_backend_cuda_context & ctx, ggm
         const int nbatch_fa = ggml_cuda_fattn_tile_get_nbatch_fa(DKQ, DV, cols_per_block, cc);
         fattn_kernel_t fattn_kernel = flash_attn_tile<DKQ, DV, cols_per_block/ncols2, ncols2, use_logit_softcap>;
         launch_fattn<DV, cols_per_block/ncols2, ncols2>
-            (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, warp_size);
+            (ctx, dst, fattn_kernel, nwarps, nbytes_shared, nbatch_fa, true, true, false, false, warp_size);
         return;
     }
 
@@ -1308,12 +1306,12 @@ static void launch_fattn_tile_switch_ncols2(ggml_backend_cuda_context & ctx, ggm
             return;
         }
 
-        if constexpr (DV <= 256) {
-            if (use_gqa_opt && gqa_ratio % 2 == 0) {
-                launch_fattn_tile_switch_ncols1<DKQ, DV, 2, use_logit_softcap>(ctx, dst);
-                return;
-            }
+        if (use_gqa_opt && gqa_ratio % 2 == 0) {
+            launch_fattn_tile_switch_ncols1<DKQ, DV, 2, use_logit_softcap>(ctx, dst);
+            return;
+        }
 
+        if constexpr (DV <= 256) {
             launch_fattn_tile_switch_ncols1<DKQ, DV, 1, use_logit_softcap>(ctx, dst);
             return;
         }

@@ -1,11 +1,25 @@
-ARG ONEAPI_VERSION=2025.3.3-0-devel-ubuntu24.04
+ARG ONEAPI_VERSION=2026.1.1-devel-ubuntu24.04
 ARG BUILD_DATE=N/A
 ARG APP_VERSION=N/A
 ARG APP_REVISION=N/A
 
 ## Build Image
 
-FROM docker.io/intel/deep-learning-essentials:$ONEAPI_VERSION AS build
+ARG NODE_VERSION=24
+
+FROM docker.io/node:$NODE_VERSION AS web
+
+ARG APP_VERSION
+
+WORKDIR /app/tools/ui
+
+COPY tools/ui/package.json tools/ui/package-lock.json ./
+RUN npm ci
+
+COPY tools/ui/ ./
+RUN LLAMA_BUILD_NUMBER="$APP_VERSION" npm run build
+
+FROM docker.io/intel/oneapi-toolkit:$ONEAPI_VERSION AS build
 
 ARG GGML_SYCL_F16=ON
 ARG LEVEL_ZERO_VERSION=1.28.2
@@ -21,6 +35,8 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY . .
+
+COPY --from=web /app/tools/ui/dist tools/ui/dist
 
 RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
         echo "GGML_SYCL_F16 is set" \
@@ -43,7 +59,7 @@ RUN mkdir -p /app/full \
     && cp requirements.txt /app/full \
     && cp .devops/tools.sh /app/full/tools.sh
 
-FROM docker.io/intel/deep-learning-essentials:$ONEAPI_VERSION AS base
+FROM docker.io/intel/oneapi-toolkit:$ONEAPI_VERSION AS base
 
 ARG BUILD_DATE=N/A
 ARG APP_VERSION=N/A
@@ -125,7 +141,7 @@ ENTRYPOINT ["/app/tools.sh"]
 FROM base AS light
 
 COPY --from=build /app/lib/ /app
-COPY --from=build /app/full/llama-cli /app/full/llama-completion /app
+COPY --from=build /app/full/llama /app/full/llama-cli /app/full/llama-completion /app
 
 WORKDIR /app
 
@@ -135,9 +151,10 @@ ENTRYPOINT [ "/app/llama-cli" ]
 FROM base AS server
 
 ENV LLAMA_ARG_HOST=0.0.0.0
+ENV LLAMA_ARG_PORT=8080
 
 COPY --from=build /app/lib/ /app
-COPY --from=build /app/full/llama-server /app
+COPY --from=build /app/full/llama /app/full/llama-server /app
 
 WORKDIR /app
 

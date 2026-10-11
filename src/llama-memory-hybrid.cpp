@@ -78,15 +78,15 @@ llama_memory_context_ptr llama_memory_hybrid::init_batch(llama_batch_allocr & ba
                 // if all tokens are output, split by sequence
                 ubatch = balloc.split_seq(n_ubatch);
             } else {
-                if (mem_recr->n_rs_seq > 0) {
-                    // [TAG_RECURRENT_ROLLBACK_SPLITS]
-                    // TODO: recurrent state rollback does not support equal splits
-                    ubatch = balloc.split_seq(n_ubatch);
-                } else {
-                    // Use non-sequential split when KV cache is unified (needed for hellaswag/winogrande/multiple-choice)
-                    const bool unified = (mem_attn->get_n_stream() == 1);
-                    ubatch = balloc.split_equal(n_ubatch, !unified);
-                }
+                // Use non-sequential split when KV cache is unified (needed for hellaswag/winogrande/multiple-choice)
+                const bool unified = (mem_attn->get_n_stream() == 1);
+
+                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+                // the trailing (1 + n_rs_seq) tokens of each seq must stay in the same ubatch
+                //   so that the rollback snapshots remain valid
+                const uint32_t n_rs_seq = mem_recr->n_rs_seq;
+
+                ubatch = balloc.split_equal(n_ubatch, !unified, n_rs_seq > 0 ? n_rs_seq + 1 : 0);
             }
 
             if (ubatch.n_tokens == 0) {
@@ -195,10 +195,22 @@ void llama_memory_hybrid::state_write(llama_io_write_i & io, llama_seq_id seq_id
 }
 
 void llama_memory_hybrid::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
-    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+    const bool read_attn = (flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0;
+
+    if (read_attn) {
         mem_attn->state_read(io, seq_id, flags);
     }
-    mem_recr->state_read(io, seq_id, flags);
+
+    try {
+        mem_recr->state_read(io, seq_id, flags);
+    } catch (...) {
+        // the attention part is already restored - undo it
+        if (read_attn) {
+            mem_attn->state_clear(seq_id);
+        }
+
+        throw;
+    }
 }
 
 llama_kv_cache * llama_memory_hybrid::get_mem_attn() const {
