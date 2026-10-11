@@ -141,7 +141,8 @@ int ggml_cuda_get_device() {
 static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
     ggml_cuda_set_device(device);
     cudaError_t err;
-    if (getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr) {
+    static const bool enable_unified_memory = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr;
+    if (enable_unified_memory) {
         err = cudaMallocManaged(ptr, size);
 #if defined(GGML_USE_HIP)
         if (err == hipSuccess) {
@@ -1272,7 +1273,8 @@ static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buff
 }
 
 static void * ggml_cuda_host_malloc(size_t size) {
-    if (getenv("GGML_CUDA_NO_PINNED") != nullptr) {
+    static const bool no_pinned = getenv("GGML_CUDA_NO_PINNED") != nullptr;
+    if (no_pinned) {
         return nullptr;
     }
 
@@ -5153,7 +5155,8 @@ void ggml_backend_cuda_get_device_memory(int device, size_t * free, size_t * tot
 }
 
 bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
-    if (getenv("GGML_CUDA_REGISTER_HOST") == nullptr) {
+    static const bool register_host = getenv("GGML_CUDA_REGISTER_HOST") != nullptr;
+    if (!register_host) {
         return false;
     }
 
@@ -5176,7 +5179,8 @@ bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
 }
 
 void ggml_backend_cuda_unregister_host_buffer(void * buffer) {
-    if (getenv("GGML_CUDA_REGISTER_HOST") == nullptr) {
+    static const bool register_host = getenv("GGML_CUDA_REGISTER_HOST") != nullptr;
+    if (!register_host) {
         return;
     }
 
@@ -5303,7 +5307,7 @@ static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t *
     CUDA_CHECK(cudaGetDeviceProperties(&prop, ggml_cuda_get_physical_device(ctx->device)));
 
     // Check if UMA is explicitly enabled via environment variable
-    bool uma_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr;
+    static const bool uma_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr;
     bool is_uma = prop.integrated > 0 || uma_env;
 
     if (is_uma) {
@@ -5345,7 +5349,8 @@ static void ggml_backend_cuda_device_get_props(ggml_backend_dev_t dev, ggml_back
     props->device_id   = ctx->pci_bus_id.empty() ? nullptr : ctx->pci_bus_id.c_str();
     ggml_backend_cuda_device_get_memory(dev, &props->memory_free, &props->memory_total);
 
-    bool host_buffer = getenv("GGML_CUDA_NO_PINNED") == nullptr;
+    static const bool no_pinned = getenv("GGML_CUDA_NO_PINNED") != nullptr;
+    const bool host_buffer = !no_pinned;
 #ifdef GGML_CUDA_NO_PEER_COPY
     bool events = false;
 #else
@@ -6049,7 +6054,8 @@ ggml_backend_reg_t ggml_backend_cuda_reg() {
         std::lock_guard<std::mutex> lock(mutex);
         if (!initialized) {
             ggml_backend_cuda_reg_context * ctx = new ggml_backend_cuda_reg_context;
-            const int min_batch_size = getenv("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(getenv("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
+            static const int min_batch_size = getenv("GGML_OP_OFFLOAD_MIN_BATCH") != nullptr
+                                                ? atoi(getenv("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
 
             const ggml_cuda_device_info & info = ggml_cuda_info();
             const bool virtual_devices = info.device_count > info.physical_device_count;
