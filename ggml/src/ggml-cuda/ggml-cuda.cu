@@ -2642,9 +2642,20 @@ static bool ggml_cuda_is_view_or_noop(const ggml_tensor * t) {
            t->op == GGML_OP_VIEW || t->op == GGML_OP_PERMUTE || t->op == GGML_OP_NONE;
 }
 
+// env var helpers: the variable is read exactly once
+static bool ggml_cuda_env_flag(const char * name) {
+    const char * env = getenv(name);
+    return env != nullptr && std::atoi(env) != 0;
+}
+
+static int ggml_cuda_env_int(const char * name, int default_value) {
+    const char * env = getenv(name);
+    return env != nullptr ? std::atoi(env) : default_value;
+}
+
 #ifdef USE_CUDA_GRAPH
 static bool ggml_cuda_graph_debug_enabled() {
-    static const bool enabled = getenv("GGML_CUDA_GRAPH_DEBUG") != nullptr && std::atoi(getenv("GGML_CUDA_GRAPH_DEBUG")) != 0;
+    static const bool enabled = ggml_cuda_env_flag("GGML_CUDA_GRAPH_DEBUG");
     return enabled;
 }
 
@@ -3618,7 +3629,7 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
 // try and fuse nodes and return the number of nodes to skip
 static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, int i) {
 
-    static bool disable_fusion = getenv("GGML_CUDA_DISABLE_FUSION") != nullptr && std::atoi(getenv("GGML_CUDA_DISABLE_FUSION"));
+    static const bool disable_fusion = ggml_cuda_env_flag("GGML_CUDA_DISABLE_FUSION");
     if (disable_fusion) {
         return 0;
     }
@@ -4735,7 +4746,7 @@ static void ggml_backend_cuda_event_wait(ggml_backend_t backend, ggml_backend_ev
 static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph * cgraph, ggml_backend_graph_optimize_params * params) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
 
-    static const bool disable_fusion = getenv("GGML_CUDA_DISABLE_FUSION") != nullptr && std::atoi(getenv("GGML_CUDA_DISABLE_FUSION"));
+    static const bool disable_fusion = ggml_cuda_env_flag("GGML_CUDA_DISABLE_FUSION");
 
     auto add_alloc_deps = [&](size_t start, size_t last_node) {
 
@@ -6054,8 +6065,7 @@ ggml_backend_reg_t ggml_backend_cuda_reg() {
         std::lock_guard<std::mutex> lock(mutex);
         if (!initialized) {
             ggml_backend_cuda_reg_context * ctx = new ggml_backend_cuda_reg_context;
-            static const int min_batch_size = getenv("GGML_OP_OFFLOAD_MIN_BATCH") != nullptr
-                                                ? atoi(getenv("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
+            static const int min_batch_size = ggml_cuda_env_int("GGML_OP_OFFLOAD_MIN_BATCH", 32);
 
             const ggml_cuda_device_info & info = ggml_cuda_info();
             const bool virtual_devices = info.device_count > info.physical_device_count;
