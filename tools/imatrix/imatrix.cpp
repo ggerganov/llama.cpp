@@ -1475,7 +1475,9 @@ static bool compute_imatrix(llama_context * ctx, const common_params & params, c
     const int n_seq = std::max(1, n_batch / n_ctx);
 
     GGML_ASSERT(n_batch < n_ctx || n_batch % n_ctx == 0);
-    GGML_ASSERT(params.n_ctx == n_seq * n_ctx);
+    // the context is sized for n_seq sequences before the model is loaded, and loading can lower n_batch
+    // (a model in embedding mode needs the whole batch in one ubatch): fewer sequences than fit is fine
+    GGML_ASSERT(params.n_ctx >= n_seq * n_ctx);
 
     common_batch batch(ctx);
 
@@ -1973,6 +1975,12 @@ int main(int argc, char ** argv) {
     if (model == nullptr || ctx == nullptr) {
         LOG_ERR("%s : failed to init\n", __func__);
         return 1;
+    }
+
+    // a model in embedding mode (e.g. a decision model) has no logits to compute a perplexity from
+    if (params.embedding && params.compute_ppl) {
+        LOG_INF("%s: the model runs in embedding mode, perplexity is not computed\n", __func__);
+        params.compute_ppl = false;
     }
 
     const int n_ctx_train = llama_model_n_ctx_train(model);
