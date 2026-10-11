@@ -1406,7 +1406,7 @@ static uint32_t fa_block_bytes(ggml_type t) {
     return (uint32_t) ggml_type_size(t);
 }
 
-static std::vector<uint32_t> get_fa_spec_constants(const vk_fa_pipeline_state& state) {
+static std::vector<uint32_t> get_fa_spec_constants(const vk_device& device, const vk_fa_pipeline_state& state) {
     return {
         /* 0 WorkGroupSize   */ state.workgroup_size,
         /* 1 Br              */ state.Br,
@@ -1424,6 +1424,8 @@ static std::vector<uint32_t> get_fa_spec_constants(const vk_fa_pipeline_state& s
         /*13 FaTypeV         */ static_cast<uint32_t>(state.v_type),
         /*14 FaBlockBytesK   */ fa_block_bytes(state.k_type),
         /*15 FaBlockBytesV   */ fa_block_bytes(state.v_type),
+        /*16 MatBr           */ device->coopmat_n,
++       /*17 MatBc           */ device->coopmat_m,
     };
 }
 
@@ -2080,7 +2082,7 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
         }
         ggml_vk_create_pipeline(device, fa.second, name, spv_size, spv_data, "main", 8,
                                 sizeof(vk_flash_attn_push_constants), {Br, 1, 1},
-                                get_fa_spec_constants(fa.first), aligned ? Bc : 1, true,
+                                get_fa_spec_constants(device, fa.first), aligned ? Bc : 1, true,
                                 !fa_ds, !fa_ds ? fa_sgs : 0);
     }
 
@@ -2116,7 +2118,7 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
             }
             ggml_vk_create_pipeline(device, fa.second, name, spv_size, spv_data, "main", 8,
                                     sizeof(vk_flash_attn_push_constants), {Br, 1, 1},
-                                    get_fa_spec_constants(fa.first), aligned ? Bc : 1, true,
+                                    get_fa_spec_constants(device, fa.first), aligned ? Bc : 1, true,
                                     !fa_ds, !fa_ds ? fa_sgs : 0);
         }
     }
@@ -2153,7 +2155,7 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
             }
             ggml_vk_create_pipeline(device, fa.second, name, spv_size, spv_data, "main", 8,
                                     sizeof(vk_flash_attn_push_constants), {Br, 1, 1},
-                                    get_fa_spec_constants(fa.first), aligned ? Bc : 1, true, false, 0);
+                                    get_fa_spec_constants(device, fa.first), aligned ? Bc : 1, true, false, 0);
         }
     }
 #endif
