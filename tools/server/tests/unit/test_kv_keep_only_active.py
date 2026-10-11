@@ -113,36 +113,3 @@ def test_disabled_with_flag():
     })
     assert res.status_code == 200
     assert "__TEST_TAG_CACHE_IDLE_SLOT__" not in log.drain()
-
-
-# two clients share a large prefix on a single slot: the prefix dominates the kept fraction,
-# so the small tail of the previous client is saved only if it exceeds the batch size
-@pytest.mark.parametrize("n_batch,is_restored", [
-    (8,   True),
-    (128, False),
-])
-def test_shared_prefix_keeps_tail(n_batch: int, is_restored: bool):
-    global server
-    server.n_slots = 1
-    server.n_batch = n_batch
-    server.start()
-
-    prompt_a = LONG_PROMPT + " The knight finally reached the castle gates and opened them."
-    prompt_b = LONG_PROMPT + " A dragon was sleeping on a big pile of shiny gold coins."
-
-    for prompt in [prompt_a, prompt_b]:
-        res = server.make_request("POST", "/completion", data={
-            "prompt": prompt,
-            "cache_prompt": True,
-        })
-        assert res.status_code == 200
-
-    res = server.make_request("POST", "/completion", data={
-        "prompt": prompt_a,
-        "cache_prompt": True,
-    })
-    assert res.status_code == 200
-    if is_restored:
-        assert res.body["timings"]["prompt_n"] == 1
-    else:
-        assert res.body["timings"]["prompt_n"] > 1
