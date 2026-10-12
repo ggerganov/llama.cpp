@@ -849,10 +849,6 @@ extern "C" {
             struct llama_context * ctx,
                    const uint8_t * src,
                           size_t   size);
-    LLAMA_API DEPRECATED(size_t llama_set_state_data(
-            struct llama_context * ctx,
-                   const uint8_t * src),
-        "use llama_state_set_data instead");
 
     // Save/load session file
     LLAMA_API bool llama_state_load_file(

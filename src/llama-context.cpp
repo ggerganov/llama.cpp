@@ -4456,11 +4456,6 @@ size_t llama_copy_state_data(llama_context * ctx, uint8_t * dst) {
 }
 
 // deprecated
-size_t llama_set_state_data(llama_context * ctx, const uint8_t * src) {
-    return llama_state_set_data(ctx, src, -1);
-}
-
-// deprecated
 bool llama_load_session_file(llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     return llama_state_load_file(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
 }
