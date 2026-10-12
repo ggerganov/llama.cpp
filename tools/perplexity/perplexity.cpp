@@ -2094,5 +2094,9 @@ int llama_perplexity(int argc, char ** argv) {
 
     llama_backend_free();
 
+    // the main logger runs on its own thread and is not flushed at exit (see common_log_main),
+    // drain it here so the report above cannot be lost
+    common_log_flush(common_log_main());
+
     return 0;
 }
