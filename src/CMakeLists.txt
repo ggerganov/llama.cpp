@@ -39,6 +39,7 @@ set(LLAMA_CORE_SOURCES
     llama-model.cpp
     llama-quant.cpp
     llama-sampler.cpp
+    llama-share.cpp
     llama-vocab.cpp
     unicode-data.cpp
     unicode.cpp

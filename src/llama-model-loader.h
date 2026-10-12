@@ -9,6 +9,10 @@
 
 #include "ggml-cpp.h"
 
+// cross-process weight sharing (llama-share.cpp); the model loader only holds a
+// pointer - llama-model.cpp owns the lifetime
+struct llama_share;
+
 #include <cstddef>
 #include <cstring>
 #include <map>
@@ -118,6 +122,10 @@ struct llama_model_loader {
     } lazy;
 
     llama_files files;
+
+    // paths of the weight files, in load order (used for share-manifest freshness gating)
+    std::vector<std::string> file_paths;
+
     llama_ftype ftype;
     llama_fver  fver;
 
@@ -132,6 +140,9 @@ struct llama_model_loader {
     llama_model_set_tensor_data_t set_tensor_data;
     void * set_tensor_data_ud;
     std::vector<ggml_context_ptr> contexts;
+
+    // optional cross-process weight sharing hooks (may be null)
+    llama_share * share = nullptr;
 
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);

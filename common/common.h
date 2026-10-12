@@ -588,6 +588,9 @@ struct common_params {
     bool no_host           = false; // bypass host buffer allowing extra buffers to be used
     bool load_mtp          = false; // load MTP/NextN layers
 
+    std::string share_ipc        = ""; // cross-process weight sharing: registry socket path (empty = disabled); requires tools/llama-share-registry
+    std::string share_manifest   = ""; // cross-process weight sharing: digest manifest path (empty = default <model>.share.tsv)
+
     bool single_turn       = false; // single turn chat conversation
 
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K

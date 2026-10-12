@@ -4,6 +4,7 @@
 #include "ggml.h"
 #include "gguf.h"
 #include "llama-hparams.h"
+#include "llama-share.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -577,6 +578,7 @@ llama_model_loader::llama_model_loader(
         llm_kv = LLM_KV(llm_arch_from_string(arch_name));
 
         files.emplace_back(new llama_file(fname.c_str(), "rb", use_direct_io));
+        file_paths.push_back(fname);
         contexts.emplace_back(ctx);
 
         // Save tensors data offset of the main file.
@@ -645,6 +647,7 @@ llama_model_loader::llama_model_loader(
                 }
 
                 files.emplace_back(new llama_file(fname_split, "rb", use_direct_io));
+                file_paths.push_back(fname_split);
                 contexts.emplace_back(ctx);
 
                 // Save tensors data offset info of the shard.
@@ -1636,6 +1639,13 @@ bool llama_model_loader::load_all_data(
 
         size_t n_size = ggml_nbytes(cur);
 
+        // cross-process sharing: a tensor that was already attached to a foreign
+        // segment is resident - skip reading and uploading its bytes altogether
+        if (share && share->begin_tensor(cur)) {
+            size_done += n_size;
+            continue;
+        }
+
         const bool from_mapping = use_mmap || lazy.has(cur);
 
         if (from_mapping) {
@@ -1666,6 +1676,9 @@ bool llama_model_loader::load_all_data(
                 mmap_used.first  = std::min(mmap_used.first,  weight->offs);
                 mmap_used.second = std::max(mmap_used.second, weight->offs + n_size);
             } else {
+                if (share) {
+                    share->on_bytes(data, n_size);
+                }
                 ggml_backend_tensor_set(cur, data, 0, n_size);
             }
         } else {
@@ -1674,6 +1687,9 @@ bool llama_model_loader::load_all_data(
             if (ggml_backend_buffer_is_host(cur->buffer)) {
                 file->seek(weight->offs, SEEK_SET);
                 file->read_raw(cur->data, n_size);
+                if (share) {
+                    share->on_bytes(cur->data, n_size);
+                }
                 if (check_tensors) {
                     validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
                         return std::make_pair(cur, ggml_validate_row_data(cur->type, cur->data, n_size));
@@ -1727,6 +1743,10 @@ bool llama_model_loader::load_all_data(
                                                       reinterpret_cast<void *>(ptr_data), data_read, data_to_copy);
                         ggml_backend_event_record(events[buffer_idx], upload_backend);
 
+                        if (share) {
+                            share->on_bytes(reinterpret_cast<const void *>(ptr_data), data_to_copy);
+                        }
+
                         data_read += data_to_copy;
                         bytes_read += read_size;
 
@@ -1738,6 +1758,9 @@ bool llama_model_loader::load_all_data(
                     std::vector<no_init<uint8_t>> read_buf(n_size);
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(read_buf.data(), n_size);
+                    if (share) {
+                        share->on_bytes(read_buf.data(), n_size);
+                    }
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                     if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
@@ -1747,6 +1770,10 @@ bool llama_model_loader::load_all_data(
         }
 
         size_done += n_size;
+
+        if (share) {
+            share->end_tensor(cur);
+        }
     }
 
     // free temporary resources used for async uploads

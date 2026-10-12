@@ -347,6 +347,17 @@ extern "C" {
         // override key-value pairs of the model meta data
         const struct llama_model_kv_override * kv_overrides;
 
+        // Cross-process weight sharing over CUDA VMM segments (experimental). When set,
+        // weights are loaded into shareable segments; tensors already registered by
+        // another process (querying ipc_path) are attached instead of being read.
+        // share_manifest optionally points at a digest manifest used as a lookup cache
+        // (default: <first gguf file>.share.tsv; pass empty to disable the cache and
+        // rely only on the registry query).
+        // Requires an IPC registry daemon (tools/llama-share-registry) on the same
+        // machine. Degrades to a normal load when unsupported. Linux only.
+        const char * share_ipc;
+        const char * share_manifest;
+
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only;      // only load the vocabulary, no weights
         bool check_tensors;   // validate model tensor data

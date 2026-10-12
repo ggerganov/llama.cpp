@@ -2945,6 +2945,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
+        {"--share-ipc"}, "PATH",
+        "cross-process weight sharing: unix-socket path of a llama-share-registry, which pins shared weight segments across processes; requires the CUDA VMM shareable buffers (default: disabled)",
+        [](common_params & params, const std::string & value) {
+            params.share_ipc = value;
+        }
+    ));
+    add_opt(common_arg(
+        {"--share-manifest"}, "PATH",
+        "cross-process weight sharing: digest manifest path used as a query cache\n(default: <model>.share.tsv next to the model file)",
+        [](common_params & params, const std::string & value) {
+            params.share_manifest = value;
+        }
+    ));
+    add_opt(common_arg(
         {"--override-kv"}, "KEY=TYPE:VALUE,...",
         "advanced option to override model metadata by key. to specify multiple overrides, either use comma-separated values.\n"
         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false,tokenizer.ggml.add_eos_token=bool:false",

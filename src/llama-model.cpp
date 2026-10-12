@@ -7,6 +7,7 @@
 #include "llama-mmap.h"
 #include "llama-cparams.h"
 #include "llama-model-loader.h"
+#include "llama-share.h"
 
 #include "llama-kv-cache.h"
 #include "llama-kv-cache-iswa.h"
@@ -1265,6 +1266,9 @@ struct llama_model::impl {
     bool has_tensor_overrides;
 
     std::vector<float> tensor_split_owned;
+
+    // cross-process weight sharing over CUDA VMM segments (LLAMA_SHARE_*); null unless enabled
+    std::unique_ptr<llama_share> share;
 };
 
 bool llama_prec_policy::apply(ggml_tensor * res) const {
@@ -1601,12 +1605,48 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     LLAMA_LOG_INFO("%s: loading model tensors, this can take a while... (load_mode = %s)\n",
         __func__, load_mode_name);
 
+    // cross-process weight sharing over VMM segments (params.share_ipc): construct the
+    // share object (digests the weight files' manifest) and swap each device's default
+    // buffer type for its shareable buffer type, so weight tensors land in segments
+    // other processes can attach to
+    if (params.share_ipc && *params.share_ipc) {
+        pimpl->share.reset(new llama_share(
+            params.share_ipc,
+            params.share_manifest && *params.share_manifest
+                ? params.share_manifest
+                : ml.file_paths.empty() ? std::string() : ml.file_paths.front() + ".share.tsv",
+            ml.file_paths));
+        if (!pimpl->share->enable()) {
+            pimpl->share.reset();
+        } else {
+            ml.share = pimpl->share.get(); // the loader drives the per-tensor hooks
+        }
+    }
+
     // build a list of buffer types for the CPU and GPU devices
     pimpl->cpu_buft_list = make_cpu_buft_list(devices, params.use_extra_bufts, params.no_host);
     for (const auto & dev : devices) {
         buft_list_t buft_list = make_gpu_buft_list(dev.dev, split_mode, tensor_split);
         // add CPU buffer types as a fallback
         buft_list.insert(buft_list.end(), pimpl->cpu_buft_list.begin(), pimpl->cpu_buft_list.end());
+
+        if (pimpl->share) {
+            ggml_backend_buffer_type_t dev_buft = pimpl->share->shareable_buft(dev.dev);
+            if (dev_buft) {
+                // replace the entry equal to the device's default buffer type; other
+                // entries (row-split containers, extra bufts, CPU fallbacks) keep their
+                // tensors unshared, which degrades gracefully
+                for (auto & entry : buft_list) {
+                    if (entry.second == ggml_backend_dev_buffer_type(dev.dev)) {
+                        entry.second = dev_buft;
+                    }
+                }
+            } else {
+                LLAMA_LOG_WARN("%s: device %s has no shareable VMM buffer type, its weights are not shared\n",
+                        __func__, ggml_backend_dev_name(dev.dev));
+            }
+        }
+
         pimpl->gpu_buft_list.emplace(dev.dev, std::move(buft_list));
     }
 
@@ -1942,6 +1982,11 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
                     t->buffer = buf; // set dummy buffer for weights so that the backend scheduler won't try to allocate them
                 }
             } else {
+                // cross-process sharing: register attach specs for this context's tensors
+                // that the registry can already supply, before their buffers are allocated
+                if (pimpl->share && pimpl->share->is_shareable_buft(buft)) {
+                    pimpl->share->attach_specs_for_ctx(ctx, buft);
+                }
                 buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft); // real buffer
             }
             if (buf == nullptr) {
@@ -2009,8 +2054,15 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     // load tensor data
     for (auto & [ctx, buf_map] : ctx_buf_maps) {
         if (!ml.load_all_data(ctx, buf_map, use_mlock ? &pimpl->mlock_mmaps : NULL, params.progress_callback, params.progress_callback_user_data)) {
+            if (pimpl->share) {
+                pimpl->share->finish(false);
+            }
             return false;
         }
+    }
+
+    if (pimpl->share) {
+        pimpl->share->finish(true);
     }
 
     if (use_mmap_buffer) {
@@ -3337,6 +3389,8 @@ llama_model_params llama_model_default_params() {
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.kv_overrides                =*/ nullptr,
+        /*.share_ipc                   =*/ nullptr,
+        /*.share_manifest              =*/ nullptr,
         /*.vocab_only                  =*/ false,
         /*.check_tensors               =*/ false,
         /*.use_extra_bufts             =*/ true,

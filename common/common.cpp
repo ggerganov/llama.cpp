@@ -1704,6 +1704,9 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     mparams.no_alloc                    = params.no_alloc;
     mparams.load_mtp                    = params.load_mtp || std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
 
+    mparams.share_ipc      = params.share_ipc.empty()      ? nullptr : params.share_ipc.c_str();
+    mparams.share_manifest = params.share_manifest.empty() ? nullptr : params.share_manifest.c_str();
+
     return mparams;
 }
 
