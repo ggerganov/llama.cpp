@@ -50,6 +50,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (params.n_parallel > 1 && !params.kv_unified) {
+        LOG_ERR("%s: --kv-unified/-kvu is required when --parallel/-np > 1\n", __func__);
+        return 1;
+    }
+
     if (params.speculative.draft.mparams.path.empty()) {
         LOG_ERR("%s: --model-draft is required\n", __func__);
         return 1;
