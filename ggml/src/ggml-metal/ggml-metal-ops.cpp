@@ -2976,6 +2976,8 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
 
             const size_t smem = pipeline.smem;
 
+            GGML_ASSERT(smem <= props_dev->max_theadgroup_memory_size);
+
             ggml_metal_encoder_set_threadgroup_memory_size(enc, smem, 0);
 
             const int max_tiles = (int) ggml_metal_op_mul_mat_id_max_tiles(op);
