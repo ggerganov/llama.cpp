@@ -846,7 +846,11 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
             if (ud->model->arch == LLM_ARCH_GLM5_NEXT && std::regex_match(tensor_name, pattern_attn_q_b_weight)) {
                 GGML_ASSERT(segments.size() == 1);
                 // absorbed MLA query projection: split on whole query heads
-                return {granularity_q};
+                //   granularity_q spans n_gqa heads which is the whole tensor for MLA (n_head_kv == 1)
+                //   and would degenerate to a {0, ne} split - align to a single query head instead
+                GGML_ASSERT(hparams.n_head(il) > 0 && segments[0].first % hparams.n_head(il) == 0);
+                const int64_t head_w = segments[0].first / hparams.n_head(il);
+                return {std::lcm(head_w, blck_size_perf)};
             }
             if (std::regex_match(tensor_name, pattern_q_weight) || std::regex_match(tensor_name, pattern_q_bias)) {
                 GGML_ASSERT(segments.size() == 1);
