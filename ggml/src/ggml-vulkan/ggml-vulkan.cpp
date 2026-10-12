@@ -13998,7 +13998,6 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
             flops_cap = 2'000'000'000ULL * ctx->device->shader_core_count;
         }
     }
-    // Smallest amount of work worth the CPU cost of a submit
     const uint64_t flops_floor = std::min<uint64_t>(100'000'000ULL, flops_cap);
     uint64_t flops_per_submit = std::clamp(ctx->last_total_flops / 40u, flops_floor, flops_cap);
 
@@ -15865,7 +15864,7 @@ static ggml_backend_dev_t ggml_backend_vk_reg_get_device(ggml_backend_reg_t reg,
 #if !defined(_WIN32)
 static constexpr size_t ggml_vk_comm_f16_min_size = 1024 * 1024;
 
-// Walks back over the ops ggml-backend-meta may delay a reduction across.
+// follows ops ggml-backend-meta may delay a reduction across
 // TODO: the required precision should come from the meta backend instead.
 static bool ggml_vk_comm_needs_f32(const ggml_tensor * t, int depth = 0) {
     if (t == nullptr || depth > 64) {
@@ -15887,8 +15886,7 @@ static bool ggml_vk_comm_needs_f32(const ggml_tensor * t, int depth = 0) {
     }
 }
 
-// SYNC_FD: only cross-device handle type allowed by the spec. Revisit with VK_EXT_external_semaphore_drm_syncobj
-// (shared timeline semaphores, no per-round export/import).
+// SYNC_FD: only spec-allowed cross-device handle type; revisit with VK_EXT_external_semaphore_drm_syncobj
 struct ggml_backend_vk_comm_context {
     std::vector<ggml_backend_t>                     backends;
     std::vector<ggml_backend_vk_context *>          vkctx;
@@ -15927,7 +15925,7 @@ static int ggml_vk_comm_export(ggml_backend_vk_comm_context * comm, size_t i) {
     return fd;
 }
 
-// Pooled semaphore: reused only after ggml_vk_graph_cleanup, i.e. after the wait completed.
+// pooled, reused only after ggml_vk_graph_cleanup
 static vk::Semaphore ggml_vk_comm_import(ggml_backend_vk_comm_context * comm, size_t i, int fd) {
     const vk::Semaphore sem = ggml_vk_create_binary_semaphore(comm->vkctx[i])->s;
     VkImportSemaphoreFdInfoKHR isi{};
@@ -16105,11 +16103,10 @@ static void ggml_vk_comm_submit(ggml_backend_vk_context * ctx, vk_context & c, v
     ctx->compute_ctx.reset();
 }
 
-// Phase A: each device writes its partial into slot (round & 1) of its own host buffer, signals and exports its semaphore.
-// Phase B: each device imports and waits on all peers' fds and adds their slots into its tensor.
-// Slot reuse is safe: device i writes slot s in round k after its phase B of round k-1, which waited on each
-// peer's phase A of round k-1, which that peer submitted after its phase B of round k-2, the last reader of s.
-// All phase A submits go out before any phase B submit, so a fence wait on one device never blocks on a peer.
+// A: write partial to own host slot (round & 1), signal + export sem
+// B: import + wait on peers' fds, add their slots
+// slot reuse: A(k) follows own B(k-1), which waited on peers' A(k-1), submitted after their B(k-2), the last reader
+// all A submits precede any B submit, so a fence wait never blocks on a peer
 static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor ** tensors) {
     ggml_backend_vk_comm_context * comm = static_cast<ggml_backend_vk_comm_context *>(comm_ctx);
     const size_t n = comm->backends.size();
