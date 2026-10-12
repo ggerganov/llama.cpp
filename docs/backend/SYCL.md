@@ -365,8 +365,11 @@ cmake --build build --config Release -j -v
 ```
 
 You can use `-DGGML_SYCL_SEPARATE_BUILD_CXX=<compiler>` to choose another SYCL C++ compiler than `icpx`.
-Other backends are enabled with their usual options, and all of them are listed by `--list-devices` at runtime.
+Other backends are enabled with their usual options.
 Builds without `GGML_SYCL_SEPARATE_BUILD` are not affected.
+
+Check result:
+After the building is successful, run `llama-server --list-devices` or `llama-cli --list-devices` to show all supported devices by multiple backends at runtime.
 
 ### III. Run the inference
 
