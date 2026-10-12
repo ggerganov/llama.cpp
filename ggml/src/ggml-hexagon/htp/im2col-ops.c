@@ -13,12 +13,12 @@
 #include "ggml-common.h"
 #include "htp-ctx.h"
 #include "htp-ops.h"
-#include "im2col-ops.h"
 #include "hvx-utils.h"
 #include "dma-queue.h"
 #include "hex-profile.h"
 #include "htp-vtcm.h"
 #include "htp-tensor.h"
+#include "im2col-ops.h"
 
 struct htp_im2col_context {
     struct htp_ops_context * octx;
@@ -140,8 +140,7 @@ static void im2col_blocked_dma_stage(struct htp_im2col_context * ictx, dma_queue
         }
         const uint32_t cpw = (uint32_t) (hi - lo);
         float * vdst = srcb + (size_t) ikh * Wb + lo;
-        const dma_addr_t vsrc = src_data + batch_offset +
-            (size_t) iih * src1->nb[1] + (size_t) (win0 + lo) * src1->nb[0];
+        const dma_addr_t vsrc = src_data + batch_offset + (size_t) iih * src1->nb[1] + (size_t) (win0 + lo) * src1->nb[0];
         dma_queue_push(dma_q, dma_make_data(vdst, vsrc),
                        (size_t) KH * Wb * sizeof(float), src_channel_stride,
                        cpw * sizeof(float), IC);
@@ -218,26 +217,26 @@ IM2COL_BLOCKED_COMPUTE_BODY(im2col_blocked_compute_f32, float,    hvx_copy_f32_u
 
 static void im2col_blocked_dma_thread(unsigned int nth, unsigned int ith, void * data) {
     (void) nth;
-    struct htp_im2col_context * ictx        = (struct htp_im2col_context *) data;
-    struct htp_ops_context *    octx        = ictx->octx;
-    struct htp_thread_trace * restrict tr   = &octx->ctx->trace[ith];
-    const uint32_t OW                       = ictx->OW;
-    const uint32_t KH                       = ictx->KH;
-    const uint32_t owb                      = ictx->pe_owb;
-    const uint32_t nbpr                     = ictx->pe_nbpr;
-    const uint32_t patch_stride             = ictx->patch_stride;
-    const uint32_t dst_elem                 = ictx->dst_elem;
-    im2col_blocked_compute_fn_t compute     = (im2col_blocked_compute_fn_t) ictx->compute;
-    const dma_addr_t dst_data               = octx->dst->data;
-    dma_queue *    dma_q                    = octx->ctx->dma[ith];
-    uint8_t *      srcb_base                = ictx->pe_vtcm_src + ith * ictx->pe_src_size_per_thread;
-    uint8_t *      dstb_base                = ictx->pe_vtcm_dst + ith * ictx->pe_dst_size_per_thread;
-    float *        srcb2[2]                 = { (float *) srcb_base, (float *) (srcb_base + ictx->pe_src_row_bytes) };
-    void *         dstb2[2]                 = { dstb_base, dstb_base + ictx->pe_dst_row_bytes };
-    float *        scratch                  = (float *) (srcb_base + 2 * ictx->pe_src_row_bytes);
-    const uint32_t row_end_max              = ictx->pe_row_base + ictx->pe_nrows;
-    const uint32_t row_start                = ictx->pe_row_base + ictx->pe_rows_per_thread * ith;
-    const uint32_t row_end                  = MIN(row_start + ictx->pe_rows_per_thread, row_end_max);
+    struct htp_im2col_context * ictx      = (struct htp_im2col_context *) data;
+    struct htp_ops_context *    octx      = ictx->octx;
+    struct htp_thread_trace * restrict tr = &octx->ctx->trace[ith];
+    const uint32_t OW                     = ictx->OW;
+    const uint32_t KH                     = ictx->KH;
+    const uint32_t owb                    = ictx->pe_owb;
+    const uint32_t nbpr                   = ictx->pe_nbpr;
+    const uint32_t patch_stride           = ictx->patch_stride;
+    const uint32_t dst_elem               = ictx->dst_elem;
+    im2col_blocked_compute_fn_t compute   = (im2col_blocked_compute_fn_t) ictx->compute;
+    const dma_addr_t dst_data             = octx->dst->data;
+    dma_queue *    dma_q                  = octx->ctx->dma[ith];
+    uint8_t *      srcb_base              = ictx->pe_vtcm_src + ith * ictx->pe_src_size_per_thread;
+    uint8_t *      dstb_base              = ictx->pe_vtcm_dst + ith * ictx->pe_dst_size_per_thread;
+    float *        srcb2[2]               = { (float *) srcb_base, (float *) (srcb_base + ictx->pe_src_row_bytes) };
+    void *         dstb2[2]               = { dstb_base, dstb_base + ictx->pe_dst_row_bytes };
+    float *        scratch                = (float *) (srcb_base + 2 * ictx->pe_src_row_bytes);
+    const uint32_t row_end_max            = ictx->pe_row_base + ictx->pe_nrows;
+    const uint32_t row_start              = ictx->pe_row_base + ictx->pe_rows_per_thread * ith;
+    const uint32_t row_end                = MIN(row_start + ictx->pe_rows_per_thread, row_end_max);
     if (row_start >= row_end) {
         return;
     }
@@ -283,17 +282,17 @@ static void im2col_blocked_dma_thread(unsigned int nth, unsigned int ith, void *
     }
     dma_queue_flush(dma_q);
 }
+
 static void im2col_patchembed_dma_stage(struct htp_im2col_context * ictx, dma_queue * dma_q,
                                         float * srcb, const struct im2col_cursor * c) {
     const struct htp_ops_context * octx = ictx->octx;
     const uint32_t IC = ictx->IC, IH = ictx->IH, IW = ictx->IW;
     const uint32_t KH = ictx->KH;
     const uint32_t in = c->in, ioh = c->ioh;
-    const dma_addr_t src_data = octx->src[1]->data;
     const size_t src_channel_stride  = (size_t) IH * IW * sizeof(float);
     const size_t vtcm_channel_stride = (size_t) KH * IW * sizeof(float);
-    const dma_addr_t vsrc = src_data +
-        (size_t) (((in * IC) * IH + ioh * KH) * IW) * sizeof(float);
+    const dma_addr_t src_data        = octx->src[1]->data;
+    const dma_addr_t vsrc            = src_data + (size_t) (((in * IC) * IH + ioh * KH) * IW) * sizeof(float);
 
     dma_queue_push(dma_q, dma_make_data(srcb, vsrc),
                    vtcm_channel_stride, src_channel_stride,
@@ -409,6 +408,7 @@ static void im2col_patchembed_dma_thread(unsigned int nth, unsigned int ith, voi
     }
     dma_queue_flush(dma_q);
 }
+
 static inline void im2col_3d_step_row(struct im2col_cursor * c, const struct htp_im2col_context * ictx) {
     c->r++;
     c->ioh++;
@@ -518,8 +518,7 @@ static void FNAME(const struct htp_im2col_context * ictx,                       
                         SPLAT_FN(out_run, 0, KW);                                                    \
                         continue;                                                                    \
                     }                                                                                \
-                    const float * vrow = srcb +                                                      \
-                        (size_t) (iic * KD * KH + ikd * KH + ikh) * Wb;                              \
+                    const float * vrow = srcb + (size_t) (iic * KD * KH + ikd * KH + ikh) * Wb;      \
                     if (d0 == 1) {                                                                   \
                         const int32_t lo = iiw0 < 0 ? -iiw0 : 0;                                     \
                         int32_t hi = (int32_t) IW - iiw0;                                            \
@@ -571,7 +570,6 @@ static void im2col_3d_blocked_dma_thread(unsigned int nth, unsigned int ith, voi
     const uint32_t owb          = ictx->pe_owb;
     const uint32_t nbpr         = ictx->pe_nbpr;
     const uint32_t dst_elem     = ictx->dst_elem;
-    im2col_3d_blocked_compute_fn_t compute = (im2col_3d_blocked_compute_fn_t) ictx->compute;
     const dma_addr_t dst_data   = dst->data;
     dma_queue * dma_q           = octx->ctx->dma[ith];
     uint8_t * srcb_base         = ictx->pe_vtcm_src + ith * ictx->pe_src_size_per_thread;
@@ -603,6 +601,8 @@ static void im2col_3d_blocked_dma_thread(unsigned int nth, unsigned int ith, voi
         im2col_3d_blocked_dma_stage(ictx, dma_q, srcb2[i], &stage);
         im2col_3d_step_block(&stage, ictx);
     }
+
+    im2col_3d_blocked_compute_fn_t compute = (im2col_3d_blocked_compute_fn_t) ictx->compute;
     for (uint32_t bi = 0; bi < total_blocks; bi++) {
         const uint32_t buf = bi & 1u;
         float * srcb = srcb2[buf];
@@ -615,8 +615,7 @@ static void im2col_3d_blocked_dma_thread(unsigned int nth, unsigned int ith, voi
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, cur.r);
         compute(ictx, dstb, srcb, scratch, nb, cur.c0, cur.iod, cur.ioh);
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, cur.r);
-        const dma_addr_t ddr = dst_data +
-            (size_t) (cur.r * OW + cur.c0) * patch_stride * dst_elem;
+        const dma_addr_t ddr = dst_data + (size_t) (cur.r * OW + cur.c0) * patch_stride * dst_elem;
         dma_queue_push(dma_q, dma_make_data(ddr, dstb),
                        nb * patch_stride * dst_elem, nb * patch_stride * dst_elem,
                        nb * patch_stride * dst_elem, 1);
@@ -706,11 +705,10 @@ static void im2col_3d_patchembed_dma_thread(unsigned int nth, unsigned int ith, 
     struct htp_ops_context *    octx        = ictx->octx;
     struct htp_thread_trace * restrict tr   = &octx->ctx->trace[ith];
     const struct htp_tensor * restrict dst  = octx->dst;
-    const uint32_t KD = ictx->KD;
+    const uint32_t KD           = ictx->KD;
     const uint32_t OW           = ictx->OW;
     const uint32_t patch_stride = ictx->patch_stride;
     const uint32_t dst_elem     = ictx->dst_elem;
-    im2col_3d_patchembed_compute_fn_t compute = (im2col_3d_patchembed_compute_fn_t) ictx->compute;
     const dma_addr_t dst_data   = dst->data;
     dma_queue * dma_q           = octx->ctx->dma[ith];
     const uint32_t row_end_max  = ictx->pe_row_base + ictx->pe_nrows;
@@ -719,6 +717,7 @@ static void im2col_3d_patchembed_dma_thread(unsigned int nth, unsigned int ith, 
     if (row_start >= row_end) {
         return;
     }
+
     const uint32_t nrows_local  = row_end - row_start;
     uint8_t * src_base          = ictx->pe_vtcm_src + ith * ictx->pe_src_size_per_thread;
     uint8_t * dstb_base         = ictx->pe_vtcm_dst + ith * ictx->pe_dst_size_per_thread;
@@ -737,6 +736,8 @@ static void im2col_3d_patchembed_dma_thread(unsigned int nth, unsigned int ith, 
         im2col_3d_patchembed_dma_stage(ictx, dma_q, srcb2[i], &stage);
         im2col_3d_step_row(&stage, ictx);
     }
+
+    im2col_3d_patchembed_compute_fn_t compute = (im2col_3d_patchembed_compute_fn_t) ictx->compute;
     for (uint32_t idx = 0; idx < nrows_local; idx++) {
         const uint32_t buf = idx & 1u;
         float * srcb = srcb2[buf];
@@ -777,8 +778,7 @@ int op_im2col(struct htp_ops_context * octx) {
     uint32_t nrows    = kparams->total_rows;
     if (octx->ctx->mdev.count > 1) {
         const uint32_t row_size = dst->nb[2];
-        const uint32_t rows_per_chunk =
-            (row_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(row_size, HEX_L2_LINE_SIZE)) : 1;
+        const uint32_t rows_per_chunk = (row_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(row_size, HEX_L2_LINE_SIZE)) : 1;
         const struct htp_tensor_mdev_range range =
             htp_tensor_mdev_partition(kparams->total_rows, htp_tensor_mdev_data_aligned(dst) ? rows_per_chunk : 0,
                                       octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
@@ -860,8 +860,7 @@ int op_im2col_3d(struct htp_ops_context * octx) {
     uint32_t nrows    = kparams->total_rows;
     if (octx->ctx->mdev.count > 1) {
         const uint32_t row_size = dst->nb[2];
-        const uint32_t rows_per_chunk =
-            (row_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(row_size, HEX_L2_LINE_SIZE)) : 1;
+        const uint32_t rows_per_chunk = (row_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(row_size, HEX_L2_LINE_SIZE)) : 1;
         const struct htp_tensor_mdev_range range =
             htp_tensor_mdev_partition(kparams->total_rows, htp_tensor_mdev_data_aligned(dst) ? rows_per_chunk : 0,
                                       octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
