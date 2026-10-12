@@ -148,6 +148,7 @@ void server_decision_context::init(const llama_model * model) {
     } else if (model_type == COMMON_DECISION_TYPE_VLLM_DECISION2) {
         n_options_max       = 255;
         noul_criteria_order = true;
+        strict_payload      = true;
     } else if (model_type == COMMON_DECISION_TYPE_LFM2_D1) {
         n_options_max   = 255;
         noul_true_first = true;
@@ -169,10 +170,17 @@ void server_decision_context::init(const llama_model * model) {
 // request parsing
 //
 
+static bool decision_is_payload(const json & val) {
+    return val.is_string() || val.is_object() || val.is_array();
+}
+
 std::vector<server_decision_question> server_decision_context::parse_questions(const json & body) const {
     // lfm2-d1 and lfm2-d1-omni accept a null state, for example to ask about images only
     if (!body.contains("state") || (body.at("state").is_null() && type != COMMON_DECISION_TYPE_LFM2_D1 && type != COMMON_DECISION_TYPE_LFM2_D1_OMNI)) {
         throw std::invalid_argument("\"state\" must be provided");
+    }
+    if (strict_payload && !decision_is_payload(body.at("state"))) {
+        throw std::invalid_argument("\"state\" must be text, an object or an array");
     }
     if (!body.contains("questions") || !body.at("questions").is_object() || body.at("questions").empty()) {
         throw std::invalid_argument("\"questions\" must be a non-empty object");
@@ -189,6 +197,9 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
         if (!q.contains("instructions") || q.at("instructions").is_null()) {
             throw err("\"instructions\" must be provided");
         }
+        if (strict_payload && (!decision_is_payload(q.at("instructions")) || q.at("instructions") == "")) {
+            throw err("\"instructions\" must be non-empty text, an object or an array");
+        }
 
         server_decision_question question;
         question.id           = id;
@@ -203,7 +214,13 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
                 throw err("\"criteria\" must be a non-empty object");
             }
             for (const auto & [key, description] : criteria.items()) {
+                if (strict_payload && (key.empty() || !(description.is_null() || decision_is_payload(description)))) {
+                    throw err("option keys must be non-empty, descriptions must be null, text, an object or an array");
+                }
                 question.options.push_back({key, description});
+            }
+            if (strict_payload && question.options.size() < 2) {
+                throw err("\"criteria\" must have at least 2 options");
             }
             if (choice_sorted) {
                 std::sort(question.options.begin(), question.options.end(), [](const auto & a, const auto & b) {
@@ -216,12 +233,22 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
                 throw err("\"criteria\" must be an array of 2 to 10 levels");
             }
             for (size_t i = 0; i < criteria.size(); i++) {
+                if (strict_payload && !decision_is_payload(criteria.at(i))) {
+                    throw err("level descriptions must be text, an object or an array");
+                }
                 question.options.push_back({std::to_string(i), criteria.at(i)});
             }
         } else if (type_name == "noul") {
             question.type = SERVER_DECISION_QUESTION_NOUL;
             if (!criteria.is_null() && !criteria.is_object()) {
                 throw err("\"criteria\" must be an object");
+            }
+            if (strict_payload && criteria.is_object()) {
+                for (const auto & [key, description] : criteria.items()) {
+                    if ((key != "false" && key != "true") || !decision_is_payload(description)) {
+                        throw err("\"criteria\" may only describe \"false\" and \"true\" with text, an object or an array");
+                    }
+                }
             }
             for (const char * key : {"false", "true"}) {
                 json description;
@@ -1184,7 +1211,9 @@ json server_decision_context::format_answer(const server_decision_question & que
         json legend = json::object();
         for (size_t i = 0; i < n; i++) {
             expected += i * probs[i];
-            legend[question.options[i].key] = question.options[i].description;
+            const json & description = question.options[i].description;
+            // vllm-decision2 returns structured descriptions as canonical JSON text
+            legend[question.options[i].key] = strict_payload && !description.is_string() ? json(decision_sort_keys(description).dump()) : description;
         }
         answer["score"]         = expected;
         answer["legend"]        = legend;

@@ -116,6 +116,7 @@ private:
     bool   noul_true_first = false; // noul options are [true, false] instead of [false, true]
     bool   noul_criteria_order = false; // noul options are in the order of the criteria keys, if given
     bool   choice_sorted   = false; // choice options are in the order of their keys
+    bool   strict_payload  = false; // state, instructions and descriptions must be text, an object or an array
 
     // OPENJEV, LEV, NIMBLE, PPLX_DECIDER
     std::vector<llama_token> labels;
