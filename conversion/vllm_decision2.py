@@ -55,12 +55,6 @@ class VllmDecision2Model(Qwen3Model):
         finally:
             self.dir_model = dir_model
 
-    @classmethod
-    def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
-        name, gen = item
-        # the backbone is a bare Qwen3Model, its tensors have no "model." prefix
-        return super().filter_tensors(("model." + name, gen))
-
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         yield from super().get_tensors()
         from safetensors.torch import load_file
