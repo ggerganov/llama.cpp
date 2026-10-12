@@ -125,27 +125,27 @@ static __attribute__((noinline)) void FNAME(                                    
     const uint32_t KH = ictx->KH, KW = ictx->KW;                                                 \
     const uint32_t Wb = ictx->pe_wb;                                                             \
     const uint32_t patch_stride = ictx->patch_stride;                                            \
-    const int64_t  win0 = (int64_t) c0 * s0 - p0;                                                \
+    const int32_t  win0 = (int32_t) c0 * s0 - p0;                                                \
                                                                                                  \
     for (uint32_t j = 0; j < nb; j++) {                                                          \
         const uint32_t iow       = c0 + j;                                                       \
-        DST_CTYPE *    dst_patch = dstb + (uint64_t) j * patch_stride;                           \
-        const int64_t  iiw0      = (int64_t) iow * s0 - p0;                                      \
+        DST_CTYPE *    dst_patch = dstb + (size_t) j * patch_stride;                             \
+        const int32_t  iiw0      = (int32_t) iow * s0 - p0;                                      \
         for (uint32_t ikh = 0; ikh < KH; ikh++) {                                                \
-            const int64_t iih = (int64_t) ioh * s1 + (int64_t) ikh * d1 - p1;                    \
-            const int     okh = (iih >= 0 && iih < (int64_t) IH);                                \
+            const int32_t iih = (int32_t) ioh * s1 + (int32_t) ikh * d1 - p1;                    \
+            const int     okh = (iih >= 0 && iih < (int32_t) IH);                                \
             for (uint32_t iic = 0; iic < IC; iic++) {                                            \
-                DST_CTYPE * out_run = dst_patch + ((uint64_t) iic * KH + ikh) * KW;              \
+                DST_CTYPE * out_run = dst_patch + (size_t) (iic * KH + ikh) * KW;                \
                 if (!okh) {                                                                      \
                     SPLAT_FN(out_run, 0, KW);                                                    \
                     continue;                                                                    \
                 }                                                                                \
-                const float * vrow = srcb + ((uint64_t) (iic * KH + ikh)) * Wb;                  \
+                const float * vrow = srcb + (size_t) (iic * KH + ikh) * Wb;                      \
                 if (d0 == 1) {                                                                   \
-                    const int64_t lo = iiw0 < 0 ? -iiw0 : 0;                                     \
-                    int64_t       hi = (int64_t) IW - iiw0;                                      \
-                    if (hi > (int64_t) KW) {                                                     \
-                        hi = (int64_t) KW;                                                       \
+                    const int32_t lo = iiw0 < 0 ? -iiw0 : 0;                                     \
+                    int32_t       hi = (int32_t) IW - iiw0;                                      \
+                    if (hi > (int32_t) KW) {                                                     \
+                        hi = (int32_t) KW;                                                       \
                     }                                                                            \
                     if (hi <= lo) {                                                              \
                         SPLAT_FN(out_run, 0, KW);                                                \
@@ -156,7 +156,7 @@ static __attribute__((noinline)) void FNAME(                                    
                         COPY_FN((uint8_t *) (out_run + lo),                                      \
                                 (const uint8_t *) (vrow + (iiw0 + lo - win0)),                   \
                                 (uint32_t) (hi - lo));                                           \
-                        if (hi < (int64_t) KW) {                                                 \
+                        if (hi < (int32_t) KW) {                                                 \
                             SPLAT_FN(out_run + hi, 0, (uint32_t) (KW - hi));                     \
                         }                                                                        \
                     }                                                                            \
@@ -165,8 +165,8 @@ static __attribute__((noinline)) void FNAME(                                    
                 for (uint32_t ikw = 0; ikw < KW; ikw += 64) {                                    \
                     const uint32_t chunk = MIN(KW - ikw, 64);                                    \
                     for (uint32_t c = 0; c < chunk; c++) {                                       \
-                        const int64_t iiw = iiw0 + (int64_t) (ikw + c) * d0;                     \
-                        scratch[c] = (iiw < 0 || iiw >= (int64_t) IW) ? 0.0f : vrow[iiw - win0]; \
+                        const int32_t iiw = iiw0 + (int32_t) (ikw + c) * d0;                     \
+                        scratch[c] = (iiw < 0 || iiw >= (int32_t) IW) ? 0.0f : vrow[iiw - win0]; \
                     }                                                                            \
                     COPY_FN((uint8_t *) (out_run + ikw), (const uint8_t *) scratch, chunk);      \
                 }                                                                                \
@@ -259,7 +259,7 @@ static void im2col_patchembed_dma_stage(struct htp_im2col_context * ictx, dma_qu
     const size_t src_channel_stride  = (size_t) IH * IW * sizeof(float);
     const size_t vtcm_channel_stride = (size_t) KH * IW * sizeof(float);
     const dma_addr_t vsrc = src_data +
-        (((uint64_t) in * IC) * IH + (uint64_t) ioh * KH) * IW * sizeof(float);
+        (size_t) (((in * IC) * IH + ioh * KH) * IW) * sizeof(float);
 
     dma_queue_push(dma_q, dma_make_data(srcb, vsrc),
                    vtcm_channel_stride, src_channel_stride,
@@ -274,16 +274,16 @@ static __attribute__((noinline)) void im2col_patchembed_compute_f16(
     const uint32_t OW = ictx->OW, patch_stride = ictx->patch_stride;
 
     for (uint32_t iow = 0; iow < OW; iow++) {
-        uint16_t * dst_patch = dstb + (uint64_t) iow * patch_stride;
+        uint16_t * dst_patch = dstb + (size_t) iow * patch_stride;
         for (uint32_t ikh = 0; ikh < KH; ikh++) {
             const int32_t iih = (int32_t) ioh * (int32_t) KH + (int32_t) ikh;
             for (uint32_t iic = 0; iic < IC; iic++) {
-                uint16_t * out_run = dst_patch + ((uint64_t) iic * KH + ikh) * KW;
+                uint16_t * out_run = dst_patch + (size_t) (iic * KH + ikh) * KW;
                 if (iih < 0 || iih >= (int32_t) IH) {
                     hvx_splat_u16_u(out_run, 0, KW);
                     continue;
                 }
-                const float * src_run = srcb + ((uint64_t) iic * KH + ikh) * IW + (uint64_t) iow * KW;
+                const float * src_run = srcb + (size_t) (iic * KH + ikh) * IW + (size_t) iow * KW;
                 hvx_copy_f16_f32_uu((uint8_t *) out_run, (const uint8_t *) src_run, KW);
             }
         }
@@ -298,16 +298,16 @@ static __attribute__((noinline)) void im2col_patchembed_compute_f32(
     const uint32_t OW = ictx->OW, patch_stride = ictx->patch_stride;
 
     for (uint32_t iow = 0; iow < OW; iow++) {
-        float * dst_patch = dstb + (uint64_t) iow * patch_stride;
+        float * dst_patch = dstb + (size_t) iow * patch_stride;
         for (uint32_t ikh = 0; ikh < KH; ikh++) {
             const int32_t iih = (int32_t) ioh * (int32_t) KH + (int32_t) ikh;
             for (uint32_t iic = 0; iic < IC; iic++) {
-                float * out_run = dst_patch + ((uint64_t) iic * KH + ikh) * KW;
+                float * out_run = dst_patch + (size_t) (iic * KH + ikh) * KW;
                 if (iih < 0 || iih >= (int32_t) IH) {
                     hvx_splat_f32_u(out_run, 0, KW);
                     continue;
                 }
-                const float * src_run = srcb + ((uint64_t) iic * KH + ikh) * IW + (uint64_t) iow * KW;
+                const float * src_run = srcb + (size_t) (iic * KH + ikh) * IW + (size_t) iow * KW;
                 hvx_copy_f32_uu((uint8_t *) out_run, (const uint8_t *) src_run, KW);
             }
         }
@@ -416,31 +416,31 @@ static void im2col_3d_blocked_dma_stage(struct htp_im2col_context * ictx, dma_qu
     const uint32_t ID = ictx->ID, IH = ictx->IH, IW = ictx->IW;
     const uint32_t KD = ictx->KD, KH = ictx->KH;
     const uint32_t Wb = ictx->pe_wb;
-    const int64_t win0 = (int64_t) c0 * s0 - p0;
+    const int32_t win0 = (int32_t) c0 * s0 - p0;
     const size_t src_channel_stride = (size_t) ID * IH * IW * sizeof(float);
     const size_t vtcm_channel_stride = (size_t) KD * KH * Wb * sizeof(float);
 
     for (uint32_t ikd = 0; ikd < KD; ikd++) {
-        const int64_t iid = (int64_t) iod * s2 + (int64_t) ikd * d2 - p2;
-        const bool valid_d = (iid >= 0 && iid < (int64_t) ID);
+        const int32_t iid = (int32_t) iod * s2 + (int32_t) ikd * d2 - p2;
+        const bool valid_d = (iid >= 0 && iid < (int32_t) ID);
         for (uint32_t ikh = 0; ikh < KH; ikh++) {
-            const int64_t iih = (int64_t) ioh * s1 + (int64_t) ikh * d1 - p1;
-            if (!valid_d || iih < 0 || iih >= (int64_t) IH) {
+            const int32_t iih = (int32_t) ioh * s1 + (int32_t) ikh * d1 - p1;
+            if (!valid_d || iih < 0 || iih >= (int32_t) IH) {
                 dma_queue_push(dma_q, dma_make_data(srcb, 0), 0, 0, 0, 0);
                 continue;
             }
-            const int64_t lo = win0 < 0 ? -win0 : 0;
-            int64_t hi = (int64_t) IW - win0;
-            if (hi > (int64_t) Wb) {
-                hi = (int64_t) Wb;
+            const int32_t lo = win0 < 0 ? -win0 : 0;
+            int32_t hi = (int32_t) IW - win0;
+            if (hi > (int32_t) Wb) {
+                hi = (int32_t) Wb;
             }
             if (hi <= lo) {
                 dma_queue_push(dma_q, dma_make_data(srcb, 0), 0, 0, 0, 0);
                 continue;
             }
-            float * vdst = srcb + ((size_t) ikd * KH + ikh) * Wb + lo;
+            float * vdst = srcb + (size_t) (ikd * KH + ikh) * Wb + lo;
             const dma_addr_t vsrc = src1->data +
-                (((((uint64_t) in * IC) * ID + iid) * IH + iih) * IW + (win0 + lo)) * sizeof(float);
+                (size_t) ((((in * IC) * ID + (uint32_t) iid) * IH + (uint32_t) iih) * IW + (win0 + lo)) * sizeof(float);
             dma_queue_push(dma_q, dma_make_data(vdst, vsrc),
                            vtcm_channel_stride, src_channel_stride,
                            (size_t) (hi - lo) * sizeof(float), IC);
@@ -462,29 +462,29 @@ static __attribute__((noinline)) void FNAME(const struct htp_im2col_context * ic
     const uint32_t KD = ictx->KD, KH = ictx->KH, KW = ictx->KW;                                      \
     const uint32_t patch_stride = ictx->patch_stride;                                                \
     const uint32_t Wb = ictx->pe_wb;                                                                 \
-    const int64_t win0 = (int64_t) c0 * s0 - p0;                                                     \
+    const int32_t win0 = (int32_t) c0 * s0 - p0;                                                     \
     for (uint32_t j = 0; j < nb; j++) {                                                              \
         const uint32_t iow = c0 + j;                                                                 \
-        const int64_t iiw0 = (int64_t) iow * s0 - p0;                                                \
-        DST_CTYPE * dst_patch = dstb + (uint64_t) j * patch_stride;                                  \
+        const int32_t iiw0 = (int32_t) iow * s0 - p0;                                                \
+        DST_CTYPE * dst_patch = dstb + (size_t) j * patch_stride;                                    \
         for (uint32_t iic = 0; iic < IC; iic++) {                                                    \
             for (uint32_t ikd = 0; ikd < KD; ikd++) {                                                \
-                const int64_t iid = (int64_t) iod * s2 + (int64_t) ikd * d2 - p2;                    \
+                const int32_t iid = (int32_t) iod * s2 + (int32_t) ikd * d2 - p2;                    \
                 for (uint32_t ikh = 0; ikh < KH; ikh++) {                                            \
-                    const int64_t iih = (int64_t) ioh * s1 + (int64_t) ikh * d1 - p1;                \
+                    const int32_t iih = (int32_t) ioh * s1 + (int32_t) ikh * d1 - p1;                \
                     DST_CTYPE * out_run = dst_patch +                                                \
-                        ((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * KW;                 \
-                    if (iid < 0 || iid >= (int64_t) ID || iih < 0 || iih >= (int64_t) IH) {          \
+                        (size_t) (iic * KD * KH + ikd * KH + ikh) * KW;                              \
+                    if (iid < 0 || iid >= (int32_t) ID || iih < 0 || iih >= (int32_t) IH) {          \
                         SPLAT_FN(out_run, 0, KW);                                                    \
                         continue;                                                                    \
                     }                                                                                \
                     const float * vrow = srcb +                                                      \
-                        ((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * Wb;                 \
+                        (size_t) (iic * KD * KH + ikd * KH + ikh) * Wb;                              \
                     if (d0 == 1) {                                                                   \
-                        const int64_t lo = iiw0 < 0 ? -iiw0 : 0;                                     \
-                        int64_t hi = (int64_t) IW - iiw0;                                            \
-                        if (hi > (int64_t) KW) {                                                     \
-                            hi = (int64_t) KW;                                                       \
+                        const int32_t lo = iiw0 < 0 ? -iiw0 : 0;                                     \
+                        int32_t hi = (int32_t) IW - iiw0;                                            \
+                        if (hi > (int32_t) KW) {                                                     \
+                            hi = (int32_t) KW;                                                       \
                         }                                                                            \
                         if (hi <= lo) {                                                              \
                             SPLAT_FN(out_run, 0, KW);                                                \
@@ -495,7 +495,7 @@ static __attribute__((noinline)) void FNAME(const struct htp_im2col_context * ic
                             COPY_FN((uint8_t *) (out_run + lo),                                      \
                                     (const uint8_t *) (vrow + (iiw0 + lo - win0)),                   \
                                     (uint32_t) (hi - lo));                                           \
-                            if (hi < (int64_t) KW) {                                                 \
+                            if (hi < (int32_t) KW) {                                                 \
                                 SPLAT_FN(out_run + hi, 0, (uint32_t) (KW - hi));                     \
                             }                                                                        \
                         }                                                                            \
@@ -504,8 +504,8 @@ static __attribute__((noinline)) void FNAME(const struct htp_im2col_context * ic
                     for (uint32_t ikw = 0; ikw < KW; ikw += 64) {                                    \
                         const uint32_t chunk = MIN(KW - ikw, 64);                                    \
                         for (uint32_t c = 0; c < chunk; c++) {                                       \
-                            const int64_t iiw = iiw0 + (int64_t) (ikw + c) * d0;                     \
-                            scratch[c] = (iiw < 0 || iiw >= (int64_t) IW) ? 0.0f : vrow[iiw - win0]; \
+                            const int32_t iiw = iiw0 + (int32_t) (ikw + c) * d0;                     \
+                            scratch[c] = (iiw < 0 || iiw >= (int32_t) IW) ? 0.0f : vrow[iiw - win0]; \
                         }                                                                            \
                         COPY_FN((uint8_t *) (out_run + ikw), (const uint8_t *) scratch, chunk);      \
                     }                                                                                \
@@ -584,7 +584,7 @@ IM2COL_3D_BLOCKED_COMPUTE_BODY(im2col_3d_blocked_compute_f32, float,    hvx_copy
             COMPUTE_FN(ictx, dstb, srcb, scratch, nb, c0, iod, ioh);                                           \
             htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, r);                                               \
             const dma_addr_t ddr = dst_data +                                                                  \
-                ((uint64_t) r * OW + c0) * patch_stride * (DST_ELEM);                                          \
+                (size_t) (r * OW + c0) * patch_stride * (DST_ELEM);                                            \
             dma_queue_push(dma_q, dma_make_data(ddr, dstb),                                                    \
                            nb * patch_stride * (DST_ELEM), nb * patch_stride * (DST_ELEM),                     \
                            nb * patch_stride * (DST_ELEM), 1);                                                 \
@@ -613,7 +613,7 @@ static void im2col_3d_patchembed_dma_stage(dma_queue * dma_q, const dma_addr_t s
     for (uint32_t ikd = 0; ikd < KD; ikd++) {
         const uint32_t iid = iod * KD + ikd;
         float * vdst = srcb + (size_t) ikd * KH * IW;
-        const dma_addr_t vsrc = src_data + ((((uint64_t) in * IC) * ID + iid) * IH + (uint64_t) ioh * KH) * IW * sizeof(float);
+        const dma_addr_t vsrc = src_data + (size_t) (((in * IC) * ID + iid) * IH + ioh * KH) * IW * sizeof(float);
         dma_queue_push(dma_q, dma_make_data(vdst, vsrc),
                        vtcm_channel_stride, src_channel_stride, row_size, IC);
     }
@@ -631,12 +631,12 @@ static __attribute__((noinline)) void im2col_3d_patchembed_compute_f16(
     const uint32_t patch_stride = ictx->patch_stride;
 
     for (uint32_t iow = 0; iow < OW; iow++) {
-        uint16_t * dst_patch = dstb + (uint64_t) iow * patch_stride;
+        uint16_t * dst_patch = dstb + (size_t) iow * patch_stride;
         for (uint32_t iic = 0; iic < IC; iic++) {
             for (uint32_t ikd = 0; ikd < KD; ikd++) {
                 for (uint32_t ikh = 0; ikh < KH; ikh++) {
-                    uint16_t * out_run = dst_patch + ((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * KW;
-                    const float * src_run = srcb + (((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * IW) + (uint64_t) iow * KW;
+                    uint16_t * out_run = dst_patch + (size_t) (iic * KD * KH + ikd * KH + ikh) * KW;
+                    const float * src_run = srcb + (size_t) (iic * KD * KH + ikd * KH + ikh) * IW + (size_t) iow * KW;
                     hvx_copy_f16_f32_uu((uint8_t *) out_run, (const uint8_t *) src_run, KW);
                 }
             }
@@ -656,12 +656,12 @@ static __attribute__((noinline)) void im2col_3d_patchembed_compute_f32(
     const uint32_t patch_stride = ictx->patch_stride;
 
     for (uint32_t iow = 0; iow < OW; iow++) {
-        float * dst_patch = dstb + (uint64_t) iow * patch_stride;
+        float * dst_patch = dstb + (size_t) iow * patch_stride;
         for (uint32_t iic = 0; iic < IC; iic++) {
             for (uint32_t ikd = 0; ikd < KD; ikd++) {
                 for (uint32_t ikh = 0; ikh < KH; ikh++) {
-                    float * out_run = dst_patch + ((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * KW;
-                    const float * src_run = srcb + (((uint64_t) iic * KD * KH + (uint64_t) ikd * KH + ikh) * IW) + (uint64_t) iow * KW;
+                    float * out_run = dst_patch + (size_t) (iic * KD * KH + ikd * KH + ikh) * KW;
+                    const float * src_run = srcb + (size_t) (iic * KD * KH + ikd * KH + ikh) * IW + (size_t) iow * KW;
                     hvx_copy_f32_uu((uint8_t *) out_run, (const uint8_t *) src_run, KW);
                 }
             }
