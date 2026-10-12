@@ -12212,6 +12212,25 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
     // Qwen3-VL-8B https://github.com/ggml-org/llama.cpp/issues/17012
     test_cases.emplace_back(new test_flash_attn_ext(72, 72, 16, {1, 1}, 5776, 5776, false, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16));
 
+    // GCN sparse attention threshold validation across head sizes and GQA.
+    for (int64_t kv : {8192, 16384, 32768, 65536}) {
+        for (const auto & shape : {std::array<int64_t, 3>{ 72,  72, 12},
+                                  std::array<int64_t, 3>{ 80,  80, 12},
+                                  std::array<int64_t, 3>{ 96,  96, 12},
+                                  std::array<int64_t, 3>{112, 112, 12},
+                                  std::array<int64_t, 3>{128, 128, 12},
+                                  std::array<int64_t, 3>{192, 128, 32},
+                                  std::array<int64_t, 3>{256, 256,  2},
+                                  std::array<int64_t, 3>{320, 256,  8},
+                                  std::array<int64_t, 3>{320, 256, 64},
+                                  std::array<int64_t, 3>{512, 512,  8},
+                                  std::array<int64_t, 3>{512, 512, 16},
+                                  std::array<int64_t, 3>{576, 512, 16},
+                                  std::array<int64_t, 3>{576, 512, 32}}) {
+            test_cases.emplace_back(new test_flash_attn_ext(shape[0], shape[1], 2, {shape[2], 1}, kv, 1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
+        }
+    }
+
     // GCN sparse attention break-even for multiple query tokens.
     for (int64_t kv : {16384, 32768, 65536}) {
         for (int64_t nq : {1, 2, 4, 8, 16, 32, 64}) {
