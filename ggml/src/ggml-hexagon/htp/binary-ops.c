@@ -103,51 +103,26 @@ static inline uint32_t calc_block_size(struct htp_binary_context * bctx, uint32_
 
 // Out-of-line compute micro-kernels
 
-typedef void (*compute_scalar_dma_t)(
+typedef void (*compute_scalar_t)(
     uint8_t * dst, const uint8_t * src0, const void * s1_table,
     uint32_t cur_i11, uint32_t ne11, uint32_t n_rows,
     size_t dst_stride, size_t src0_stride, uint32_t ne00);
 
-#define DEFINE_COMPUTE_SCALAR_DMA(NAME, TYPE, HVX_STMT)         \
-static void compute_scalar_dma_##NAME(                          \
-    uint8_t * dst, const uint8_t * src0, const void * s1_table, \
+#define DEFINE_COMPUTE_SCALAR(NAME, TYPE, HVX_STMT)              \
+static void compute_scalar_##NAME(                               \
+    uint8_t * dst, const uint8_t * src0, const void * s1_table,  \
     uint32_t cur_i11, uint32_t ne11, uint32_t n_rows,           \
-    size_t dst_stride, size_t src0_stride, uint32_t ne00) {     \
-    const TYPE * table = (const TYPE *) s1_table;               \
-    for (uint32_t r = 0; r < n_rows; r++) {                     \
-        uint8_t * r_dst = dst + r * dst_stride;                 \
-        const uint8_t * r_src0 = src0 + r * src0_stride;        \
-        TYPE val = table[cur_i11];                              \
-        HVX_STMT;                                               \
-        if (ne11 > 1 && ++cur_i11 == ne11) {                    \
-            cur_i11 = 0;                                        \
-        }                                                       \
-    }                                                           \
-}
-
-DEFINE_COMPUTE_SCALAR_DMA(add_f32, float,    hvx_add_scalar_f32_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(add_f16, _Float16, hvx_add_scalar_f16_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(sub_f32, float,    hvx_sub_scalar_f32_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(sub_f16, _Float16, hvx_sub_scalar_f16_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(mul_f32, float,    hvx_mul_scalar_f32_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(mul_f16, _Float16, hvx_mul_scalar_f16_aa(r_dst, r_src0, val, ne00))
-DEFINE_COMPUTE_SCALAR_DMA(div_f32, float,    hvx_mul_scalar_f32_aa(r_dst, r_src0, 1.0f / (val), ne00))
-DEFINE_COMPUTE_SCALAR_DMA(div_f16, _Float16, hvx_div_scalar_f16_aa(r_dst, r_src0, val, ne00))
-
-typedef void (*compute_scalar_t)(
-    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_ptr, uint32_t s1_stride,
-    uint32_t n_rows, size_t dst_stride, size_t src0_stride, uint32_t ne00);
-
-#define DEFINE_COMPUTE_SCALAR(NAME, TYPE, HVX_STMT)                                          \
-static void compute_scalar_##NAME(                                                           \
-    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_ptr, uint32_t s1_stride,       \
-    uint32_t n_rows, size_t dst_stride, size_t src0_stride, uint32_t ne00) {                 \
-    for (uint32_t r = 0; r < n_rows; r++) {                                                  \
-        uint8_t * r_dst = dst + r * dst_stride;                                              \
-        const uint8_t * r_src0 = src0 + r * src0_stride;                                     \
-        TYPE val = *(const TYPE *)(src1_ptr + r * s1_stride);                                \
-        HVX_STMT;                                                                            \
-    }                                                                                        \
+    size_t dst_stride, size_t src0_stride, uint32_t ne00) {      \
+    const TYPE * table = (const TYPE *) s1_table;                \
+    for (uint32_t r = 0; r < n_rows; r++) {                      \
+        uint8_t * r_dst = dst + r * dst_stride;                  \
+        const uint8_t * r_src0 = src0 + r * src0_stride;         \
+        TYPE val = table[cur_i11];                               \
+        HVX_STMT;                                                \
+        if (ne11 > 1 && ++cur_i11 == ne11) {                     \
+            cur_i11 = 0;                                         \
+        }                                                        \
+    }                                                            \
 }
 
 DEFINE_COMPUTE_SCALAR(add_f32, float,    hvx_add_scalar_f32_aa(r_dst, r_src0, val, ne00))
@@ -283,18 +258,22 @@ static void compute_add_id_f32(
     }
 }
 
-// 1a. Scalar src1 in VTCM via DMA (ne10 == 1)
-static void binary_thread_scalar_dma(unsigned int nth, unsigned int ith, void * data) {
+// 1. Scalar src1 in VTCM via DMA (ne10 == 1)
+static void binary_thread_scalar(unsigned int nth, unsigned int ith, void * data) {
     struct htp_binary_context * bctx = (struct htp_binary_context *) data;
     struct htp_ops_context * octx = bctx->octx;
     htp_binary_preamble;
+
+    const uint32_t elem_size = (src0->type == HTP_TYPE_F32) ? sizeof(float) : sizeof(_Float16);
+    const size_t plane_stride = (size_t) ne12 * ne11 * elem_size;
+    const size_t row_stride   = (size_t) ne11 * elem_size;
 
     const uint32_t row_size_bytes = bctx->row_size_bytes;
     const uint32_t start_row = bctx->row_start + bctx->nrows_per_thread * ith;
     const uint32_t end_row   = MIN(start_row + bctx->nrows_per_thread, bctx->row_start + bctx->total_rows);
     if (start_row >= end_row) return;
 
-    FARF(HIGH, "binary-scalar-dma: %d/%d (%u:%u) row-size %u (%u)",
+    FARF(HIGH, "binary-scalar: %d/%d (%u:%u) row-size %u (%u)",
          ith, nth, start_row, end_row, nb01, bctx->dst_row_size_aligned);
 
     const struct htp_binary_vtcm_layout * layout = &bctx->vtcm_layout;
@@ -330,7 +309,7 @@ static void binary_thread_scalar_dma(unsigned int nth, unsigned int ith, void * 
     }
 
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
-    compute_scalar_dma_t compute = (compute_scalar_dma_t) bctx->compute;
+    compute_scalar_t compute = (compute_scalar_t) bctx->compute;
 
     for (uint32_t ir = start_row; ir < end_row; ) {
         uint32_t current_block_size = calc_block_size(bctx, ir, end_row, ne01, ne02);
@@ -347,9 +326,8 @@ static void binary_thread_scalar_dma(unsigned int nth, unsigned int ith, void * 
         uint32_t i13 = fastmodulo(i03, ne13, &bctx->src1_dim3_div);
         uint32_t i12 = fastmodulo(i02, ne12, &bctx->src1_dim2_div);
         uint32_t i11 = fastmodulo(i01, ne11, &bctx->src1_dim1_div);
-        const uint32_t scalar_size = row_size_bytes / ne00;
         const uint8_t * scalar_table = (const uint8_t *) s1_table +
-            (((size_t) i13 * ne12 * ne11 + (size_t) i12 * ne11) * scalar_size);
+            i13 * plane_stride + i12 * row_stride;
 
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir);
         compute(d_spad, s0_spad, scalar_table, i11, ne11, current_block_size,
@@ -370,97 +348,6 @@ static void binary_thread_scalar_dma(unsigned int nth, unsigned int ith, void * 
             dma_addr_t s0_next = src0->data + p03 * nb03 + p02 * nb02 + p01 * nb01;
             dma_queue_push(dma_q, dma_make_data(s0_spad, s0_next), bctx->src0_row_size_aligned, nb01, row_size_bytes,
                                                                next_block_size);
-            ir_prefetch += next_block_size;
-        }
-        ir += current_block_size;
-    }
-
-    dma_queue_flush(dma_q);
-}
-
-// 1b. Scalar src1 dynamic / pointer (ne10 == 1)
-static void binary_thread_scalar(unsigned int nth, unsigned int ith, void * data) {
-    struct htp_binary_context * bctx = (struct htp_binary_context *) data;
-    struct htp_ops_context * octx = bctx->octx;
-    htp_binary_preamble;
-
-    const uint32_t row_size_bytes = bctx->row_size_bytes;
-    const uint32_t start_row = bctx->row_start + bctx->nrows_per_thread * ith;
-    const uint32_t end_row   = MIN(start_row + bctx->nrows_per_thread, bctx->row_start + bctx->total_rows);
-    if (start_row >= end_row) return;
-
-    FARF(HIGH, "binary-scalar: %d/%d (%u:%u) row-size %u (%u)",
-         ith, nth, start_row, end_row, nb01, bctx->dst_row_size_aligned);
-
-    const struct htp_binary_vtcm_layout * layout = &bctx->vtcm_layout;
-    uint8_t * src0_spad_base = VTCM_LAYOUT_PTR(uint8_t, bctx->vtcm_base, layout->off_src0) + (ith * layout->src0_bytes_per_thread);
-    uint8_t * dst_spad_base  = VTCM_LAYOUT_PTR(uint8_t, bctx->vtcm_base, layout->off_dst)  + (ith * layout->dst_bytes_per_thread);
-    size_t src0_spad_half    = layout->src0_spad_half_size;
-    size_t dst_spad_half     = layout->dst_spad_half_size;
-
-    dma_queue * dma_q = octx->ctx->dma[ith];
-    uint32_t ir_prefetch = start_row;
-    int spad_idx = 0;
-
-    for (int k = 0; k < 2 && ir_prefetch < end_row; k++) {
-        uint32_t current_block_size = calc_block_size(bctx, ir_prefetch, end_row, ne01, ne02);
-        uint32_t i03, i02, i01, rem;
-        i03 = fastdiv(ir_prefetch, &bctx->src0_dim12_div);
-        rem = ir_prefetch - i03 * (ne02 * ne01);
-        i02 = fastdiv(rem, &bctx->src0_dim1_div);
-        i01 = rem - i02 * ne01;
-
-        dma_addr_t src0_curr = src0->data + i03 * nb03 + i02 * nb02 + i01 * nb01;
-        dma_addr_t dst_curr  = dst->data  + i03 * nb3  + i02 * nb2  + i01 * nb1;
-
-        uint8_t * s0_spad = src0_spad_base + spad_idx * src0_spad_half;
-        uint8_t * d_spad  = dst_spad_base  + spad_idx * dst_spad_half;
-
-        dma_queue_push(dma_q, dma_make_data(dst_curr, d_spad), nb1, bctx->dst_row_size_aligned, row_size_bytes, 0);
-        dma_queue_push(dma_q, dma_make_data(s0_spad, src0_curr), bctx->src0_row_size_aligned, nb01, row_size_bytes, current_block_size);
-        ir_prefetch += current_block_size;
-        spad_idx ^= 1;
-    }
-
-    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
-    compute_scalar_t compute = (compute_scalar_t) bctx->compute;
-
-    for (uint32_t ir = start_row; ir < end_row; ) {
-        uint32_t current_block_size = calc_block_size(bctx, ir, end_row, ne01, ne02);
-
-        uint8_t * d_spad  = (uint8_t *) dma_queue_pop(dma_q).src;
-        uint8_t * s0_spad = (uint8_t *) dma_queue_pop(dma_q).dst;
-
-        uint32_t i03, i02, i01, rem;
-        i03 = fastdiv(ir, &bctx->src0_dim12_div);
-        rem = ir - i03 * (ne02 * ne01);
-        i02 = fastdiv(rem, &bctx->src0_dim1_div);
-        i01 = rem - i02 * ne01;
-
-        uint32_t i13 = fastmodulo(i03, ne13, &bctx->src1_dim3_div);
-        uint32_t i12 = fastmodulo(i02, ne12, &bctx->src1_dim2_div);
-        uint32_t i11 = fastmodulo(i01, ne11, &bctx->src1_dim1_div);
-
-        const uint8_t * src1_ptr = (const uint8_t *)(uintptr_t) src1->data + i13 * nb13 + i12 * nb12 + i11 * nb11;
-        uint32_t s1_stride = (ne11 == 1) ? 0 : nb11;
-
-        htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir);
-        compute(d_spad, s0_spad, src1_ptr, s1_stride, current_block_size,
-                bctx->dst_row_size_aligned, bctx->src0_row_size_aligned, ne00);
-        htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir);
-
-        dma_addr_t dst_curr = dst->data + i03 * nb3 + i02 * nb2 + i01 * nb1;
-        dma_queue_push(dma_q, dma_make_data(dst_curr, d_spad), nb1, bctx->dst_row_size_aligned, row_size_bytes, current_block_size);
-
-        if (ir_prefetch < end_row) {
-            uint32_t next_block_size = calc_block_size(bctx, ir_prefetch, end_row, ne01, ne02);
-            uint32_t p03, p02, p01, prem;
-            p03 = fastdiv(ir_prefetch, &bctx->src0_dim12_div);
-            prem = ir_prefetch - p03 * (ne02 * ne01);
-            p02 = fastdiv(prem, &bctx->src0_dim1_div);
-            p01 = prem - p02 * ne01;
-            dma_addr_t s0_next = src0->data + p03 * nb03 + p02 * nb02 + p01 * nb01;
-            dma_queue_push(dma_q, dma_make_data(s0_spad, s0_next), bctx->src0_row_size_aligned, nb01, row_size_bytes, next_block_size);
             ir_prefetch += next_block_size;
         }
         ir += current_block_size;
@@ -1239,19 +1126,6 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     const size_t src1_row_size_aligned = kparams->src1_row_size_aligned;
     const size_t dst_row_size_aligned  = kparams->dst_row_size_aligned;
 
-    if (htp_tensor_is_extended(src1)) {
-        if (kparams->kernel_type != HTP_BINARY_KERNEL_SAME_SHAPE &&
-            kparams->kernel_type != HTP_BINARY_KERNEL_ROW_BCAST &&
-            kparams->kernel_type != HTP_BINARY_KERNEL_SCALAR_DMA &&
-            kparams->kernel_type != HTP_BINARY_KERNEL_ADD_ID) {
-            return HTP_STATUS_NO_SUPPORT;
-        }
-    }
-
-    if (octx->op == HTP_OP_ADD_ID && htp_tensor_is_extended(octx->src[2])) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     struct htp_binary_context bctx;
     bctx.vtcm_base = (uint8_t *) octx->ctx->vtcm_base;
     htp_binary_vtcm_layout_build(&bctx.vtcm_layout, kparams, octx->ctx->vtcm_size);
@@ -1264,7 +1138,7 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     uint8_t * vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, bctx.vtcm_base, bctx.vtcm_layout.off_src1);
     if (kparams->kernel_type == HTP_BINARY_KERNEL_ROW_BCAST) {
         dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, src1->ne[0] * elem_size, 1);
-    } else if (kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR_DMA) {
+    } else if (kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR) {
         const uint64_t src1_size64 = (uint64_t) src1->ne[0] * src1->ne[1] * src1->ne[2] * src1->ne[3] * elem_size;
         if (src1_size64 > bctx.vtcm_layout.src1_size || src1_size64 > SIZE_MAX) {
             return HTP_STATUS_INVAL_PARAMS;
@@ -1302,6 +1176,7 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     bool dst_contig_dim2  = (dst->nb[3]  == src0->ne[2] * dst->nb[2]);
 
     bctx.split_at_ne01 = (octx->op == HTP_OP_ADD_ID) ||
+        (kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR) ||
         ((src0->ne[2] > 1) && ((src1->ne[1] > 1) || (src1->ne[2] > 1) || !src0_contig_dim1 || !dst_contig_dim1));
     bctx.split_at_ne02 = (src0->ne[3] > 1) && ((src1->ne[2] > 1) || (src1->ne[3] > 1) || !src0_contig_dim2 || !dst_contig_dim2);
 
@@ -1345,26 +1220,6 @@ static int execute_op_binary(struct htp_ops_context * octx) {
                     case HTP_OP_SUB: compute_func = compute_row_bcast_sub_f16; break;
                     case HTP_OP_MUL: compute_func = compute_row_bcast_mul_f16; break;
                     case HTP_OP_DIV: compute_func = compute_row_bcast_div_f16; break;
-                    default: break;
-                }
-            }
-            break;
-        case HTP_BINARY_KERNEL_SCALAR_DMA:
-            worker_func = binary_thread_scalar_dma;
-            if (src0_type == HTP_TYPE_F32) {
-                switch (octx->op) {
-                    case HTP_OP_ADD: compute_func = compute_scalar_dma_add_f32; break;
-                    case HTP_OP_SUB: compute_func = compute_scalar_dma_sub_f32; break;
-                    case HTP_OP_MUL: compute_func = compute_scalar_dma_mul_f32; break;
-                    case HTP_OP_DIV: compute_func = compute_scalar_dma_div_f32; break;
-                    default: break;
-                }
-            } else if (src0_type == HTP_TYPE_F16) {
-                switch (octx->op) {
-                    case HTP_OP_ADD: compute_func = compute_scalar_dma_add_f16; break;
-                    case HTP_OP_SUB: compute_func = compute_scalar_dma_sub_f16; break;
-                    case HTP_OP_MUL: compute_func = compute_scalar_dma_mul_f16; break;
-                    case HTP_OP_DIV: compute_func = compute_scalar_dma_div_f16; break;
                     default: break;
                 }
             }
@@ -1445,7 +1300,7 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     bctx.compute = compute_func;
 
     if (kparams->kernel_type == HTP_BINARY_KERNEL_ROW_BCAST ||
-        kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR_DMA ||
+        kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR ||
         kparams->kernel_type == HTP_BINARY_KERNEL_ADD_ID) {
         dma_queue_pop(dma_q);
     }
