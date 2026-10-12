@@ -67,6 +67,12 @@ class VllmDecision2Model(Qwen3Model):
         for name, data in load_file(self.dir_model / "decision_head.safetensors").items():
             yield "decision_head." + name, data
 
+    def tensor_force_quant(self, name: str, new_name: str, bid: int | None, n_dims: int) -> gguf.GGMLQuantizationType | bool:
+        # the head is computed in F32
+        if new_name.startswith("decision."):
+            return gguf.GGMLQuantizationType.F32
+        return super().tensor_force_quant(name, new_name, bid, n_dims)
+
     def set_vocab(self):
         super().set_vocab()
         self.gguf_writer.add_chat_template([{"name": "systemone", "template": self._systemone_template()}])

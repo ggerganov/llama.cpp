@@ -135,6 +135,7 @@ private:
     void fill_task_laya(llama_tokens & tokens, const server_decision_question & question, server_task & task) const;
 
     float get_temperature(const server_decision_question & question) const;
+    double get_decision_confidence(server_decision_question_type type, const std::vector<double> & probs) const;
 };
 
 // group the tasks so that the common prefix of their prompts is evaluated only once

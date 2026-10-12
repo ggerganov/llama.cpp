@@ -759,6 +759,32 @@ static double decision_confidence_score(const std::vector<double> & probs) {
     return std::max(0.0, 1.0 - dist / dist_uniform);
 }
 
+// VLLM_DECISION2: normalized entropy, as in the reference implementation
+static double decision_confidence_entropy(const std::vector<double> & probs) {
+    if (probs.size() < 2) {
+        return 1.0;
+    }
+    double entropy = 0.0;
+    for (const double p : probs) {
+        if (p > 0.0) {
+            entropy -= p * std::log(p);
+        }
+    }
+    return std::max(0.0, std::min(1.0, 1.0 - entropy / std::log((double) probs.size())));
+}
+
+double server_decision_context::get_decision_confidence(server_decision_question_type question_type, const std::vector<double> & probs) const {
+    if (type == COMMON_DECISION_TYPE_VLLM_DECISION2) {
+        return decision_confidence_entropy(probs);
+    }
+    switch (question_type) {
+        case SERVER_DECISION_QUESTION_CHOICE: return decision_confidence_choice(probs);
+        case SERVER_DECISION_QUESTION_SCORE:  return decision_confidence_score(probs);
+        case SERVER_DECISION_QUESTION_NOUL:   break;
+    }
+    throw std::runtime_error("no confidence for this question type");
+}
+
 json server_decision_context::format_answer(const server_decision_question & question, const std::vector<std::vector<float>> & scores) const {
     const size_t n = n_outputs(question);
     if (scores.size() != n_variants(question)) {
@@ -824,7 +850,7 @@ json server_decision_context::format_answer(const server_decision_question & que
         const size_t best = std::max_element(probs.begin(), probs.end()) - probs.begin();
         answer["choice"]        = question.options[best].key;
         answer["probabilities"] = probabilities;
-        answer["confidence"]    = decision_confidence_choice(probs);
+        answer["confidence"]    = get_decision_confidence(question.type, probs);
     } else {
         double expected = 0.0;
         json legend = json::object();
@@ -835,7 +861,7 @@ json server_decision_context::format_answer(const server_decision_question & que
         answer["score"]         = expected;
         answer["legend"]        = legend;
         answer["probabilities"] = probabilities;
-        answer["confidence"]    = decision_confidence_score(probs);
+        answer["confidence"]    = get_decision_confidence(question.type, probs);
     }
     return answer;
 }
