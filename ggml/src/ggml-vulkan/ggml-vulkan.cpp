@@ -1059,13 +1059,15 @@ vk_context ggml_vk_create_temporary_context(vk_command_pool& p) {
 }
 
 static vk_semaphore * ggml_vk_create_binary_semaphore(ggml_backend_vk_context * ctx) {
-    VK_LOG_DEBUG("ggml_vk_create_timeline_semaphore()");
-    vk::SemaphoreTypeCreateInfo tci{ vk::SemaphoreType::eBinary, 0 };
-    vk::SemaphoreCreateInfo ci{};
-    ci.setPNext(&tci);
-    vk::Semaphore semaphore = ctx->device->device.createSemaphore(ci);
-    ctx->gc.semaphores.push_back({ semaphore, 0 });
-    return &ctx->gc.semaphores[ctx->gc.semaphores.size() - 1];
+    VK_LOG_DEBUG("ggml_vk_create_binary_semaphore()");
+    if (ctx->binary_semaphore_idx >= ctx->gc.semaphores.size()) {
+        vk::SemaphoreTypeCreateInfo tci{ vk::SemaphoreType::eBinary, 0 };
+        vk::SemaphoreCreateInfo ci{};
+        ci.setPNext(&tci);
+        vk::Semaphore semaphore = ctx->device->device.createSemaphore(ci);
+        ctx->gc.semaphores.push_back({ semaphore, 0 });
+    }
+    return &ctx->gc.semaphores[ctx->binary_semaphore_idx++];
 }
 
 static vk_semaphore * ggml_vk_create_timeline_semaphore(ggml_backend_vk_context * ctx) {
@@ -5227,6 +5229,7 @@ void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     ctx->device = ggml_vk_get_device(idx);
 
     ctx->semaphore_idx = 0;
+    ctx->binary_semaphore_idx = 0;
     ctx->event_idx = 0;
 
     ctx->prealloc_size_x = 0;
@@ -12554,10 +12557,7 @@ void ggml_vk_graph_cleanup(ggml_backend_vk_context * ctx) {
         ggml_vk_command_pool_cleanup(ctx->device, ctx->transfer_cmd_pool);
     }
 
-    for (size_t i = 0; i < ctx->gc.semaphores.size(); i++) {
-        ctx->device->device.destroySemaphore({ ctx->gc.semaphores[i].s });
-    }
-    ctx->gc.semaphores.clear();
+    ctx->binary_semaphore_idx = 0;
 
     for (size_t i = 0; i < ctx->gc.tl_semaphores.size(); i++) {
         ctx->device->device.destroySemaphore({ ctx->gc.tl_semaphores[i].s });
@@ -12604,6 +12604,11 @@ void ggml_vk_cleanup(ggml_backend_vk_context * ctx) {
         ctx->device->device.destroyEvent(event);
     }
     ctx->gc.events.clear();
+
+    for (auto & sem : ctx->gc.semaphores) {
+        ctx->device->device.destroySemaphore(sem.s);
+    }
+    ctx->gc.semaphores.clear();
 
     ctx->device->device.destroyFence(ctx->fence);
     ctx->device->device.destroyFence(ctx->almost_ready_fence);
@@ -15920,7 +15925,7 @@ static int ggml_vk_comm_export(ggml_backend_vk_comm_context * comm, size_t i) {
     return fd;
 }
 
-// Fresh semaphore per import: it is destroyed in ggml_vk_graph_cleanup, after the wait completed.
+// Pooled semaphore: reused only after ggml_vk_graph_cleanup, i.e. after the wait completed.
 static vk::Semaphore ggml_vk_comm_import(ggml_backend_vk_comm_context * comm, size_t i, int fd) {
     const vk::Semaphore sem = ggml_vk_create_binary_semaphore(comm->vkctx[i])->s;
     VkImportSemaphoreFdInfoKHR isi{};
