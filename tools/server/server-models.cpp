@@ -65,22 +65,9 @@ static void request_child_exit(server_subproc & proc) {
 
 namespace server_models_metrics_helper {
 
-// Placeholder metrics skeleton for unloaded/sleeping/failed models in router mode.
-static json placeholder_metrics() {
-    return json{
-        {"context_max", 0},
-        {"tasks", json{{"processing", 0}, {"queued", 0}}},
-        {"prompt", json{{"tokens_total", 0}, {"tokens_cached_total", 0}}},
-        {"prediction", json{{"tokens_total", 0}}},
-        {"decode", json{{"total", 0}, {"n_tokens_max", 0}, {"busy_slots_per_decode", 0.0}, {"speculative", json{{"draft_tokens_total", 0}, {"verification_steps_total", 0}, {"accepted_tokens", json{{"total", 0}}}}}}},
-        {"kvcache", json{{"active_tokens", 0}}},
-        {"slots", json::array()},
-        {"memory", json{{"context_bytes", 0}, {"model_bytes", 0}}},
-    };
-}
-
 // Helper: parse child /metrics response, accepting old array or new object format.
-static json parse_child_metrics(const std::string &body) {
+// Logs a warning on failure and returns empty json::object().
+static json parse_child_metrics(const std::string &body, int child_port) {
     try {
         auto resp = json::parse(body);
         if (resp.is_object() && resp.contains("metrics")) {
@@ -92,14 +79,18 @@ static json parse_child_metrics(const std::string &body) {
                 return m;
             }
         }
-    } catch (const std::exception &) {
+    } catch (const std::exception &e) {
+        SRV_WRN("failed to parse child /metrics from port %d: %s", child_port, e.what());
     }
-    return placeholder_metrics();
+    return json::object();
 }
 
 // Parse model list from request, resolving aliases and "all" expansion.
-static std::vector<std::string> parse_model_list(server_models &models,
-                                                  const std::string &name_param) {
+// Returns {model_names, all_meta_snapshot, alias_to_name_map} for reuse downstream.
+using model_list_result = std::tuple<std::vector<std::string>, std::vector<server_model_meta>,
+                                     std::unordered_map<std::string, std::string>>;
+static model_list_result parse_model_list(server_models &models,
+                                          const std::string &name_param) {
     // no model param: reject with 400
     if (name_param.empty()) {
         auto error_res = std::make_unique<server_http_res>();
@@ -143,7 +134,7 @@ static std::vector<std::string> parse_model_list(server_models &models,
         throw std::runtime_error(err->data);
     }
 
-    // snapshot all models under the mutex (thread-safe, fixes CRITICAL-1/2)
+    // single snapshot under the mutex
     auto all_meta = models.get_all_meta();
 
     // build alias->canonical map from snapshot
@@ -167,7 +158,7 @@ static std::vector<std::string> parse_model_list(server_models &models,
                         model_names.push_back(meta.name);
                     }
                 }
-                return model_names;
+                return {model_names, all_meta, alias_to_name};
             }
         }
     }
@@ -180,49 +171,80 @@ static std::vector<std::string> parse_model_list(server_models &models,
         model_names.push_back(mname);
     }
 
-    return model_names;
+    return {model_names, all_meta, alias_to_name};
 }
 
 // Aggregate metrics for all requested models in router mode.
 static std::unique_ptr<server_http_res> router_metrics_json(server_models &models,
                                                              const server_http_req &req,
-                                                             int32_t timeout_read) {
+                                                             int32_t timeout_read,
+                                                             int32_t timeout_write) {
     std::vector<std::string> model_names;
+    std::vector<server_model_meta> all_meta;
     try {
-        model_names = parse_model_list(models, req.get_param("model"));
+        model_list_result parsed = parse_model_list(models, req.get_param("model"));
+        model_names = std::move(std::get<0>(parsed));
+        all_meta = std::move(std::get<1>(parsed));
+        // std::get<2>(parsed) alias map not needed here
     } catch (const std::exception &) {
         throw;
+    }
+
+    // reject if any requested name is not a registered model or alias
+    for (const auto &model_name : model_names) {
+        bool found = false;
+        for (const auto &m : all_meta) {
+            if (m.name == model_name) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            auto res_err = std::make_unique<server_http_res>();
+            res_err->status = 400;
+            res_err->content_type = "application/json";
+            res_err->data = json{{"error",
+                                   json{{"code", 400},
+                                        {"type", "invalid_request_error"},
+                                        {"message", "one or more requested models not found"}}}}
+                              .dump();
+            return res_err;
+        }
     }
 
     json active    = json::array();
     json available = json::array();
     json wait      = json::array();
+    json error     = json::array();
 
     for (const auto &model_name : model_names) {
         json entry = json{{"model", model_name}};
 
-        // find the snapshot entry for this model
-        auto all_meta = models.get_all_meta();
-        const server_model_meta *meta = nullptr;
-        for (const auto &m : all_meta) {
-            if (m.name == model_name) {
-                meta = &m;
-                break;
-            }
-        }
-
-        if (meta == nullptr) {
-            entry["status"]     = "not_found";
-            entry["metrics"]    = json::object();
+        // live status check under lock (snapshot gave us metadata, live check gives
+        // fresh status — consistent since we only use snapshot for metadata lookup)
+        auto live_meta = models.get_meta(model_name);
+        if (!live_meta.has_value()) {
+            entry["status"] = "unloaded";
             available.push_back(entry);
             continue;
         }
 
-        // re-validate status under lock (fixes CRITICAL-3: TOCTOU)
-        auto live_meta = models.get_meta(model_name);
-        if (!live_meta.has_value() || !live_meta->is_ready_or_sleep()) {
-            entry["status"]     = "unloaded";
-            entry["metrics"]    = placeholder_metrics();
+        // failed models go into the error collection
+        if (live_meta->is_failed()) {
+            entry["status"]   = "failed";
+            entry["exit_code"] = live_meta->exit_code;
+            error.push_back(entry);
+            continue;
+        }
+
+        if (live_meta->status == SERVER_MODEL_STATUS_LOADING) {
+            entry["status"] = "loading";
+            wait.push_back(entry);
+            continue;
+        }
+
+        if (!live_meta->is_ready_or_sleep()) {
+            entry["status"] = "unloaded";
             available.push_back(entry);
             continue;
         }
@@ -231,8 +253,8 @@ static std::unique_ptr<server_http_res> router_metrics_json(server_models &model
                               ? "loaded"
                               : "sleeping";
 
+        // sleeping model: no metrics available
         if (live_meta->status != SERVER_MODEL_STATUS_LOADED) {
-            entry["metrics"] = placeholder_metrics();
             active.push_back(entry);
             continue;
         }
@@ -240,14 +262,17 @@ static std::unique_ptr<server_http_res> router_metrics_json(server_models &model
         // proxy to running child (port validated at line below)
         int child_port = live_meta->port;
         if (child_port <= 0) {
-            entry["metrics"] = placeholder_metrics();
+            entry["status"] = "no_child";
             active.push_back(entry);
             continue;
         }
 
         httplib::Client cli(CHILD_ADDR, child_port);
-        cli.set_connection_timeout(timeout_read, 5);
-        cli.set_read_timeout(timeout_read, 0);
+        // Use a short connection timeout for child health checks; do not reuse
+        // the user-facing --timeout which can be as high as 3600s.
+        static constexpr int kChildConnTimeout = 5;
+        cli.set_connection_timeout(kChildConnTimeout, 0);
+        cli.set_read_timeout(timeout_write, 0);
         cli.set_write_timeout(timeout_read, 0);
         std::string path = "/metrics";
         if (!req.query_string.empty()) {
@@ -255,10 +280,28 @@ static std::unique_ptr<server_http_res> router_metrics_json(server_models &model
         }
         httplib::Headers headers = {{"Accept", "application/json"}};
         auto result = cli.Get(path.c_str(), headers);
-        if (result && result->status == 200 && (size_t)result->body.size() <= 4 * 1024 * 1024) {
-            entry["metrics"] = parse_child_metrics(result->body);
+        if (result && result->status == 200 && (size_t)result->body.size() <= 64 * 1024) {
+            entry["metrics"] = parse_child_metrics(result->body, child_port);
+        } else if (result && result->status == 503) {
+            // check if the 503 is "Loading model" (still initializing)
+            try {
+                json err = json::parse(result->body);
+                std::string msg = json_value(err, "error.message", std::string());
+                if (msg == "Loading model") {
+                    entry["status"] = "loading";
+                    wait.push_back(entry);
+                    continue;
+                }
+            } catch (const std::exception &) {
+                // not valid JSON
+            }
+            // fall through to generic failure below
         } else {
-            entry["metrics"] = placeholder_metrics();
+            // non-503 failure
+        }
+        if (result && result->status != 200) {
+            SRV_WRN("failed to get /metrics from child port %d, status=%d", child_port, result->status);
+            entry["metrics"] = json::object();
         }
         active.push_back(entry);
     }
@@ -267,6 +310,7 @@ static std::unique_ptr<server_http_res> router_metrics_json(server_models &model
     wrapped["active"]    = active;
     wrapped["available"] = available;
     wrapped["wait"]      = wait;
+    wrapped["error"]     = error;
     auto res = std::make_unique<server_http_res>();
     res->status         = 200;
     res->content_type   = "application/json";
@@ -2192,22 +2236,23 @@ void server_models_routes::init_routes() {
     };
 
     this->proxy_get = [this](const server_http_req & req) {
-        // server-global endpoints (not per-model); skip model name validation
-        if (req.path == "/metrics" || req.path == "/slots") {
+        // /metrics JSON aggregation for router mode (JSON-only feature)
+        if (req.path == "/metrics") {
 #ifdef ENABLE_EXPERIMENTAL_METRICS
             // detect JSON accept header
             bool json_output = is_json_accept(req.headers);
 
-            // /metrics JSON aggregation for router mode (JSON-only feature)
-            if (req.path == "/metrics" && json_output) {
+            if (json_output) {
                 try {
-                    return server_models_metrics_helper::router_metrics_json(models, req, models.base_params.timeout_read);
+                    return server_models_metrics_helper::router_metrics_json(models, req, models.base_params.timeout_read, models.base_params.timeout_write);
                 } catch (const std::exception &e) {
-                    // parse_model_list threw — response data already contains error JSON
+                    // parse_model_list threw — wrap in JSON error object
                     auto res = std::make_unique<server_http_res>();
                     res->status = 400;
                     res->content_type = "application/json";
-                    res->data = std::string(e.what());
+                    res->data = json{{"error",
+                        json{{"code", 400}, {"type", "invalid_request"}, {"message", e.what()}}}}
+                        .dump();
                     return res;
                 }
             }

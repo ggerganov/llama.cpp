@@ -4714,8 +4714,8 @@ void server_routes::init_routes() {
             return res;
         }
 
-        // detect JSON accept header (case-insensitive)
 #ifdef ENABLE_EXPERIMENTAL_METRICS
+        // detect JSON accept header (case-insensitive)
         bool json_output = is_json_accept(req.headers);
 #endif
 
@@ -4728,19 +4728,22 @@ void server_routes::init_routes() {
             res->status = 200;
 #ifdef ENABLE_EXPERIMENTAL_METRICS
             if (json_output) {
+				// JSON path is read-only (no bucket reset to avoid breaking Prometheus rates)
                 res->content_type = "application/json";
                 res->data = tmp.to_json().dump();
             } else {
                 res->content_type = "text/plain; version=0.0.4";
                 res->data = tmp.to_metrics();
+				// Prometheus text path resets bucket counters for the next scrape interval
+                cached_metrics.reset_bucket();
+                should_reset_buckets = true;
             }
 #else
             res->content_type = "text/plain; version=0.0.4";
             res->data = tmp.to_metrics();
+			cached_metrics.reset_bucket();
+			should_reset_buckets = true;
 #endif
-            // the gauges are averaged over the window between two scrapes
-            cached_metrics.reset_bucket();
-            should_reset_buckets = true;
         };
 
         if (queue_tasks.is_sleeping()) {

@@ -12,14 +12,18 @@
 
 #include <sstream>
 #include <cmath>
-#include <iomanip>
+
 
 // Helper to serialize a double with exactly 1 decimal place in JSON output.
 // std::round(x*10)/10 produces artifacts like 3.3000000000000003;
-// snprintf("%.1f") formats the rounded value as a string, then we parse it
-// back into a double so the JSON library writes it as a number.
+// Round a double to 1 decimal place for stable JSON output.
+// Guard against non-finite inputs (NaN, Infinity) to avoid
+// snprintf("nan") / std::stod() crashes.
 static json json_round1(double value) {
-    char buf[16];
+    if (!std::isfinite(value)) {
+        return json(0.0);
+    }
+    char buf[32];
     std::snprintf(buf, sizeof(buf), "%.1f", value);
     return json(std::stod(buf));
 }
@@ -1526,6 +1530,7 @@ json server_task_result_slots::to_json() {
     return slots_data;
 }
 
+#ifdef ENABLE_EXPERIMENTAL_METRICS
 static const char * slot_state_name(int state) {
     switch (state) {
         case 0:  return "idle";
@@ -1538,11 +1543,7 @@ static const char * slot_state_name(int state) {
     }
 }
 
-#ifdef ENABLE_EXPERIMENTAL_METRICS
 static json server_task_result_metrics_to_json_full(const server_task_result_metrics &m) {
-    double n_busy = m.metrics.n_decode > 0
-        ? (double)m.metrics.n_busy_slots / (double)m.metrics.n_decode
-        : 0.0;
 
     // per-slot context ceiling (all slots share the context window equally)
     double context_max_slot = 0.0;
@@ -1557,18 +1558,13 @@ static json server_task_result_metrics_to_json_full(const server_task_result_met
     // slots: moved out of kvcache, each slot reports its own utilization
     json slots = json::array();
     for (const auto & slot : m.metrics.kvcache_slots) {
-        double ctx_util = 0.0;
-        if (context_max_slot > 0) {
-            ctx_util = (double)slot.n_tokens / context_max_slot * 100.0;
-        }
         slots.push_back(json{
             {"slot",            slot.slot_id},
             {"state",           std::to_string(slot.state) + " - " + slot_state_name(slot.state)},
             {"tokens",          slot.n_tokens},
-            {"context_max",     (int)std::round(context_max_slot)},
-            {"context_utilization", json_round1(std::round(ctx_util * 10.0) / 10.0)},
+            {"context_max",     (int64_t)std::round(context_max_slot)},
             {"prompt_cached_tokens",    slot.n_prompt_cached},
-            {"prompt_new_tokens",       slot.n_prompt_processed - slot.n_prompt_cached},
+            {"prompt_new_tokens",       std::max(0, (int)slot.n_prompt_processed - (int)slot.n_prompt_cached)},
             {"generated_tokens",        slot.n_gen},
             {"elapsed_seconds",         json_round1(std::max(0.0, (ggml_time_us() - slot.t_start) / 1e6))},
         });
@@ -1605,9 +1601,9 @@ static json server_task_result_metrics_to_json_full(const server_task_result_met
     };
 
     json decode = json{
-        {"total",                m.metrics.n_decode},
-        {"n_tokens_max",         m.metrics.n_tokens_max},
-        {"busy_slots_per_decode", json_round1(std::round(n_busy * 10.0) / 10.0)},
+        {"total",            m.metrics.n_decode},
+        {"n_tokens_max",     m.metrics.n_tokens_max},
+        {"n_busy_slots",     m.metrics.n_busy_slots},
     };
 
     // speculative section only when draft tokens were generated
@@ -1618,7 +1614,7 @@ static json server_task_result_metrics_to_json_full(const server_task_result_met
         }
         decode["speculative"] = json{
             {"draft_tokens_total",     m.metrics.n_draft_tokens},
-            {"verification_steps_total", m.metrics.n_draft_verif_steps},
+            {"draft_steps_total", m.metrics.n_draft_verif_steps},
             {"accepted_tokens",        accepted},
         };
     }

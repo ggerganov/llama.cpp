@@ -42,11 +42,15 @@ using raw_buffer = std::vector<uint8_t>;
 #ifdef ENABLE_EXPERIMENTAL_METRICS
 inline bool is_json_accept(const std::map<std::string, std::string> & headers) {
     for (const auto & [key, value] : headers) {
-        std::string lk(key.begin(), key.end());
-        std::transform(lk.begin(), lk.end(), lk.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        if (lk == "accept" && value.find("application/json") != std::string::npos) {
-            return true;
+        // case-insensitive key == "accept" without allocation
+        if (key.size() != 6) {
+            continue;
+        }
+        if (std::equal(key.begin(), key.end(), "accept",
+                       [](unsigned char a, unsigned char b) { return std::tolower(a) == b; })) {
+            if (value.find("application/json") != std::string::npos) {
+                return true;
+            }
         }
     }
     return false;

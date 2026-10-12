@@ -55,6 +55,9 @@ target_link_libraries(${TARGET} PUBLIC server-context llama-ui cpp-httplib ${CMA
 
 add_dependencies(${TARGET} llama-ui-assets)
 
+# Note: ENABLE_EXPERIMENTAL_METRICS is re-defined on llama-server-impl for
+# clarity — server-context uses PRIVATE scope so the define does not propagate
+# transitively, but keeping it here makes the intent explicit.
 if(ENABLE_EXPERIMENTAL_METRICS)
     target_compile_definitions(${TARGET} PRIVATE ENABLE_EXPERIMENTAL_METRICS)
 endif()
@@ -72,5 +75,3 @@ install(TARGETS ${TARGET} RUNTIME)
 
 target_link_libraries(${TARGET} PRIVATE llama-server-impl)
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
-
-
