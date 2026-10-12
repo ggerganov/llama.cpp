@@ -7749,7 +7749,7 @@ static bool ggml_hexagon_precompute_im2col_params(
         return false;
     }
 
-    if (!ggml_is_contiguous(src1) || !ggml_is_contiguous(dst)) {
+    if (src1->nb[0] != sizeof(float) || !ggml_is_contiguous(dst)) {
         return false;
     }
 
@@ -7799,7 +7799,7 @@ static bool ggml_hexagon_precompute_im2col_params(
 
     const uint32_t dst_elem = (dst->type == GGML_TYPE_F16) ? sizeof(ggml_fp16_t) : sizeof(float);
 
-    bool is_patchembed = (s0 == (int32_t) KW && p0 == 0 && d0 == 1);
+    bool is_patchembed = ggml_is_contiguous(src1) && (s0 == (int32_t) KW && p0 == 0 && d0 == 1);
     if (is_2D) {
         is_patchembed = is_patchembed && (s1 == (int32_t) KH && p1 == 0 && d1 == 1);
     }
@@ -7927,7 +7927,7 @@ static bool ggml_hexagon_precompute_im2col_3d_params(
         return false;
     }
 
-    if (!ggml_is_contiguous(src1) || !ggml_is_contiguous(dst)) {
+    if (src1->nb[0] != sizeof(float) || !ggml_is_contiguous(dst)) {
         return false;
     }
 
@@ -7984,7 +7984,8 @@ static bool ggml_hexagon_precompute_im2col_3d_params(
 
     const uint32_t dst_elem = (dst->type == GGML_TYPE_F16) ? sizeof(ggml_fp16_t) : sizeof(float);
 
-    const bool is_patchembed = (s0 == (int32_t) KW && s1 == (int32_t) KH && s2 == (int32_t) KD &&
+    const bool is_patchembed = ggml_is_contiguous(src1) &&
+                               (s0 == (int32_t) KW && s1 == (int32_t) KH && s2 == (int32_t) KD &&
                                 p0 == 0 && p1 == 0 && p2 == 0 &&
                                 d0 == 1 && d1 == 1 && d2 == 1);
 

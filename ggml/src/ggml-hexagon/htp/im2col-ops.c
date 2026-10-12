@@ -110,14 +110,18 @@ static void im2col_blocked_dma_stage(struct htp_im2col_context * ictx, dma_queue
                                      float * srcb, const struct im2col_cursor * c) {
     const uint32_t in = c->in, ioh = c->ioh, c0 = c->c0;
     const struct htp_ops_context * octx = ictx->octx;
+    const struct htp_tensor * src1 = octx->src[1];
     const int32_t s0 = octx->op_params[0], s1 = octx->op_params[1];
     const int32_t p0 = octx->op_params[2], p1 = octx->op_params[3];
     const int32_t d1 = octx->op_params[5];
+    const bool is_2D = (octx->op_params[6] == 1);
     const uint32_t IC = ictx->IC, IH = ictx->IH, IW = ictx->IW;
     const uint32_t KH = ictx->KH;
     const uint32_t Wb = ictx->pe_wb;
-    const dma_addr_t src_data = octx->src[1]->data;
+    const dma_addr_t src_data = src1->data;
     const int32_t win0 = (int32_t) c0 * s0 - p0;
+    const size_t src_channel_stride = is_2D ? src1->nb[2] : src1->nb[1];
+    const size_t batch_offset        = is_2D ? (size_t) in * src1->nb[3] : (size_t) in * src1->nb[2];
 
     for (uint32_t ikh = 0; ikh < KH; ikh++) {
         const int32_t iih = (int32_t) ioh * s1 + (int32_t) ikh * d1 - p1;
@@ -136,9 +140,10 @@ static void im2col_blocked_dma_stage(struct htp_im2col_context * ictx, dma_queue
         }
         const uint32_t cpw = (uint32_t) (hi - lo);
         float * vdst = srcb + (size_t) ikh * Wb + lo;
-        const dma_addr_t vsrc = src_data + (size_t) (((in * IC) * IH + iih) * IW + (win0 + lo)) * sizeof(float);
+        const dma_addr_t vsrc = src_data + batch_offset +
+            (size_t) iih * src1->nb[1] + (size_t) (win0 + lo) * src1->nb[0];
         dma_queue_push(dma_q, dma_make_data(vdst, vsrc),
-                       (size_t) KH * Wb * sizeof(float), (size_t) IH * IW * sizeof(float),
+                       (size_t) KH * Wb * sizeof(float), src_channel_stride,
                        cpw * sizeof(float), IC);
     }
 }
@@ -437,7 +442,7 @@ static inline void im2col_3d_step_block(struct im2col_cursor * c, const struct h
 static void im2col_3d_blocked_dma_stage(struct htp_im2col_context * ictx, dma_queue * dma_q,
                                         float * srcb, const struct im2col_cursor * c) {
     const uint32_t in = c->in, iod = c->iod, ioh = c->ioh, c0 = c->c0;
-    struct htp_ops_context * octx = ictx->octx;
+    const struct htp_ops_context * octx = ictx->octx;
     const struct htp_tensor * src1 = octx->src[1];
     const int32_t s0 = octx->op_params[0], s1 = octx->op_params[1], s2 = octx->op_params[2];
     const int32_t p0 = octx->op_params[3], p1 = octx->op_params[4], p2 = octx->op_params[5];
@@ -447,8 +452,10 @@ static void im2col_3d_blocked_dma_stage(struct htp_im2col_context * ictx, dma_qu
     const uint32_t KD = ictx->KD, KH = ictx->KH;
     const uint32_t Wb = ictx->pe_wb;
     const int32_t win0 = (int32_t) c0 * s0 - p0;
-    const size_t src_channel_stride = (size_t) ID * IH * IW * sizeof(float);
+    const dma_addr_t src_data = src1->data;
+    const size_t src_channel_stride = src1->nb[3];
     const size_t vtcm_channel_stride = (size_t) KD * KH * Wb * sizeof(float);
+    const size_t batch_offset        = (size_t) (in * IC) * src1->nb[3];
 
     for (uint32_t ikd = 0; ikd < KD; ikd++) {
         const int32_t iid = (int32_t) iod * s2 + (int32_t) ikd * d2 - p2;
@@ -469,8 +476,10 @@ static void im2col_3d_blocked_dma_stage(struct htp_im2col_context * ictx, dma_qu
                 continue;
             }
             float * vdst = srcb + (size_t) (ikd * KH + ikh) * Wb + lo;
-            const dma_addr_t vsrc = src1->data +
-                (size_t) ((((in * IC) * ID + (uint32_t) iid) * IH + (uint32_t) iih) * IW + (win0 + lo)) * sizeof(float);
+            const dma_addr_t vsrc = src_data + batch_offset +
+                (size_t) iid * src1->nb[2] +
+                (size_t) iih * src1->nb[1] +
+                (size_t) (win0 + lo) * src1->nb[0];
             dma_queue_push(dma_q, dma_make_data(vdst, vsrc),
                            vtcm_channel_stride, src_channel_stride,
                            (size_t) (hi - lo) * sizeof(float), IC);
