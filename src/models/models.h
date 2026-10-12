@@ -287,6 +287,21 @@ struct llama_model_refact : public llama_model_base {
 };
 
 
+struct llama_model_deberta_v2 : public llama_model_base {
+    llama_model_deberta_v2(const llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    uint32_t n_buckets = 0;
+    uint32_t max_distance = 0;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model_deberta_v2 & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
 struct llama_model_bert : public llama_model_base {
     llama_model_bert(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;

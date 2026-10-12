@@ -1,4 +1,5 @@
 #include "server-decision.h"
+#include "../../src/unicode.h"
 
 #include "../../src/llama-ext.h" // staging API: llama_decision_order
 
@@ -142,6 +143,13 @@ void server_decision_context::init(const llama_model * model) {
         if (max_head_tokens == 0) {
             throw std::runtime_error("decision model has no valid max_head_tokens");
         }
+        n_options_max = 255;
+    } else if (model_type == COMMON_DECISION_TYPE_GLINER) {
+        const auto toks = common_tokenize(vocab, "[L]", false, true);
+        if (toks.size() != 1) {
+            throw std::runtime_error("GLiNER model has no [L] token");
+        }
+        token_marker = toks[0];
         n_options_max = 255;
     } else if (model_type == COMMON_DECISION_TYPE_CLEF) {
         n_options_max   = 255;
@@ -982,6 +990,121 @@ static const std::string CLEF_SEP           = "<<clef:sep>>";
 static const std::string CLEF_MARK_QUESTION = "<<clef:question>>";
 static const std::string CLEF_MARK_OPTION   = "<<clef:option>>";
 
+static std::string decision_gliner_lower(const std::string & word) {
+    const auto cpts = unicode_cpts_from_utf8(word);
+    std::string out;
+    for (size_t i = 0; i < cpts.size(); ++i) {
+        uint32_t cpt = cpts[i];
+        if (cpt == 0x130) {
+            out += "i\xCC\x87";
+            continue;
+        }
+        if (cpt == 0x3A3) {
+            size_t before = i, after = i + 1;
+            while (before && unicode_cpt_flags_from_cpt(cpts[before - 1]).is_accent_mark) {
+                --before;
+            }
+            while (after < cpts.size() && unicode_cpt_flags_from_cpt(cpts[after]).is_accent_mark) {
+                ++after;
+            }
+            auto cased = [](uint32_t cp) {
+                const auto flags = unicode_cpt_flags_from_cpt(cp);
+                return flags.is_lowercase || flags.is_uppercase;
+            };
+            cpt = before && cased(cpts[before - 1]) && (after == cpts.size() || !cased(cpts[after])) ? 0x3C2 : 0x3C3;
+        }
+        out += unicode_cpt_to_utf8(unicode_tolower(cpt));
+    }
+    return out;
+}
+
+static bool decision_gliner_space(uint32_t cpt) {
+    return unicode_cpt_flags_from_cpt(cpt).is_whitespace && !(cpt >= 0x1C && cpt <= 0x1F);
+}
+
+// The HF normalizer merges whitespace runs, keeps single non-ASCII spaces and strips the right side.
+static std::string decision_gliner_segment(const std::string & text) {
+    const auto cpts = unicode_cpts_from_utf8(text);
+    size_t end = cpts.size();
+    while (end && decision_gliner_space(cpts[end - 1])) {
+        --end;
+    }
+    std::string out;
+    for (size_t i = 0; i < end;) {
+        size_t next = i + 1;
+        if (decision_gliner_space(cpts[i])) {
+            while (next < end && decision_gliner_space(cpts[next])) {
+                ++next;
+            }
+        }
+        const uint32_t cpt = next > i + 1 || cpts[i] == '\n' || cpts[i] == '\r' || cpts[i] == '\t' ? ' ' : cpts[i];
+        out += unicode_cpt_to_utf8(cpt);
+        i = next;
+    }
+    return out;
+}
+
+void server_decision_context::fill_task_gliner(const json & state, const std::vector<server_decision_question> & questions, server_task & task) const {
+    const std::string separator = "<<gliner:sep>>";
+    const std::string mark_option = "<<gliner:option>>";
+    std::string text = state.is_string() ? state.get<std::string>() : state.dump();
+    if (text.empty() || (text.back() != '.' && text.back() != '!' && text.back() != '?')) {
+        text += '.';
+    }
+    const std::vector<std::string> patterns = {
+        "(?:[hH][tT][tT][pP][sS]?://[^\\s]+|[wW][wW][wW]\\.[^\\s]+)|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}|@[a-zA-Z0-9_]+|[\\p{L}\\p{N}_]+(?:[-_][\\p{L}\\p{N}_]+)*|\\S",
+    };
+    json words = json::array();
+    for (const auto & word : unicode_regex_split(text, patterns, false)) {
+        const auto cpts = unicode_cpts_from_utf8(word);
+        if (!cpts.empty() && !unicode_cpt_flags_from_cpt(cpts[0]).is_whitespace) {
+            words.push_back(decision_gliner_lower(word));
+        }
+    }
+    json q_values = json::array();
+    for (const auto & question : questions) {
+        for (const auto & option : question.options) {
+            if (option.key == "[SEP_TEXT]" || option.key == "[SEP_STRUCT]") {
+                throw std::invalid_argument("GLiNER option names cannot be schema separators");
+            }
+        }
+        q_values.push_back(json{
+            {"id", question.id}, {"instructions", question.instructions}, {"options", render_options(question, 0)},
+        });
+    }
+    json inp = {{"questions", q_values}, {"words", words}};
+    inp = decision_replace_text(inp, "<<gliner:", "<<gliner ");
+    inp["sep"] = separator;
+    inp["mark_option"] = mark_option;
+    jinja::context ctx(tmpl->source());
+    jinja::global_from_json(ctx, inp, false);
+    jinja::runtime runtime(ctx);
+    const auto result = runtime.execute(tmpl->prog);
+    const std::string prompt = jinja::runtime::gather_string_parts(result)->as_string().str();
+    llama_tokens tokens;
+    for (std::string piece : string_split(prompt, separator)) {
+        if (string_starts_with(piece, mark_option)) {
+            piece.erase(0, mark_option.size());
+            task.decision.markers.push_back(tokens.size());
+        }
+        const auto segment = common_tokenize(vocab, decision_gliner_segment(piece), false, true);
+        tokens.insert(tokens.end(), segment.begin(), segment.end());
+    }
+    size_t n_options = 0;
+    for (const auto & question : questions) {
+        n_options += question.options.size();
+    }
+    if (task.decision.markers.size() != n_options) {
+        throw std::runtime_error("unexpected layout of the GLiNER prompt");
+    }
+    for (const int32_t marker : task.decision.markers) {
+        if (marker < 0 || size_t(marker) >= tokens.size() || tokens[marker] != token_marker) {
+            throw std::runtime_error("GLiNER option marker is not a single token");
+        }
+    }
+    task.tokens = server_tokens(tokens, false);
+}
+
 void server_decision_context::fill_task_joint(
         const json & state,
         const std::vector<server_decision_question> & questions,
@@ -989,6 +1112,10 @@ void server_decision_context::fill_task_joint(
         mtmd_context * mctx,
         const mtmd_helper_init_opt & init_opt,
         server_task & task) const {
+    if (type == COMMON_DECISION_TYPE_GLINER) {
+        fill_task_gliner(state, questions, task);
+        return;
+    }
     json inp_questions = json::array();
     for (const auto & question : questions) {
         json options = json::array();

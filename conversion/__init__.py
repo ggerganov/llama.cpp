@@ -33,6 +33,7 @@ TEXT_MODEL_MAP: dict[str, str] = {
     "BertForMaskedLM": "bert",
     "BertForSequenceClassification": "bert",
     "BertModel": "bert",
+    "GLiNERDecideModel": "deberta",
     "BitnetForCausalLM": "bitnet",
     "BitNetForCausalLM": "bitnet",
     "BloomForCausalLM": "bloom",

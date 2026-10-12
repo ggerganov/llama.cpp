@@ -1716,11 +1716,21 @@ Follows the [TypeSafe API](https://docs.typesafe.ai/api), streaming is not suppo
   - `score`: An array of 2 to 10 level descriptions, lowest level first.
   - `noul`: Optional. An object with the descriptions of `true` and `false`.
 
-The questions of a request are answered independently, an answer does not depend on the other questions. The exception is clef: it reads all the questions in one prompt and decides them jointly.
+The questions of a request are answered independently, an answer does not depend on the other questions. The exceptions are clef and gliner: they read all the questions in one prompt and decide them jointly.
 
-The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for laya, clef, pplx-decider, vllm-decision2, vllm-d3, lfm2-d1 and lfm2-d1-omni. For laya, long questions and options are truncated to the token budget the model was trained with.
+The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for laya, clef, gliner, pplx-decider, vllm-decision2, vllm-d3, lfm2-d1 and lfm2-d1-omni. For laya, long questions and options are truncated to the token budget the model was trained with.
 
-For laya, clef, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available.
+For laya, clef, gliner, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available.
+
+*GLiNER2.5-Decide:*
+
+Convert the `fastino/GLiNER2.5-Decide` checkpoint directory with `convert_hf_to_gguf.py`, then serve its GGUF with this endpoint. This supports the DeBERTa-v2 encoder variant used by the checkpoint and its classification head. It does not support entity spans, records, other GLiNER checkpoints or standalone DeBERTa models.
+
+The question id is the task name; `instructions` is its optional prompt (use an empty string to omit it). Option keys are label names and their descriptions are appended to the prompt in option order. The schema and each lowercased text word are tokenized separately, matching the upstream processor. A period is appended to text that does not end in `.`, `!` or `?`, including empty text. All questions share one encoder pass, so adding a question can change another question's scores.
+
+`choice` uses softmax over the label logits. `score` uses the numeric level keys as labels and returns their expected index; `noul` uses `false` and `true` as labels and returns the softmax probability of `true`. These are classification mappings, without fitted calibration or an independent sigmoid/multi-label response. There is no automatic truncation: the full schema and text must fit in `--ubatch-size` and the context. The GGUF contains the encoder and classifier tensors only; extraction tensors are omitted. Existing gliner.cpp GGUF files must be reconverted from the original checkpoint.
+
+An optional CPU F32 regression can be run with `GLINER_F32_LOCAL_MODEL=/path/to/model.gguf` and `LLAMA_SERVER_BIN_PATH=/path/to/llama-server`: run `pytest tools/server/tests/unit/test_gliner.py`.
 
 *Image input:*
 

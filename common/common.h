@@ -960,6 +960,7 @@ enum common_decision_type {
     COMMON_DECISION_TYPE_LEV,     // same as openjev, noul is read from a rating scale
     COMMON_DECISION_TYPE_KEV,     // dot product of the hidden states of the last token and of one end token per option
     COMMON_DECISION_TYPE_NIMBLE,  // same as openjev, the prompt lists all the questions of the request
+    COMMON_DECISION_TYPE_GLINER,  // classifier on contextual label markers
     COMMON_DECISION_TYPE_LAYA,    // score of one marker token per option, read from the embeddings output
     COMMON_DECISION_TYPE_CLEF,    // all questions in one prompt, score of option i read from the embeddings output at row i
     COMMON_DECISION_TYPE_PPLX_DECIDER, // same as openjev, label codes of 1 or 2 letters
