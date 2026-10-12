@@ -242,7 +242,16 @@ struct llama_model_loader {
 
     void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr);
 
-    void get_mapping_range(size_t * first, size_t * last, void ** addr, int idx, ggml_context * ctx) const;
+    // byte range within a mapped file
+    struct mapping_range {
+        size_t first; // inclusive
+        size_t last;  // exclusive
+    };
+
+    // sorted, non-overlapping ranges of file 'idx' that back the tensors of 'ctx'
+    // ranges owned by other contexts are excluded, so that a buffer wrapping them won't pin
+    // data that this context never reads (lazy tensors, -cmoe tensors, ...)
+    std::vector<mapping_range> get_mapping_ranges(int idx, ggml_context * ctx) const;
 
     // release a weight's mmap pages
     void unmap_weight(const llama_tensor_weight & w) const;
