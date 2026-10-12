@@ -397,6 +397,7 @@ static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_spa
 
 static constexpr bool ggml_cuda_fattn_tile_sparse_supported(
         const int DKQ, const int DV, const int ncols2, const bool use_logit_softcap) {
+    // TODO: Extend sparse kernel support to other AMD architectures.
     return ggml_cuda_fattn_tile_get_sparse_config_gcn(DKQ, DV, 1).min_kv > 0 &&
            ncols2 > 1 && !use_logit_softcap &&
            ggml_cuda_fattn_tile_get_config_amd(DKQ, DV, ncols2) != 0 &&
@@ -404,6 +405,7 @@ static constexpr bool ggml_cuda_fattn_tile_sparse_supported(
 }
 
 static bool ggml_cuda_fattn_tile_use_sparse(const ggml_tensor * dst, const int cc, const int DKQ, const int DV) {
+    // TODO: Add sparse selection policies for other AMD architectures.
     if (!GGML_CUDA_CC_IS_GCN(cc)) {
         return false;
     }
@@ -414,7 +416,7 @@ static bool ggml_cuda_fattn_tile_use_sparse(const ggml_tensor * dst, const int c
     const int n_kv_max = ggml_get_op_params_i32(dst, 4);
 
     if (Q->ne[1] != 1 || !mask || mask->ne[0] != K->ne[1] ||
-        mask->ne[1] < Q->ne[1] || mask->ne[2] != 1 || n_kv_max <= 0) {
+        mask->ne[1] < Q->ne[1] || n_kv_max <= 0) {
         return false;
     }
 
