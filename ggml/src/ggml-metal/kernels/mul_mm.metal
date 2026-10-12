@@ -582,6 +582,7 @@ template [[host_name("kernel_mul_mm_id_map0_ne20_10")]] kernel kernel_mul_mm_id_
 template [[host_name("kernel_mul_mm_id_map0_ne20_16")]] kernel kernel_mul_mm_id_map0_t kernel_mul_mm_id_map0<16>;
 template [[host_name("kernel_mul_mm_id_map0_ne20_22")]] kernel kernel_mul_mm_id_map0_t kernel_mul_mm_id_map0<22>;
 
+// TODO: refactor into two seperate functions to avoid ifdef branching: with and without tensor support
 template<typename S0, typename S0_4x4, typename S0_8x8, typename S1, typename S1_2x4, typename S1_8x8, typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread S0_4x4 &), typename T0, typename T0_4x4, typename T1, typename T1_2x4>
 kernel void kernel_mul_mm_id(
         constant ggml_metal_kargs_mul_mm_id & args,
@@ -689,20 +690,20 @@ kernel void kernel_mul_mm_id(
 
         const bool has_hi = nr1 > NR1H;
 
-    #ifndef GGML_METAL_HAS_TENSOR
+#ifndef GGML_METAL_HAS_TENSOR
         for (short i = 0; i < 8; i++){
             mc[i] = make_filled_simdgroup_matrix<float, 8>(0.f);
         }
 
         // simdgroups 2,3 own rows NR1H..NR1-1
         const bool sg_active = has_hi || sgitg < 2;
-    #else
+#else
         auto cT0 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB0), float>();
         auto cT1 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB1), float>();
-    #endif
+#endif
 
         for (int loop_k = 0; loop_k < args.ne00; loop_k += NK) {
-    #ifndef GGML_METAL_HAS_TENSOR
+#ifndef GGML_METAL_HAS_TENSOR
             // load data and store to threadgroup memory
             if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
                 threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -772,7 +773,7 @@ kernel void kernel_mul_mm_id(
 
                 *(threadgroup S1_2x4 *)(sb + 64*ib + 8*ly) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
             }
-    #else
+#else
             // load data and store to threadgroup memory
             if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
                 threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -831,7 +832,7 @@ kernel void kernel_mul_mm_id(
 
                 *(threadgroup S1_2x4 *)(sb + NK*(8*sy + ly) + 8*sx) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
             }
-    #endif
+#endif
 
             il = (il + 2 < nl) ? il + 2 : il % 2;
             x  = (il < 2) ? x + (2 + nl - 1)/nl : x;
@@ -840,7 +841,7 @@ kernel void kernel_mul_mm_id(
 
             threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    #ifndef GGML_METAL_HAS_TENSOR
+#ifndef GGML_METAL_HAS_TENSOR
             if (sg_active) {
                 // load matrices from threadgroup memory and conduct outer products
                 threadgroup const S0 * lsma = (sa + 4*64*(sgitg%2));
@@ -869,7 +870,7 @@ kernel void kernel_mul_mm_id(
                     lsmb += 4*64;
                 }
             }
-    #else
+#else
             auto sA  = tA.slice(0, 0);
             auto sB0 = tB0.slice(0, 0);
 
@@ -880,13 +881,13 @@ kernel void kernel_mul_mm_id(
 
                 mm.run(sB1, sA, cT1);
             }
-    #endif
+#endif
         }
 
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    #ifdef GGML_METAL_HAS_TENSOR
+#ifdef GGML_METAL_HAS_TENSOR
         auto tC0 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc,             dextents<int32_t, 2>(NR0, NR1H));
         cT0.store(tC0);
 
@@ -894,7 +895,7 @@ kernel void kernel_mul_mm_id(
             auto tC1 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc + NR1H*NR0, dextents<int32_t, 2>(NR0, NR1H));
             cT1.store(tC1);
         }
-    #else
+#else
         if (sg_active) {
             threadgroup float * temp_str = ((threadgroup float *) shmem) + 32*(sgitg&1) + (16*(sgitg >> 1))*NR0;
 
@@ -902,7 +903,7 @@ kernel void kernel_mul_mm_id(
                 simdgroup_store(mc[i], temp_str + 8*(i%4) + 8*NR0*(i/4), NR0, 0, false);
             }
         }
-    #endif
+#endif
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
