@@ -21,25 +21,6 @@ static const char * decision_question_type_name(server_decision_question_type ty
 static const size_t DECISION_LEV_N_RATINGS = 9;
 
 // h2o-lightning follows serve_config.json and h2o_lightning_shim.py of the model repo
-// the label of each option, in order, the answer is read at the token of " <label>"
-static const char * const DECISION_H2O_LABELS[] = {
-    // A-Z, a-z
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-    // Greek small letters from alpha to omega, without rho and final sigma, as UTF-8
-    "\xce\xb1", "\xce\xb2", "\xce\xb3", "\xce\xb4", "\xce\xb5", "\xce\xb6", "\xce\xb7", "\xce\xb8", "\xce\xb9", "\xce\xba", "\xce\xbb", "\xce\xbc",
-    "\xce\xbd", "\xce\xbe", "\xce\xbf", "\xcf\x80", "\xcf\x83", "\xcf\x84", "\xcf\x85", "\xcf\x86", "\xcf\x87", "\xcf\x88", "\xcf\x89",
-    // common short tokens
-    "in", "er", "on", "re", "at", "st", "en", "or", "th", "le", "it", "an", "ar", "al", "the", "ou", "is", "ing", "es", "ion",
-    "ed", "ic", "et", "ro", "as", "el", "ct", "nd", "ent", "id", "am", "to", "of", "om", "im", "il", "and", "ur", "se", "ex",
-    "ad", "ch", "ut", "if", "em", "ol", "ig", "iv", "ce", "od", "ate", "ag", "ay", "ot", "us", "un", "ul", "ue", "ow", "ew",
-    "for", "ab", "ort", "um", "ame", "pe", "tr", "ck", "ist", "he", "lo", "be", "ers", "con", "ap", "ub", "ass", "int", "ly", "urn",
-    "av", "ir", "nt", "end", "de", "ith", "out", "our", "lic", "res", "pt", "wh", "ver", "age", "ht", "ext", "ess", "os", "ect", "ke",
-    "rom", "qu", "iz", "op", "up", "get", "ile", "ata", "ore", "ri", "pro", "ter", "ain", "com", "art", "ack", "est", "ine", "ill", "ind",
-    "ere", "elf", "orm", "ult", "str", "you", "pl", "new", "ld", "oc", "ant", "ase", "ave", "ang", "are", "ial", "act", "ive", "ode", "ost",
-    "not", "og", "ord", "all", "ff", "ont", "ime", "pr", "ies", "ure", "by", "ire", "sh", "ice", "ast", "ok", "cl", "ard", "was", "ip",
-    "The", "ide", "ace", "ib", "ac", "rou", "we", "ak", "ve", "ath", "oid", "ust", "que", "ans", "pp", "one", "ail", "ach", "div", "ell",
-};
 // a longer state keeps its head and its tail
 static const size_t DECISION_H2O_MAX_STATE_TOKENS = 32000;
 
@@ -182,14 +163,18 @@ void server_decision_context::init(const llama_model * model) {
         }
         n_options_max = 255;
     } else if (model_type == COMMON_DECISION_TYPE_H2O_LIGHTNING) {
-        // the answer is read after the "Answer:" prefill of the template, where an option is the token of " <label>"
-        for (const char * text : DECISION_H2O_LABELS) {
-            const auto toks = common_tokenize(vocab, std::string(" ") + text, false, false);
+        // the answer is read at the token of a label, its text is given to the template
+        for (uint32_t i = 0; llama_model_decision_label(model, i) != nullptr; i++) {
+            const std::string text = llama_model_decision_label(model, i);
+            const auto toks = common_tokenize(vocab, text, false, false);
             if (toks.size() != 1 || std::find(labels.begin(), labels.end(), toks[0]) != labels.end()) {
-                throw std::runtime_error(string_format("decision label \" %s\" is not a single distinct token", text));
+                throw std::runtime_error(string_format("decision label \"%s\" is not a single distinct token", text.c_str()));
             }
             labels.push_back(toks[0]);
             label_texts.push_back(text);
+        }
+        if (labels.empty()) {
+            throw std::runtime_error("decision model has no labels");
         }
         // the texts of the control and user-defined tokens are quoted in the input, so that they stay text
         for (llama_token id = 0; id < llama_vocab_n_tokens(vocab); id++) {
