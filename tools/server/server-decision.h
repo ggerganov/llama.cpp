@@ -63,6 +63,7 @@ struct server_decision_context {
             case COMMON_DECISION_TYPE_OPENJEV:
             case COMMON_DECISION_TYPE_CLEF:
             case COMMON_DECISION_TYPE_PPLX_DECIDER:
+            case COMMON_DECISION_TYPE_VLLM_D3:
             case COMMON_DECISION_TYPE_LFM2_D1:
             case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
             case COMMON_DECISION_TYPE_H2O_LIGHTNING:
@@ -122,8 +123,9 @@ private:
     bool   noul_criteria_order = false; // noul options are in the order of the criteria keys, if given
     bool   choice_sorted   = false; // choice options are in the order of their keys
     bool   strict_payload  = false; // state, instructions and descriptions must be text, an object or an array
+    bool   canonical_legend = false; // non-string score descriptions are returned as canonical JSON text
 
-    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER, H2O_LIGHTNING
+    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER, VLLM_D3, H2O_LIGHTNING
     std::vector<llama_token> labels;
     std::vector<std::string> label_texts; // only if the label of an option is given to the template
 
