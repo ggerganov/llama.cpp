@@ -15858,6 +15858,28 @@ static ggml_backend_dev_t ggml_backend_vk_reg_get_device(ggml_backend_reg_t reg,
 #if !defined(_WIN32)
 static constexpr size_t ggml_vk_comm_f16_min_size = 1024 * 1024;
 
+// Walks back over the ops ggml-backend-meta may delay a reduction across.
+// TODO: the required precision should come from the meta backend instead.
+static bool ggml_vk_comm_needs_f32(const ggml_tensor * t, int depth = 0) {
+    if (t == nullptr || depth > 64) {
+        return false;
+    }
+    switch (t->op) {
+        case GGML_OP_MUL_MAT:
+        case GGML_OP_MUL_MAT_ID:
+            return ggml_get_op_params_i32(t, 0) == GGML_PREC_F32;
+        case GGML_OP_ADD:
+            return ggml_vk_comm_needs_f32(t->src[0], depth + 1) || ggml_vk_comm_needs_f32(t->src[1], depth + 1);
+        case GGML_OP_MUL:
+        case GGML_OP_ADD_ID:
+            return ggml_vk_comm_needs_f32(t->src[0], depth + 1);
+        case GGML_OP_VIEW:
+            return ggml_vk_comm_needs_f32(t->view_src, depth + 1);
+        default:
+            return false;
+    }
+}
+
 // SYNC_FD: only cross-device handle type allowed by the spec. Revisit with VK_EXT_external_semaphore_drm_syncobj
 // (shared timeline semaphores, no per-round export/import).
 struct ggml_backend_vk_comm_context {
@@ -16097,7 +16119,8 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
         return false;
     }
 
-    const ggml_type wire      = nbytes < ggml_vk_comm_f16_min_size ? GGML_TYPE_F32 : GGML_TYPE_F16;
+    const bool      f32_wire  = nbytes < ggml_vk_comm_f16_min_size || ggml_vk_comm_needs_f32(tensors[0]);
+    const ggml_type wire      = f32_wire ? GGML_TYPE_F32 : GGML_TYPE_F16;
     const uint64_t  round     = ++comm->round;
     const size_t    slot_offs = (round & 1) * comm->cap;
     const size_t    slot_size = ne * ggml_type_size(wire);
