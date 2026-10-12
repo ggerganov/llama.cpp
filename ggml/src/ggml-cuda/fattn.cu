@@ -129,14 +129,9 @@ void ggml_cuda_flash_attn_ext_compact_mask(
     const dim3 block_dim(256, 1, 1);
     const ggml_cuda_kernel_launch_params launch_params(blocks_num, block_dim, 0, stream);
     GGML_ASSERT(ncols1 == 1 || ncols1 == 8);
-#ifdef GGML_USE_HIP
-    GGML_ASSERT(ncols1 == 1);
-    const auto kernel = flash_attn_mask_to_sparse_indices<1, false>;
-#else
     const auto kernel = ncols1 == 1        ? flash_attn_mask_to_sparse_indices<1, false> :
                         n_queries % 8 != 0 ? flash_attn_mask_to_sparse_indices<8, true>  :
                                              flash_attn_mask_to_sparse_indices<8, false>;
-#endif // GGML_USE_HIP
     ggml_cuda_kernel_launch(kernel, launch_params,
         (const half *) mask->data, indices, counts, int(mask->ne[0]), n_queries, n_kv_max, s31, s33);
     CUDA_CHECK(cudaGetLastError());
