@@ -11,8 +11,9 @@ __launch_bounds__(256, 1)
 static __global__ void flash_attn_mask_to_sparse_indices_hip(
         const half * mask, int32_t * indices, int32_t * counts,
         const int n_kv, const int n_kv_max, const int64_t s31, const int64_t s33) {
-    constexpr int wave_size = 64;
-    constexpr int nwaves = 256 / wave_size;
+    constexpr int nthreads  = 256;
+    constexpr int wave_size = ggml_cuda_get_physical_warp_size();
+    constexpr int nwaves    = nthreads / wave_size;
 
     const int tid = threadIdx.x;
     const int lane = tid % wave_size;
@@ -31,7 +32,7 @@ static __global__ void flash_attn_mask_to_sparse_indices_hip(
     }
     __syncthreads();
 
-    for (int i0 = 0; i0 < n_kv; i0 += 256) {
+    for (int i0 = 0; i0 < n_kv; i0 += nthreads) {
         const int i = i0 + wave*wave_size + lane;
         const bool selected = i < n_kv && isfinite(__half2float(mask_row[i]));
         const uint64_t selected_mask = __ballot(selected);
