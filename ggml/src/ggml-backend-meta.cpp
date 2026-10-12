@@ -666,7 +666,10 @@ static struct ggml_backend_meta_split_state ggml_backend_meta_get_split_state(
                 }
                 if (src_ss[0].n_segments == 1) {
                     base_ne_in /= src_ss[0].nr[0];
-                    if (src_ss[0].axis == ggml_n_dims(tensor->src[0]) - 1 && src_ss[0].nr[0] == 1) {
+                    // note: ggml_n_dims() never returns 0, so this also matches an all-ones source where
+                    //   the split dim cannot be located from the shape - let the rules below decide
+                    if (src_ss[0].axis == ggml_n_dims(tensor->src[0]) - 1 && src_ss[0].nr[0] == 1 &&
+                            tensor->src[0]->ne[src_ss[0].axis] > 1) {
                         return {ggml_backend_meta_split_axis(ggml_n_dims(tensor) - 1), {0}, {1}, 1};
                     }
                     if (src_ss[0].axis == GGML_BACKEND_SPLIT_AXIS_0 && tensor->ne[0] == tensor->src[0]->ne[0] &&

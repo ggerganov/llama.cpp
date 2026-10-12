@@ -536,8 +536,8 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_MIRRORED);
             }
             if (std::regex_match(tensor_name, pattern_ssm_a)) {
-                // [n_head] A values are consumed per head
-                return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_1, "ssm_out.weight", "attn_output.weight");
+                // [n_head] 1D, the heads live on dim 0, the reshape to [1, n_head, 1] maps it to axis 1
+                return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_0, "ssm_out.weight", "attn_output.weight");
             }
         }
         if (is_dsv4) {
