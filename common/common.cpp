@@ -1,8 +1,12 @@
 #include "ggml.h"
+#include "ggml-cpp.h"
 #include "gguf.h"
 
 #include "build-info.h"
 #include "common.h"
+
+#include "../src/llama-ext.h"
+
 #include "fit.h"
 #include "log.h"
 #include "llama.h"
@@ -1023,69 +1027,24 @@ std::filesystem::path fs_get_cache_file(const std::string & filename) {
     GGML_ASSERT(filename.find(DIRECTORY_SEPARATOR) == std::string::npos);
     const std::filesystem::path cache_directory = fs_get_cache_directory();
     std::error_code ec;
-    std::filesystem::create_directories(cache_directory, ec);
+    common_create_directories(cache_directory, ec);
     if (ec) {
         throw std::runtime_error("failed to create cache directory: " + fs_path_to_utf8(cache_directory));
     }
     return cache_directory / std::filesystem::u8path(filename);
 }
 
-std::vector<common_file_info> fs_list(const std::string & path, bool include_directories) {
-    std::vector<common_file_info> files;
-    if (path.empty()) return files;
-
-    std::filesystem::path dir(path);
-    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
-        return files;
-    }
-
-    for (const auto & entry : std::filesystem::directory_iterator(dir)) {
-        try {
-            // Only include regular files (skip directories)
-            const auto & p = entry.path();
-            if (std::filesystem::is_regular_file(p)) {
-                common_file_info info;
-                info.path   = p.string();
-                info.name   = p.filename().string();
-                info.is_dir = false;
-                try {
-                    info.size = static_cast<size_t>(std::filesystem::file_size(p));
-                } catch (const std::filesystem::filesystem_error &) {
-                    info.size = 0;
-                }
-                files.push_back(std::move(info));
-            } else if (include_directories && std::filesystem::is_directory(p)) {
-                common_file_info info;
-                info.path   = p.string();
-                info.name   = p.filename().string();
-                info.size   = 0; // Directories have no size
-                info.is_dir = true;
-                files.push_back(std::move(info));
-            }
-        } catch (const std::filesystem::filesystem_error &) {
-            // skip entries we cannot inspect
-            continue;
-        }
-    }
-
-    return files;
-}
-
-std::ifstream fs_open_ifstream(const std::string & fname, std::ios_base::openmode mode) {
-#ifdef _WIN32
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, fname.c_str(), -1, NULL, 0);
-    if (!wlen) { return std::ifstream(); }
-    std::vector<wchar_t> wfname(wlen);
-    (void)MultiByteToWideChar(CP_UTF8, 0, fname.c_str(), -1, wfname.data(), wlen);
-    return std::ifstream(wfname.data(), mode);
-#else
-    return std::ifstream(fname, mode);
-#endif
-}
-
 //
 // TTY utils
 //
+
+bool common_is_tty(FILE * file) {
+#if defined(_WIN32)
+    return _isatty(_fileno(file));
+#else
+    return isatty(fileno(file));
+#endif
+}
 
 bool tty_can_use_colors() {
     // Check NO_COLOR environment variable (https://no-color.org/)
@@ -1104,10 +1063,21 @@ bool tty_can_use_colors() {
 
     // Check if stdout and stderr are connected to a terminal
     // We check both because log messages can go to either
-    bool stdout_is_tty = isatty(fileno(stdout));
-    bool stderr_is_tty = isatty(fileno(stderr));
+    return common_is_tty(stdout) || common_is_tty(stderr);
+}
 
-    return stdout_is_tty || stderr_is_tty;
+bool tty_enable_ansi() {
+#if defined(_WIN32)
+    // a Windows console renders ANSI sequences only in virtual terminal mode, pipes and files take them as is
+    for (DWORD id : { STD_OUTPUT_HANDLE, STD_ERROR_HANDLE }) {
+        HANDLE h    = GetStdHandle(id);
+        DWORD  mode = 0;
+        if (GetConsoleMode(h, &mode) && !SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+            return false;
+        }
+    }
+#endif
+    return true;
 }
 
 //
@@ -1192,6 +1162,77 @@ struct common_init_result::impl {
     std::vector<llama_sampler_seq_config> samplers_seq_config;
 };
 
+static const std::map<common_decision_type, std::string> COMMON_DECISION_TYPE_NAMES = {
+    { COMMON_DECISION_TYPE_OPENJEV,        "openjev"       },
+    { COMMON_DECISION_TYPE_LEV,            "lev"           },
+    { COMMON_DECISION_TYPE_KEV,            "kev"           },
+    { COMMON_DECISION_TYPE_NIMBLE,         "nimble"        },
+    { COMMON_DECISION_TYPE_LAYA,           "laya"          },
+    { COMMON_DECISION_TYPE_CLEF,           "clef"          },
+    { COMMON_DECISION_TYPE_PPLX_DECIDER,   "pplx-decider"  },
+    { COMMON_DECISION_TYPE_LFM2_D1,        "lfm2-d1"       },
+    { COMMON_DECISION_TYPE_LFM2_D1_OMNI,   "lfm2-d1-omni"  },
+};
+
+static common_decision_type common_decision_type_from_string(const std::string & str) {
+    for (const auto & pair : COMMON_DECISION_TYPE_NAMES) {
+        if (pair.second == str) {
+            return pair.first;
+        }
+    }
+    return COMMON_DECISION_TYPE_UNKNOWN;
+}
+
+common_decision_type common_get_decision_type(const struct llama_model * model) {
+    char buf[64];
+    if (llama_model_meta_val_str(model, "general.architecture", buf, sizeof(buf)) < 0) {
+        return COMMON_DECISION_TYPE_NONE;
+    }
+    const std::string key = std::string(buf) + ".decision.type";
+    if (llama_model_meta_val_str(model, key.c_str(), buf, sizeof(buf)) < 0) {
+        return COMMON_DECISION_TYPE_NONE;
+    }
+    return common_decision_type_from_string(buf);
+}
+
+common_gguf_info common_get_gguf_info(const std::string & fname) {
+    common_gguf_info info;
+
+    struct gguf_init_params gguf_params = {
+        /* .no_alloc = */ true,
+        /* .ctx      = */ nullptr,
+    };
+
+    gguf_context_ptr gguf_ctx(gguf_init_from_file(fname.c_str(), gguf_params));
+    if (!gguf_ctx) {
+        return info; // missing or unreadable file
+    }
+
+    const int64_t arch_id = gguf_find_key(gguf_ctx.get(), "general.architecture");
+    if (arch_id < 0 || gguf_get_kv_type(gguf_ctx.get(), arch_id) != GGUF_TYPE_STRING) {
+        return info; // no architecture in the metadata
+    }
+    const std::string arch = gguf_get_val_str(gguf_ctx.get(), arch_id);
+    if (arch.empty()) {
+        return info;
+    }
+
+    const int64_t type_id = gguf_find_key(gguf_ctx.get(), (arch + ".decision.type").c_str());
+    if (type_id < 0) {
+        info.decision_type = COMMON_DECISION_TYPE_NONE;
+    } else if (gguf_get_kv_type(gguf_ctx.get(), type_id) == GGUF_TYPE_STRING) {
+        info.decision_type = common_decision_type_from_string(gguf_get_val_str(gguf_ctx.get(), type_id));
+    }
+
+    // same key and type as the model loader
+    const int64_t ctx_id = gguf_find_key(gguf_ctx.get(), (arch + ".context_length").c_str());
+    if (ctx_id >= 0 && gguf_get_kv_type(gguf_ctx.get(), ctx_id) == GGUF_TYPE_UINT32) {
+        info.n_ctx_train = gguf_get_val_u32(gguf_ctx.get(), ctx_id);
+    }
+
+    return info;
+}
+
 common_init_result::common_init_result(common_params & params, bool model_only) :
     pimpl(new impl{}) {
     auto mparams = common_model_params_to_llama(params);
@@ -1243,6 +1284,30 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
     }
 
     const llama_vocab * vocab = llama_model_get_vocab(model);
+
+    // these decision models return a score for each token via the embeddings output
+    // TODO: maybe improve this in the future
+    const auto decision_type = common_get_decision_type(model);
+    if (decision_type == COMMON_DECISION_TYPE_LAYA || decision_type == COMMON_DECISION_TYPE_KEV || decision_type == COMMON_DECISION_TYPE_CLEF ||
+        decision_type == COMMON_DECISION_TYPE_LFM2_D1_OMNI) {
+        params.embedding    = true;
+        params.pooling_type = LLAMA_POOLING_TYPE_NONE;
+
+        cparams.embeddings            = true;
+        cparams.pooling_type          = LLAMA_POOLING_TYPE_NONE;
+        cparams.n_outputs_max         = cparams.n_batch;
+        cparams.n_outputs_max_per_seq = 1;
+
+        LOG_INF("%s", "decision model reads the embeddings output, enabling embedding mode\n");
+    }
+
+    // embeddings need the whole batch in one ubatch, so n_batch must not be larger than n_ubatch
+    // (server.cpp does this check for --embedding, but before the model is loaded)
+    if (cparams.embeddings && cparams.n_batch > cparams.n_ubatch) {
+        LOG_WRN("embeddings enabled: setting n_batch = n_ubatch = %u\n", cparams.n_ubatch);
+        cparams.n_batch = cparams.n_ubatch;
+        params.n_batch  = params.n_ubatch;
+    }
 
     // load and optionally apply lora adapters
     for (auto & la : params.lora_adapters) {
@@ -1336,6 +1401,14 @@ void common_init_result::reset_samplers() {
 
 std::vector<llama_adapter_lora_ptr> & common_init_result::lora() {
     return pimpl->lora;
+}
+
+// only for warmup and probe decodes, fill zeros as dummy input
+static void common_batch_set_zero_state(common_batch & batch, const llama_model * model, std::vector<float> & zeros) {
+    zeros.assign(llama_model_n_embd_out(model), 0.0f);
+    for (int32_t i = 0; i < batch.size(); ++i) {
+        batch.set_embd_state(i, { zeros.data(), 1, zeros.size() });
+    }
 }
 
 common_init_result_ptr common_init_from_params(common_params & params, bool model_only) {
@@ -1444,6 +1517,8 @@ common_init_result_ptr common_init_from_params(common_params & params, bool mode
         if (llama_model_has_decoder(model)) {
             tmp.resize(std::min(tmp.size(), (size_t) params.n_batch));
             common_batch batch = common_batch_get_one(lctx, tmp);
+            std::vector<float> zeros;
+            common_batch_set_zero_state(batch, model, zeros);
             llama_process(lctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
         }
         llama_memory_clear(llama_get_memory(lctx), true);
@@ -1511,6 +1586,8 @@ common_context_seq_rm_type common_context_can_seq_rm(llama_context * ctx) {
     int ret;
     {
         common_batch batch = common_batch_get_one(ctx, tmp);
+        std::vector<float> zeros;
+        common_batch_set_zero_state(batch, llama_get_model(ctx), zeros);
         ret = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
     }
     if (ret != 0) {
@@ -1622,7 +1699,7 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
     mparams.progress_callback           = params.load_progress_callback;
     mparams.progress_callback_user_data = params.load_progress_callback_user_data;
     mparams.no_alloc                    = params.no_alloc;
-    mparams.load_mtp                    = std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
+    mparams.load_mtp                    = params.load_mtp || std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
 
     return mparams;
 }
@@ -1662,6 +1739,8 @@ struct llama_context_params common_context_params_to_llama(const common_params &
 
     cparams.type_k = params.cache_type_k;
     cparams.type_v = params.cache_type_v;
+
+    cparams.moe_cache_size = params.moe_cache_size;
 
     return cparams;
 }
@@ -1736,33 +1815,6 @@ void common_threadpools::init(llama_context * ctx, const common_params & params)
     }
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
-}
-
-//
-// Batch utils
-//
-
-void common_batch_clear(struct llama_batch & batch) {
-    batch.n_tokens = 0;
-}
-
-void common_batch_add(
-                 struct llama_batch & batch,
-                        llama_token   id,
-                          llama_pos   pos,
-    const std::vector<llama_seq_id> & seq_ids,
-                               bool   logits) {
-    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
-
-    batch.token   [batch.n_tokens] = id;
-    batch.pos     [batch.n_tokens] = pos;
-    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
-    for (size_t i = 0; i < seq_ids.size(); ++i) {
-        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
-    }
-    batch.logits  [batch.n_tokens] = logits;
-
-    batch.n_tokens++;
 }
 
 //
@@ -2118,124 +2170,129 @@ common_batch::common_batch(llama_context * ctx) : batch(llama_batch_ext_init(ctx
 
 void common_batch::clear() {
     tokens.clear();
-    llama_batch_ext_clear(batch.get());
 }
 
 int32_t common_batch::add(llama_token id, llama_pos pos, llama_seq_id seq_id, bool output) {
-    const int32_t idx = llama_batch_ext_add_token(batch.get(), seq_id, id);
-    if (idx < 0) {
-        GGML_ABORT("%s: failed to add token %d to the batch (error %d, n_tokens = %d)\n", __func__, id, idx, size());
+    tokens.push_back({ id, { pos, 0, 0, 0 }, seq_id, output, { nullptr, 0, 0 }, { nullptr, 0, 0 }, {} });
+    return size() - 1;
+}
+
+int32_t common_batch::add(llama_token id, llama_pos pos, const std::vector<llama_seq_id> & seq_ids, bool output) {
+    GGML_ASSERT(!seq_ids.empty());
+
+    const int32_t idx = add(id, pos, seq_ids[0], output);
+    for (size_t s = 1; s < seq_ids.size(); ++s) {
+        add_seq(idx, seq_ids[s]);
     }
-    llama_batch_ext_set_pos(batch.get(), idx, &pos);
-    if (output) {
-        llama_batch_ext_set_output_logits(batch.get(), idx, true);
-    }
-    tokens.push_back({ id, { pos, 0, 0, 0 }, seq_id, output, { nullptr, 0, 0 } });
     return idx;
 }
 
+bool common_batch::add_seq(int32_t idx, llama_seq_id seq_id) {
+    if (idx < 0 || idx >= size()) {
+        return false;
+    }
+    tokens[idx].seq_ids_extra.push_back(seq_id);
+    return true;
+}
+
 bool common_batch::set_output(int32_t idx, bool value) {
-    if (idx < 0 || idx >= (int32_t) tokens.size()) {
+    if (idx < 0 || idx >= size()) {
         return false;
     }
     tokens[idx].output = value;
-    return llama_batch_ext_set_output_logits(batch.get(), idx, value);
+    return true;
 }
 
 bool common_batch::set_embd(int32_t idx, llama_embd embd) {
-    if (idx < 0 || idx >= (int32_t) tokens.size()) {
-        return false;
-    }
-    if (!llama_batch_ext_set_embd_token(batch.get(), idx, embd)) {
+    if (idx < 0 || idx >= size() || tokens[idx].embd.data != nullptr) {
         return false;
     }
     tokens[idx].embd = embd;
     return true;
 }
 
+bool common_batch::set_embd_state(int32_t idx, llama_embd state) {
+    if (idx < 0 || idx >= size() || tokens[idx].state.data != nullptr) {
+        return false;
+    }
+    tokens[idx].state = state;
+    return true;
+}
+
 int32_t common_batch::add_embd(llama_embd embd, const llama_pos * pos, llama_seq_id seq_id, bool output) {
-    const int32_t idx = llama_batch_ext_add_embd(batch.get(), seq_id, embd);
-    if (idx < 0) {
-        GGML_ABORT("%s: failed to add embedding to the batch (error %d, n_tokens = %d)\n", __func__, idx, size());
-    }
-    llama_batch_ext_set_pos(batch.get(), idx, pos);
-    if (output) {
-        llama_batch_ext_set_output_logits(batch.get(), idx, true);
-    }
-    token t = { LLAMA_TOKEN_NULL, { 0, 0, 0, 0 }, seq_id, output, embd };
+    token t = { LLAMA_TOKEN_NULL, { 0, 0, 0, 0 }, seq_id, output, embd, { nullptr, 0, 0 }, {} };
     for (int32_t j = 0; j < n_pos; ++j) {
         t.pos[j] = pos[j];
     }
     tokens.push_back(t);
-    return idx;
+    return size() - 1;
 }
 
-common_batch common_batch_from_llama_batch(llama_context * ctx, const llama_batch & batch) {
-    common_batch res(ctx);
+llama_batch_ext * common_batch::get_sub_batch(int32_t off, int32_t n) {
+    GGML_ASSERT(batch && "common_batch was not initialized with a context");
+    GGML_ASSERT(off >= 0 && n >= 0 && off + n <= size());
 
-    const bool has_token = batch.token != nullptr;
-    const bool has_embd  = batch.embd  != nullptr;
+    llama_batch_ext * res = batch.get();
+    llama_batch_ext_clear(res);
 
-    const size_t n_embd = llama_model_n_embd_inp(llama_get_model(ctx));
-
-    // positions continue from the memory when none are given
-    auto * mem = llama_get_memory(ctx);
-    std::vector<llama_pos> pos_next(llama_n_seq_max(ctx));
-    for (llama_seq_id s = 0; s < (llama_seq_id) pos_next.size(); ++s) {
-        pos_next[s] = llama_memory_seq_pos_max(mem, s) + 1;
-    }
-
-    for (int32_t i = 0; i < batch.n_tokens; ++i) {
-        const int32_t      n_sid  = batch.n_seq_id ? batch.n_seq_id[i]  : 1;
-        const llama_seq_id seq_id = batch.seq_id   ? batch.seq_id[i][0] : 0;
-
-        llama_pos pos[GGML_MROPE_SECTIONS] = { 0, 0, 0, 0 };
-        if (!batch.pos) {
-            pos[0] = pos_next[seq_id]++;
-        } else if (has_token) {
-            pos[0] = batch.pos[i];
-        } else {
-            // embedding batch: section-major layout pos[j*n_tokens + i]
-            for (int32_t j = 0; j < res.n_pos; ++j) {
-                pos[j] = batch.pos[j * batch.n_tokens + i];
-            }
-        }
-
-        const bool output = batch.logits ? batch.logits[i] != 0 : i == batch.n_tokens - 1;
-
-        const llama_embd embd = { has_embd ? batch.embd + (size_t) i * n_embd : nullptr, 1, n_embd };
+    for (int32_t i = off; i < off + n; ++i) {
+        const token & t = tokens[i];
 
         int32_t idx;
-        if (has_token) {
-            idx = res.add(batch.token[i], pos[0], seq_id, output);
-            if (has_embd) {
-                res.set_embd(idx, embd);
+        if (t.id != LLAMA_TOKEN_NULL) {
+            idx = llama_batch_ext_add_token(res, t.seq_id, t.id);
+            if (idx < 0) {
+                GGML_ABORT("%s: failed to add token %d at index %d (error %d, n = %d)\n", __func__, t.id, i, idx, n);
+            }
+            llama_batch_ext_set_pos(res, idx, t.pos.data());
+            if (t.embd.data && !llama_batch_ext_set_embd_token(res, idx, t.embd)) {
+                GGML_ABORT("%s: failed to set the embedding of token %d at index %d\n", __func__, t.id, i);
             }
         } else {
-            idx = res.add_embd(embd, pos, seq_id, output);
+            idx = llama_batch_ext_add_embd(res, t.seq_id, t.embd);
+            if (idx < 0) {
+                GGML_ABORT("%s: failed to add embedding at index %d (error %d, n = %d)\n", __func__, i, idx, n);
+            }
+            llama_batch_ext_set_pos(res, idx, t.pos.data());
         }
+        GGML_ASSERT(idx == i - off);
 
-        for (int32_t s = 1; s < n_sid; ++s) {
-            llama_batch_ext_add_seq(res.get(), idx, batch.seq_id[i][s]);
+        for (const llama_seq_id seq_id : t.seq_ids_extra) {
+            if (!llama_batch_ext_add_seq(res, idx, seq_id)) {
+                GGML_ABORT("%s: failed to add seq %d to the entry at index %d\n", __func__, seq_id, i);
+            }
+        }
+        if (t.output) {
+            llama_batch_ext_set_output_logits(res, idx, true);
+        }
+        if (t.state.data) {
+            llama_batch_ext_set_embd_state(res, idx, t.state); // contexts without a state input ignore it
+        }
+        if (t.decision_order != 0) {
+            llama_batch_ext_set_decision_order(res, idx, (llama_decision_order) t.decision_order);
         }
     }
 
     return res;
 }
 
-common_batch common_batch_get_one(llama_context * ctx, const llama_tokens & tokens) {
+common_batch common_batch_get_one(llama_context * ctx, const llama_token * tokens, int32_t n_tokens) {
     common_batch batch(ctx);
 
     auto mem = llama_get_memory(ctx);
     llama_pos pos = llama_memory_seq_pos_max(mem, 0) + 1; // -1 + 1 == 0 when the memory is empty
 
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        const bool output = i == tokens.size() - 1;
+    for (int32_t i = 0; i < n_tokens; ++i) {
+        const bool output = i == n_tokens - 1;
         batch.add(tokens[i], pos, 0, output);
         pos++;
     }
 
     return batch;
+}
+
+common_batch common_batch_get_one(llama_context * ctx, const llama_tokens & tokens) {
+    return common_batch_get_one(ctx, tokens.data(), (int32_t) tokens.size());
 }
 
 bool common_prompt_batch_decode(
@@ -2357,40 +2414,36 @@ void common_prompt_checkpoint::update_dft(
     }
 }
 
-void common_prompt_checkpoint::load_tgt(
+bool common_prompt_checkpoint::load_tgt(
         llama_context * ctx,
         llama_seq_id seq_id,
         llama_state_seq_flags flags) const {
     if (ctx == nullptr) {
-        return;
+        return true;
     }
 
     if (data_tgt.empty()) {
-        return;
+        return true;
     }
 
     const size_t n = llama_state_seq_set_data_ext(ctx, data_tgt.data(), data_tgt.size(), seq_id, flags);
-    if (n != data_tgt.size()) {
-        GGML_ABORT("checkpoint size mismatch: expected %zu, got %zu\n", data_tgt.size(), n);
-    }
+    return n == data_tgt.size();
 }
 
-void common_prompt_checkpoint::load_dft(
+bool common_prompt_checkpoint::load_dft(
         llama_context * ctx,
         llama_seq_id seq_id,
         llama_state_seq_flags flags) const {
     if (ctx == nullptr) {
-        return;
+        return true;
     }
 
     if (data_dft.empty()) {
-        return;
+        return true;
     }
 
     const size_t n = llama_state_seq_set_data_ext(ctx, data_dft.data(), data_dft.size(), seq_id, flags);
-    if (n != data_dft.size()) {
-        GGML_ABORT("checkpoint size mismatch: expected %zu, got %zu\n", data_dft.size(), n);
-    }
+    return n == data_dft.size();
 }
 
 void common_prompt_checkpoint::clear_tgt() {
