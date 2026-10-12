@@ -62,6 +62,7 @@ a wide range of hardware - locally and in the cloud.
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP and Moore Threads GPUs via MUSA)
 - Vulkan and SYCL backend support
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
+- Emulated analog in-memory computing backend (`--analog`): conductance arrays with CPU and Vulkan kernels for the peripheral passes
 
 The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-org/ggml) library.
 
@@ -69,6 +70,7 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 
 | Backend | Target devices |
 | --- | --- |
+| [Analog (emulated array)](docs/backend/ANALOG.md) | All |
 | [BLAS](docs/build.md#blas-build) | All |
 | [BLIS](docs/backend/BLIS.md) | All |
 | [CANN](docs/build.md#cann) | Ascend NPU |
@@ -86,6 +88,51 @@ The `llama.cpp` project is build on top of the [ggml](https://github.com/ggml-or
 | [Vulkan](docs/build.md#vulkan) | GPU |
 | [WebGPU](docs/build.md#webgpu) | All |
 | [ZenDNN](docs/build.md#zendnn) | AMD CPU |
+
+## Analog array backend (this fork)
+
+The `--analog` switch runs the matrix multiplications on an emulated analog in-memory computing
+accelerator: the weights are programmed into conductance arrays (cell precision, programming error,
+drift, IR drop, readout noise), and the peripheral passes of the tile - input DAC, programming and
+readout - run as parallel CPU kernels or as Vulkan compute shaders. A device model reports the time
+and the energy the array would need. The emulation itself is CPU-bound and slower than the stock CPU
+backend; what it buys is the model. The device model and the measurements against the CPU backend
+are in [docs/backend/ANALOG.md](docs/backend/ANALOG.md).
+
+Build and try it on any platform (Linux, macOS, Windows):
+
+```sh
+cmake -B build -DGGML_ANALOG=ON
+cmake --build build --config Release -j
+
+./llama-cli        -m model.gguf -p "Hello" --analog
+./llama-perplexity -m model.gguf -f wiki.test.raw --chunks 8 --analog --analog-stats
+./llama-bench      -m model.gguf -p 512 -n 128 --analog
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--analog` / `--no-analog` | use the emulated array at all, or not |
+| `--analog-ideal` | program the array without any error, identical results to the CPU backend |
+| `--analog-bits N` | precision of a cell, 1 to 8 bits (default: 4) |
+| `--analog-tile N` | cells of a tile along the reduction dimension (default: 128) |
+| `--analog-dispatch <cpu\|shader\|vulkan>` | where the array passes run: parallel CPU kernels, the CPU mirror of the shaders, or a Vulkan device |
+| `--analog-threads N` | threads of the array passes |
+| `--analog-latency-ns T` | modeled latency of one array pass, in nanoseconds |
+| `--analog-stats` | array statistics at exit: programmed cells, array operations, modeled time and energy |
+
+The same settings exist as `GGML_ANALOG_*` environment variables, documented in
+[ANALOG.md](docs/backend/ANALOG.md), e.g. `GGML_ANALOG_ENABLE=1 GGML_ANALOG_BITS_W=2 ./llama-cli -m model.gguf -p "Hello"`.
+
+`--analog-dispatch shader` exercises the compute shaders on their CPU mirror (bit-identical to the
+kernels); `vulkan` runs the SPIR-V modules on a Vulkan 1.1 device with `shaderInt64` and falls back
+to the mirror, with the reason logged, when no device can be initialized. On Windows the backend
+needs no OpenMP (`std::thread` fallback), the Vulkan loader is opened at runtime (`vulkan-1.dll`),
+and the shaders only need `glslangValidator.exe` or `glslc.exe` (`GGML_ANALOG_GLSLC`).
+
+Tests and measurements: `ctest --test-dir build -R analog`, `test-analog-backend`,
+`test-analog-kernels`, and the benchmark of
+[benches/analog](benches/analog/README.md) with its [results](benches/analog/RESULTS.md).
 
 ## Documentation
 

@@ -137,6 +137,31 @@ Check [Optimizing and Running LLaMA2 on Intel® CPU](https://builders.intel.com/
 
 Any other BLAS library can be used by setting the `GGML_BLAS_VENDOR` option. See the [CMake documentation](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) for a list of supported vendors.
 
+## Analog Build
+
+This is an emulation of an analog in-memory computing accelerator (memristor / ReRAM crossbars)
+running on the CPU. It is a research tool: it is not faster than the CPU backend, but it models
+cell precision, programming error, drift, IR drop, readout noise and the energy of a matrix
+multiplication, which makes it possible to study how a model fares on such a device before the
+device exists.
+
+```sh
+cmake -B build -DGGML_ANALOG=ON
+cmake --build build --config Release
+./llama-cli -m model.gguf -p "Hello" --analog
+# or: GGML_ANALOG_ENABLE=1 ./llama-cli -m model.gguf -p "Hello"
+```
+
+The passes of the array model (input DAC, programming of a tile, readout) are compiled both as
+parallel CPU kernels and, when a GLSL compiler (`glslangValidator` or `glslc`) is found, as Vulkan
+compute shaders: the shaders are built to SPIR-V and embedded in the library, and they are
+dispatched on a Vulkan device when the Vulkan headers are present and the machine has one. Without
+either tool the backend builds and runs exactly the same, the shaders are simply replaced by their
+CPU mirror. `GGML_ANALOG_SHADERS=OFF` disables the shader build.
+
+Check [ANALOG.md](./backend/ANALOG.md) for the device model, the environment variables and the
+measurements against the CPU backend.
+
 ## Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
