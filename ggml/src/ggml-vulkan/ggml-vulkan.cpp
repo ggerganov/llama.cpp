@@ -15858,6 +15858,8 @@ static ggml_backend_dev_t ggml_backend_vk_reg_get_device(ggml_backend_reg_t reg,
 #if !defined(_WIN32)
 static constexpr size_t ggml_vk_comm_f16_min_size = 1024 * 1024;
 
+// SYNC_FD: only cross-device handle type allowed by the spec. Revisit with VK_EXT_external_semaphore_drm_syncobj
+// (shared timeline semaphores, no per-round export/import).
 struct ggml_backend_vk_comm_context {
     std::vector<ggml_backend_t>                     backends;
     std::vector<ggml_backend_vk_context *>          vkctx;
@@ -15865,7 +15867,7 @@ struct ggml_backend_vk_comm_context {
     std::vector<PFN_vkGetSemaphoreFdKHR>            get_fd;
     std::vector<PFN_vkImportSemaphoreFdKHR>         import_fd;
     std::vector<vk::Semaphore>                      sem;
-    std::vector<std::vector<vk::Semaphore>>         peer_sem;
+    std::vector<int>                                fd;
     std::vector<void *>                             host_ptr;
     std::vector<std::vector<ggml_backend_buffer_t>> host_buf;
     size_t                                          align = 4096;
@@ -15875,81 +15877,61 @@ struct ggml_backend_vk_comm_context {
     ggml_tensor *                                   slot  = nullptr;
 };
 
-static vk::Semaphore ggml_vk_create_export_timeline(vk_device & device) {
-    vk::ExportSemaphoreCreateInfo esci{ vk::ExternalSemaphoreHandleTypeFlagBits::eOpaqueFd };
-    vk::SemaphoreTypeCreateInfo   stci{ vk::SemaphoreType::eTimeline, 0 };
-    stci.pNext = &esci;
+static vk::Semaphore ggml_vk_comm_create_export_semaphore(vk_device & device) {
+    vk::ExportSemaphoreCreateInfo esci{ vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd };
     vk::SemaphoreCreateInfo sci{};
-    sci.pNext = &stci;
+    sci.pNext = &esci;
     return device->device.createSemaphore(sci);
 }
 
-static vk::Semaphore ggml_vk_import_timeline(ggml_backend_vk_comm_context * comm, size_t dst, size_t src) {
+// Requires a submitted signal on sem[i]; the export resets it.
+static int ggml_vk_comm_export(ggml_backend_vk_comm_context * comm, size_t i) {
     int fd = -1;
     VkSemaphoreGetFdInfoKHR gi{};
     gi.sType      = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR;
-    gi.semaphore  = comm->sem[src];
-    gi.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT;
-    VkResult result = comm->get_fd[src]((VkDevice) comm->device[src]->device, &gi, &fd);
+    gi.semaphore  = comm->sem[i];
+    gi.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
+    const VkResult result = comm->get_fd[i]((VkDevice) comm->device[i]->device, &gi, &fd);
     if (result != VK_SUCCESS) {
-        throw vk::SystemError(vk::make_error_code((vk::Result) result), "ggml_vulkan: vkGetSemaphoreFdKHR");
+        GGML_ABORT("ggml_vulkan: vkGetSemaphoreFdKHR failed: %d", (int) result);
     }
+    return fd;
+}
 
-    vk::Semaphore sem;
-    try {
-        vk::SemaphoreTypeCreateInfo stci{ vk::SemaphoreType::eTimeline, 0 };
-        vk::SemaphoreCreateInfo sci{};
-        sci.pNext = &stci;
-        sem = comm->device[dst]->device.createSemaphore(sci);
-
-        VkImportSemaphoreFdInfoKHR isi{};
-        isi.sType      = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR;
-        isi.semaphore  = sem;
-        isi.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT;
-        isi.fd         = fd;
-        result = comm->import_fd[dst]((VkDevice) comm->device[dst]->device, &isi);
-        if (result != VK_SUCCESS) {
-            throw vk::SystemError(vk::make_error_code((vk::Result) result), "ggml_vulkan: vkImportSemaphoreFdKHR");
-        }
-    } catch (...) {
-        if (sem) {
-            comm->device[dst]->device.destroySemaphore(sem);
-        }
+// Fresh semaphore per import: it is destroyed in ggml_vk_graph_cleanup, after the wait completed.
+static vk::Semaphore ggml_vk_comm_import(ggml_backend_vk_comm_context * comm, size_t i, int fd) {
+    const vk::Semaphore sem = ggml_vk_create_binary_semaphore(comm->vkctx[i])->s;
+    VkImportSemaphoreFdInfoKHR isi{};
+    isi.sType      = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR;
+    isi.semaphore  = sem;
+    isi.flags      = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT;
+    isi.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
+    isi.fd         = fd;
+    const VkResult result = comm->import_fd[i]((VkDevice) comm->device[i]->device, &isi);
+    if (result != VK_SUCCESS) {
         close(fd);
-        throw;
+        GGML_ABORT("ggml_vulkan: vkImportSemaphoreFdKHR failed: %d", (int) result);
     }
     return sem;
 }
 
-static bool ggml_vk_comm_opaque_fd_supported(ggml_backend_vk_comm_context * comm) {
+static bool ggml_vk_comm_sync_fd_supported(ggml_backend_vk_comm_context * comm) {
     const size_t n = comm->device.size();
-    uint8_t driver_uuid[VK_UUID_SIZE];
     comm->get_fd.resize(n);
     comm->import_fd.resize(n);
     for (size_t i = 0; i < n; i++) {
-        vk::PhysicalDeviceIDProperties id;
-        vk::PhysicalDeviceProperties2  p2;
-        p2.pNext = &id;
-        comm->device[i]->physical_device.getProperties2(&p2);
-        if (i == 0) {
-            memcpy(driver_uuid, id.driverUUID.data(), VK_UUID_SIZE);
-        } else if (memcmp(driver_uuid, id.driverUUID.data(), VK_UUID_SIZE) != 0) {
-            return false;
-        }
-
         comm->get_fd[i]    = (PFN_vkGetSemaphoreFdKHR)    comm->device[i]->device.getProcAddr("vkGetSemaphoreFdKHR");
         comm->import_fd[i] = (PFN_vkImportSemaphoreFdKHR) comm->device[i]->device.getProcAddr("vkImportSemaphoreFdKHR");
         if (!comm->get_fd[i] || !comm->import_fd[i]) {
             return false;
         }
 
-        vk::SemaphoreTypeCreateInfo             stci{ vk::SemaphoreType::eTimeline, 0 };
-        vk::PhysicalDeviceExternalSemaphoreInfo esi{ vk::ExternalSemaphoreHandleTypeFlagBits::eOpaqueFd };
-        esi.pNext = &stci;
+        vk::PhysicalDeviceExternalSemaphoreInfo esi{ vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd };
         vk::ExternalSemaphoreProperties esp = comm->device[i]->physical_device.getExternalSemaphoreProperties(esi);
         const vk::ExternalSemaphoreFeatureFlags need =
             vk::ExternalSemaphoreFeatureFlagBits::eExportable | vk::ExternalSemaphoreFeatureFlagBits::eImportable;
-        if ((esp.externalSemaphoreFeatures & need) != need) {
+        if ((esp.externalSemaphoreFeatures & need) != need ||
+            !(esp.compatibleHandleTypes & vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd)) {
             return false;
         }
     }
@@ -15973,13 +15955,6 @@ static void ggml_backend_vk_comm_free(void * comm_ctx) {
     for (ggml_backend_t backend : comm->backends) {
         ggml_backend_synchronize(backend);
     }
-    for (size_t i = 0; i < comm->peer_sem.size(); i++) {
-        for (vk::Semaphore s : comm->peer_sem[i]) {
-            if (s) {
-                comm->device[i]->device.destroySemaphore(s);
-            }
-        }
-    }
     for (size_t i = 0; i < comm->sem.size(); i++) {
         if (comm->sem[i]) {
             comm->device[i]->device.destroySemaphore(comm->sem[i]);
@@ -16002,7 +15977,7 @@ static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_back
     comm->vkctx.resize(n_backends);
     comm->device.resize(n_backends);
     comm->sem.resize(n_backends);
-    comm->peer_sem.assign(n_backends, std::vector<vk::Semaphore>(n_backends));
+    comm->fd.assign(n_backends, -1);
     comm->host_ptr.assign(n_backends, nullptr);
     comm->host_buf.assign(n_backends, std::vector<ggml_backend_buffer_t>(n_backends, nullptr));
 
@@ -16013,7 +15988,7 @@ static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_back
         ok = ok && comm->device[i]->external_memory_host && comm->device[i]->external_semaphore && !comm->device[i]->serialize_submissions;
         comm->align = std::max(comm->align, (size_t) comm->device[i]->min_imported_host_pointer_alignment);
     }
-    ok = ok && ggml_vk_comm_opaque_fd_supported(comm);
+    ok = ok && ggml_vk_comm_sync_fd_supported(comm);
     if (!ok) {
         GGML_LOG_WARN("ggml_vulkan: shared semaphore all-reduce unavailable, using generic all-reduce\n");
         ggml_backend_vk_comm_free(comm);
@@ -16022,14 +15997,7 @@ static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_back
 
     try {
         for (size_t i = 0; i < n_backends; i++) {
-            comm->sem[i] = ggml_vk_create_export_timeline(comm->device[i]);
-        }
-        for (size_t i = 0; i < n_backends; i++) {
-            for (size_t j = 0; j < n_backends; j++) {
-                if (i != j) {
-                    comm->peer_sem[i][j] = ggml_vk_import_timeline(comm, i, j);
-                }
-            }
+            comm->sem[i] = ggml_vk_comm_create_export_semaphore(comm->device[i]);
         }
     } catch (const vk::SystemError & e) {
         GGML_LOG_WARN("ggml_vulkan: shared semaphore initialization failed: %s, using generic all-reduce\n", e.what());
@@ -16084,7 +16052,7 @@ static void ggml_vk_comm_set_slot(ggml_tensor * slot, const ggml_tensor * src, g
     slot->data   = (char *) ggml_backend_buffer_get_base(buf) + offs;
 }
 
-static void ggml_vk_comm_submit(ggml_backend_vk_context * ctx, vk_context & c, vk::Semaphore signal, uint64_t value) {
+static void ggml_vk_comm_submit(ggml_backend_vk_context * ctx, vk_context & c, vk::Semaphore signal) {
     ggml_vk_ctx_end(c);
     for (auto & cpy : c->in_memcpys) {
         memcpy(cpy.dst, cpy.src, cpy.n);
@@ -16095,15 +16063,15 @@ static void ggml_vk_comm_submit(ggml_backend_vk_context * ctx, vk_context & c, v
     c->in_memcpys.clear();
     c->memsets.clear();
     if (signal) {
-        c->seqs.back().back().signal_semaphores.push_back({ signal, value });
+        c->seqs.back().back().signal_semaphores.push_back({ signal, 0 });
     }
     ggml_vk_submit(c, {});
     ctx->submit_pending = true;
     ctx->compute_ctx.reset();
 }
 
-// Phase A: each device writes its partial into slot (round & 1) of its own host buffer and signals round.
-// Phase B: each device waits for round on all peers and adds their slots into its tensor.
+// Phase A: each device writes its partial into slot (round & 1) of its own host buffer, signals and exports its semaphore.
+// Phase B: each device imports and waits on all peers' fds and adds their slots into its tensor.
 // Slot reuse is safe: device i writes slot s in round k after its phase B of round k-1, which waited on each
 // peer's phase A of round k-1, which that peer submitted after its phase B of round k-2, the last reader of s.
 // All phase A submits go out before any phase B submit, so a fence wait on one device never blocks on a peer.
@@ -16152,16 +16120,22 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
             ggml_vk_comm_set_slot(comm->slot, t, wire, comm->host_buf[i][i], slot_offs);
             ggml_vk_cpy(ctx, c, t, comm->slot);
         }
-        ggml_vk_comm_submit(ctx, c, comm->sem[i], round);
+        ggml_vk_comm_submit(ctx, c, comm->sem[i]);
+        comm->fd[i] = ggml_vk_comm_export(comm, i);
     }
 
     for (size_t i = 0; i < n; i++) {
         ggml_backend_vk_context * ctx = comm->vkctx[i];
         vk_context c = ggml_vk_get_compute_ctx(ctx);
         for (size_t j = 0; j < n; j++) {
-            if (j != i) {
-                c->s->wait_semaphores.push_back({ comm->peer_sem[i][j], round });
+            // -1: already signaled
+            if (j == i || comm->fd[j] < 0) {
+                continue;
             }
+            const bool last = i == (j == n - 1 ? n - 2 : n - 1);
+            const int  fd   = last ? comm->fd[j] : dup(comm->fd[j]);
+            GGML_ASSERT(fd >= 0);
+            c->s->wait_semaphores.push_back({ ggml_vk_comm_import(comm, i, fd), 0 });
         }
         for (size_t j = 0; j < n; j++) {
             if (j == i) {
@@ -16173,7 +16147,7 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
         }
         // Small reductions stay open and go out with the next graph's first submit
         if (wire != GGML_TYPE_F32 || vk_perf_logger_enabled) {
-            ggml_vk_comm_submit(ctx, c, {}, 0);
+            ggml_vk_comm_submit(ctx, c, {});
         }
     }
     return true;
