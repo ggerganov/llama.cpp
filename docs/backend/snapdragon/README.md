@@ -329,11 +329,10 @@ on 4 physical NPUs, or `--devices 'HTP0[0-1:0],HTP1[0-1:1]'` on 2 physical NPUs 
 
 - `GGML_HEXAGON_DMA64=0` (default: enabled on v81+)
   Disables 64-bit DMA for model weights. Set to `1` to enable it explicitly on a supported architecture.
-  
+
 - `GGML_HEXAGON_POWER_MODE=default`
   Controls the DCVS/HMX power mode requested from the HTP DSP for the session. Modes are listed
-  from lowest to highest power. All modes except `burst` leave DCVS enabled and DSP sleep allowed,
-  so the HTP can back off under thermal pressure.
+  from lowest to highest power. All modes except `burst` leave DCVS enabled and keep the HTP awake.
 
   - `low_power_saver`
   - `power_saver`

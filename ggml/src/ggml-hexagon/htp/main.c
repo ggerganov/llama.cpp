@@ -363,8 +363,8 @@ static void htp_main_thread(void * context);
 static void htp_packet_callback(dspqueue_t queue, int error, void * context);
 static void htp_error_callback(dspqueue_t queue, int error, void * context);
 
-// Non-BURST modes leave DCVS enabled and sleep allowed so the HTP can back off
-// under thermal pressure. BURST pins all corners to MAX and disables both.
+// Non-BURST modes leave DCVS enabled and keep the HTP awake.
+// BURST pins all corners to MAX and disables DCVS.
 // Corner constants are from HAP_power.h (HAP_dcvs_voltage_corner_t / HAP_dcvs_exp_vcorner_t).
 struct htp_power_profile {
     boolean  dcvs_enable;
@@ -390,7 +390,7 @@ struct htp_power_profile {
         .core_min_corner    = (min_c), \
         .core_max_corner    = (max_c), \
         .core_target_corner = (max_c), \
-        .sleep_disable      = FALSE, \
+        .sleep_disable      = TRUE, \
         .hmx_min_corner     = (hmx_c), \
         .hmx_max_corner     = (hmx_c), \
         .hmx_target_corner  = (hmx_c), \
