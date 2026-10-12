@@ -2888,7 +2888,6 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
 
         {
             ggml_metal_kargs_mul_mm_id_map0 args = {
-                ne02,
                 ne10,
                 ne11, // n_expert_used (bcast)
                 nb11,

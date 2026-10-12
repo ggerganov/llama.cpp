@@ -8,6 +8,7 @@ constant short FC_mul_mm_ne13  [[function_constant(FC_MUL_MM + 3)]];
 constant short FC_mul_mm_r2    [[function_constant(FC_MUL_MM + 4)]];
 constant short FC_mul_mm_r3    [[function_constant(FC_MUL_MM + 5)]];
 constant bool FC_mul_mm_id_amax [[function_constant(FC_MUL_MM + 6)]];
+constant int32_t FC_mul_mm_id_map0_ne02 [[function_constant(FC_MUL_MM + 7)]];
 
 // each block_q contains 16*nl weights
 #ifdef GGML_METAL_HAS_TENSOR
@@ -373,10 +374,10 @@ kernel void kernel_mul_mm_id_map0(
 
     // per expert: entry count (pass 1), replaced by the base offset of the slice (pass 2)
     threadgroup uint32_t * cnt = (threadgroup uint32_t *) (shmem);
-    threadgroup uint32_t * bas = cnt + args.ne02;
+    threadgroup uint32_t * bas = cnt + FC_mul_mm_id_map0_ne02;
 
     // staging of the ids of ntg tokens
-    threadgroup uint16_t * sids = (threadgroup uint16_t *) (bas + args.ne02);
+    threadgroup uint16_t * sids = (threadgroup uint16_t *) (bas + FC_mul_mm_id_map0_ne02);
 
     // pass 1: count the entries of this expert - every occurrence of this expert within the
     // ids is an entry (duplicate ids produce multiple entries for the same token)
@@ -386,8 +387,7 @@ kernel void kernel_mul_mm_id_map0(
         if (i21 + tpitg < args.ne21) {
             device const int32_t * src2_i32 = (device const int32_t *) (src2 + (i21 + tpitg)*args.nb21);
 
-            #pragma unroll(ne20)
-            for (short i20 = 0; i20 < ne20; i20++) {
+            FOR_UNROLL (short i20 = 0; i20 < ne20; i20++) {
                 sids[tpitg*ne20 + i20] = src2_i32[i20];
             }
         }
@@ -401,8 +401,7 @@ kernel void kernel_mul_mm_id_map0(
 
             threadgroup const uint16_t * sids_t = sids + t*ne20;
 
-            #pragma unroll(ne20)
-            for (short i20 = 0; i20 < ne20; i20++) {
+            FOR_UNROLL (short i20 = 0; i20 < ne20; i20++) {
                 n_all += sids_t[i20] == ide;
             }
         }
@@ -421,7 +420,7 @@ kernel void kernel_mul_mm_id_map0(
 
         device uint32_t * tpe_u32 = (device uint32_t *) (htpe);
 
-        for (int e = 0; e < args.ne02; ++e) {
+        for (int e = 0; e < FC_mul_mm_id_map0_ne02; ++e) {
             const uint32_t n = cnt[e];
 
             bas[e] = base;
@@ -444,8 +443,7 @@ kernel void kernel_mul_mm_id_map0(
         if (i21 + tpitg < args.ne21) {
             device const int32_t * src2_i32 = (device const int32_t *) (src2 + (i21 + tpitg)*args.nb21);
 
-            #pragma unroll(ne20)
-            for (short i20 = 0; i20 < ne20; i20++) {
+            FOR_UNROLL (short i20 = 0; i20 < ne20; i20++) {
                 sids[tpitg*ne20 + i20] = src2_i32[i20];
             }
         }
@@ -462,8 +460,7 @@ kernel void kernel_mul_mm_id_map0(
             short first = -1;
             short n_ents = 0;
 
-            #pragma unroll(ne20)
-            for (short i20 = 0; i20 < ne20; i20++) {
+            FOR_UNROLL (short i20 = 0; i20 < ne20; i20++) {
                 const short hit = sids_t[i20] == ide;
 
                 first = hit && first < 0 ? i20 : first;
@@ -479,8 +476,7 @@ kernel void kernel_mul_mm_id_map0(
                 // duplicate ids: the remaining matches of this token
                 short j = 1;
 
-                #pragma unroll(ne20)
-                for (short i20 = 0; i20 < ne20; i20++) {
+                FOR_UNROLL (short i20 = 0; i20 < ne20; i20++) {
                     if (sids_t[i20] == ide && i20 != first) {
                         ids_i32[ient + j] = (i21 + t)*ne20 + i20;
                         j += 1;
