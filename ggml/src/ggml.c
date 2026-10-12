@@ -329,6 +329,20 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 #endif
 
 
+// the thread sanitizer does not intercept vm_allocate and vm_deallocate, so it never sees a page
+// range change hands - a thread that writes a range recycled from another one still sees the
+// accesses of the previous owner as unsynchronized and reports a data race. posix_memalign is
+// intercepted, so allocate with it when the sanitizer is enabled
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define GGML_TSAN_ENABLED 1
+#endif
+#else
+#if defined(__SANITIZE_THREAD__)
+#define GGML_TSAN_ENABLED 1
+#endif
+#endif
+
 void * ggml_aligned_malloc(size_t size) {
 #if defined(__s390x__)
     const int alignment = 256;
@@ -346,7 +360,7 @@ void * ggml_aligned_malloc(size_t size) {
     void * aligned_memory = NULL;
   #ifdef GGML_USE_CPU_HBM
     int result = hbw_posix_memalign(&aligned_memory, alignment, size);
-  #elif TARGET_OS_OSX
+  #elif TARGET_OS_OSX && !defined(GGML_TSAN_ENABLED)
     GGML_UNUSED(alignment);
     kern_return_t alloc_status = vm_allocate((vm_map_t) mach_task_self(), (vm_address_t *) &aligned_memory, size, VM_FLAGS_ANYWHERE);
     int result = EFAULT;
@@ -393,7 +407,7 @@ void ggml_aligned_free(void * ptr, size_t size) {
     if (ptr != NULL) {
         hbw_free(ptr);
     }
-#elif TARGET_OS_OSX
+#elif TARGET_OS_OSX && !defined(GGML_TSAN_ENABLED)
     if (ptr != NULL) {
         vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)ptr, size);
     }
