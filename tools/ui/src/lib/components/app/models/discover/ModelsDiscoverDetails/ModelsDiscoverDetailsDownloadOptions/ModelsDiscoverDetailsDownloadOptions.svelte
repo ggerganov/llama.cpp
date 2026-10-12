@@ -2,6 +2,7 @@
 	import { classify, labelFor } from './download-options.utils';
 	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
 	import ModelsDiscoverDetailsDownloadOptionsRow from './ModelsDiscoverDetailsDownloadOptionsRow.svelte';
+	import { ChevronDown, Terminal } from '@lucide/svelte';
 	import { DialogConfirmDownload } from '$lib/components/app/dialogs';
 	import { ModelDownloadConfirmAction, ModelSelectableFileKind } from '$lib/enums';
 	import { HuggingFaceService, ModelsService } from '$lib/services';
@@ -12,6 +13,8 @@
 		ModelQuantOption,
 		ModelSelectableFile
 	} from '$lib/types';
+	import { cubicOut } from 'svelte/easing';
+	import { slide } from 'svelte/transition';
 
 	interface Props {
 		/** Full HuggingFace repo id, e.g. `ggml-org/gemma-3-4b-it-GGUF`. */
@@ -27,6 +30,10 @@
 	}
 
 	let { bitDepthRows, getDownloadState, modelId }: Props = $props();
+
+	// The terminal command stays collapsed until asked for; it re-collapses when
+	// another model opens, since this panel remounts per model.
+	let commandOpen = $state(false);
 
 	// Destructive chip actions (delete a downloaded model, cancel a download) are
 	// confirmed here rather than inside each chip: a single shared dialog owned by
@@ -158,9 +165,38 @@
 			{/each}
 		</div>
 
-		<!-- Terminal command preview, standalone: its picks are not bound to the chips. -->
-		<div class="border-t border-border/50 px-4 pt-3.5 pb-4 dark:border-border/35">
-			<ModelsDiscoverDetailsDownloadOptionsDownloadCommand {draftOptions} {mainOptions} {modelId} />
+		<!-- Terminal command, collapsed until asked for; its picks are not bound to the chips. -->
+		<div class="border-t border-border/50 px-4 pt-2.5 pb-3 dark:border-border/35">
+			<button
+				aria-expanded={commandOpen}
+				class="flex w-full cursor-pointer items-center gap-2 rounded-md py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+				onclick={() => (commandOpen = !commandOpen)}
+				type="button"
+			>
+				<Terminal class="h-3.5 w-3.5 shrink-0" />
+
+				<span class="flex-1">
+					{commandOpen
+						? 'Hide the download command for terminal'
+						: 'Show the download command for terminal'}
+				</span>
+
+				<ChevronDown
+					class="h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] {commandOpen
+						? 'rotate-180'
+						: ''}"
+				/>
+			</button>
+
+			{#if commandOpen}
+				<div transition:slide={{ duration: 200, easing: cubicOut }} class="pt-2.5">
+					<ModelsDiscoverDetailsDownloadOptionsDownloadCommand
+						{draftOptions}
+						{mainOptions}
+						{modelId}
+					/>
+				</div>
+			{/if}
 		</div>
 	</section>
 {/if}
