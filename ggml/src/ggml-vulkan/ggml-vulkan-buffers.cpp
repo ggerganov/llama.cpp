@@ -280,7 +280,7 @@ void * ggml_vk_host_malloc(size_t size) {
     ggml_vk_instance_init();
 
     if (vk_instance.multi_device) {
-        const size_t align      = std::max<size_t>(vk_instance.host_import_alignment, sizeof(void *));
+        const size_t align      = std::max<size_t>(vk_instance.host_import_alignment, TENSOR_ALIGNMENT);
         const size_t alloc_size = (size + align - 1) / align * align;
 
         void * ptr = portable_aligned_malloc(align, alloc_size);

@@ -5388,11 +5388,10 @@ void ggml_vk_instance_init() {
             GGML_LOG_INFO("ggml_vulkan: No devices found.\n");
             return;
         }
-
-        vk_instance.multi_device = vk_instance.device_indices.size() > 1;
     }
     GGML_LOG_DEBUG("ggml_vulkan: Found %zu Vulkan devices:\n", vk_instance.device_indices.size());
 
+    bool all_external_memory_host = vk_instance.device_indices.size() > 1;
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         vk::PhysicalDevice vkdev = devices[vk_instance.device_indices[i]];
         std::vector<vk::ExtensionProperties> extensionprops = vkdev.enumerateDeviceExtensionProperties();
@@ -5415,10 +5414,14 @@ void ggml_vk_instance_init() {
             props2.pNext = &ext_props;
             vkdev.getProperties2(&props2);
             vk_instance.host_import_alignment = std::max<size_t>(vk_instance.host_import_alignment, ext_props.minImportedHostPointerAlignment);
+        } else {
+            all_external_memory_host = false;
         }
 
         ggml_vk_print_gpu_info(i);
     }
+
+    vk_instance.multi_device = all_external_memory_host;
 }
 
 void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
