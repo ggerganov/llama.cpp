@@ -108,21 +108,21 @@ typedef void (*compute_scalar_t)(
     uint32_t cur_i11, uint32_t ne11, uint32_t n_rows,
     size_t dst_stride, size_t src0_stride, uint32_t ne00);
 
-#define DEFINE_COMPUTE_SCALAR(NAME, TYPE, HVX_STMT)              \
-static void compute_scalar_##NAME(                               \
-    uint8_t * dst, const uint8_t * src0, const void * s1_table,  \
+#define DEFINE_COMPUTE_SCALAR(NAME, TYPE, HVX_STMT)             \
+static void compute_scalar_##NAME(                              \
+    uint8_t * dst, const uint8_t * src0, const void * s1_table, \
     uint32_t cur_i11, uint32_t ne11, uint32_t n_rows,           \
-    size_t dst_stride, size_t src0_stride, uint32_t ne00) {      \
-    const TYPE * table = (const TYPE *) s1_table;                \
-    for (uint32_t r = 0; r < n_rows; r++) {                      \
-        uint8_t * r_dst = dst + r * dst_stride;                  \
-        const uint8_t * r_src0 = src0 + r * src0_stride;         \
-        TYPE val = table[cur_i11];                               \
-        HVX_STMT;                                                \
-        if (ne11 > 1 && ++cur_i11 == ne11) {                     \
-            cur_i11 = 0;                                         \
-        }                                                        \
-    }                                                            \
+    size_t dst_stride, size_t src0_stride, uint32_t ne00) {     \
+    const TYPE * table = (const TYPE *) s1_table;               \
+    for (uint32_t r = 0; r < n_rows; r++) {                     \
+        uint8_t * r_dst = dst + r * dst_stride;                 \
+        const uint8_t * r_src0 = src0 + r * src0_stride;        \
+        TYPE val = table[cur_i11];                              \
+        HVX_STMT;                                               \
+        if (ne11 > 1 && ++cur_i11 == ne11) {                    \
+            cur_i11 = 0;                                        \
+        }                                                       \
+    }                                                           \
 }
 
 DEFINE_COMPUTE_SCALAR(add_f32, float,    hvx_add_scalar_f32_aa(r_dst, r_src0, val, ne00))
@@ -1149,11 +1149,9 @@ static int execute_op_binary(struct htp_ops_context * octx) {
                 for (uint32_t i12 = 0; i12 < ne12; i12++) {
                     dma_addr_t src_addr = src1->data + i13 * src1->nb[3] + i12 * src1->nb[2];
                     uint8_t * dst_ptr = vtcm_src1 + (i13 * ne12 * ne11 + i12 * ne11) * elem_size;
-                    if (!dma_queue_push(dma_q, dma_make_data(dst_ptr, src_addr),
-                                        elem_size, src1->nb[1], elem_size, ne11)) {
+                    while (!dma_queue_push(dma_q, dma_make_data(dst_ptr, src_addr),
+                                           elem_size, src1->nb[1], elem_size, ne11)) {
                         dma_queue_pop(dma_q);
-                        dma_queue_push(dma_q, dma_make_data(dst_ptr, src_addr),
-                                       elem_size, src1->nb[1], elem_size, ne11);
                     }
                 }
             }
@@ -1316,13 +1314,6 @@ static int execute_op_binary(struct htp_ops_context * octx) {
 }
 
 int op_binary(struct htp_ops_context * octx) {
-
-    // Does not support permutations of src1
-    const struct htp_tensor * src1 = octx->src[1];
-    if (src1->nb[1] < src1->nb[0]) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     const uint32_t src0_type = octx->src[0]->type;
     if ((src0_type == HTP_TYPE_F32) || (src0_type == HTP_TYPE_F16)) {
         return execute_op_binary(octx);

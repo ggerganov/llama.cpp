@@ -5965,13 +5965,29 @@ static bool ggml_hexagon_precompute_binary_params(
     const bool src1_contig_dim2 = (src1->nb[3] == src1->ne[2] * src1->nb[2]);
     const bool dst_contig_dim2  = (dst->nb[3]  == src0->ne[2] * dst->nb[2]);
 
-    kparams->split_at_ne01 = (is_add_id || kernel_type == HTP_BINARY_KERNEL_SCALAR ||
-        ((src0->ne[2] > 1) && ((src1->ne[1] > 1) || (src1->ne[2] > 1) ||
-                               !src0_contig_dim1 || !src1_contig_dim1 || !dst_contig_dim1))) ? 1 : 0;
+    bool split_at_ne01 = false;
+    if (src0->ne[2] > 1) {
+        if (kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) {
+            split_at_ne01 = (src1->ne[2] != src0->ne[2]) || !src0_contig_dim1 || !src1_contig_dim1 || !dst_contig_dim1;
+        } else if (kernel_type == HTP_BINARY_KERNEL_ROW_BCAST) {
+            split_at_ne01 = !src0_contig_dim1 || !dst_contig_dim1;
+        } else {
+            split_at_ne01 = true;
+        }
+    }
+    kparams->split_at_ne01 = split_at_ne01 ? 1 : 0;
 
-    kparams->split_at_ne02 = ((src0->ne[3] > 1) &&
-        ((src1->ne[2] > 1) || (src1->ne[3] > 1) ||
-         !src0_contig_dim2 || !src1_contig_dim2 || !dst_contig_dim2)) ? 1 : 0;
+    bool split_at_ne02 = false;
+    if (src0->ne[3] > 1) {
+        if (kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) {
+            split_at_ne02 = (src1->ne[3] != src0->ne[3]) || !src0_contig_dim2 || !src1_contig_dim2 || !dst_contig_dim2;
+        } else if (kernel_type == HTP_BINARY_KERNEL_ROW_BCAST) {
+            split_at_ne02 = !src0_contig_dim2 || !dst_contig_dim2;
+        } else {
+            split_at_ne02 = true;
+        }
+    }
+    kparams->split_at_ne02 = split_at_ne02 ? 1 : 0;
 
     struct htp_binary_vtcm_layout L;
     htp_binary_vtcm_layout_build(&L, kparams, sess->vtcm_size);
