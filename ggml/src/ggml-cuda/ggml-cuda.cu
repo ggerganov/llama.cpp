@@ -91,6 +91,8 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <fcntl.h>
+#include <unistd.h>
 
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
@@ -872,7 +874,22 @@ static const char * ggml_backend_cuda_buffer_type_get_name(ggml_backend_buffer_t
     return ctx->name.c_str();
 }
 
+// cuda shareable buffer (CUDA VMM, Linux) - defined before its first use below
+#if defined(GGML_USE_VMM) && !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+#define GGML_CUDA_SHAREABLE
+#endif
+
+#ifdef GGML_CUDA_SHAREABLE
+static const char * ggml_backend_cuda_shareable_buffer_type_get_name(ggml_backend_buffer_type_t buft);
+#endif
+
 static bool ggml_backend_buft_is_cuda(ggml_backend_buffer_type_t buft) {
+#ifdef GGML_CUDA_SHAREABLE
+    // the shareable VMM buft is device-local memory on the same device
+    if (buft->iface.get_name == ggml_backend_cuda_shareable_buffer_type_get_name) {
+        return true;
+    }
+#endif
     return buft->iface.get_name == ggml_backend_cuda_buffer_type_get_name;
 }
 
@@ -955,6 +972,653 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
     }
 
     return &ggml_backend_cuda_buffer_types[device];
+}
+
+// cuda shareable buffer (CUDA VMM, Linux)
+//
+// Allocations are single physical VMM segments created with POSIX-fd handles
+// (cuMemCreate + requestedHandleTypes), so another CUDA process can import the
+// fd (cross-process transport is the caller's job - e.g. SCM_RIGHTS over a
+// unix socket) and map the segment read-only, sharing the buffer contents with
+// this process. Typical use: identical weight tensors of independently running
+// model instances resident only once.
+//
+// A shareable buffer of size N spans exactly one segment of
+// round_up(N, granularity) bytes, aligned to the device VMM granularity. The
+// shareable buffer type allocates one segment per tensor (alloc_buffer_n
+// override) so tensors can attach/allocate individually; tensors with foreign
+// segments registered via ggml_backend_cuda_shareable_buffer_type_attach_spec
+// are backed by an imported read-only mapping instead of a fresh allocation.
+
+#ifdef GGML_CUDA_SHAREABLE
+
+struct ggml_backend_cuda_shareable_buffer_context {
+    int      device;            // virtual device index (as set via ggml_cuda_set_device)
+    int      physical_device;   // physical CUDA device id used for cuMem* calls
+    void *   dev_ptr = nullptr; // mapped base address
+    size_t   segment_size = 0;  // physical segment bytes (granularity-rounded)
+    bool     attached = false;  // dev_ptr maps a foreign segment, mapped read-only
+    CUmemGenericAllocationHandle handle = 0; // imported handle (attached only)
+    std::string name;
+
+    ggml_backend_cuda_shareable_buffer_context(int device, int physical_device) :
+        device(device), physical_device(physical_device),
+        name(GGML_CUDA_NAME + std::string("S") + std::to_string(device)) {
+    }
+
+    ~ggml_backend_cuda_shareable_buffer_context() {
+        if (dev_ptr == nullptr) {
+            return;
+        }
+        ggml_cuda_set_device(device);
+        CU_CHECK(cuMemUnmap((CUdeviceptr)dev_ptr, segment_size));
+        CU_CHECK(cuMemAddressFree((CUdeviceptr)dev_ptr, segment_size));
+        if (attached) {
+            // the import holds a reference on the physical allocation (which keeps
+            // the segment alive even after the exporting process exits) - drop it
+            CU_CHECK(cuMemRelease(handle));
+        }
+    }
+};
+
+static void ggml_backend_cuda_shareable_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+    delete ctx;
+}
+
+static bool ggml_backend_buffer_is_cuda_shareable(ggml_backend_buffer_t buffer) {
+    return buffer != nullptr && buffer->iface.free_buffer == ggml_backend_cuda_shareable_buffer_free_buffer;
+}
+
+static void * ggml_backend_cuda_shareable_buffer_get_base(ggml_backend_buffer_t buffer) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+    return ctx->dev_ptr;
+}
+
+static enum ggml_status ggml_backend_cuda_shareable_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+
+    if (tensor->view_src != NULL) {
+        GGML_ASSERT(tensor->view_src->buffer->buft == buffer->buft);
+        return GGML_STATUS_SUCCESS;
+    }
+
+    if (ctx->attached) {
+        // foreign segments are mapped read-only and their padding was zeroed by the
+        // producing process (same tensor bytes and shape -> same padded alloc size);
+        // there is nothing left to initialize
+        return GGML_STATUS_SUCCESS;
+    }
+
+    if (ggml_is_quantized(tensor->type) && tensor->view_src == nullptr && ggml_backend_buffer_get_usage(buffer) != GGML_BACKEND_BUFFER_USAGE_COMPUTE) {
+        // initialize padding to 0 to avoid possible NaN values
+        const size_t original_size = ggml_nbytes(tensor);
+        const size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
+
+        if (padded_size > original_size) {
+            ggml_cuda_set_device(ctx->device);
+            CUDA_CHECK(cudaMemsetAsync((char *)tensor->data + original_size, 0, padded_size - original_size, cudaStreamPerThread));
+            CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+        }
+    }
+    return GGML_STATUS_SUCCESS;
+}
+
+static void ggml_backend_cuda_shareable_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *) buffer->context;
+
+    if (ctx->attached) {
+        GGML_ABORT("memset_tensor on a read-only attached shareable buffer");
+    }
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemsetAsync((char *) tensor->data + offset, value, size, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+static void ggml_backend_cuda_shareable_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *) buffer->context;
+
+    if (ctx->attached) {
+        GGML_ABORT("set_tensor on a read-only attached shareable buffer");
+    }
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+static void ggml_backend_cuda_shareable_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+static void ggml_backend_cuda_shareable_buffer_set_tensor_2d(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data,
+        size_t offset, size_t size, size_t n_copies, size_t stride_tensor, size_t stride_data) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *) buffer->context;
+
+    if (ctx->attached) {
+        GGML_ABORT("set_tensor_2d on a read-only attached shareable buffer");
+    }
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemcpy2DAsync(
+        (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+static void ggml_backend_cuda_shareable_buffer_get_tensor_2d(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data,
+        size_t offset, size_t size, size_t n_copies, size_t stride_tensor, size_t stride_data) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemcpy2DAsync(
+        data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+// resolve the physical device and base pointer of a cuda or cuda-shareable buffer
+static bool ggml_backend_cuda_shareable_cpy_src_dst(const ggml_tensor * t, int * physical_device, void ** dev_ptr) {
+    if (t->buffer == nullptr) {
+        return false;
+    }
+    if (ggml_backend_buffer_is_cuda(t->buffer)) {
+        ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)t->buffer->context;
+        *physical_device = ggml_cuda_get_physical_device(ctx->device);
+        *dev_ptr = ctx->dev_ptr;
+        return true;
+    }
+    if (ggml_backend_buffer_is_cuda_shareable(t->buffer)) {
+        ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)t->buffer->context;
+        *physical_device = ctx->physical_device;
+        *dev_ptr = ctx->dev_ptr;
+        return true;
+    }
+    return false;
+}
+
+static bool ggml_backend_cuda_shareable_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+    int src_physical;
+    void * src_ptr;
+    if (!ggml_backend_cuda_shareable_cpy_src_dst(src, &src_physical, &src_ptr)) {
+        return false;
+    }
+
+    if (ggml_backend_buffer_is_cuda_shareable(dst->buffer)) {
+        ggml_backend_cuda_shareable_buffer_context * dst_ctx = (ggml_backend_cuda_shareable_buffer_context *)dst->buffer->context;
+        if (dst_ctx->attached) {
+            GGML_ABORT("copy into a read-only attached shareable buffer");
+        }
+    }
+
+    int dst_physical;
+    void * dst_ptr;
+    if (!ggml_backend_cuda_shareable_cpy_src_dst(dst, &dst_physical, &dst_ptr)) {
+        return false;
+    }
+
+    GGML_UNUSED(buffer);
+
+    if (src_physical == dst_physical) {
+        CUDA_CHECK(cudaMemcpyAsync(dst_ptr, src_ptr, ggml_nbytes(src), cudaMemcpyDeviceToDevice, cudaStreamPerThread));
+    } else {
+#ifdef GGML_CUDA_NO_PEER_COPY
+        return false;
+#else
+        CUDA_CHECK(cudaMemcpyPeerAsync(dst_ptr, dst_physical, src_ptr, src_physical, ggml_nbytes(src), cudaStreamPerThread));
+#endif
+    }
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+    return true;
+}
+
+static void ggml_backend_cuda_shareable_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+
+    if (ctx->attached) {
+        GGML_ABORT("clear on a read-only attached shareable buffer");
+    }
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaMemsetAsync(ctx->dev_ptr, value, buffer->size, cudaStreamPerThread));
+    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+}
+
+static const ggml_backend_buffer_i ggml_backend_cuda_shareable_buffer_interface = {
+    /* .free_buffer     = */ ggml_backend_cuda_shareable_buffer_free_buffer,
+    /* .get_base        = */ ggml_backend_cuda_shareable_buffer_get_base,
+    /* .init_tensor     = */ ggml_backend_cuda_shareable_buffer_init_tensor,
+    /* .memset_tensor   = */ ggml_backend_cuda_shareable_buffer_memset_tensor,
+    /* .set_tensor      = */ ggml_backend_cuda_shareable_buffer_set_tensor,
+    /* .get_tensor      = */ ggml_backend_cuda_shareable_buffer_get_tensor,
+    /* .set_tensor_2d   = */ ggml_backend_cuda_shareable_buffer_set_tensor_2d,
+    /* .get_tensor_2d   = */ ggml_backend_cuda_shareable_buffer_get_tensor_2d,
+    /* .cpy_tensor      = */ ggml_backend_cuda_shareable_buffer_cpy_tensor,
+    /* .clear           = */ ggml_backend_cuda_shareable_buffer_clear,
+    /* .reset           = */ NULL,
+};
+
+// buffer type
+
+struct ggml_backend_cuda_shareable_attach_spec {
+    std::string tensor_name;
+    int    fd;               // owned by the buffer type, consumed by the attach
+    size_t segment_size;     // as reported by the exporting process
+    bool   consumed = false;
+};
+
+struct ggml_backend_cuda_shareable_buffer_type_context {
+    int device;
+    int physical_device;
+    std::string name;
+    size_t granularity;
+    std::vector<ggml_backend_cuda_shareable_attach_spec> attach_specs;
+};
+
+static const char * ggml_backend_cuda_shareable_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+    ggml_backend_cuda_shareable_buffer_type_context * ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+
+    return ctx->name.c_str();
+}
+
+static bool ggml_backend_buft_is_cuda_shareable_type(ggml_backend_buffer_type_t buft) {
+    return buft != nullptr && buft->iface.get_name == ggml_backend_cuda_shareable_buffer_type_get_name;
+}
+
+static size_t ggml_backend_cuda_shareable_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+    return 128;
+
+    GGML_UNUSED(buft);
+}
+
+static size_t ggml_backend_cuda_shareable_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
+    // identical to the regular cuda buffer type so allocation sizes (and the
+    // padding they imply) do not depend on whether a buffer is shareable
+    ggml_backend_cuda_shareable_buffer_type_context * buft_ctx = (ggml_backend_cuda_shareable_buffer_type_context *) buft->context;
+
+    size_t size = tensor->op == GGML_OP_FLASH_ATTN_EXT
+        ? ggml_cuda_flash_attn_ext_get_alloc_size(buft_ctx->device, tensor)
+        : ggml_nbytes(tensor);
+    int64_t ne0 = tensor->ne[0];
+
+    // [TAG_ALLOC_SIZE_EXPAND]
+    if (ggml_is_quantized(tensor->type)) {
+        if (ne0 % MATRIX_ROW_PADDING != 0) {
+            GGML_ASSERT(tensor->nb[0] == ggml_element_size(tensor));
+            size += ggml_row_size(tensor->type, MATRIX_ROW_PADDING - ne0 % MATRIX_ROW_PADDING);
+        }
+    }
+
+    return size;
+}
+
+// create the mapping for a physical segment: reserve the virtual address range,
+// map the allocation and grant access. returns nullptr (after releasing the
+// reservation) on failure. for attach mappings access is read-only.
+static void * ggml_cuda_shareable_map_allocation(int physical_device, CUmemGenericAllocationHandle handle, size_t segment_size, bool read_only) {
+    CUdeviceptr va = 0;
+    CUresult r = cuMemAddressReserve(&va, segment_size, 0, 0, 0);
+    if (r != CUDA_SUCCESS) {
+        GGML_LOG_ERROR("%s: cuMemAddressReserve(%zu) failed\n", __func__, segment_size);
+        return nullptr;
+    }
+
+    r = cuMemMap(va, segment_size, 0, handle, 0);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_ERROR("%s: cuMemMap(%zu) failed: %s\n", __func__, segment_size, err_name ? err_name : "unknown error");
+        cuMemAddressFree(va, segment_size);
+        return nullptr;
+    }
+
+    CUmemAccessDesc access = {};
+    access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    access.location.id   = physical_device;
+    access.flags         = read_only ? CU_MEM_ACCESS_FLAGS_PROT_READ : CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+    r = cuMemSetAccess(va, segment_size, &access, 1);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_ERROR("%s: cuMemSetAccess(%zu) failed: %s\n", __func__, segment_size, err_name ? err_name : "unknown error");
+        cuMemUnmap(va, segment_size);
+        cuMemAddressFree(va, segment_size);
+        return nullptr;
+    }
+
+    return (void *)va;
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_shareable_alloc_segment(
+        ggml_backend_buffer_type_t buft, ggml_backend_cuda_shareable_buffer_type_context * buft_ctx, size_t size) {
+    ggml_cuda_set_device(buft_ctx->device);
+
+    const size_t segment_size = buft_ctx->granularity * ((size + buft_ctx->granularity - 1) / buft_ctx->granularity);
+
+    CUmemAllocationProp prop = {};
+    prop.type                 = CU_MEM_ALLOCATION_TYPE_PINNED;
+    prop.location.type        = CU_MEM_LOCATION_TYPE_DEVICE;
+    prop.location.id          = buft_ctx->physical_device;
+    prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+
+    CUmemGenericAllocationHandle handle;
+    CUresult r = cuMemCreate(&handle, segment_size, &prop, 0);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_ERROR("%s: cuMemCreate(%zu) on device %d failed: %s\n", __func__, segment_size, buft_ctx->physical_device, err_name ? err_name : "unknown error");
+        return nullptr;
+    }
+
+    // the mapping takes over the reference; exportable fds are created on demand via
+    // cuMemRetainAllocationHandle (see ggml_backend_cuda_buffer_export_shareable)
+    void * dev_ptr = ggml_cuda_shareable_map_allocation(buft_ctx->physical_device, handle, segment_size, false);
+    if (dev_ptr == nullptr) {
+        cuMemRelease(handle);
+        return nullptr;
+    }
+    CU_CHECK(cuMemRelease(handle));
+
+    auto * ctx = new ggml_backend_cuda_shareable_buffer_context(buft_ctx->device, buft_ctx->physical_device);
+    ctx->dev_ptr      = dev_ptr;
+    ctx->segment_size = segment_size;
+    ctx->attached     = false;
+
+    return ggml_backend_buffer_init(buft, ggml_backend_cuda_shareable_buffer_interface, ctx, size);
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_shareable_alloc_attached(
+        ggml_backend_buffer_type_t buft, ggml_backend_cuda_shareable_buffer_type_context * buft_ctx,
+        int fd, size_t segment_size, size_t buffer_size) {
+    ggml_cuda_set_device(buft_ctx->device);
+
+    CUmemGenericAllocationHandle handle;
+    CUresult r = cuMemImportFromShareableHandle(&handle, (void *)(uintptr_t)fd, CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_WARN("%s: failed to import shareable segment (fd %d, %zu bytes): %s\n", __func__, fd, segment_size, err_name ? err_name : "unknown error");
+        close(fd);
+        return nullptr;
+    }
+    // close the fd so the attach consumes it exactly once (whether the import itself
+    // closed it or the fd was already consumed is not documented; probe before closing)
+    if (fcntl(fd, F_GETFD) != -1) {
+        close(fd);
+    }
+
+    void * dev_ptr = ggml_cuda_shareable_map_allocation(buft_ctx->physical_device, handle, segment_size, true);
+    if (dev_ptr == nullptr) {
+        cuMemRelease(handle);
+        return nullptr;
+    }
+
+    auto * ctx = new ggml_backend_cuda_shareable_buffer_context(buft_ctx->device, buft_ctx->physical_device);
+    ctx->dev_ptr      = dev_ptr;
+    ctx->segment_size = segment_size;
+    ctx->attached     = true;
+    ctx->handle       = handle;
+
+    return ggml_backend_buffer_init(buft, ggml_backend_cuda_shareable_buffer_interface, ctx, buffer_size);
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_shareable_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    ggml_backend_cuda_shareable_buffer_type_context * buft_ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+
+    return ggml_backend_cuda_shareable_alloc_segment(buft, buft_ctx, size);
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_shareable_buffer_type_alloc_buffer_n(ggml_backend_buffer_type_t buft, ggml_tensor ** tensors, int n_tensors) {
+    ggml_backend_cuda_shareable_buffer_type_context * buft_ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+
+    std::vector<ggml_backend_buffer_t> buffers;
+    auto fail = [&]() {
+        GGML_LOG_ERROR("%s: failed to allocate %s buffers\n", __func__, ggml_backend_buft_name(buft));
+        for (ggml_backend_buffer_t b : buffers) {
+            ggml_backend_buffer_free(b);
+        }
+        return (ggml_backend_buffer_t) nullptr;
+    };
+
+    for (int i = 0; i < n_tensors; i++) {
+        struct ggml_tensor * t = tensors[i];
+
+        if (t->data != NULL || t->view_src != NULL) {
+            if (t->view_src != NULL && t->buffer == NULL) {
+                // view of a pre-allocated tensor
+                if (ggml_backend_view_init(t) != GGML_STATUS_SUCCESS) {
+                    return fail();
+                }
+            }
+            continue;
+        }
+
+        const size_t size = GGML_PAD(ggml_backend_buft_get_alloc_size(buft, t), ggml_backend_buft_get_alignment(buft));
+
+        // attach a foreign segment registered for this tensor, if any
+        ggml_backend_cuda_shareable_attach_spec * spec = nullptr;
+        for (auto & s : buft_ctx->attach_specs) {
+            if (!s.consumed && s.tensor_name == t->name) {
+                spec = &s;
+                break;
+            }
+        }
+
+        ggml_backend_buffer_t buffer = nullptr;
+        if (spec != nullptr) {
+            spec->consumed = true;
+            if (size <= spec->segment_size) {
+                buffer = ggml_backend_cuda_shareable_alloc_attached(buft, buft_ctx, spec->fd, spec->segment_size, size);
+                if (buffer == nullptr) {
+                    // the segment is gone or could not be mapped - fall back privately
+                    GGML_LOG_WARN("%s: attach of tensor '%s' failed, allocating privately\n", __func__, t->name);
+                }
+            } else {
+                close(spec->fd);
+            }
+        }
+        if (buffer == nullptr) {
+            buffer = ggml_backend_cuda_shareable_alloc_segment(buft, buft_ctx, size);
+        }
+        if (buffer == nullptr) {
+            return fail();
+        }
+
+        struct ggml_tallocr tallocr = ggml_tallocr_new(buffer);
+        if (ggml_tallocr_alloc(&tallocr, t) != GGML_STATUS_SUCCESS) {
+            ggml_backend_buffer_free(buffer);
+            return fail();
+        }
+
+        buffers.push_back(buffer);
+    }
+
+    if (buffers.empty()) {
+        return nullptr;
+    }
+
+    if (buffers.size() == 1) {
+        return buffers[0];
+    }
+
+    return ggml_backend_multi_buffer_alloc_buffer(buffers.data(), buffers.size());
+}
+
+static const ggml_backend_buffer_type_i ggml_backend_cuda_shareable_buffer_type_interface = {
+    /* .get_name            = */ ggml_backend_cuda_shareable_buffer_type_get_name,
+    /* .alloc_buffer        = */ ggml_backend_cuda_shareable_buffer_type_alloc_buffer,
+    /* .alloc_buffer_n      = */ ggml_backend_cuda_shareable_buffer_type_alloc_buffer_n,
+    /* .get_alignment       = */ ggml_backend_cuda_shareable_buffer_type_get_alignment,
+    /* .get_max_size        = */ NULL, // defaults to SIZE_MAX
+    /* .get_alloc_size      = */ ggml_backend_cuda_shareable_buffer_type_get_alloc_size,
+    /* .get_alloc_size_n    = */ NULL,
+    /* .is_host             = */ NULL,
+};
+
+ggml_backend_buffer_type_t ggml_backend_cuda_shareable_buffer_type(int device) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (device >= ggml_backend_cuda_get_device_count() || !ggml_cuda_info().devices[device].vmm) {
+        return nullptr;
+    }
+
+    static ggml_backend_buffer_type ggml_backend_cuda_shareable_buffer_types[GGML_CUDA_MAX_DEVICES];
+
+    static bool initialized = false;
+
+    if (!initialized) {
+        for (int i = 0; i < ggml_backend_cuda_get_device_count(); i++) {
+            if (!ggml_cuda_info().devices[i].vmm) {
+                continue;
+            }
+            ggml_backend_cuda_shareable_buffer_types[i] = {
+                /* .iface    = */ ggml_backend_cuda_shareable_buffer_type_interface,
+                /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_cuda_reg(), i),
+                /* .context  = */ new ggml_backend_cuda_shareable_buffer_type_context{
+                    i,
+                    ggml_cuda_get_physical_device(i),
+                    GGML_CUDA_NAME + std::string("S") + std::to_string(i), // "Shar(e)able"
+                    ggml_cuda_info().devices[i].vmm_granularity,
+                    {},
+                },
+            };
+        }
+        initialized = true;
+    }
+
+    if (ggml_backend_cuda_shareable_buffer_types[device].context == nullptr) {
+        return nullptr;
+    }
+
+    return &ggml_backend_cuda_shareable_buffer_types[device];
+}
+
+#endif // GGML_CUDA_SHAREABLE
+
+// public API (no-op / NULL when the feature is compiled out)
+
+bool ggml_backend_cuda_buffer_is_shareable(ggml_backend_buffer_t buffer) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(buffer);
+    return false;
+#else
+    return ggml_backend_buffer_is_cuda_shareable(buffer);
+#endif
+}
+
+int ggml_backend_cuda_buffer_export_shareable(ggml_backend_buffer_t buffer, int * fd, size_t * segment_size) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(buffer); GGML_UNUSED(fd); GGML_UNUSED(segment_size);
+    return -1;
+#else
+    if (!ggml_backend_buffer_is_cuda_shareable(buffer)) {
+        return -1;
+    }
+
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+    if (ctx->attached) {
+        // imported segments are not re-exported
+        return -1;
+    }
+
+    ggml_cuda_set_device(ctx->device);
+
+    CUmemGenericAllocationHandle handle;
+    CUresult r = cuMemRetainAllocationHandle(&handle, ctx->dev_ptr);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_ERROR("%s: cuMemRetainAllocationHandle failed: %s\n", __func__, err_name ? err_name : "unknown error");
+        return -1;
+    }
+
+    r = cuMemExportToShareableHandle(fd, handle, CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0);
+    if (r != CUDA_SUCCESS) {
+        const char * err_name = nullptr;
+        cuGetErrorName(r, &err_name);
+        GGML_LOG_ERROR("%s: cuMemExportToShareableHandle failed: %s\n", __func__, err_name ? err_name : "unknown error");
+        cuMemRelease(handle);
+        return -1;
+    }
+
+    CU_CHECK(cuMemRelease(handle));
+    *segment_size = ctx->segment_size;
+    return 0;
+#endif
+}
+
+ggml_backend_buffer_t ggml_backend_cuda_buffer_attach_shareable(int device, int fd, size_t segment_size, size_t buffer_size) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(device); GGML_UNUSED(segment_size); GGML_UNUSED(buffer_size);
+    close(fd);
+    return nullptr;
+#else
+    if (device < 0 || device >= ggml_backend_cuda_get_device_count() || !ggml_cuda_info().devices[device].vmm) {
+        close(fd);
+        return nullptr;
+    }
+
+    ggml_backend_buffer_type_t buft = ggml_backend_cuda_shareable_buffer_type(device);
+    if (buft == nullptr) {
+        close(fd);
+        return nullptr;
+    }
+
+    auto * buft_ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+    return ggml_backend_cuda_shareable_alloc_attached(buft, buft_ctx, fd, segment_size, buffer_size);
+#endif
+}
+
+bool ggml_backend_cuda_shareable_buffer_type_attach_spec(ggml_backend_buffer_type_t buft, const char * tensor_name, int fd, size_t segment_size) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(buft); GGML_UNUSED(tensor_name); GGML_UNUSED(segment_size);
+    close(fd);
+    return false;
+#else
+    if (!ggml_backend_buft_is_cuda_shareable_type(buft)) {
+        close(fd);
+        return false;
+    }
+
+    auto * ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+    ctx->attach_specs.push_back({ tensor_name, fd, segment_size });
+    return true;
+#endif
+}
+
+const char * ggml_backend_cuda_shareable_device_bus_id(int device, char * buf, size_t buf_size) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(device); GGML_UNUSED(buf); GGML_UNUSED(buf_size);
+    return nullptr;
+#else
+    if (buf == nullptr || buf_size == 0 || device < 0 || device >= ggml_backend_cuda_get_device_count() || !ggml_cuda_info().devices[device].vmm) {
+        return nullptr;
+    }
+
+    // the bus id of the physical GPU that backs `device`: consumers use it to refuse
+    // segments anchored on a different GPU (cross-device mapping returns garbage)
+    if (cudaDeviceGetPCIBusId(buf, (int)buf_size, ggml_cuda_info().devices[device].physical_device) != cudaSuccess) {
+        return nullptr;
+    }
+    return buf;
+#endif
+}
+
+bool ggml_backend_cuda_buffer_is_attached_shareable(ggml_backend_buffer_t buffer) {
+#ifndef GGML_CUDA_SHAREABLE
+    GGML_UNUSED(buffer);
+    return false;
+#else
+    if (!ggml_backend_buffer_is_cuda_shareable(buffer)) {
+        return false;
+    }
+    ggml_backend_cuda_shareable_buffer_context * ctx = (ggml_backend_cuda_shareable_buffer_context *)buffer->context;
+    return ctx->attached;
+#endif
 }
 
 // Communication context for multi-GPU AllReduce during tensor parallelism.
@@ -5363,14 +6027,27 @@ static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_host_buffer_type(
 }
 
 // TODO: move these functions here
+static int ggml_backend_cuda_buft_device(ggml_backend_buffer_type_t buft) {
+    if (buft->iface.get_name == ggml_backend_cuda_buffer_type_get_name) {
+        ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+        return buft_ctx->device;
+    }
+#ifdef GGML_CUDA_SHAREABLE
+    if (buft->iface.get_name == ggml_backend_cuda_shareable_buffer_type_get_name) {
+        ggml_backend_cuda_shareable_buffer_type_context * buft_ctx = (ggml_backend_cuda_shareable_buffer_type_context *)buft->context;
+        return buft_ctx->device;
+    }
+#endif
+    return -1; // not a CUDA device buffer type
+}
+
 static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const ggml_tensor * op) {
     ggml_backend_cuda_device_context * dev_ctx = (ggml_backend_cuda_device_context *) dev->context;
 
     // check if all the sources are allocated on this device
     for (int i = 0; i < GGML_MAX_SRC; i++) {
         if (op->src[i] && op->src[i]->buffer && ggml_backend_buft_is_cuda(op->src[i]->buffer->buft)) {
-            ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)op->src[i]->buffer->buft->context;
-            if (buft_ctx->device != dev_ctx->device) {
+            if (ggml_backend_cuda_buft_device(op->src[i]->buffer->buft) != dev_ctx->device) {
                 return false;
             }
         }
@@ -5996,6 +6673,27 @@ static ggml_backend_feature * ggml_backend_cuda_get_features(ggml_backend_reg_t 
 
 static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
     GGML_UNUSED(reg);
+    if (strcmp(name, "ggml_backend_cuda_buffer_is_shareable") == 0) {
+        return (void *)ggml_backend_cuda_buffer_is_shareable;
+    }
+    if (strcmp(name, "ggml_backend_cuda_buffer_export_shareable") == 0) {
+        return (void *)ggml_backend_cuda_buffer_export_shareable;
+    }
+    if (strcmp(name, "ggml_backend_cuda_buffer_is_attached_shareable") == 0) {
+        return (void *)ggml_backend_cuda_buffer_is_attached_shareable;
+    }
+    if (strcmp(name, "ggml_backend_cuda_buffer_attach_shareable") == 0) {
+        return (void *)ggml_backend_cuda_buffer_attach_shareable;
+    }
+    if (strcmp(name, "ggml_backend_cuda_shareable_buffer_type") == 0) {
+        return (void *)ggml_backend_cuda_shareable_buffer_type;
+    }
+    if (strcmp(name, "ggml_backend_cuda_shareable_buffer_type_attach_spec") == 0) {
+        return (void *)ggml_backend_cuda_shareable_buffer_type_attach_spec;
+    }
+    if (strcmp(name, "ggml_backend_cuda_shareable_device_bus_id") == 0) {
+        return (void *)ggml_backend_cuda_shareable_device_bus_id;
+    }
     if (strcmp(name, "ggml_backend_comm_init") == 0) {
         return (void *)ggml_backend_cuda_comm_init;
     }

@@ -69,6 +69,11 @@ extern "C" {
     GGML_API ggml_backend_buffer_type_t     ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
     GGML_API void                           ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
 
+    // multi-buffer: a buffer that wraps a collection of buffers (e.g. produced when allocating
+    // a list of tensors across several buffers). exposes the wrapped buffers.
+    GGML_API size_t                 ggml_backend_buffer_multi_get_n_buffers(ggml_backend_buffer_t buffer);
+    GGML_API ggml_backend_buffer_t  ggml_backend_buffer_multi_get_buffer   (ggml_backend_buffer_t buffer, size_t index);
+
     // tensor copy between different backends
     GGML_API void ggml_backend_tensor_copy(const struct ggml_tensor * src, struct ggml_tensor * dst);
 

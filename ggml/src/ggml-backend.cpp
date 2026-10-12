@@ -841,16 +841,60 @@ static void ggml_backend_multi_buffer_clear(ggml_backend_buffer_t buffer, uint8_
     }
 }
 
+// find the sub-buffer holding the given tensor data; NULL when not found
+static ggml_backend_buffer_t ggml_backend_multi_buffer_get_owner(ggml_backend_buffer_t buffer, const void * data) {
+    GGML_ASSERT(buffer);
+    ggml_backend_multi_buffer_context * ctx = (ggml_backend_multi_buffer_context *) buffer->context;
+    for (size_t i = 0; i < ctx->n_buffers; i++) {
+        void * base = ggml_backend_buffer_get_base(ctx->buffers[i]);
+        if (base != nullptr && data >= base && data < (char *)base + ggml_backend_buffer_get_size(ctx->buffers[i])) {
+            return ctx->buffers[i];
+        }
+    }
+    return nullptr;
+}
+
+// tensors whose buffer is the multi-buffer (instead of a sub-buffer) are data-accessed
+// through the following forwarding implementations. this happens for buffers allocated
+// by an alloc_buffer_n implementation that allocates one buffer per tensor: weight
+// loading (ggml_backend_tensor_set) runs through them.
+
+static void ggml_backend_multi_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
+    ggml_backend_buffer_t owner = ggml_backend_multi_buffer_get_owner(buffer, tensor->data);
+    GGML_ASSERT(owner != nullptr && "tensor not found in multi-buffer");
+    owner->iface.memset_tensor(owner, tensor, value, offset, size);
+}
+
+static void ggml_backend_multi_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+    ggml_backend_buffer_t owner = ggml_backend_multi_buffer_get_owner(buffer, tensor->data);
+    GGML_ASSERT(owner != nullptr && "tensor not found in multi-buffer");
+    owner->iface.set_tensor(owner, tensor, data, offset, size);
+}
+
+static void ggml_backend_multi_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+    ggml_backend_buffer_t owner = ggml_backend_multi_buffer_get_owner(buffer, tensor->data);
+    GGML_ASSERT(owner != nullptr && "tensor not found in multi-buffer");
+    owner->iface.get_tensor(owner, tensor, data, offset, size);
+}
+
+static bool ggml_backend_multi_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+    ggml_backend_buffer_t owner = ggml_backend_multi_buffer_get_owner(buffer, dst->data);
+    if (owner == nullptr) {
+        return false;
+    }
+    return owner->iface.cpy_tensor(owner, src, dst);
+}
+
 static const struct ggml_backend_buffer_i ggml_backend_multi_buffer_i = {
     /* .free_buffer     = */ ggml_backend_multi_buffer_free_buffer,
     /* .get_base        = */ NULL,
     /* .init_tensor     = */ NULL,
-    /* .memset_tensor   = */ NULL,
-    /* .set_tensor      = */ NULL,
-    /* .get_tensor      = */ NULL,
+    /* .memset_tensor   = */ ggml_backend_multi_buffer_memset_tensor,
+    /* .set_tensor      = */ ggml_backend_multi_buffer_set_tensor,
+    /* .get_tensor      = */ ggml_backend_multi_buffer_get_tensor,
     /* .set_tensor_2d   = */ NULL,
     /* .get_tensor_2d   = */ NULL,
-    /* .cpy_tensor      = */ NULL,
+    /* .cpy_tensor      = */ ggml_backend_multi_buffer_cpy_tensor,
     /* .clear           = */ ggml_backend_multi_buffer_clear,
     /* .reset           = */ NULL,
 };
@@ -883,6 +927,21 @@ void ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml
     for (size_t i = 0; i < ctx->n_buffers; i++) {
         ggml_backend_buffer_set_usage(ctx->buffers[i], usage);
     }
+}
+
+size_t ggml_backend_buffer_multi_get_n_buffers(ggml_backend_buffer_t buffer) {
+    GGML_ASSERT(buffer);
+    GGML_ASSERT(ggml_backend_buffer_is_multi_buffer(buffer));
+    ggml_backend_multi_buffer_context * ctx = (ggml_backend_multi_buffer_context *) buffer->context;
+    return ctx->n_buffers;
+}
+
+ggml_backend_buffer_t ggml_backend_buffer_multi_get_buffer(ggml_backend_buffer_t buffer, size_t index) {
+    GGML_ASSERT(buffer);
+    GGML_ASSERT(ggml_backend_buffer_is_multi_buffer(buffer));
+    ggml_backend_multi_buffer_context * ctx = (ggml_backend_multi_buffer_context *) buffer->context;
+    GGML_ASSERT(index < ctx->n_buffers);
+    return ctx->buffers[index];
 }
 
 // creates a copy of the tensor with the same memory layout
