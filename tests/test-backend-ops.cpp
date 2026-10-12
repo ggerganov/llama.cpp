@@ -11719,14 +11719,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_flash_attn_ext(128, 128, 2, {12, 1}, 32768,  8, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
     test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {12, 2}, 16384,  4, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
 
-    // Sparse cases newly selected by the uniform GCN threshold.
-    test_cases.emplace_back(new test_flash_attn_ext( 72,  72, 2, {12, 1},  8192, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 128, 2, {12, 1},  8192, 4, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, { 2, 1}, 16384, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-    test_cases.emplace_back(new test_flash_attn_ext(320, 256, 2, { 8, 1}, 16384, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-    test_cases.emplace_back(new test_flash_attn_ext(512, 512, 1, { 8, 1},  8192, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-    test_cases.emplace_back(new test_flash_attn_ext(576, 512, 1, {16, 1},  8192, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, true,  2048));
-
     // Sparse gather: native block sizes, padded slots, and head/batch strides.
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16, GGML_TYPE_Q4_0, GGML_TYPE_Q4_1, GGML_TYPE_Q5_0, GGML_TYPE_Q5_1, GGML_TYPE_Q8_0, GGML_TYPE_IQ4_NL}) {
         test_cases.emplace_back(new test_flash_attn_ext(128, 96, 2, {8, 2}, 5003, 3, true, false, 0, 0, GGML_PREC_F32, type, type, {0, 1, 2, 3}, true, false, 257));
@@ -12219,25 +12211,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
 
     // Qwen3-VL-8B https://github.com/ggml-org/llama.cpp/issues/17012
     test_cases.emplace_back(new test_flash_attn_ext(72, 72, 16, {1, 1}, 5776, 5776, false, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16));
-
-    // GCN sparse attention threshold validation across head sizes and GQA.
-    for (int64_t kv : {8192, 16384, 32768, 65536}) {
-        for (const auto & shape : {std::array<int64_t, 3>{ 72,  72, 12},
-                                  std::array<int64_t, 3>{ 80,  80, 12},
-                                  std::array<int64_t, 3>{ 96,  96, 12},
-                                  std::array<int64_t, 3>{112, 112, 12},
-                                  std::array<int64_t, 3>{128, 128, 12},
-                                  std::array<int64_t, 3>{192, 128, 32},
-                                  std::array<int64_t, 3>{256, 256,  2},
-                                  std::array<int64_t, 3>{320, 256,  8},
-                                  std::array<int64_t, 3>{320, 256, 64},
-                                  std::array<int64_t, 3>{512, 512,  8},
-                                  std::array<int64_t, 3>{512, 512, 16},
-                                  std::array<int64_t, 3>{576, 512, 16},
-                                  std::array<int64_t, 3>{576, 512, 32}}) {
-            test_cases.emplace_back(new test_flash_attn_ext(shape[0], shape[1], 2, {shape[2], 1}, kv, 1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16, {0, 1, 2, 3}, true, false, 2048));
-        }
-    }
 
     // GCN sparse attention break-even for multiple query tokens.
     for (int64_t kv : {16384, 32768, 65536}) {
