@@ -759,6 +759,52 @@ static void common_params_apply_system_config(common_params & params, llama_exam
     }
 }
 
+// The analog backend reads its configuration from the environment when its registry is
+// constructed, which can precede parsing: ask it to re-read the variables written above
+static void common_apply_analog_env(const common_params & params) {
+    const bool touched =
+        params.analog || params.analog_ideal || params.analog_stats ||
+        params.analog_bits > 0 || params.analog_tile_cols > 0 || params.analog_threads > 0 ||
+        params.analog_latency_ns > 0.0f || !params.analog_dispatch.empty() ||
+        std::getenv("GGML_ANALOG_ENABLE") != nullptr;
+
+    if (!touched) {
+        return;
+    }
+
+    ggml_backend_load_all();
+
+    ggml_backend_reg_t reg = ggml_backend_reg_by_name("ANALOG");
+
+    if (reg == nullptr) {
+        if (params.analog) {
+            LOG_WRN("%s: this build has no analog backend, rebuild with -DGGML_ANALOG=ON\n", __func__);
+        }
+        return;
+    }
+
+    typedef void (*common_analog_fn_void)(void);
+    typedef void (*common_analog_fn_bool)(bool);
+
+    auto reload = (common_analog_fn_void) ggml_backend_reg_get_proc_address(reg, "ggml_backend_analog_config_reload");
+    auto enable = (common_analog_fn_bool) ggml_backend_reg_get_proc_address(reg, "ggml_backend_analog_set_enabled");
+
+    if (reload != nullptr) {
+        reload();
+    }
+
+    if (enable != nullptr) {
+        const char * val = std::getenv("GGML_ANALOG_ENABLE");
+
+        enable(val != nullptr && atoi(val) != 0);
+    }
+
+    if (params.analog) {
+        LOG_INF("%s: analog array backend enabled (%s)\n", __func__,
+                params.analog_dispatch.empty() ? "cpu kernels" : params.analog_dispatch.c_str());
+    }
+}
+
 static bool common_params_parse_ex(int argc, char ** argv, common_params_context & ctx_arg) {
     common_params & params = ctx_arg.params;
 
@@ -964,6 +1010,8 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
     if (!params.default_template_kwargs.count("preserve_reasoning")) {
         params.default_template_kwargs["preserve_reasoning"] = "true";
     }
+
+    common_apply_analog_env(params);
 
     return true;
 }
@@ -2976,6 +3024,104 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("whether to offload host tensor operations to device (default: %s)", params.no_op_offload ? "false" : "true"),
         [](common_params & params, bool value) {
             params.no_op_offload = !value;
+        }
+    ));
+    // The analog backend reads its configuration from the environment, so the options below write
+    // the GGML_ANALOG_* variables. See docs/backend/ANALOG.md for the device model
+    add_opt(common_arg(
+        {"--analog"},
+        {"--no-analog"},
+        "run the matrix multiplications on the emulated analog array backend (GGML_ANALOG), an in-memory "
+        "computing accelerator model: cell precision, programming error, drift, IR drop, readout noise and "
+        "the energy of a pass. The default is off, or the value of GGML_ANALOG_ENABLE; the backend has to "
+        "be built in (-DGGML_ANALOG=ON)",
+        [](common_params & params, bool value) {
+            params.analog = value;
+            common_set_env("GGML_ANALOG_ENABLE", value ? "1" : "0");
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-ideal"},
+        "program the array without any error, so the emulation reproduces the CPU backend exactly: the "
+        "check that the backend is wired up correctly",
+        [](common_params & params) {
+            params.analog_ideal = true;
+            common_set_env("GGML_ANALOG_IDEAL", "1");
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-bits"}, "N",
+        "precision of a cell of the array, in bits, 1 to 8 (default: 4)",
+        [](common_params & params, int value) {
+            if (value < 1 || value > 8) {
+                throw std::invalid_argument("the precision of a cell is between 1 and 8 bits");
+            }
+
+            params.analog_bits = value;
+            common_set_env("GGML_ANALOG_BITS_W", std::to_string(value));
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-tile"}, "N",
+        "number of cells of a tile along the column: it sets how many times an input vector is swept "
+        "through the array, and therefore the modeled latency of a pass (default: 128)",
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::invalid_argument("a tile has at least one cell");
+            }
+
+            params.analog_tile_cols = value;
+            common_set_env("GGML_ANALOG_TILE_COLS", std::to_string(value));
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-dispatch"}, "<cpu|shader|vulkan>",
+        "where the passes of the array model run: the parallel CPU kernels (default), the mirror of the "
+        "compute shaders, or the compute shaders on a Vulkan device, which fall back to the mirror when "
+        "no device can be initialized",
+        [](common_params & params, const std::string & value) {
+            if (value != "cpu" && value != "shader" && value != "vulkan") {
+                throw std::invalid_argument("expected cpu, shader or vulkan");
+            }
+
+            params.analog_dispatch = value;
+            common_set_env("GGML_ANALOG_DISPATCH", value);
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-threads"}, "N",
+        "threads used by the passes of the array model (default: the threads of the CPU backend)",
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::invalid_argument("at least one thread");
+            }
+
+            params.analog_threads = value;
+            common_set_env("GGML_ANALOG_N_THREADS", std::to_string(value));
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-latency-ns"}, "T",
+        "latency of one pass through the array, in nanoseconds, used by the device model to report the "
+        "time and the energy that the emulated device would need (default: 300)",
+        [](common_params & params, const std::string & value) {
+            const float latency = std::stof(value);
+
+            if (latency <= 0.0f) {
+                throw std::invalid_argument("the latency of a pass is positive");
+            }
+
+            params.analog_latency_ns = latency;
+            common_set_env("GGML_ANALOG_MVM_LATENCY_NS", value);
+        }
+    ));
+    add_opt(common_arg(
+        {"--analog-stats"},
+        "print the statistics of the array before exiting: programmed arrays, array passes, modeled time "
+        "and energy",
+        [](common_params & params) {
+            params.analog_stats = true;
+            common_set_env("GGML_ANALOG_STATS", "1");
         }
     ));
     add_opt(common_arg(

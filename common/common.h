@@ -582,6 +582,18 @@ struct common_params {
     bool no_extra_bufts    = false; // disable extra buffer types (used for weight repacking)
     bool no_host           = false; // bypass host buffer allowing extra buffers to be used
 
+    // the emulated analog array backend (GGML_ANALOG), see docs/backend/ANALOG.md
+    // the options below are passed to the backend through the environment, because the backend
+    // reads its configuration when it is initialized, which happens after the arguments are parsed
+    bool        analog             = false; // run the matrix multiplications on the emulated array
+    bool        analog_ideal       = false; // program the array without any error
+    bool        analog_stats       = false; // print the statistics of the array before exiting
+    int         analog_bits        = -1;    // precision of a cell, -1 = the default of the backend
+    int         analog_tile_cols   = -1;    // cells per tile along the column, -1 = backend default
+    int         analog_threads     = -1;    // threads of the passes, -1 = the default
+    float       analog_latency_ns  = -1.0f; // modeled latency of one pass through the array
+    std::string analog_dispatch;            // cpu, shader or vulkan; empty = the default
+
     bool single_turn       = false; // single turn chat conversation
 
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
