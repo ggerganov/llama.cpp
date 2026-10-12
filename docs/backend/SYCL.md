@@ -339,7 +339,7 @@ as `-cl-fp32-correctly-rounded-divide-sqrt`
 
 By default the whole project is built with the SYCL compiler (`icx`/`icpx`), which prevents building other
 backends that need a different compiler, such as ROCm (`hipcc`).
-
+Support is now available to compile multiple backends simultaneously within a single project build, utilizing their respective compilers. Upon successful compilation, the corresponding .so or .dll files are generated in the build directory. Users can launch them concurrently within a single process to utilize multiple GPUs in same time.
 With `GGML_SYCL_SEPARATE_BUILD=ON`, only the SYCL backend is built with the SYCL compiler in a nested CMake project.
 The rest of the project uses the compiler you choose, and each backend is built as a dynamically loadable library,
 so SYCL can be used together with other backends, e.g. ROCm or Vulkan.
