@@ -4889,6 +4889,7 @@ static void ggml_hexagon_precompute_dsv4_hc_pre_params(
 
     const bool gated = ggml_get_op_params_i32(op, 1) != 0;
     kparams->dma_eligible = gated &&
+                            x->ne[1] == 4 &&
                             n_tokens > 1 &&
                             x->ne[0] % HTP_DSV4_HC_CHUNK_ELEMS == 0 &&
                             kparams->jobs_per_thread >= 2*kparams->dma_block_chunks &&
@@ -6729,7 +6730,7 @@ static bool ggml_hexagon_supported_dsv4_hc_pre(const struct ggml_hexagon_session
     if (x->type != GGML_TYPE_F32 || weights->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) {
         return false;
     }
-    if (x->ne[1] != 4 || x->ne[3] != 1) {
+    if (x->ne[1] == 0 || x->ne[3] != 1) {
         return false;
     }
     if (dst->ne[0] != x->ne[0] || dst->ne[1] != x->ne[2] || dst->ne[2] != 1 || dst->ne[3] != 1) {
