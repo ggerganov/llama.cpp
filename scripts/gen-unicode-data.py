@@ -4,15 +4,21 @@ import array
 import sys
 import unicodedata
 
+import requests
+
+
+def out(line=""):
+    print(line, end='\n')  # noqa
+
 
 def normalization_tables():
-    print(f"// Canonical normalization tables: Unicode {unicodedata.unidata_version}.")
-    print("const std::unordered_map<uint32_t, uint8_t> unicode_combining_class = {")
+    out(f"// Canonical normalization tables: Unicode {unicodedata.unidata_version}.")
+    out("const std::unordered_map<uint32_t, uint8_t> unicode_combining_class = {")
     for cpt in range(0x110000):
         if value := unicodedata.combining(chr(cpt)):
-            print(f"{{0x{cpt:06X}, {value}}},")
-    print("};\n")
-    print("const std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> unicode_decomposition = {")
+            out(f"{{0x{cpt:06X}, {value}}},")
+    out("};\n")
+    out("const std::unordered_map<uint32_t, std::pair<uint32_t, uint32_t>> unicode_decomposition = {")
     compositions = []
     for cpt in range(0x110000):
         if 0xAC00 <= cpt < 0xAC00 + 11172:
@@ -23,22 +29,20 @@ def normalization_tables():
         parts = [int(part, 16) for part in raw.split()]
         assert 1 <= len(parts) <= 2
         first, second = parts[0], parts[1] if len(parts) == 2 else 0
-        print(f"{{0x{cpt:06X}, {{0x{first:06X}, 0x{second:06X}}}}},")
+        out(f"{{0x{cpt:06X}, {{0x{first:06X}, 0x{second:06X}}}}},")
         if second and unicodedata.normalize("NFC", chr(first) + chr(second)) == chr(cpt):
             compositions.append((first, second, cpt))
-    print("};\n")
-    print("const std::unordered_map<uint64_t, uint32_t> unicode_composition = {")
+    out("};\n")
+    out("const std::unordered_map<uint64_t, uint32_t> unicode_composition = {")
     for first, second, cpt in compositions:
-        print(f"{{0x{((first << 32) | second):016X}ULL, 0x{cpt:06X}}},")
-    print("};")
+        out(f"{{0x{((first << 32) | second):016X}ULL, 0x{cpt:06X}}},")
+    out("};")
 
 
+# Generate only canonical tables, without downloading the UCD data.
 if sys.argv[1:] == ["--normalization-only"]:
     normalization_tables()
     sys.exit(0)
-
-
-import requests
 
 
 MAX_CODEPOINTS = 0x110000
@@ -190,10 +194,6 @@ for codepoint, norm in table_nfd:
 
 # Generate 'unicode-data.cpp':
 #   python ./scripts//gen-unicode-data.py > unicode-data.cpp
-
-def out(line=""):
-    print(line, end='\n')  # noqa
-
 
 out("""\
 // generated with scripts/gen-unicode-data.py

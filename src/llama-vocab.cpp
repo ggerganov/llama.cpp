@@ -1022,11 +1022,16 @@ struct llm_tokenizer_ugm_session {
         // normalize the input first
         std::string normalized;
         if (vocab.get_normalizer_opts().nfc) {
-            std::string canonical;
-            for (const uint32_t cpt : unicode_cpts_normalize_nfc(unicode_cpts_from_utf8(text))) {
-                canonical += unicode_cpt_to_utf8(cpt);
+            try {
+                std::string canonical;
+                for (const uint32_t cpt : unicode_cpts_normalize_nfc(unicode_cpts_from_utf8(text))) {
+                    canonical += unicode_cpt_to_utf8(cpt);
+                }
+                normalize(canonical, &normalized);
+            } catch (const std::invalid_argument &) {
+                // Use the existing UGM normalization path for malformed input.
+                normalize(text, &normalized);
             }
-            normalize(canonical, &normalized);
         } else {
             normalize(text, &normalized);
         }
