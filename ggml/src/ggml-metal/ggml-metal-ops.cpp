@@ -2777,16 +2777,20 @@ size_t ggml_metal_op_mul_mat_id_extra_tpe(const ggml_tensor * op) {
 
     const int64_t ne02 = op->src[0]->ne[2]; // n_expert
 
-    return ggml_type_size(GGML_TYPE_I32)*ne02;
+    // per expert: base offset + number of entries in the compact ids list
+    return ggml_type_size(GGML_TYPE_I32)*2*ne02;
 }
 
 size_t ggml_metal_op_mul_mat_id_extra_ids(const ggml_tensor * op) {
     assert(op->op == GGML_OP_MUL_MAT_ID);
 
     const int64_t ne02 = op->src[0]->ne[2]; // n_expert
+    const int64_t ne20 = op->src[2]->ne[0]; // n_expert_used
     const int64_t ne21 = op->src[2]->ne[1]; // n_token
 
-    return ggml_type_size(GGML_TYPE_I32)*ne02*ne21;
+    // one entry per (expert used, token) pair of ids plus one padding slot per expert
+    // (see kernel_mul_mm_id_map0)
+    return ggml_type_size(GGML_TYPE_I32)*(ne20*ne21 + ne02);
 }
 
 size_t ggml_metal_op_mul_mat_id_extra_amax(const ggml_tensor * op) {

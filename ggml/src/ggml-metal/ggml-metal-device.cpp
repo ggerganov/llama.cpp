@@ -1271,7 +1271,8 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mm_id_map0(g
         res = ggml_metal_library_compile_pipeline(lib, base, name, nullptr);
     }
 
-    res.smem = (size_t) ne02*ne20*sizeof(uint16_t);
+    // per expert: entry count + base offset, followed by the staging of the ids of ntg tokens
+    res.smem = 2*(size_t) ne02*sizeof(uint32_t) + (size_t) ne02*ne20*sizeof(uint16_t);
     res.smem = GGML_PAD(res.smem, 16);
 
     return res;
