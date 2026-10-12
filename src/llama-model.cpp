@@ -862,6 +862,13 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 }
                 return {granularity_q};
             }
+            if (ud->model->arch == LLM_ARCH_GLM5_NEXT && std::regex_match(tensor_name, pattern_attn_out_weight)) {
+                GGML_ASSERT(segments.size() == 1);
+                // the attention output rows are [head_v, head] fused per query head: split on whole
+                //   query heads like q/k/v - granularity_head * n_embd_head_v spans n_gqa == n_head
+                //   heads for MLA and would degenerate to a {0, ne} split
+                return {std::lcm((int64_t) hparams.n_embd_head_v(il), blck_size_perf)};
+            }
             if (std::regex_match(tensor_name, pattern_attn_out_weight)) {
                 GGML_ASSERT(segments.size() == 1);
                 return {granularity_head * hparams.n_embd_head_v(il)};
