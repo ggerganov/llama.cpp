@@ -379,7 +379,7 @@ struct ggml_cuda_fattn_tile_sparse_config {
     int min_gqa;
 };
 
-static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_sparse_config_vega20(
+static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_sparse_config_gcn(
         const int DKQ, const int DV, const int gqa_ratio) {
     if (DKQ == 72  && DV == 72)  return {32768, 1};
     if (DKQ == 80  && DV == 80)  return {16384, 1};
@@ -397,14 +397,14 @@ static constexpr ggml_cuda_fattn_tile_sparse_config ggml_cuda_fattn_tile_get_spa
 
 static constexpr bool ggml_cuda_fattn_tile_sparse_supported(
         const int DKQ, const int DV, const int ncols2, const bool use_logit_softcap) {
-    return ggml_cuda_fattn_tile_get_sparse_config_vega20(DKQ, DV, 1).min_kv > 0 &&
+    return ggml_cuda_fattn_tile_get_sparse_config_gcn(DKQ, DV, 1).min_kv > 0 &&
            ncols2 > 1 && !use_logit_softcap &&
            ggml_cuda_fattn_tile_get_config_amd(DKQ, DV, ncols2) != 0 &&
            ggml_cuda_fattn_tile_get_config_amd_rdna(DKQ, DV, ncols2) != 0;
 }
 
 static bool ggml_cuda_fattn_tile_use_sparse(const ggml_tensor * dst, const int cc, const int DKQ, const int DV) {
-    if (cc != GGML_CUDA_CC_VEGA20) {
+    if (!GGML_CUDA_CC_IS_GCN(cc)) {
         return false;
     }
 
@@ -419,7 +419,7 @@ static bool ggml_cuda_fattn_tile_use_sparse(const ggml_tensor * dst, const int c
     }
 
     const int gqa_ratio = Q->ne[2] / K->ne[2];
-    const auto config = ggml_cuda_fattn_tile_get_sparse_config_vega20(DKQ, DV, gqa_ratio);
+    const auto config = ggml_cuda_fattn_tile_get_sparse_config_gcn(DKQ, DV, gqa_ratio);
     return config.min_kv > 0 && K->ne[1] >= config.min_kv && gqa_ratio >= config.min_gqa;
 }
 #endif // GGML_USE_HIP
