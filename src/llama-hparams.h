@@ -36,6 +36,13 @@ enum llama_non_causal_type {
     LLAMA_NON_CAUSAL_TYPE_SWA_FULL = 2, // all layers non-causal, SWA not applied between tokens of the current ubatch (deepseek 4)
 };
 
+// M-RoPE: which input position slot feeds each RoPE section
+enum llama_rope_section_order {
+    LLAMA_ROPE_SECTION_ORDER_UNSPECIFIED = -1,
+    LLAMA_ROPE_SECTION_ORDER_TYXZ        = 0, // default, slot i feeds section i
+    LLAMA_ROPE_SECTION_ORDER_ZYXT        = 1, // MiniCPM-V 4.7: time last
+};
+
 // forward declaration; full definition in llama-graph.h
 enum llm_ffn_op_type : int;
 
@@ -72,6 +79,8 @@ struct llama_hparams {
     int32_t  router_layer = -1;
     uint32_t n_expert = 0;
     uint32_t n_rel_attn_bkts = 0;
+    uint32_t n_value_expert      = 0; // MoVA value experts (K2 Horizon)
+    uint32_t n_value_expert_used = 0;
 
     // TODO: this needs to be reworked
     int32_t  n_layer_kv_from_start = -1; // if non-negative, the first n_layer_kv_from_start layers have KV cache
@@ -163,6 +172,8 @@ struct llama_hparams {
     float    yarn_beta_slow   =  1.0f;
 
     std::array<int, 4> rope_sections;
+
+    enum llama_rope_section_order rope_section_order = LLAMA_ROPE_SECTION_ORDER_TYXZ;
 
     // Per-layer RoPE enable flags (1 = use RoPE, 0 = NoPE)
     // by default, all layers use RoPE (controlled by rope_finetuned)
@@ -369,6 +380,7 @@ struct llama_hparams {
     // llm_ffn_op_type_from_string() in llama-model.cpp, mirroring how
     // rope_scaling_type_train is handled.
     enum llm_ffn_op_type llm_ffn_op;
+    enum ggml_unary_op   act_cls = GGML_UNARY_OP_TANH; // activation of the classifier head (RANK)
 
     // Step35: optional per-layer clamps for (Swi)GLU
     std::array<float, LLAMA_MAX_LAYERS> swiglu_clamp_exp; // clamping for expert FFN

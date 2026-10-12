@@ -279,6 +279,8 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,       hparams.f_norm_rms_eps);
     add_kv(LLM_KV_ATTENTION_GROUPNORM_EPS,           hparams.f_norm_group_eps);
     add_kv(LLM_KV_ATTENTION_GROUPNORM_GROUPS,        hparams.n_norm_groups);
+    add_kv(LLM_KV_ATTENTION_VALUE_EXPERT_COUNT,      hparams.n_value_expert);
+    add_kv(LLM_KV_ATTENTION_VALUE_EXPERT_USED_COUNT, hparams.n_value_expert_used);
     add_kv(LLM_KV_ATTENTION_CAUSAL,                  hparams.causal_attn);
     add_kv(LLM_KV_ATTENTION_Q_LORA_RANK,             hparams.n_lora_q);
     add_kv(LLM_KV_ATTENTION_KV_LORA_RANK,            hparams.n_lora_kv);
@@ -363,6 +365,7 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_ROPE_DIMENSION_COUNT,              hparams.n_rot_full);
     add_kv(LLM_KV_ROPE_DIMENSION_COUNT_SWA,          hparams.n_rot_swa);
     add_kv(LLM_KV_ROPE_DIMENSION_SECTIONS,           hparams.rope_sections);
+    add_kv(LLM_KV_ROPE_SECTION_ORDER,                llama_rope_section_order_name(hparams.rope_section_order));
     add_kv(LLM_KV_ROPE_FREQ_BASE,                    hparams.rope_freq_base_train);
     add_kv(LLM_KV_ROPE_FREQ_BASE_SWA,                hparams.rope_freq_base_train_swa);
     // add_kv(LLM_KV_ROPE_SCALE_LINEAR,                 rope_scaling_factor); // old name
