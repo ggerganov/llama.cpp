@@ -561,6 +561,7 @@ class MODEL_ARCH(IntEnum):
     QWEN35MOE        = auto()
     CLEF             = auto()
     VLLM_DECISION2   = auto()
+    VLLM_DEC2_QWEN35 = auto()
     QWEN4EXP         = auto()
     PHI2             = auto()
     PHI3             = auto()
@@ -1351,6 +1352,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN35MOE:        "qwen35moe",
     MODEL_ARCH.CLEF:             "clef",
     MODEL_ARCH.VLLM_DECISION2:   "vllm-decision2",
+    MODEL_ARCH.VLLM_DEC2_QWEN35: "vllm-dec2-qwen35",
     MODEL_ARCH.QWEN4EXP:         "qwen4exp",
     MODEL_ARCH.PHI2:             "phi2",
     MODEL_ARCH.PHI3:             "phi3",
@@ -3061,6 +3063,38 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        # decision head
+        MODEL_TENSOR.DECISION_OPTION_NORM,
+        MODEL_TENSOR.DECISION_QUERY_NORM,
+        MODEL_TENSOR.DECISION_KEY,
+        MODEL_TENSOR.DECISION_QUERY,
+        MODEL_TENSOR.DECISION_OPTION_MLP,
+        MODEL_TENSOR.DECISION_QUERY_MLP,
+        MODEL_TENSOR.DECISION_SCORER_OUT,
+    ],
+    MODEL_ARCH.VLLM_DEC2_QWEN35: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_GATE,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_NORM,
+        MODEL_TENSOR.SSM_BETA,
+        MODEL_TENSOR.SSM_ALPHA,
+        MODEL_TENSOR.SSM_OUT,
         # decision head
         MODEL_TENSOR.DECISION_OPTION_NORM,
         MODEL_TENSOR.DECISION_QUERY_NORM,

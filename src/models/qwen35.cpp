@@ -136,6 +136,28 @@ std::unique_ptr<llm_graph_context> llama_model_qwen35::build_arch_graph(const ll
 
 llama_model_qwen35::graph::graph(const llama_model & model, const llm_graph_params & params) :
     llm_build_delta_net_base(params), model(model) {
+    ggml_tensor * cur = build_backbone(model);
+
+    if (model.cls_out) {
+        ggml_tensor * embd = build_lora_mm(model.cls_out, cur);
+        if (model.cls_out_b) {
+            embd = ggml_add(ctx0, embd, model.cls_out_b);
+        }
+        cb(embd, "result_embd_proj", -1);
+        res->t_embd = embd;
+        ggml_build_forward_expand(gf, embd);
+    }
+
+    // LM head
+    cur = build_lora_mm(model.output, cur, model.output_s);
+
+    cb(cur, "result_output", -1);
+    res->t_logits = cur;
+
+    ggml_build_forward_expand(gf, cur);
+}
+
+ggml_tensor * llama_model_qwen35::graph::build_backbone(const llama_model & model) {
     const int64_t n_embd_head = hparams.n_embd_head_v();
 
     GGML_ASSERT(n_embd_head == hparams.n_embd_head_k());
@@ -219,23 +241,7 @@ llama_model_qwen35::graph::graph(const llama_model & model, const llm_graph_para
     cb(cur, "result_norm", -1);
     res->t_embd = cur;
 
-    if (model.cls_out) {
-        ggml_tensor * embd = build_lora_mm(model.cls_out, cur);
-        if (model.cls_out_b) {
-            embd = ggml_add(ctx0, embd, model.cls_out_b);
-        }
-        cb(embd, "result_embd_proj", -1);
-        res->t_embd = embd;
-        ggml_build_forward_expand(gf, embd);
-    }
-
-    // LM head
-    cur = build_lora_mm(model.output, cur, model.output_s);
-
-    cb(cur, "result_output", -1);
-    res->t_logits = cur;
-
-    ggml_build_forward_expand(gf, cur);
+    return cur;
 }
 
 std::pair<ggml_tensor *, ggml_tensor *> llama_model_qwen35::graph::build_qkvz(

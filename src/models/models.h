@@ -595,12 +595,8 @@ struct llama_model_qwen3 : public llama_model_base {
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
 };
 
-// Qwen3 with the decision head of vllm-sr Decision 2.0: one score per option
-struct llama_model_vllm_decision2 : public llama_model_qwen3 {
-    llama_model_vllm_decision2(const struct llama_model_params & params) : llama_model_qwen3(params) {}
-    void load_arch_hparams(llama_model_loader & ml) override;
-    void load_arch_tensors(llama_model_loader & ml) override;
-
+// the decision head of vllm-sr Decision 2.0: one score per option, see llama_batch_ext_set_decision_order()
+struct llama_decision2_head {
     ggml_tensor * option_norm     = nullptr;
     ggml_tensor * option_norm_b   = nullptr;
     ggml_tensor * query_norm      = nullptr;
@@ -612,15 +608,25 @@ struct llama_model_vllm_decision2 : public llama_model_qwen3 {
     ggml_tensor * query_mlp       = nullptr;
     ggml_tensor * scorer_out      = nullptr;
 
-    class input_decision;
+    class input;
+
+    void load_hparams(llama_hparams & hparams, llama_model_loader & ml) const;
+    void load_tensors(llama_model_base & model, llama_model_loader & ml);
+
+    // the output of the graph: row i is the score of option i, hidden is the backbone output [n_embd, n_outputs]
+    void build(llm_graph_context & gc, ggml_tensor * hidden) const;
+};
+
+// Qwen3 with the decision head of vllm-sr Decision 2.0
+struct llama_model_vllm_decision2 : public llama_model_qwen3 {
+    llama_model_vllm_decision2(const struct llama_model_params & params) : llama_model_qwen3(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    llama_decision2_head head;
 
     struct graph : public llama_model_qwen3::graph {
         graph(const llama_model & model, const llm_graph_params & params);
-    private:
-        // hidden: [n_embd, n_outputs], returns one score per option: [1, n_options]
-        ggml_tensor * build_head(ggml_tensor * hidden, input_decision * inp);
-
-        const llama_model_vllm_decision2 & model;
     };
 
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
@@ -2418,6 +2424,13 @@ struct llama_model_qwen35 : public llama_model_base {
 
     struct graph : public llm_build_delta_net_base {
         graph(const llama_model & model, const llm_graph_params & params);
+    protected:
+        // the helpers alone, a derived graph builds its own body
+        struct no_build {};
+        graph(const llama_model & model, const llm_graph_params & params, no_build) : llm_build_delta_net_base(params), model(model) {}
+
+        // the layers and the final norm: [n_embd, n_outputs]
+        ggml_tensor * build_backbone(const llama_model & model);
     private:
         ggml_tensor * build_layer_attn(
         llm_graph_input_attn_kv * inp_attn,
@@ -2456,6 +2469,21 @@ struct llama_model_qwen35 : public llama_model_base {
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
 };
 
+
+// Qwen3.5 with the decision head of vllm-sr Decision 2.0
+struct llama_model_vllm_dec2_qwen35 : public llama_model_qwen35 {
+    llama_model_vllm_dec2_qwen35(const struct llama_model_params & params) : llama_model_qwen35(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    llama_decision2_head head;
+
+    struct graph : public llama_model_qwen35::graph {
+        graph(const llama_model & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
 
 // Qwen3.5 backbone evaluated without memory, with a joint decision head on top of its hidden states
 struct llama_model_clef : public llama_model_qwen35 {
