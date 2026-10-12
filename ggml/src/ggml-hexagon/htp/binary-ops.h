@@ -34,10 +34,35 @@ struct htp_binary_kernel_params {
     uint32_t chunk_size;
     uint32_t chunk_bytes;
     uint32_t is_scalar;
+
+    uint8_t  split_at_ne01;
+    uint8_t  split_at_ne02;
+    uint8_t  src1_strided;
+    uint8_t  pad;
 };
 
 #if defined(__cplusplus)
 static_assert(sizeof(struct htp_binary_kernel_params) <= 128, "htp_binary_kernel_params is too large for kernel_params blob");
+
+struct ggml_tensor;
+static inline bool htp_binary_strides_safe(
+    const struct ggml_tensor * src0,
+    const struct ggml_tensor * src1,
+    const struct ggml_tensor * dst,
+    size_t elem_size
+) {
+    if ((src0->ne[0] != 1 && src0->nb[0] != elem_size) ||
+        (src1->ne[0] != 1 && src1->nb[0] != elem_size) ||
+        (dst->ne[0]  != 1 && dst->nb[0]  != elem_size)) {
+        return false;
+    }
+    if ((src0->ne[1] > 1 && src0->nb[1] < src0->ne[0] * elem_size) ||
+        (src1->ne[1] > 1 && src1->nb[1] < src1->ne[0] * elem_size) ||
+        (dst->ne[1]  > 1 && dst->nb[1]  < dst->ne[0]  * elem_size)) {
+        return false;
+    }
+    return true;
+}
 #else
 _Static_assert(sizeof(struct htp_binary_kernel_params) <= 128, "htp_binary_kernel_params is too large for kernel_params blob");
 #endif

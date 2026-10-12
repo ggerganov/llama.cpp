@@ -5877,14 +5877,17 @@ static bool ggml_hexagon_precompute_binary_params(
     const size_t src1_row_size_aligned = hex_round_up(src1_row_size, 128);
     const size_t dst_row_size_aligned  = hex_round_up(dst_row_size,  128);
 
+    if (!htp_binary_strides_safe(src0, src1, dst, elem_size)) {
+        return false;
+    }
+
     const bool is_add_id = op == HTP_OP_ADD_ID;
     const bool is_scalar = !is_add_id && src1->ne[0] == 1;
-    const bool is_transposed = src0->nb[1] < src0_row_size || src1->nb[1] < src1_row_size || dst->nb[1] < dst_row_size;
-    const bool is_row_bcast = !is_add_id && !is_scalar && !is_transposed &&
+    const bool is_row_bcast = !is_add_id && !is_scalar &&
         src1->ne[0] == src0->ne[0] &&
         (src0->ne[1] > 1 || src0->ne[2] > 1 || src0->ne[3] > 1) &&
         src1->ne[1] == 1 && src1->ne[2] == 1 && src1->ne[3] == 1;
-    const bool is_same_shape = !is_add_id && !is_scalar && !is_transposed &&
+    const bool is_same_shape = !is_add_id && !is_scalar &&
         src1->ne[0] == src0->ne[0] &&
         src1->ne[1] == src0->ne[1] &&
         (src1->ne[2] == src0->ne[2] || src1->ne[2] == 1) &&
@@ -5933,14 +5936,12 @@ static bool ggml_hexagon_precompute_binary_params(
         kernel_type = HTP_BINARY_KERNEL_ROW_BCAST;
         src1_size = src1_row_size_aligned;
     } else if (is_scalar) {
-        if (!ggml_is_contiguous(src1)) {
-            return false;
-        }
-        src1_size = hex_round_up(ggml_nbytes(src1), 128);
+        src1_size = hex_round_up(ggml_nelements(src1) * elem_size, 128);
         if (src1_size > sess->vtcm_size) {
             return false;
         }
         kernel_type = HTP_BINARY_KERNEL_SCALAR;
+        kparams->src1_strided = !ggml_is_contiguous(src1) ? 1 : 0;
     } else if (is_same_shape) {
         kernel_type = HTP_BINARY_KERNEL_SAME_SHAPE;
     } else if (is_complex) {
@@ -5955,6 +5956,22 @@ static bool ggml_hexagon_precompute_binary_params(
     kparams->src1_row_size_aligned = src1_row_size_aligned;
     kparams->dst_row_size_aligned  = dst_row_size_aligned;
     kparams->src1_size             = src1_size;
+
+    const bool src0_contig_dim1 = (src0->nb[2] == src0->ne[1] * src0->nb[1]);
+    const bool src1_contig_dim1 = (src1->nb[2] == src1->ne[1] * src1->nb[1]);
+    const bool dst_contig_dim1  = (dst->nb[2]  == src0->ne[1] * dst->nb[1]);
+
+    const bool src0_contig_dim2 = (src0->nb[3] == src0->ne[2] * src0->nb[2]);
+    const bool src1_contig_dim2 = (src1->nb[3] == src1->ne[2] * src1->nb[2]);
+    const bool dst_contig_dim2  = (dst->nb[3]  == src0->ne[2] * dst->nb[2]);
+
+    kparams->split_at_ne01 = (is_add_id || kernel_type == HTP_BINARY_KERNEL_SCALAR ||
+        ((src0->ne[2] > 1) && ((src1->ne[1] > 1) || (src1->ne[2] > 1) ||
+                               !src0_contig_dim1 || !src1_contig_dim1 || !dst_contig_dim1))) ? 1 : 0;
+
+    kparams->split_at_ne02 = ((src0->ne[3] > 1) &&
+        ((src1->ne[2] > 1) || (src1->ne[3] > 1) ||
+         !src0_contig_dim2 || !src1_contig_dim2 || !dst_contig_dim2)) ? 1 : 0;
 
     struct htp_binary_vtcm_layout L;
     htp_binary_vtcm_layout_build(&L, kparams, sess->vtcm_size);

@@ -1139,12 +1139,25 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     if (kparams->kernel_type == HTP_BINARY_KERNEL_ROW_BCAST) {
         dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, src1->ne[0] * elem_size, 1);
     } else if (kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR) {
-        const uint64_t src1_size64 = (uint64_t) src1->ne[0] * src1->ne[1] * src1->ne[2] * src1->ne[3] * elem_size;
-        if (src1_size64 > bctx.vtcm_layout.src1_size || src1_size64 > SIZE_MAX) {
-            return HTP_STATUS_INVAL_PARAMS;
+        if (!kparams->src1_strided) {
+            dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, kparams->src1_size, 1);
+        } else {
+            const uint32_t ne11 = src1->ne[1];
+            const uint32_t ne12 = src1->ne[2];
+            const uint32_t ne13 = src1->ne[3];
+            for (uint32_t i13 = 0; i13 < ne13; i13++) {
+                for (uint32_t i12 = 0; i12 < ne12; i12++) {
+                    dma_addr_t src_addr = src1->data + i13 * src1->nb[3] + i12 * src1->nb[2];
+                    uint8_t * dst_ptr = vtcm_src1 + (i13 * ne12 * ne11 + i12 * ne11) * elem_size;
+                    if (!dma_queue_push(dma_q, dma_make_data(dst_ptr, src_addr),
+                                        elem_size, src1->nb[1], elem_size, ne11)) {
+                        dma_queue_pop(dma_q);
+                        dma_queue_push(dma_q, dma_make_data(dst_ptr, src_addr),
+                                       elem_size, src1->nb[1], elem_size, ne11);
+                    }
+                }
+            }
         }
-        const size_t src1_size = (size_t) src1_size64;
-        dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, src1_size, 1);
     } else if (kparams->kernel_type == HTP_BINARY_KERNEL_ADD_ID) {
         dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data),
                        kparams->src1_row_size_aligned, src1->nb[1],
@@ -1169,16 +1182,8 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     bctx.src1_dim2_div  = init_fastdiv_values(src1->ne[2]);
     bctx.src1_dim3_div  = init_fastdiv_values(src1->ne[3]);
 
-    bool src0_contig_dim1 = (src0->nb[2] == src0->ne[1] * src0->nb[1]);
-    bool dst_contig_dim1  = (dst->nb[2]  == src0->ne[1] * dst->nb[1]);
-
-    bool src0_contig_dim2 = (src0->nb[3] == src0->ne[2] * src0->nb[2]);
-    bool dst_contig_dim2  = (dst->nb[3]  == src0->ne[2] * dst->nb[2]);
-
-    bctx.split_at_ne01 = (octx->op == HTP_OP_ADD_ID) ||
-        (kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR) ||
-        ((src0->ne[2] > 1) && ((src1->ne[1] > 1) || (src1->ne[2] > 1) || !src0_contig_dim1 || !dst_contig_dim1));
-    bctx.split_at_ne02 = (src0->ne[3] > 1) && ((src1->ne[2] > 1) || (src1->ne[3] > 1) || !src0_contig_dim2 || !dst_contig_dim2);
+    bctx.split_at_ne01  = kparams->split_at_ne01;
+    bctx.split_at_ne02  = kparams->split_at_ne02;
 
     worker_callback_t worker_func = NULL;
     void * compute_func = NULL;
@@ -1302,7 +1307,7 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     if (kparams->kernel_type == HTP_BINARY_KERNEL_ROW_BCAST ||
         kparams->kernel_type == HTP_BINARY_KERNEL_SCALAR ||
         kparams->kernel_type == HTP_BINARY_KERNEL_ADD_ID) {
-        dma_queue_pop(dma_q);
+        dma_queue_flush(dma_q);
     }
 
     work_queue_run(octx->ctx->work_queue, worker_func, &bctx, n_threads);
