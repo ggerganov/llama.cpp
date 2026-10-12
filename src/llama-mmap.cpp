@@ -835,7 +835,7 @@ const bool llama_mlock::SUPPORTED = false;
 #endif
 
 void llama_prefetch(llama_memory_ranges mr) {
-#if defined(__linux__) || (defined(_WIN32) && _WIN32_WINNT >= 0x602)
+#if defined(__linux__) || defined(__APPLE__) || (defined(_WIN32) && _WIN32_WINNT >= 0x602)
     if (mr.empty()) {
         return;
     }
