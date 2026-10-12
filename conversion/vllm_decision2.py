@@ -181,11 +181,5 @@ class VllmDec2Qwen35Model(_VllmDecision2Mixin, Qwen3_5TextModel):
 
     @classmethod
     def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
-        name, gen = item
         # the head replaces the LM head
-        if name == "lm_head.weight":
-            return None
-        # a packaged backbone is a bare Qwen3_5TextModel, its tensors have no "model." prefix
-        if not name.startswith("model."):
-            name = "model." + name
-        return super().filter_tensors((name, gen))
+        return None if item[0] == "lm_head.weight" else super().filter_tensors(item)
