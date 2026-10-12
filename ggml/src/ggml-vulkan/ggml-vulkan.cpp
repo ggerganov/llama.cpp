@@ -334,20 +334,20 @@ bool ggml_vk_concat_supported(const ggml_tensor * src0, const ggml_tensor * src1
 
 // dim-0 concat with a transposed src1, e.g. GDN conv_input = concat(conv_state, transpose(qkv), 0)
 static bool ggml_vk_concat_transpose_supported(const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
+    GGML_UNUSED(src0);
     if (ggml_get_op_params_i32(dst, 0) != 0) {
         return false;
     }
     if (ggml_is_quantized(dst->type) || ggml_vk_concat_unit_size(dst->type) != 4) {
         return false;
     }
-    if (!ggml_is_contiguous_rows(src0) || !ggml_is_contiguous(dst)) {
+    // src1 is a transposed view (dim 1 contiguous), so ggml_vk_cpy picks the tiled transpose copy for it
+    if (src1->nb[1] != ggml_type_size(src1->type)) {
         return false;
     }
-    if (src1->nb[1] != ggml_type_size(src1->type) || src1->nb[0] < (size_t) src1->ne[1] * src1->nb[1]) {
-        return false;
-    }
-    // src1 goes through the tiled transpose copy, src0 through a plain strided copy, so src1 must be the larger part
-    return src1->ne[0] >= 32 && src0->ne[0] <= src1->ne[0];
+    // conservative cutoff: for small batches such as single-token decode the second dispatch
+    // costs more than the transposed copy saves, so they keep the regular concat shader
+    return src1->ne[0] >= 32;
 }
 
 static bool vk_instance_initialized = false;
@@ -10436,9 +10436,13 @@ void ggml_vk_concat(ggml_backend_vk_context * ctx, vk_context& subctx, const ggm
     if (ggml_vk_concat_transpose_supported(src0, src1, dst)) {
         // dst = [src0 | src1] along dim 0 as two copies into views of dst: a plain copy for src0 and
         // the tiled transpose copy for the transposed src1. The two copies write disjoint elements.
+        // dst is not empty here, but a source can be (e.g. a zero-width conv state): skip empty copies,
+        // their push constant setup would divide by zero.
         ggml_tensor dst0 = *dst;
         dst0.ne[0] = src0->ne[0];
-        ggml_vk_cpy(ctx, subctx, src0, &dst0);
+        if (!ggml_is_empty(src0)) {
+            ggml_vk_cpy(ctx, subctx, src0, &dst0);
+        }
 
         const size_t offs = src0->ne[0] * dst->nb[0];
         ggml_tensor dst1 = *dst;
@@ -10447,7 +10451,9 @@ void ggml_vk_concat(ggml_backend_vk_context * ctx, vk_context& subctx, const ggm
         if (dst->view_src) {
             dst1.view_offs += offs;
         }
-        ggml_vk_cpy(ctx, subctx, src1, &dst1);
+        if (!ggml_is_empty(src1)) {
+            ggml_vk_cpy(ctx, subctx, src1, &dst1);
+        }
         return;
     }
 

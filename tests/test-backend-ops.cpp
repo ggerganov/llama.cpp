@@ -6712,7 +6712,7 @@ struct test_concat : public test_case {
     const std::array<int64_t, 4> ne_a;
     const int64_t ne_b_d;
     const int dim;
-    const int v; // view (1 << 0: non-cont a (first 3 dim), 1 << 1: non-cont b (first 3 dim), 1 << 2: non-cont a (last 2 dim), 1 << 3: non-cont b (last 2 dim))
+    const int v; // view (1 << 0: non-cont a (first 3 dim), 1 << 1: non-cont b (first 3 dim), 1 << 2: non-cont a (last 2 dim), 1 << 3: non-cont b (last 2 dim), 1 << 4: a is a transposed view)
     const bool transpose_b; // b is a transposed view of a contiguous tensor (dim 0 only)
 
     std::string vars() override {
@@ -6729,7 +6729,13 @@ struct test_concat : public test_case {
         auto ne_b = ne_a;
         ne_b[dim] = ne_b_d;
         ggml_tensor * a;
-        if (v & 1) {
+        if (v & 16) {
+            a = ggml_new_tensor_4d(ctx, type, ne_a[1], ne_a[0], ne_a[2], ne_a[3]);
+            ggml_set_name(a, "a");
+
+            a = ggml_transpose(ctx, a);
+            ggml_set_name(a, "transpose_of_a");
+        } else if (v & 1) {
             auto ne = ne_a; ne[0] *= 2; ne[1] *= 4; ne[2] *= 3;
             a = ggml_new_tensor(ctx, type, 4, ne.data());
             ggml_set_name(a, "a");
@@ -11006,6 +11012,15 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {3, 64, 3, 2}, ne_b_d, 0, 0, true));
     }
     test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {40, 37, 2, 1}, 33, 0, 0, true));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {64, 37, 1, 1}, 32, 0, 0, true));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {3, 64, 3, 2}, 33, 0, 1, true));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {3, 64, 3, 2}, 33, 0, 4, true));
+    // transposed src0 (non-contiguous rows), above and below the 32-column threshold
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {3, 64, 3, 2}, 33, 0, 16, true));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {3, 64, 3, 2}, 31, 0, 16, true));
+    // empty src0 (e.g. a zero-width conv state)
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {0, 64, 1, 1}, 33, 0, 0, true));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32, {0, 37, 3, 2}, 64, 0, 0, true));
 
     for (int v : { 0, 1, 2, 3 }) {
         for (int dim : { 0, 1, 2, 3, }) {
