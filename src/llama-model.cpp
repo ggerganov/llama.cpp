@@ -399,8 +399,8 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
 
         const ggml_tensor * tensor_axis_0;
 
-        uint32_t il;
-        size_t   il_eff;   // index of this layer among the layers of its type
+        uint32_t il;     // actual layer index that the tensor resides on
+        uint32_t il_eff; // effective layer index when counting only layers of same type
     };
 
     auto get_tensor_config_impl = [&](
@@ -408,7 +408,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
         // the layers in a tensor can be inhomogeneous, if the pattern is cleanly divided by the number of GPUs there can be aliasing effects,
         //     count only the same type of previous layers to avoid this
         auto get_il_eff = [&](const size_t il){
-            size_t ret = 0;
+            uint32_t ret = 0;
             const bool il_is_recr = hparams.is_recr(il);
             const bool il_is_swa  = hparams.is_swa(il);
             for (size_t il_prev = 0; il_prev < il; il_prev++) {
@@ -419,7 +419,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
 
         uint32_t il;
         std::string prefix;
-        size_t il_eff;
+        uint32_t il_eff;
         if (tensor_name.substr(0, 4) == "blk.") {
             const size_t length_prefix = tensor_name.find('.', 4);
             GGML_ASSERT(length_prefix != std::string::npos);
@@ -684,13 +684,13 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
     if (split_state.axis >= 0 && split_state.axis < GGML_MAX_DIMS) {
         const int64_t blck_size = ggml_blck_size(tc.tensor_axis_0->type);
         const float * tensor_split = ud->model->tensor_split();
-        std::vector<float> tensor_split_share(ud->n_devices, 1.0/ud->n_devices);
+        std::vector<float> tensor_split_normalized(ud->n_devices, 1.0/ud->n_devices);
         float share_sum = 0.0;
         for (size_t j = 0; tensor_split != nullptr && j < ud->n_devices; j++) {
             share_sum += tensor_split[j];
         }
         for (size_t j = 0; share_sum > 0.0 && j < ud->n_devices; j++) {
-            tensor_split_share[j] = tensor_split[j]/share_sum;
+            tensor_split_normalized[j] = tensor_split[j]/share_sum;
         }
         const std::vector<std::pair<int64_t, uint32_t>> segments = get_split_segments(split_state.axis, tc.il);
         const std::vector<int64_t> granularity = get_split_granularity(blck_size, tc.il, segments);
@@ -707,13 +707,13 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
 
             int64_t base_total = 0;
             for (size_t j = 0; j < ud->n_devices; j++) {
-                base_slices[j] = (tensor_split_share[j] - 1e-9) * n_q;
+                base_slices[j] = (tensor_split_normalized[j] - 1e-9) * n_q;
                 base_total    += base_slices[j];
             }
 
             std::fill(device_slices.begin(), device_slices.end(), 0);
             int64_t shares_allocated = 0;
-            for (size_t m = 0; m <= tc.il_eff; m++) {
+            for (uint32_t m = 0; m <= tc.il_eff; m++) {
                 for (size_t k = 0; k < ud->n_devices; k++) {
                     segment_slices[k]  = base_slices[k];
                     device_slices[k]  += base_slices[k];
@@ -728,11 +728,11 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                             if (segment_slices[j] > base_slices[j]) {
                                 continue;
                             }
-                            const int64_t max_slices = std::ceil(shares_allocated * tensor_split_share[j] - 1e-9);
+                            const int64_t max_slices = std::ceil(shares_allocated * tensor_split_normalized[j] - 1e-9);
                             if (pass == 0 && (float)device_slices[j] + 1 > max_slices) {
                                 continue;
                             }
-                            const float priority = tensor_split_share[j]/float(device_slices[j] + 1);
+                            const float priority = tensor_split_normalized[j]/float(device_slices[j] + 1);
                             if (priority > best_priority) {
                                 best_priority = priority;
                                 best          = j;
