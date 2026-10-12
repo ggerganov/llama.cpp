@@ -245,7 +245,7 @@ int main(int argc, char ** argv) {
     bool list_cases        = false;
     bool dump_logs_on_fail = true;
 
-    int parallel_workers = 0; // 0 = auto, same flag as in test-backend-ops
+    int parallel_workers = 1; // 0 = auto, same flag as in test-backend-ops
 
     auto parse_parallel_workers = [&](const char * flag, const char * value) {
         try {
