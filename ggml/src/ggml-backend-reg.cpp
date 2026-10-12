@@ -66,6 +66,10 @@
 #include "ggml-blas.h"
 #endif
 
+#ifdef GGML_USE_ANALOG
+#include "ggml-analog.h"
+#endif
+
 #ifdef GGML_USE_RPC
 #include "ggml-rpc.h"
 #endif
@@ -167,6 +171,9 @@ struct ggml_backend_registry {
 #endif
 #ifdef GGML_USE_ET
         register_backend(ggml_backend_et_reg());
+#endif
+#ifdef GGML_USE_ANALOG
+        register_backend(ggml_backend_analog_reg());
 #endif
 #ifdef GGML_USE_CPU
         register_backend(ggml_backend_cpu_reg());

@@ -1,0 +1,68 @@
+// Readout of the analog array: the partial sums produced by the mixed-signal core are scaled to the
+// full scale of the row, hit by the thermal noise of one array pass, clipped and quantized by the
+// ADC. One invocation per output element, the pass is element-wise.
+//
+// mirror: ggml_analog_shader_readout() in analog-shader.cpp
+
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "analog-common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer BY { float y[]; };                      // in: partial sums, out: readout
+layout(std430, binding = 1) readonly buffer BR { float x_rms[]; };
+layout(std430, binding = 2) readonly buffer BN { float row_norm[]; };
+layout(std430, binding = 3) readonly buffer BI { float row_inv_norm[]; };
+
+layout(push_constant) uniform PC {
+    uint  m;          // rows of the array, elements per column vector
+    uint  n1;
+    uint  n2;
+    uint  n3;
+    uint  ne2;        // second dimension of the weight matrix, for the broadcast of the rows
+    uint  ne3;
+    float adc_sigma;  // readout range, in standard deviations of the partial sum
+    float sigma;      // thermal noise of one array pass
+    float adc_step;   // ADC step, relative to the full scale of the readout
+    float adc_rstep;
+} pc;
+
+void main() {
+    const uint idx = gl_GlobalInvocationID.x;
+    const uint c   = idx/pc.m;
+    const uint i   = idx%pc.m;
+
+    const uint i2 = (c/pc.n1)%pc.n2;
+    const uint i3 = (c/pc.n1)/pc.n2;
+
+    const uint r2 = pc.n2/pc.ne2;
+    const uint r3 = pc.n3/pc.ne3;
+
+    const uint row = ((i3/r3)*pc.ne2 + i2/r2)*pc.m + i;
+
+    const float scale     = pc.adc_sigma*x_rms[c];
+    const float scale_inv = scale > 0.0f ? 1.0f/scale : 0.0f;
+    const float full_scale = scale*row_norm[row];
+
+    if (full_scale <= 0.0f) {
+        y[idx] = 0.0f;
+        return;
+    }
+
+    float v = y[idx];
+
+    // thermal / shot noise of the readout, relative to the full scale of an array pass
+    if (pc.sigma > 0.0f) {
+        v += pc.sigma*full_scale*analog_noise_of(row, c);
+    }
+
+    // saturating ADC over the full scale of the readout
+    v = min(max(v, -full_scale), full_scale);
+
+    const float norm = v*scale_inv*row_inv_norm[row];
+
+    y[idx] = round(norm*pc.adc_rstep)*pc.adc_step*full_scale;
+}

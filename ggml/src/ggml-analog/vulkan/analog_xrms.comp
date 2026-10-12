@@ -1,0 +1,37 @@
+// Dynamic range of the readout: the RMS of the input vector of every column of the array, summed
+// in the same order as on the CPU. The value scales the full scale of the readout of the column.
+//
+// mirror: ggml_analog_shader_xrms() in analog-shader.cpp
+
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "analog-common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly  buffer BX { float x[]; };
+layout(std430, binding = 1) writeonly buffer BR { float x_rms[]; };
+
+layout(push_constant) uniform PC {
+    uint k;
+    uint ncols;
+} pc;
+
+void main() {
+    const uint c = gl_GlobalInvocationID.x;
+
+    if (c >= pc.ncols) {
+        return;
+    }
+
+    const uint base = c*pc.k;
+
+    float sq = 0.0f;
+    for (uint i = 0; i < pc.k; ++i) {
+        sq += x[base + i]*x[base + i];
+    }
+
+    x_rms[c] = sqrt(sq/float(pc.k));
+}

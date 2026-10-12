@@ -1,0 +1,51 @@
+// Input DAC of the analog array: the activations are snapped to the levels that the drivers of
+// the array can produce, one block of ANALOG_BLOCK elements at a time. The block full scale is a
+// maximum, so the blocks can be processed in any order and in parallel.
+//
+// mirror: ggml_analog_shader_dac() in analog-shader.cpp
+
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "analog-common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer BX { float x[]; };
+layout(std430, binding = 1) writeonly buffer BQ { float q[]; };
+
+layout(push_constant) uniform PC {
+    uint  k;        // reduction dimension (elements per column)
+    uint  nb;       // blocks per column
+    float step;     // DAC step, relative to the full scale of the block
+    float inv_step;
+} pc;
+
+void main() {
+    const uint blk = gl_GlobalInvocationID.x;
+    const uint col = blk/pc.nb;
+    const uint b   = blk%pc.nb;
+
+    const uint k0 = b*ANALOG_BLOCK;
+    const uint kn = min(ANALOG_BLOCK, pc.k - k0);
+
+    const uint base = col*pc.k + k0;
+
+    // the full scale of the block, a max is exact in any order
+    float d = 0.0f;
+    for (uint i = 0; i < kn; ++i) {
+        d = max(d, abs(x[base + i]));
+    }
+
+    for (uint i = 0; i < kn; ++i) {
+        if (d == 0.0f) {
+            q[base + i] = 0.0f;
+            continue;
+        }
+
+        const float v = min(max(x[base + i]/d, -1.0f), 1.0f);
+
+        q[base + i] = round(v*pc.inv_step)*pc.step*d;
+    }
+}

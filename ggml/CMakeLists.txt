@@ -191,6 +191,7 @@ option(GGML_SCHED_NO_REALLOC                "ggml: disallow reallocations in ggm
 
 # 3rd party libs / backends
 option(GGML_ACCELERATE                      "ggml: enable Accelerate framework"               ON)
+option(GGML_ANALOG                          "ggml: enable analog in-memory computing backend" OFF)
 option(GGML_BLAS                            "ggml: use BLAS"                                  ${GGML_BLAS_DEFAULT})
 set(GGML_BLAS_VENDOR ${GGML_BLAS_VENDOR_DEFAULT} CACHE STRING
                                             "ggml: BLAS library vendor")

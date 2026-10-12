@@ -482,6 +482,7 @@ function(ggml_add_cpu_backend_variant tag_name)
     ggml_add_cpu_backend_variant_impl(${tag_name})
 endfunction()
 
+ggml_add_backend(ANALOG)
 ggml_add_backend(CPU)
 
 if (GGML_CPU_ALL_VARIANTS)
@@ -584,6 +585,25 @@ if (GGML_CPU_ALL_VARIANTS)
     endif()
 elseif (GGML_CPU)
     ggml_add_cpu_backend_variant_impl("")
+endif()
+
+# The analog emulation has its own copy of the passes of the array (the DAC, the programming and
+# the readout of a tile), so it is compiled with the same options as the CPU backend: the same
+# instruction set, and on MSVC the same /arch flag. With GGML_CPU_ALL_VARIANTS the variants are
+# separate targets and there is no single set of options to copy; the kernels then stay scalar.
+if (TARGET ggml-analog AND TARGET ggml-cpu)
+    get_target_property(GGML_ANALOG_CPU_OPTIONS ggml-cpu COMPILE_OPTIONS)
+    get_target_property(GGML_ANALOG_CPU_DEFINES ggml-cpu COMPILE_DEFINITIONS)
+
+    if (GGML_ANALOG_CPU_OPTIONS)
+        target_compile_options(ggml-analog PRIVATE ${GGML_ANALOG_CPU_OPTIONS})
+    endif()
+
+    if (GGML_ANALOG_CPU_DEFINES)
+        target_compile_definitions(ggml-analog PRIVATE ${GGML_ANALOG_CPU_DEFINES})
+    endif()
+
+    message(STATUS "analog: array kernels built with the options of the CPU backend: ${GGML_ANALOG_CPU_OPTIONS}")
 endif()
 
 ggml_add_backend(BLAS)

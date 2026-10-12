@@ -1,0 +1,104 @@
+// Programming pass of the analog array: weights -> conductances, with the finite number of levels
+// of a cell, the error of the write operation, the drift of the programmed conductance and the IR
+// drop along the column of the tile. One invocation per row of the array, the blocks of the row are
+// walked in order so that the norms come out of the same summation order as on the CPU.
+//
+// mirror: ggml_analog_shader_program() in analog-shader.cpp
+
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "analog-common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer BW { float w[]; };      // weights, F32, k per row
+layout(std430, binding = 1) writeonly buffer BS { float snap[]; };  // programmed snapshot
+layout(std430, binding = 2) buffer BN { float row_norm[]; };
+layout(std430, binding = 3) writeonly buffer BI { float row_inv_norm[]; };
+
+layout(push_constant) uniform PC {
+    uint  k;
+    uint  nrows;
+    uint  seed_lo;
+    uint  seed_hi;
+    float step;       // conductance step, relative to the full scale of the block
+    float inv_step;
+    float sigma_prog; // programming error of a cell
+    float drift;      // conductance drift
+    float ir_drop;    // attenuation along the column of the tile
+    uint  tile_cols;
+} pc;
+
+void main() {
+    const uint r = gl_GlobalInvocationID.x;
+
+    if (r >= pc.nrows) {
+        return;
+    }
+
+    const uint64_t seed = uint64_t(pc.seed_lo) | (uint64_t(pc.seed_hi) << 32);
+    const uint64_t row_hash = analog_hash(analog_hash(seed) ^ (uint64_t(r) + 1UL)*0x2545F4914F6CDD1DUL);
+
+    // note: the offsets are 32 bit, which covers arrays of up to 4G cells (16 GiB of F32)
+    const uint base_row = r*pc.k;
+
+    float sq_sum = 0.0f;
+
+    for (uint k0 = 0; k0 < pc.k; k0 += ANALOG_BLOCK) {
+        const uint kn = min(ANALOG_BLOCK, pc.k - k0);
+        const uint base = base_row + k0;
+
+        float d = 0.0f;
+        for (uint i = 0; i < kn; ++i) {
+            d = max(d, abs(w[base + i]));
+        }
+
+        if (d == 0.0f) {
+            // an all-zero block is not programmed, the cell keeps the value it was read with
+            for (uint i = 0; i < kn; ++i) {
+                snap[base + i] = w[base + i];
+            }
+            continue;
+        }
+
+        const float inv_d = 1.0f/d;
+
+        for (uint i = 0; i < kn; ++i) {
+            const uint64_t h = analog_hash(row_hash ^ uint64_t(k0 + i)*0x9E3779B97F4A7C15UL);
+
+            float v = w[base + i]*inv_d; // normalized cell conductance
+            v = min(max(v, -1.0f), 1.0f);
+
+            // finite number of conductance levels
+            v = round(v*pc.inv_step)*pc.step;
+
+            // programming error of the write operation
+            if (pc.sigma_prog > 0.0f) {
+                v += pc.sigma_prog*analog_gauss(h);
+            }
+
+            // conductance drift, applied once at the end of programming
+            if (pc.drift > 0.0f) {
+                v *= 1.0f - pc.drift;
+            }
+
+            // IR drop: the drive voltage decays along the column of the array
+            if (pc.ir_drop > 0.0f) {
+                const uint col = (k0 + i)%pc.tile_cols;
+                v *= 1.0f - pc.ir_drop*float(col)/float(pc.tile_cols);
+            }
+
+            const float sv = v*d;
+
+            snap[base + i] = sv;
+            sq_sum += sv*sv;
+        }
+    }
+
+    const float norm = sqrt(sq_sum);
+
+    row_norm[r]     = norm;
+    row_inv_norm[r] = norm > 0.0f ? 1.0f/norm : 0.0f;
+}
