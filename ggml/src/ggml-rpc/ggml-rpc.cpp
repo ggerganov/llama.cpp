@@ -422,7 +422,10 @@ static bool negotiate_hello(const std::shared_ptr<socket_t> & sock) {
     sock->get_caps(request.conn_caps);
 
     bool status = send_rpc_cmd(sock, RPC_CMD_HELLO, &request, sizeof(request), &response, sizeof(response));
-    RPC_STATUS_ASSERT(status);
+    if (!status) {
+        LOG_ERROR("RPC hello exchange with the server failed\n");
+        return false;
+    }
 
     if (response.major != RPC_PROTO_MAJOR_VERSION || response.minor > RPC_PROTO_MINOR_VERSION) {
         LOG_ERROR("RPC server version mismatch: %d.%d.%d\n",
@@ -505,7 +508,7 @@ public:
     void busy_spin_release();
     void graph_compute(uint32_t device, const ggml_cgraph * cgraph);
 
-    void start(const std::string & endpoint);
+    bool start(const std::string & endpoint);
     void work();
 
     ~rpc_dispatcher();
@@ -630,26 +633,37 @@ void rpc_dispatcher::busy_spin_release() {
     GGML_ASSERT(previous > 0);
 }
 
-void rpc_dispatcher::start(const std::string & endpoint) {
+// A failed connect or handshake is a reportable condition, not a reason to abort the
+// host process: one typo in an endpoint, or a temporarily unreachable server, used to
+// kill the whole application with SIGABRT - and the message went to a log the host may
+// never see. start() with this change returns false and leaves the dispatcher unstarted;
+// get_dispatcher() turns that into a nullptr, and every caller treats it as a dead
+// endpoint instead of crashing.
+bool rpc_dispatcher::start(const std::string & endpoint) {
     std::string host;
     int port;
     if (!parse_endpoint(endpoint, host, port)) {
-        GGML_ABORT("Failed to parse endpoint: %s\n", endpoint.c_str());
+        LOG_ERROR("Failed to parse endpoint: %s\n", endpoint.c_str());
+        return false;
     }
     if (!rpc_transport_init()) {
-        GGML_ABORT("RPC transport initialization failed\n");
+        LOG_ERROR("RPC transport initialization failed\n");
+        return false;
     }
 
     sock = socket_t::connect(host.c_str(), port);
     if (sock == nullptr) {
-        GGML_ABORT("Failed to connect to %s\n", endpoint.c_str());
+        LOG_ERROR("Failed to connect to %s\n", endpoint.c_str());
+        return false;
     }
     if (!negotiate_hello(sock)) {
-        GGML_ABORT("RPC handshake failed for %s\n", endpoint.c_str());
+        LOG_ERROR("RPC handshake failed for %s\n", endpoint.c_str());
+        return false;
     }
     LOG_DBG("[%s] connected to %s\n", __func__, endpoint.c_str());
     running = true;
     thread = std::thread(rpc_dispatcher_trampoline, this);
+    return true;
 }
 
 void rpc_dispatcher::work() {
@@ -712,7 +726,11 @@ static std::shared_ptr<rpc_dispatcher> get_dispatcher(const std::string & endpoi
     }
 
     auto dispatcher = std::make_shared<rpc_dispatcher>();
-    dispatcher->start(endpoint);
+    if (!dispatcher->start(endpoint)) {
+        // Do not cache a dispatcher that never connected: a nullptr says "this endpoint
+        // did not answer" to the caller, and a later call may retry cleanly.
+        return nullptr;
+    }
     dispatchers[endpoint] = dispatcher;
     return dispatcher;
 }
@@ -972,6 +990,9 @@ static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer(ggml_back
     rpc_msg_alloc_buffer_rsp response;
 
     auto dispatcher = get_dispatcher(buft_ctx->endpoint);
+    if (dispatcher == nullptr) {
+        return nullptr;   // endpoint went down - allocation fails like any other alloc failure
+    }
     dispatcher->send(RPC_CMD_ALLOC_BUFFER, request, sizeof(*request), &response, sizeof(response));
     if (response.remote_ptr != 0) {
         LOG_DBG("[%s] endpoint: %s, device: %u, size: %" PRIu64 " -> remote_ptr: 0x%" PRIx64 ", remote_size: %" PRIu64 "\n",
@@ -1090,6 +1111,9 @@ static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend_buffer_ty
         LOG_DBG2("[%s] cache miss: %s [%s], querying server\n", __func__, ggml_op_name(tensor->op), tensor->name);
         rpc_msg_get_alloc_size_rsp response;
         auto dispatcher = get_dispatcher(buft_ctx->endpoint);
+        if (dispatcher == nullptr) {
+            return min_size;   // dead link - the safe lower bound, as without the query
+        }
         dispatcher->send(RPC_CMD_GET_ALLOC_SIZE, request, sizeof(*request), &response, sizeof(response));
 
         {
@@ -1305,6 +1329,9 @@ ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint, u
         return it->second;
     }
     auto dispatcher = get_dispatcher(endpoint);
+    if (dispatcher == nullptr) {
+        return nullptr;   // buffer types are made only for live endpoints
+    }
     size_t alignment = get_alignment(dispatcher, device);
     size_t max_size = get_max_size(dispatcher, device);
     ggml_backend_rpc_buffer_type_context * buft_ctx = new ggml_backend_rpc_buffer_type_context {
@@ -1328,6 +1355,9 @@ ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint, u
 ggml_backend_t ggml_backend_rpc_init(const char * endpoint, uint32_t device) {
     std::string dev_name = "RPC" + std::to_string(device) + "[" + std::string(endpoint) + "]";
     auto dispatcher = get_dispatcher(endpoint);
+    if (dispatcher == nullptr) {
+        return nullptr;   // init without a live endpoint fails like any other init failure
+    }
     ggml_backend_rpc_context * ctx = new ggml_backend_rpc_context {
         /* .dispatcher = */ dispatcher,
         /* .endpoint   = */ endpoint,
@@ -1351,6 +1381,11 @@ bool ggml_backend_is_rpc(ggml_backend_t backend) {
 
 void ggml_backend_rpc_get_device_memory(const char * endpoint, uint32_t device, size_t * free, size_t * total) {
     auto dispatcher = get_dispatcher(endpoint);
+    if (dispatcher == nullptr) {
+        *free  = 0;   // "no answer" is reported as zero free/total, not as an abort
+        *total = 0;
+        return;
+    }
     auto request = std::make_shared<rpc_msg_get_device_memory_req>();
     request->device = device;
     rpc_msg_get_device_memory_rsp response;
@@ -2869,18 +2904,27 @@ static bool ggml_backend_rpc_device_supports_buft(ggml_backend_dev_t dev, ggml_b
 static ggml_backend_event_t ggml_backend_rpc_device_event_new(ggml_backend_dev_t dev) {
     ggml_backend_rpc_device_context * ctx = (ggml_backend_rpc_device_context *)dev->context;
     auto dispatcher = get_dispatcher(ctx->endpoint);
+    if (dispatcher == nullptr) {
+        return nullptr;   // a dead endpoint yields no event, it does not abort
+    }
     return dispatcher->event_new(dev);
 }
 
 static void ggml_backend_rpc_device_event_free(ggml_backend_dev_t dev, ggml_backend_event_t event) {
     ggml_backend_rpc_device_context * ctx = (ggml_backend_rpc_device_context *)dev->context;
     auto dispatcher = get_dispatcher(ctx->endpoint);
+    if (dispatcher == nullptr) {
+        return;
+    }
     dispatcher->event_free(event);
 }
 
 static void ggml_backend_rpc_device_event_synchronize(ggml_backend_dev_t dev, ggml_backend_event_t event) {
     ggml_backend_rpc_device_context * ctx = (ggml_backend_rpc_device_context *)dev->context;
     auto dispatcher = get_dispatcher(ctx->endpoint);
+    if (dispatcher == nullptr) {
+        return;
+    }
     dispatcher->event_synchronize(event);
 }
 
@@ -3100,6 +3144,9 @@ ggml_backend_reg_t ggml_backend_rpc_reg(void) {
 
 static uint32_t ggml_backend_rpc_get_device_count(const char * endpoint) {
     auto dispatcher = get_dispatcher(endpoint);
+    if (dispatcher == nullptr) {
+        return 0;   // endpoint unreachable -> zero devices, and add_server() reports nullptr
+    }
     rpc_msg_device_count_rsp response;
     dispatcher->send(RPC_CMD_DEVICE_COUNT, nullptr, 0, &response, sizeof(response));
     return response.device_count;
