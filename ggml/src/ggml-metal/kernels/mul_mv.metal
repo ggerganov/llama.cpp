@@ -1,6 +1,6 @@
-#include "common.h"
+﻿#include "common.h"
 #include "dequantize.h"
-// Q1_0 dot product: dot = d * (2 * Σ(yl[i] where bit=1) - sumy)
+// Q1_0 dot product: dot = d * (2 * 危(yl[i] where bit=1) - sumy)
 inline float block_q_n_dot_y(device const block_q1_0 * qb_curr, float sumy, thread float * yl, int il) {
     device const uint8_t * qs = qb_curr->qs + il / 8;
     const uint8_t b0 = qs[0];
@@ -487,7 +487,7 @@ inline float block_bf16x_dot_y(device const block_bf16x * qb, thread float * yl,
                             | (uint16_t)(e << 7)
                             | (uint16_t) m;
 
-        sum += as_type<float>(bits) * yl[i];
+        sum += as_type<float>((uint32_t) bits << 16) * yl[i];
     }
     return sum;
 }

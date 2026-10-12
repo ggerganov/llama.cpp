@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "common.h"
 
@@ -157,7 +157,7 @@ void dequantize_bf16x(device const block_bf16x * xb, short il, thread type4x4 & 
                                 | (uint16_t)(e << 7)
                                 | (uint16_t) m;
 
-            reg_f[r][c] = as_type<float>(bits);
+            reg_f[r][c] = as_type<float>((uint32_t) bits << 16);
         }
     }
 
@@ -190,7 +190,7 @@ void dequantize_bf16x_t4(device const block_bf16x * xb, short il, thread type4 &
                             | (uint16_t)(e << 7)
                             | (uint16_t) m;
 
-        reg_f[c] = as_type<float>(bits);
+        reg_f[c] = as_type<float>((uint32_t) bits << 16);
     }
 
     reg = (type4) reg_f;
