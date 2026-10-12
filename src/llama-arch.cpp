@@ -330,6 +330,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ROPE_DIMENSION_COUNT,           "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_DIMENSION_COUNT_SWA,       "%s.rope.dimension_count_swa"             },
     { LLM_KV_ROPE_DIMENSION_SECTIONS,        "%s.rope.dimension_sections"              },
+    { LLM_KV_ROPE_SECTION_ORDER,             "%s.rope.section_order"                   },
     { LLM_KV_ROPE_FREQ_BASE,                 "%s.rope.freq_base"                       },
     { LLM_KV_ROPE_FREQ_BASE_SWA,             "%s.rope.freq_base_swa"                   },
     { LLM_KV_ROPE_SCALE_LINEAR,              "%s.rope.scale_linear"                    },
@@ -439,6 +440,18 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_XIELU_ALPHA_P,         "xielu.alpha_p"         },
     { LLM_KV_XIELU_BETA,            "xielu.beta"            },
     { LLM_KV_XIELU_EPS,             "xielu.eps"             },
+
+    { LLM_KV_PRISM_HADAMARD_VERSION,              "prism.hadamard.version"              },
+    { LLM_KV_PRISM_HADAMARD_TIED_OUTPUT,          "prism.hadamard.tied_output"          },
+    { LLM_KV_PRISM_HADAMARD_BLOCK_SIZE,           "prism.hadamard.block_size"           },
+    { LLM_KV_PRISM_HADAMARD_TRANSFORM,            "prism.hadamard.transform"            },
+    { LLM_KV_PRISM_HADAMARD_AXIS,                 "prism.hadamard.axis"                 },
+    { LLM_KV_PRISM_HADAMARD_SIGN_MODE,            "prism.hadamard.sign_mode"            },
+    { LLM_KV_PRISM_HADAMARD_SIGN_WIDTHS,          "prism.hadamard.sign_widths"          },
+    { LLM_KV_PRISM_HADAMARD_SIGN_VALUES,          "prism.hadamard.sign_values"          },
+    { LLM_KV_PRISM_HADAMARD_WEIGHT_NAMES,         "prism.hadamard.weight_names"         },
+    { LLM_KV_PRISM_HADAMARD_INVERSE_WEIGHT_NAMES, "prism.hadamard.inverse_weight_names" },
+    { LLM_KV_PRISM_HADAMARD_GDN_V_GROUPED,        "prism.hadamard.gdn_v_grouped"        },
 
     // deprecated
     { LLM_KV_TOKENIZER_PREFIX_ID, "tokenizer.ggml.prefix_token_id" },
