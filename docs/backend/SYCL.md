@@ -335,7 +335,7 @@ It is possible to come across some precision issues when running tests that stem
 instructions, which can be circumvented by setting the environment variable `SYCL_PROGRAM_COMPILE_OPTIONS`
 as `-cl-fp32-correctly-rounded-divide-sqrt`
 
-#### Mix SYCL with other backends
+#### Mix SYCL with other backends (experimental)
 
 By default the whole project is built with the SYCL compiler (`icx`/`icpx`), which prevents building other
 backends that need a different compiler, such as ROCm (`hipcc`).
