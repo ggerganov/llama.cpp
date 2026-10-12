@@ -414,9 +414,13 @@ kernel void kernel_mul_mm_id_map0(
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // exclusive prefix sum over the counts: the entries of this expert start at bas[ide] -
-    // every slice is padded by one entry for the uniform dummy store of pass 2
+    // every slice is padded by one entry for the uniform dummy store of pass 2 - and emit the
+    // entry tile descriptors of kernel_mul_mm_id: (expert, first entry, valid rows) per tile
     if (tpitg == 0) {
+        constexpr uint32_t NTILE = 32; // must match NR1 of kernel_mul_mm_id
+
         uint32_t base = 0;
+        uint32_t tile = 0;
 
         device uint32_t * tpe_u32 = (device uint32_t *) (htpe);
 
@@ -425,11 +429,18 @@ kernel void kernel_mul_mm_id_map0(
 
             bas[e] = base;
 
-            tpe_u32[2*e    ] = base;
-            tpe_u32[2*e + 1] = n;
+            for (uint32_t k = 0; k < n; k += NTILE) {
+                tpe_u32[1 + 3*tile    ] = e;
+                tpe_u32[1 + 3*tile + 1] = base + k;
+                tpe_u32[1 + 3*tile + 2] = n - k < NTILE ? n - k : NTILE;
+
+                tile++;
+            }
 
             base += n + 1;
         }
+
+        tpe_u32[0] = tile;
     }
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -611,23 +622,23 @@ kernel void kernel_mul_mm_id(
     constexpr int NL0 = NK/16;
     constexpr int NL1 = NK/8;
 
-    const int im = tgpig.z; // expert
-    const int r0 = tgpig.y*NR0;
-    const int r1 = tgpig.x*NR1;
+    const int tile = tgpig.x; // entry tile, described by the prepass
+    const int r0   = tgpig.y*NR0;
 
     device const uint32_t * tpe_u32 = (device const uint32_t *) (htpe);
     device const int32_t  * ids_i32 = (device const int32_t  *) (hids);
 
-    const int32_t idb  = tpe_u32[2*im];     // first entry of this expert in hids
-    const int32_t neh1 = tpe_u32[2*im + 1]; // number of entries of this expert
-
-    if (r1 >= neh1) {
+    // the prepass emits one (expert, first entry, valid rows) descriptor per tile that has
+    // work - the grid is sized by a static upper bound, so the tail early exits
+    if (tile >= (int) tpe_u32[0]) {
         return;
     }
 
-    // duplicate ids can push an expert past the entry tiles covered by one round of the grid,
-    // so threadgroups loop over the remaining tiles of this expert
-    const int r1_stride = PAD2(args.ne21, NR1);
+    const int im  = tpe_u32[1 + 3*tile];     // expert
+    const int idb = tpe_u32[1 + 3*tile + 1]; // first entry of this tile in hids
+
+    // number of entries in this tile, always <= NR1
+    const short nr1 = (short) ((tpe_u32[1 + 3*tile + 2] < NR1) ? tpe_u32[1 + 3*tile + 2] : NR1);
 
     // if this block is of 64x32 shape or smaller
     const short nr0 = (args.ne0 - r0 < NR0) ? (args.ne0 - r0) : NR0;
@@ -669,267 +680,264 @@ kernel void kernel_mul_mm_id(
 
 #endif
 
-    for (int r1_cur = r1; r1_cur < neh1; r1_cur += r1_stride) {
-        const short nr1 = (    neh1 - r1_cur < NR1) ? (    neh1 - r1_cur) : NR1;
-        const short lr1 = ((short)tiitg/NL1) < nr1 ? ((short)tiitg/NL1) : nr1 - 1; // 0 .. 31
+    const short lr1 = ((short)tiitg/NL1) < nr1 ? ((short)tiitg/NL1) : nr1 - 1; // 0 .. 31
 
-        short il = il0;
+    short il = il0;
 
-        const int id = ids_i32[idb + r1_cur + lr1];
+    const int id = ids_i32[idb + lr1];
 
-        const short i11 = (id % args.ne20) % args.ne11;
-        const short i12 = (id / args.ne20);
+    const short i11 = (id % args.ne20) % args.ne11;
+    const short i12 = (id / args.ne20);
 
-        device const block_q * x = (device const block_q *)(src0 + args.nb01*(r0 + lr0) + offset0) + offset1;
+    device const block_q * x = (device const block_q *)(src0 + args.nb01*(r0 + lr0) + offset0) + offset1;
 
-        device const T1 * y = (device const T1 *)(src1
-            + args.nb13*i13
-            + args.nb12*i12
-            + args.nb11*i11
-            + args.nb10*iy);
+    device const T1 * y = (device const T1 *)(src1
+        + args.nb13*i13
+        + args.nb12*i12
+        + args.nb11*i11
+        + args.nb10*iy);
 
-        const bool has_hi = nr1 > NR1H;
+    const bool has_hi = nr1 > NR1H;
 
 #ifndef GGML_METAL_HAS_TENSOR
-        for (short i = 0; i < 8; i++){
-            mc[i] = make_filled_simdgroup_matrix<float, 8>(0.f);
-        }
+    for (short i = 0; i < 8; i++){
+        mc[i] = make_filled_simdgroup_matrix<float, 8>(0.f);
+    }
 
-        // simdgroups 2,3 own rows NR1H..NR1-1
-        const bool sg_active = has_hi || sgitg < 2;
+    // simdgroups 2,3 own rows NR1H..NR1-1
+    const bool sg_active = has_hi || sgitg < 2;
 #else
-        auto cT0 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB0), float>();
-        auto cT1 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB1), float>();
+    auto cT0 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB0), float>();
+    auto cT1 = mm.get_destination_cooperative_tensor<decltype(tA), decltype(tB1), float>();
 #endif
 
-        for (int loop_k = 0; loop_k < args.ne00; loop_k += NK) {
+    for (int loop_k = 0; loop_k < args.ne00; loop_k += NK) {
 #ifndef GGML_METAL_HAS_TENSOR
-            // load data and store to threadgroup memory
-            if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
-                threadgroup_barrier(mem_flags::mem_threadgroup);
+        // load data and store to threadgroup memory
+        if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
+            threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                // no need for dequantization
-                for (short i = 0; i < 16; i++) {
-                    const short sx = 2*il0 + i/8;
-                    const short sy = (tiitg/NL0)/8;
+            // no need for dequantization
+            for (short i = 0; i < 16; i++) {
+                const short sx = 2*il0 + i/8;
+                const short sy = (tiitg/NL0)/8;
 
-                  //const short lx = i%8;
-                  //const short ly = (tiitg/NL0)%8;
-                    const short lx = (tiitg/NL0)%8;
-                    const short ly = i%8;
+              //const short lx = i%8;
+              //const short ly = (tiitg/NL0)%8;
+                const short lx = (tiitg/NL0)%8;
+                const short ly = i%8;
 
-                    const short ib = 8*sx + sy;
+                const short ib = 8*sx + sy;
 
-                    *(sa + 64*ib + 8*ly + lx) = loop_k + 16*il + i < args.ne00 ? (S0) *((device T0 *) x + i) : (S0) 0;
-                }
-            } else {
-                S0_4x4 temp_a;
-                dequantize_func(x, il, temp_a);
-
-                threadgroup_barrier(mem_flags::mem_threadgroup);
-
-                FOR_UNROLL (short i = 0; i < 16; i++) {
-                    const short sx = 2*il0 + i/8;
-                    const short sy = (tiitg/NL0)/8;
-
-                  //const short lx = i%8;
-                  //const short ly = (tiitg/NL0)%8;
-                    const short lx = (tiitg/NL0)%8;
-                    const short ly = i%8;
-
-                    const short ib = 8*sx + sy;
-
-                    // NOTE: this is massively slower.. WTF?
-                    //sa[64*ib + 8*ly + lx] = temp_a[i/4][i%4];
-
-                    *(sa + 64*ib + 8*ly + lx) = temp_a[i/4][i%4];
-                }
+                *(sa + 64*ib + 8*ly + lx) = loop_k + 16*il + i < args.ne00 ? (S0) *((device T0 *) x + i) : (S0) 0;
             }
+        } else {
+            S0_4x4 temp_a;
+            dequantize_func(x, il, temp_a);
 
-            if (FC_mul_mm_bc_inp) {
-                for (short i = 0; i < 8; ++i) {
-                    const short sx = (tiitg%NL1);
-                    const short sy = (tiitg/NL1)/8;
+            threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                    const short lx = i;
-                    const short ly = (tiitg/NL1)%8;
-                  //const short lx = (tiitg/NL1)%8;
-                  //const short ly = i;
+            FOR_UNROLL (short i = 0; i < 16; i++) {
+                const short sx = 2*il0 + i/8;
+                const short sy = (tiitg/NL0)/8;
 
-                    const short ib = 4*sx + sy;
+              //const short lx = i%8;
+              //const short ly = (tiitg/NL0)%8;
+                const short lx = (tiitg/NL0)%8;
+                const short ly = i%8;
 
-                    *(sb + 64*ib + 8*ly + lx) = loop_k + iy + i < args.ne00 ? (S1) (*((device T1 *) y + i) * (T1) s1_inv) : 0;
-                }
-            } else {
+                const short ib = 8*sx + sy;
+
+                // NOTE: this is massively slower.. WTF?
+                //sa[64*ib + 8*ly + lx] = temp_a[i/4][i%4];
+
+                *(sa + 64*ib + 8*ly + lx) = temp_a[i/4][i%4];
+            }
+        }
+
+        if (FC_mul_mm_bc_inp) {
+            for (short i = 0; i < 8; ++i) {
                 const short sx = (tiitg%NL1);
                 const short sy = (tiitg/NL1)/8;
 
-              //const short dx = sx;
-              //const short dy = sy;
-
+                const short lx = i;
                 const short ly = (tiitg/NL1)%8;
+              //const short lx = (tiitg/NL1)%8;
+              //const short ly = i;
 
                 const short ib = 4*sx + sy;
 
-                *(threadgroup S1_2x4 *)(sb + 64*ib + 8*ly) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
+                *(sb + 64*ib + 8*ly + lx) = loop_k + iy + i < args.ne00 ? (S1) (*((device T1 *) y + i) * (T1) s1_inv) : 0;
             }
+        } else {
+            const short sx = (tiitg%NL1);
+            const short sy = (tiitg/NL1)/8;
+
+          //const short dx = sx;
+          //const short dy = sy;
+
+            const short ly = (tiitg/NL1)%8;
+
+            const short ib = 4*sx + sy;
+
+            *(threadgroup S1_2x4 *)(sb + 64*ib + 8*ly) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
+        }
 #else
-            // load data and store to threadgroup memory
-            if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
-                threadgroup_barrier(mem_flags::mem_threadgroup);
+        // load data and store to threadgroup memory
+        if (is_same<T0_4x4, block_q>::value && FC_mul_mm_bc_inp) {
+            threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                // no need for dequantization
-                for (short i = 0; i < 16; i++) {
-                    const short sx = 2*il0 + i/8;
-                    const short sy = (tiitg/NL0)/8;
+            // no need for dequantization
+            for (short i = 0; i < 16; i++) {
+                const short sx = 2*il0 + i/8;
+                const short sy = (tiitg/NL0)/8;
 
-                    const short lx = i%8;
-                    const short ly = (tiitg/NL0)%8;
-                    //const short lx = (tiitg/NL0)%8;
-                    //const short ly = i%8;
+                const short lx = i%8;
+                const short ly = (tiitg/NL0)%8;
+                //const short lx = (tiitg/NL0)%8;
+                //const short ly = i%8;
 
-                    *(sa + NK*(8*sy + ly) + 8*sx + lx) = loop_k + 16*il + i < args.ne00 ? (S0) *((device T0 *) x + i) : 0;
-                }
-            } else {
-                S0_4x4 temp_a;
-                dequantize_func(x, il, temp_a);
-
-                threadgroup_barrier(mem_flags::mem_threadgroup);
-
-                FOR_UNROLL (short i = 0; i < 16; i++) {
-                    const short sx = 2*il0 + i/8;
-                    const short sy = (tiitg/NL0)/8;
-
-                    const short lx = i%8;
-                    const short ly = (tiitg/NL0)%8;
-                    //const short lx = (tiitg/NL0)%8;
-                    //const short ly = i%8;
-
-                    *(sa + NK*(8*sy + ly) + 8*sx + lx) = temp_a[i/4][i%4];
-                }
+                *(sa + NK*(8*sy + ly) + 8*sx + lx) = loop_k + 16*il + i < args.ne00 ? (S0) *((device T0 *) x + i) : 0;
             }
+        } else {
+            S0_4x4 temp_a;
+            dequantize_func(x, il, temp_a);
 
-            if (FC_mul_mm_bc_inp) {
-                for (short i = 0; i < 8; ++i) {
-                    const short sx = (tiitg%NL1);
-                    const short sy = (tiitg/NL1)/8;
+            threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                    const short lx = i;
-                    const short ly = (tiitg/NL1)%8;
-                    //const short lx = (tiitg/NL1)%8;
-                    //const short ly = i;
+            FOR_UNROLL (short i = 0; i < 16; i++) {
+                const short sx = 2*il0 + i/8;
+                const short sy = (tiitg/NL0)/8;
 
-                    *(sb + NK*(8*sy + ly) + 8*sx + lx) = loop_k + iy + i < args.ne00 ? (S1) (*((device T1 *) y + i) * (T1) s1_inv) : 0;
-                }
-            } else {
+                const short lx = i%8;
+                const short ly = (tiitg/NL0)%8;
+                //const short lx = (tiitg/NL0)%8;
+                //const short ly = i%8;
+
+                *(sa + NK*(8*sy + ly) + 8*sx + lx) = temp_a[i/4][i%4];
+            }
+        }
+
+        if (FC_mul_mm_bc_inp) {
+            for (short i = 0; i < 8; ++i) {
                 const short sx = (tiitg%NL1);
                 const short sy = (tiitg/NL1)/8;
 
-                //const short lx = i;
+                const short lx = i;
                 const short ly = (tiitg/NL1)%8;
                 //const short lx = (tiitg/NL1)%8;
                 //const short ly = i;
 
-                *(threadgroup S1_2x4 *)(sb + NK*(8*sy + ly) + 8*sx) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
+                *(sb + NK*(8*sy + ly) + 8*sx + lx) = loop_k + iy + i < args.ne00 ? (S1) (*((device T1 *) y + i) * (T1) s1_inv) : 0;
             }
+        } else {
+            const short sx = (tiitg%NL1);
+            const short sy = (tiitg/NL1)/8;
+
+            //const short lx = i;
+            const short ly = (tiitg/NL1)%8;
+            //const short lx = (tiitg/NL1)%8;
+            //const short ly = i;
+
+            *(threadgroup S1_2x4 *)(sb + NK*(8*sy + ly) + 8*sx) = (S1_2x4)((*((device T1_2x4 *) y)) * (T1) s1_inv);
+        }
 #endif
 
-            il = (il + 2 < nl) ? il + 2 : il % 2;
-            x  = (il < 2) ? x + (2 + nl - 1)/nl : x;
+        il = (il + 2 < nl) ? il + 2 : il % 2;
+        x  = (il < 2) ? x + (2 + nl - 1)/nl : x;
 
-            y += NK;
+        y += NK;
 
-            threadgroup_barrier(mem_flags::mem_threadgroup);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
 
 #ifndef GGML_METAL_HAS_TENSOR
-            if (sg_active) {
-                // load matrices from threadgroup memory and conduct outer products
-                threadgroup const S0 * lsma = (sa + 4*64*(sgitg%2));
-                threadgroup const S1 * lsmb = (sb + 2*64*(sgitg/2));
+        if (sg_active) {
+            // load matrices from threadgroup memory and conduct outer products
+            threadgroup const S0 * lsma = (sa + 4*64*(sgitg%2));
+            threadgroup const S1 * lsmb = (sb + 2*64*(sgitg/2));
 
-                FOR_UNROLL (short ik = 0; ik < NK/8; ik++) {
-                    simdgroup_barrier(mem_flags::mem_none);
+            FOR_UNROLL (short ik = 0; ik < NK/8; ik++) {
+                simdgroup_barrier(mem_flags::mem_none);
 
-                    FOR_UNROLL (short i = 0; i < 4; i++) {
-                        simdgroup_load(ma[i], lsma + 64*i, 8, 0, false);
-                    }
-
-                    simdgroup_barrier(mem_flags::mem_none);
-
-                    FOR_UNROLL (short i = 0; i < 2; i++) {
-                        simdgroup_load(mb[i], lsmb + 64*i, 8, 0, false);
-                    }
-
-                    simdgroup_barrier(mem_flags::mem_none);
-
-                    FOR_UNROLL (short i = 0; i < 8; i++){
-                        simdgroup_multiply_accumulate(mc[i], mb[i/4], ma[i%4], mc[i]);
-                    }
-
-                    lsma += 8*64;
-                    lsmb += 4*64;
+                FOR_UNROLL (short i = 0; i < 4; i++) {
+                    simdgroup_load(ma[i], lsma + 64*i, 8, 0, false);
                 }
+
+                simdgroup_barrier(mem_flags::mem_none);
+
+                FOR_UNROLL (short i = 0; i < 2; i++) {
+                    simdgroup_load(mb[i], lsmb + 64*i, 8, 0, false);
+                }
+
+                simdgroup_barrier(mem_flags::mem_none);
+
+                FOR_UNROLL (short i = 0; i < 8; i++){
+                    simdgroup_multiply_accumulate(mc[i], mb[i/4], ma[i%4], mc[i]);
+                }
+
+                lsma += 8*64;
+                lsmb += 4*64;
             }
-#else
-            auto sA  = tA.slice(0, 0);
-            auto sB0 = tB0.slice(0, 0);
-
-            mm.run(sB0, sA, cT0);
-
-            if (has_hi) {
-                auto sB1 = tB1.slice(0, 0);
-
-                mm.run(sB1, sA, cT1);
-            }
-#endif
         }
+#else
+        auto sA  = tA.slice(0, 0);
+        auto sB0 = tB0.slice(0, 0);
 
-        // block is smaller than 64x32, we should avoid writing data outside of the matrix
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-#ifdef GGML_METAL_HAS_TENSOR
-        auto tC0 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc,             dextents<int32_t, 2>(NR0, NR1H));
-        cT0.store(tC0);
+        mm.run(sB0, sA, cT0);
 
         if (has_hi) {
-            auto tC1 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc + NR1H*NR0, dextents<int32_t, 2>(NR0, NR1H));
-            cT1.store(tC1);
-        }
-#else
-        if (sg_active) {
-            threadgroup float * temp_str = ((threadgroup float *) shmem) + 32*(sgitg&1) + (16*(sgitg >> 1))*NR0;
+            auto sB1 = tB1.slice(0, 0);
 
-            for (short i = 0; i < 8; i++) {
-                simdgroup_store(mc[i], temp_str + 8*(i%4) + 8*NR0*(i/4), NR0, 0, false);
-            }
+            mm.run(sB1, sA, cT1);
         }
 #endif
+    }
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+    // block is smaller than 64x32, we should avoid writing data outside of the matrix
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        for (short j = sgitg; j < nr1; j += 4) {
-            const int id = ids_i32[idb + r1_cur + j];
+#ifdef GGML_METAL_HAS_TENSOR
+    auto tC0 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc,             dextents<int32_t, 2>(NR0, NR1H));
+    cT0.store(tC0);
 
-            const short ide = id % args.ne20;
-            const short idt = id / args.ne20;
+    if (has_hi) {
+        auto tC1 = tensor<threadgroup float, dextents<int32_t, 2>, tensor_inline>(sc + NR1H*NR0, dextents<int32_t, 2>(NR0, NR1H));
+        cT1.store(tC1);
+    }
+#else
+    if (sg_active) {
+        threadgroup float * temp_str = ((threadgroup float *) shmem) + 32*(sgitg&1) + (16*(sgitg >> 1))*NR0;
 
-            device float  * D  = (device float  *) dst + r0 + ide*args.ne0 + idt*args.ne1*args.ne0;
-            device float4 * D4 = (device float4 *) D;
-
-            threadgroup float  * C  = (threadgroup float  *) shmem + j*NR0;
-            threadgroup float4 * C4 = (threadgroup float4 *) C;
-
-            int i = tiisg;
-            for (; i < nr0/4; i += 32) {
-                *(D4 + i) = *(C4 + i) * s1_scale;
-            }
-
-            i = (4*(nr0/4)) + tiisg;
-            for (; i < nr0; i += 32) {
-                *(D + i) = *(C + i) * s1_scale;
-            }
+        for (short i = 0; i < 8; i++) {
+            simdgroup_store(mc[i], temp_str + 8*(i%4) + 8*NR0*(i/4), NR0, 0, false);
         }
-    } // r1_cur
+    }
+#endif
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (short j = sgitg; j < nr1; j += 4) {
+        const int id = ids_i32[idb + j];
+
+        const short ide = id % args.ne20;
+        const short idt = id / args.ne20;
+
+        device float  * D  = (device float  *) dst + r0 + ide*args.ne0 + idt*args.ne1*args.ne0;
+        device float4 * D4 = (device float4 *) D;
+
+        threadgroup float  * C  = (threadgroup float  *) shmem + j*NR0;
+        threadgroup float4 * C4 = (threadgroup float4 *) C;
+
+        int i = tiisg;
+        for (; i < nr0/4; i += 32) {
+            *(D4 + i) = *(C4 + i) * s1_scale;
+        }
+
+        i = (4*(nr0/4)) + tiisg;
+        for (; i < nr0; i += 32) {
+            *(D + i) = *(C + i) * s1_scale;
+        }
+    }
 }
 
 //
