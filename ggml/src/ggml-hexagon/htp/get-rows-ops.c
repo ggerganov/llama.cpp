@@ -206,15 +206,6 @@ static void get_rows_thread_##TYPE_NAME##_##IDX_TYPE(unsigned int nth, unsigned 
 #define Q5_K_BYTES(n) (((n) / QK_K) * sizeof(block_q5_K))
 #define Q6_K_BYTES(n) (((n) / QK_K) * sizeof(block_q6_K))
 
-static inline void get_scale_min_k4(int j, const uint8_t * q, uint8_t * d, uint8_t * m) {
-    if (j < 4) {
-        *d = q[j] & 63; *m = q[j + 4] & 63;
-    } else {
-        *d = (q[j+4] & 0xF) | ((q[j-4] >> 6) << 4);
-        *m = (q[j+4] >>  4) | ((q[j-0] >> 6) << 4);
-    }
-}
-
 static __attribute__((noinline)) void compute_get_rows_f16(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
     hvx_dequantize_row_f16_f32(dst_spad, src_spad, cur_elems);
 }
@@ -224,110 +215,19 @@ static __attribute__((noinline)) void compute_get_rows_q8_0(float * dst_spad, co
 }
 
 static __attribute__((noinline)) void compute_get_rows_q4_0(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    const block_q4_0 * x = (const block_q4_0 *) src_spad;
-    const int nb = cur_elems / QK4_0;
-    float * y = dst_spad;
-
-    for (int i = 0; i < nb; i++) {
-        const float d = GGML_FP16_TO_FP32(x[i].d);
-        for (int j = 0; j < QK4_0 / 2; ++j) {
-            const int x0 = (x[i].qs[j] & 0x0F) - 8;
-            const int x1 = (x[i].qs[j] >>   4) - 8;
-
-            y[j + 0]         = x0 * d;
-            y[j + QK4_0 / 2] = x1 * d;
-        }
-        y += QK4_0;
-    }
+    hvx_dequantize_row_q4_0_f32(dst_spad, src_spad, cur_elems);
 }
 
 static __attribute__((noinline)) void compute_get_rows_q4_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    const block_q4_K * x = (const block_q4_K *) src_spad;
-    const int nb = cur_elems / QK_K;
-    float * y = dst_spad;
-
-    for (int i = 0; i < nb; i++) {
-        const uint8_t * q = x[i].qs;
-        const float d   = GGML_FP16_TO_FP32(x[i].d);
-        const float min = GGML_FP16_TO_FP32(x[i].dmin);
-
-        int is = 0;
-        uint8_t sc, m;
-        for (int j = 0; j < QK_K; j += 64) {
-            get_scale_min_k4(is + 0, x[i].scales, &sc, &m);
-            const float d1 = d * sc; const float m1 = min * m;
-            get_scale_min_k4(is + 1, x[i].scales, &sc, &m);
-            const float d2 = d * sc; const float m2 = min * m;
-            for (int l = 0; l < 32; ++l) y[l +  0] = d1 * (q[l] & 0xF) - m1;
-            for (int l = 0; l < 32; ++l) y[l + 32] = d2 * (q[l]  >> 4) - m2;
-            y += 64;
-            q += 32;
-            is += 2;
-        }
-    }
+    hvx_dequantize_row_q4_k_f32(dst_spad, src_spad, cur_elems);
 }
 
 static __attribute__((noinline)) void compute_get_rows_q5_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    const block_q5_K * x = (const block_q5_K *) src_spad;
-    const int nb = cur_elems / QK_K;
-    float * y = dst_spad;
-
-    for (int i = 0; i < nb; i++) {
-        const uint8_t * ql = x[i].qs;
-        const uint8_t * qh = x[i].qh;
-
-        const float d   = GGML_FP16_TO_FP32(x[i].d);
-        const float min = GGML_FP16_TO_FP32(x[i].dmin);
-
-        int is = 0;
-        uint8_t sc, m;
-        uint8_t u1 = 1, u2 = 2;
-        for (int j = 0; j < QK_K; j += 64) {
-            get_scale_min_k4(is + 0, x[i].scales, &sc, &m);
-            const float d1 = d * sc; const float m1 = min * m;
-            get_scale_min_k4(is + 1, x[i].scales, &sc, &m);
-            const float d2 = d * sc; const float m2 = min * m;
-            for (int l = 0; l < 32; ++l) y[l +  0] = d1 * ((ql[l] & 0xF) + (qh[l] & u1 ? 16 : 0)) - m1;
-            for (int l = 0; l < 32; ++l) y[l + 32] = d2 * ((ql[l]  >> 4) + (qh[l] & u2 ? 16 : 0)) - m2;
-            y  += 64;
-            ql += 32;
-            is += 2;
-            u1 <<= 2;
-            u2 <<= 2;
-        }
-    }
+    hvx_dequantize_row_q5_k_f32(dst_spad, src_spad, cur_elems);
 }
 
 static __attribute__((noinline)) void compute_get_rows_flat_q6_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    const block_q6_K * x = (const block_q6_K *) src_spad;
-    const int nb = cur_elems / QK_K;
-    float * y = dst_spad;
-
-    for (int i = 0; i < nb; i++) {
-        const float d = GGML_FP16_TO_FP32(x[i].d);
-
-        const uint8_t * restrict ql = x[i].ql;
-        const uint8_t * restrict qh = x[i].qh;
-        const int8_t  * restrict sc = x[i].scales;
-
-        for (int n = 0; n < QK_K; n += 128) {
-            for (int l = 0; l < 32; ++l) {
-                int is = l/16;
-                const int8_t q1 = (int8_t)((ql[l +  0] & 0xF) | (((qh[l] >> 0) & 3) << 4)) - 32;
-                const int8_t q2 = (int8_t)((ql[l + 32] & 0xF) | (((qh[l] >> 2) & 3) << 4)) - 32;
-                const int8_t q3 = (int8_t)((ql[l +  0]  >> 4) | (((qh[l] >> 4) & 3) << 4)) - 32;
-                const int8_t q4 = (int8_t)((ql[l + 32]  >> 4) | (((qh[l] >> 6) & 3) << 4)) - 32;
-                y[l +  0] = d * sc[is + 0] * q1;
-                y[l + 32] = d * sc[is + 2] * q2;
-                y[l + 64] = d * sc[is + 4] * q3;
-                y[l + 96] = d * sc[is + 6] * q4;
-            }
-            y  += 128;
-            ql += 64;
-            qh += 32;
-            sc += 8;
-        }
-    }
+    hvx_dequantize_row_q6_k_f32(dst_spad, src_spad, cur_elems);
 }
 
 GET_ROWS_THREAD_DT_FN(f16,  F16_BYTES,  int32_t, { compute_get_rows_f16((float *)dst_spad, src_spad, cur_elems); })
