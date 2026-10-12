@@ -1718,9 +1718,9 @@ Follows the [TypeSafe API](https://docs.typesafe.ai/api), streaming is not suppo
 
 The questions of a request are answered independently, an answer does not depend on the other questions. The exception is clef: it reads all the questions in one prompt and decides them jointly.
 
-The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for laya, clef and pplx-decider. For laya, long questions and options are truncated to the token budget the model was trained with.
+The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for laya, clef, pplx-decider and vllm-decision2. For laya, long questions and options are truncated to the token budget the model was trained with.
 
-For laya and clef, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. A server that runs clef only serves this endpoint, text generation is not available.
+For laya and clef, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available.
 
 *Image input:*
 

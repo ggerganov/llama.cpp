@@ -65,6 +65,28 @@ void server_decision_context::init(const llama_model * model) {
         temperatures[key + prefix_temp.size()] = temp;
     }
 
+    // "<n_levels>.<level>" -> offset
+    const std::string prefix_bias = prefix + "score_bias.";
+    for (int32_t i = 0; i < llama_model_meta_count(model); i++) {
+        char key[256];
+        char val[64];
+        if (llama_model_meta_key_by_index(model, i, key, sizeof(key)) < 0 || !string_starts_with(key, prefix_bias)) {
+            continue;
+        }
+        if (llama_model_meta_val_str_by_index(model, i, val, sizeof(val)) < 0) {
+            continue;
+        }
+        const auto parts = string_split<std::string>(key + prefix_bias.size(), '.');
+        const size_t n     = parts.size() == 2 ? std::strtoul(parts[0].c_str(), nullptr, 10) : 0;
+        const size_t level = parts.size() == 2 ? std::strtoul(parts[1].c_str(), nullptr, 10) : 0;
+        if (n < 2 || n > 255 || level >= n) {
+            throw std::runtime_error(string_format("invalid decision score bias: %s", key));
+        }
+        auto & bias = score_bias[n];
+        bias.resize(n, 0.0f);
+        bias[level] = std::strtof(val, nullptr);
+    }
+
     if (model_type == COMMON_DECISION_TYPE_OPENJEV) {
         // one letter per option, each must be a single token
         const std::string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -122,6 +144,9 @@ void server_decision_context::init(const llama_model * model) {
         n_options_max   = 255;
         noul_true_first = true;
         choice_sorted   = true;
+    } else if (model_type == COMMON_DECISION_TYPE_VLLM_DECISION2) {
+        n_options_max       = 255;
+        noul_criteria_order = true;
     } else {
         throw std::runtime_error("unsupported decision model type: " + type_name);
     }
@@ -190,7 +215,7 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
             for (const char * key : {"false", "true"}) {
                 question.options.push_back({key, criteria.is_object() && criteria.contains(key) ? criteria.at(key) : json()});
             }
-            if (noul_true_first) {
+            if (noul_true_first || (noul_criteria_order && criteria.is_object() && criteria.size() == 2 && criteria.begin().key() == "true")) {
                 std::swap(question.options[0], question.options[1]);
             }
         } else {
@@ -469,6 +494,12 @@ void server_decision_context::fill_task(
         mtmd_context * mctx,
         const mtmd_helper_init_opt & init_opt,
         server_task & task) const {
+    // each question has its own prompt, with the spans that the head reads
+    if (type == COMMON_DECISION_TYPE_VLLM_DECISION2) {
+        fill_task_joint(state, { question }, files, mctx, init_opt, task);
+        return;
+    }
+
     const std::string prompt = render(state, questions, question, variant, files.size());
 
     if (type == COMMON_DECISION_TYPE_OPENJEV || type == COMMON_DECISION_TYPE_LEV || type == COMMON_DECISION_TYPE_NIMBLE || type == COMMON_DECISION_TYPE_PPLX_DECIDER) {
@@ -746,11 +777,17 @@ json server_decision_context::format_answer(const server_decision_question & que
         if (std::any_of(s.begin(), s.end(), [](float v) { return std::isnan(v); })) {
             throw std::runtime_error("the model could not evaluate the decision");
         }
-        const float score_max = *std::max_element(s.begin(), s.end());
+        std::vector<double> logits(s.begin(), s.end());
+        if (question.type == SERVER_DECISION_QUESTION_SCORE && score_bias.count(n) > 0) {
+            for (size_t i = 0; i < n; i++) {
+                logits[i] += score_bias.at(n)[i];
+            }
+        }
+        const double logit_max = *std::max_element(logits.begin(), logits.end());
         std::vector<double> p(n);
         double sum = 0.0;
         for (size_t i = 0; i < n; i++) {
-            p[i] = std::exp((double) (s[i] - score_max) / temperature);
+            p[i] = std::exp((logits[i] - logit_max) / temperature);
             sum += p[i];
         }
         for (size_t i = 0; i < n; i++) {
