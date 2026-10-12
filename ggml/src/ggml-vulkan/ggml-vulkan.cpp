@@ -313,6 +313,7 @@ bool ggml_vk_concat_supported(const ggml_tensor * src0, const ggml_tensor * src1
     return ggml_is_contiguous_rows(src0) && ggml_is_contiguous_rows(src1) && ggml_is_contiguous_rows(dst);
 }
 static bool vk_instance_initialized = false;
+static bool vk_allreduce_disabled = false;
 
 vk_instance_t vk_instance;
 
@@ -5045,6 +5046,7 @@ void ggml_vk_instance_init() {
     vk_perf_logger_concurrent = getenv("GGML_VK_PERF_LOGGER_CONCURRENT") != nullptr;
     vk_enable_sync_logger = getenv("GGML_VK_SYNC_LOGGER") != nullptr;
     vk_memory_logger_enabled = getenv("GGML_VK_MEMORY_LOGGER") != nullptr;
+    vk_allreduce_disabled = getenv("GGML_VK_DISABLE_ALLREDUCE") != nullptr;
     const char* GGML_VK_PIPELINE_STATS = getenv("GGML_VK_PIPELINE_STATS");
     if (GGML_VK_PIPELINE_STATS != nullptr) {
         vk_pipeline_stats_filter = GGML_VK_PIPELINE_STATS;
@@ -15942,25 +15944,34 @@ static vk::Semaphore ggml_vk_comm_import(ggml_backend_vk_comm_context * comm, si
     return sem;
 }
 
-static bool ggml_vk_comm_sync_fd_supported(ggml_backend_vk_comm_context * comm) {
-    const size_t n = comm->device.size();
-    comm->get_fd.resize(n);
-    comm->import_fd.resize(n);
-    for (size_t i = 0; i < n; i++) {
-        comm->get_fd[i]    = (PFN_vkGetSemaphoreFdKHR)    comm->device[i]->device.getProcAddr("vkGetSemaphoreFdKHR");
-        comm->import_fd[i] = (PFN_vkImportSemaphoreFdKHR) comm->device[i]->device.getProcAddr("vkImportSemaphoreFdKHR");
-        if (!comm->get_fd[i] || !comm->import_fd[i]) {
-            return false;
-        }
-
-        vk::PhysicalDeviceExternalSemaphoreInfo esi{ vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd };
-        vk::ExternalSemaphoreProperties esp = comm->device[i]->physical_device.getExternalSemaphoreProperties(esi);
-        const vk::ExternalSemaphoreFeatureFlags need =
-            vk::ExternalSemaphoreFeatureFlagBits::eExportable | vk::ExternalSemaphoreFeatureFlagBits::eImportable;
-        if ((esp.externalSemaphoreFeatures & need) != need ||
-            !(esp.compatibleHandleTypes & vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd)) {
-            return false;
-        }
+static bool ggml_vk_comm_device_supported(ggml_backend_vk_comm_context * comm, size_t i) {
+    const vk_device & dev = comm->device[i];
+    if (!dev->external_memory_host) {
+        GGML_LOG_WARN("ggml_vulkan: device %zu: VK_EXT_external_memory_host missing, using generic all-reduce\n", i);
+        return false;
+    }
+    if (!dev->external_semaphore) {
+        GGML_LOG_WARN("ggml_vulkan: device %zu: VK_KHR_external_semaphore_fd missing, using generic all-reduce\n", i);
+        return false;
+    }
+    if (dev->serialize_submissions) {
+        GGML_LOG_WARN("ggml_vulkan: device %zu: GGML_VK_SERIALIZE_SUBMISSIONS set, using generic all-reduce\n", i);
+        return false;
+    }
+    comm->get_fd[i]    = (PFN_vkGetSemaphoreFdKHR)    dev->device.getProcAddr("vkGetSemaphoreFdKHR");
+    comm->import_fd[i] = (PFN_vkImportSemaphoreFdKHR) dev->device.getProcAddr("vkImportSemaphoreFdKHR");
+    if (!comm->get_fd[i] || !comm->import_fd[i]) {
+        GGML_LOG_WARN("ggml_vulkan: device %zu: vkGetSemaphoreFdKHR/vkImportSemaphoreFdKHR missing, using generic all-reduce\n", i);
+        return false;
+    }
+    vk::PhysicalDeviceExternalSemaphoreInfo esi{ vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd };
+    vk::ExternalSemaphoreProperties esp = dev->physical_device.getExternalSemaphoreProperties(esi);
+    const vk::ExternalSemaphoreFeatureFlags need =
+        vk::ExternalSemaphoreFeatureFlagBits::eExportable | vk::ExternalSemaphoreFeatureFlagBits::eImportable;
+    if ((esp.externalSemaphoreFeatures & need) != need ||
+        !(esp.compatibleHandleTypes & vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd)) {
+        GGML_LOG_WARN("ggml_vulkan: device %zu: SYNC_FD semaphores not exportable and importable, using generic all-reduce\n", i);
+        return false;
     }
     return true;
 }
@@ -15995,8 +16006,7 @@ static void ggml_backend_vk_comm_free(void * comm_ctx) {
 }
 
 static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_backends) {
-    if (getenv("GGML_VK_COMM_DISABLE") != nullptr) {
-        GGML_LOG_INFO("ggml_vulkan: GGML_VK_COMM_DISABLE set, using generic all-reduce\n");
+    if (vk_allreduce_disabled || n_backends < 2) {
         return nullptr;
     }
     ggml_backend_vk_comm_context * comm = new ggml_backend_vk_comm_context;
@@ -16008,18 +16018,16 @@ static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_back
     comm->host_ptr.assign(n_backends, nullptr);
     comm->host_buf.assign(n_backends, std::vector<ggml_backend_buffer_t>(n_backends, nullptr));
 
-    bool ok = n_backends >= 2;
+    comm->get_fd.resize(n_backends);
+    comm->import_fd.resize(n_backends);
     for (size_t i = 0; i < n_backends; i++) {
         comm->vkctx[i]  = (ggml_backend_vk_context *) backends[i]->context;
         comm->device[i] = comm->vkctx[i]->device;
-        ok = ok && comm->device[i]->external_memory_host && comm->device[i]->external_semaphore && !comm->device[i]->serialize_submissions;
         comm->align = std::max(comm->align, (size_t) comm->device[i]->min_imported_host_pointer_alignment);
-    }
-    ok = ok && ggml_vk_comm_sync_fd_supported(comm);
-    if (!ok) {
-        GGML_LOG_WARN("ggml_vulkan: shared semaphore all-reduce unavailable, using generic all-reduce\n");
-        ggml_backend_vk_comm_free(comm);
-        return nullptr;
+        if (!ggml_vk_comm_device_supported(comm, i)) {
+            ggml_backend_vk_comm_free(comm);
+            return nullptr;
+        }
     }
 
     try {
