@@ -299,6 +299,16 @@ if (NOT LLAMA_SANITIZE_ADDRESS AND NOT GGML_SCHED_NO_REALLOC)
 endif()
 llama_build_and_test(test-backend-ops.cpp)
 
+if (GGML_ANALOG)
+    llama_build_and_test(test-analog-backend.cpp)
+    # the backend test can also check that the passes give the same result elsewhere (-d)
+    target_include_directories(test-analog-backend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ggml/src/ggml-analog)
+
+    # the kernels test also checks the internal kernels and the mirror of the compute shaders
+    llama_build_and_test(test-analog-kernels.cpp)
+    target_include_directories(test-analog-kernels PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ggml/src/ggml-analog)
+endif()
+
 # the tensor API kernels come from a separate metallib - check they produce correct results
 # ref: https://github.com/ggml-org/llama.cpp/issues/27473
 if (GGML_METAL AND NOT GGML_METAL_EMBED_LIBRARY)
