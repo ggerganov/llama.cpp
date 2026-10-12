@@ -7262,7 +7262,7 @@ void ggml_vk_mul_mat(ggml_backend_vk_context * ctx, vk_context& subctx, const st
         }
     } else if (ggml_vk_can_use_fwht(ctx, src1, dst)) {
         ggml_vk_fwht(ctx, subctx, src1, dst);
-    } else if (src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && dst->ne[1] == 1 &&
+    } else if (src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && dst->ne[1] == 1 &&
         // detect 0213 permutation, and batch size of 1
         src0->nb[0] <= src0->nb[2] &&
         src0->nb[2] <= src0->nb[1] &&
@@ -7275,7 +7275,7 @@ void ggml_vk_mul_mat(ggml_backend_vk_context * ctx, vk_context& subctx, const st
         src0->ne[1] <= ctx->device->properties.limits.maxComputeWorkGroupCount[1] &&
         src1->ne[2] <= ctx->device->properties.limits.maxComputeWorkGroupCount[2]) {
         ggml_vk_mul_mat_vec_p021_f16_f32(ctx, subctx, cgraph, node_idx);
-    } else if (src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && dst->ne[1] == 1 &&
+    } else if (src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && dst->ne[1] == 1 &&
                !ggml_is_permuted(src0) && !ggml_is_permuted(src1) &&
                src0->ne[3] <= ctx->device->properties.limits.maxComputeWorkGroupCount[0] &&
                src0->ne[1] <= ctx->device->properties.limits.maxComputeWorkGroupCount[1] &&
