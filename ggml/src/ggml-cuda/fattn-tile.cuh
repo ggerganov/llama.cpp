@@ -413,8 +413,13 @@ static bool ggml_cuda_fattn_tile_use_sparse(const ggml_tensor * dst, const int c
     const ggml_tensor * mask = dst->src[3];
     const int n_kv_max = ggml_get_op_params_i32(dst, 4);
 
-    if (Q->ne[1] != 1 || !mask || mask->ne[0] != K->ne[1] || mask->ne[1] < Q->ne[1] || mask->ne[2] != 1 ||
-        n_kv_max <= 0 || n_kv_max > K->ne[1]/4) {
+    if (Q->ne[1] != 1 || !mask || mask->ne[0] != K->ne[1] ||
+        mask->ne[1] < Q->ne[1] || mask->ne[2] != 1 || n_kv_max <= 0) {
+        return false;
+    }
+
+    // Sparse compaction is not beneficial when the selected positions exceed 25% of the KV cache.
+    if (n_kv_max > K->ne[1]/4) {
         return false;
     }
 
