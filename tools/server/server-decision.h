@@ -43,6 +43,7 @@ struct server_decision_context {
             case COMMON_DECISION_TYPE_KEV:
             case COMMON_DECISION_TYPE_NIMBLE:
             case COMMON_DECISION_TYPE_PPLX_DECIDER:
+            case COMMON_DECISION_TYPE_VLLM_DECISION2:
             case COMMON_DECISION_TYPE_LFM2_D1:
                 return true;
             default:
@@ -61,6 +62,7 @@ struct server_decision_context {
             case COMMON_DECISION_TYPE_OPENJEV:
             case COMMON_DECISION_TYPE_CLEF:
             case COMMON_DECISION_TYPE_PPLX_DECIDER:
+            case COMMON_DECISION_TYPE_VLLM_D3:
             case COMMON_DECISION_TYPE_LFM2_D1:
             case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
                 return true;
@@ -110,11 +112,15 @@ private:
     std::shared_ptr<const common_chat_template> tmpl; // the "systemone" template
 
     std::map<std::string, float> temperatures; // "<type>" or "<type>.<n_options bucket>"
+    std::map<size_t, std::vector<float>> score_bias; // added to the scores of a score question, by number of levels
     size_t n_options_max   = 0;
     bool   noul_true_first = false; // noul options are [true, false] instead of [false, true]
+    bool   noul_criteria_order = false; // noul options are in the order of the criteria keys, if given
     bool   choice_sorted   = false; // choice options are in the order of their keys
+    bool   strict_payload  = false; // state, instructions and descriptions must be text, an object or an array
+    bool   canonical_legend = false; // non-string score descriptions are returned as canonical JSON text
 
-    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER
+    // OPENJEV, LEV, NIMBLE, PPLX_DECIDER, VLLM_D3
     std::vector<llama_token> labels;
     std::vector<std::string> label_texts; // only if the label of an option is given to the template
 
@@ -148,6 +154,7 @@ private:
             server_task & task) const;
 
     float get_temperature(const server_decision_question & question) const;
+    double get_decision_confidence(server_decision_question_type type, const std::vector<double> & probs) const;
 };
 
 // group the tasks so that the common prefix of their prompts is evaluated only once
