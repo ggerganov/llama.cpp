@@ -75,7 +75,7 @@ struct server_decision_context {
     std::vector<server_decision_question> parse_questions(const json & body) const;
 
     // the state as the model reads it, done once per request; returns the state for most models
-    json prepare_state(const json & state, size_t n_images) const;
+    json prepare_state(const json & state) const;
 
     // returns the state without its images, they are appended to files in order
     // images come from "files" (alias "images") and from the image_url and input_audio parts of a state made of chat messages
@@ -146,9 +146,9 @@ private:
     // LFM2_D1: label text and tokens of each option
     void d1_labels(const server_decision_question & question, std::vector<std::string> & texts, std::vector<llama_tokens> & groups) const;
     // H2O_LIGHTNING: the input of the template, its texts are rendered as the reference shim does
-    json render_h2o(const json & state, const server_decision_question & question, size_t n_images) const;
+    json render_h2o(const json & state, const server_decision_question & question) const;
     std::string h2o_cut_state(const std::string & text) const;
-    std::string h2o_quote(const std::string & text, size_t n_images) const;
+    std::string h2o_quote(const std::string & text) const;
     void fill_task_laya(llama_tokens & tokens, const server_decision_question & question, server_task & task) const;
     void fill_task_d1omni(
             const json & state,

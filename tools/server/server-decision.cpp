@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <regex>
 #include <stdexcept>
 
@@ -42,8 +40,6 @@ static const char * const DECISION_H2O_LABELS[] = {
     "not", "og", "ord", "all", "ff", "ont", "ime", "pr", "ies", "ure", "by", "ire", "sh", "ice", "ast", "ok", "cl", "ard", "was", "ip",
     "The", "ide", "ace", "ib", "ac", "rou", "we", "ak", "ve", "ath", "oid", "ust", "que", "ans", "pp", "one", "ail", "ach", "div", "ell",
 };
-// a request with images has this temperature for all question types
-static const float DECISION_H2O_TEMPERATURE_IMAGE = 0.65f;
 // a longer state keeps its head and its tail
 static const size_t DECISION_H2O_MAX_STATE_TOKENS = 32000;
 
@@ -245,11 +241,12 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
             }
         } else if (type_name == "score") {
             question.type = SERVER_DECISION_QUESTION_SCORE;
-            // h2o-lightning reads a level like an option, from 1 level up to the number of labels
-            const size_t n_levels_min = is_h2o ? 1 : 2;
-            const size_t n_levels_max = is_h2o ? n_options_max : 10;
-            if (!criteria.is_array() || criteria.size() < n_levels_min || criteria.size() > n_levels_max) {
-                throw err(string_format("\"criteria\" must be an array of %zu to %zu levels", n_levels_min, n_levels_max));
+            // h2o-lightning: from 1 level, the maximum is n_options_max
+            if (is_h2o && (!criteria.is_array() || criteria.empty())) {
+                throw err("\"criteria\" must be a non-empty array");
+            }
+            if (!is_h2o && (!criteria.is_array() || criteria.size() < 2 || criteria.size() > 10)) {
+                throw err("\"criteria\" must be an array of 2 to 10 levels");
             }
             for (size_t i = 0; i < criteria.size(); i++) {
                 question.options.push_back({std::to_string(i), criteria.at(i)});
@@ -539,12 +536,6 @@ static std::string decision_py_escape_cp(uint32_t cp) {
 
 // repr() of a Python float: the shortest digits that read back the same, in exponent form below 1e-4 and from 1e16
 static std::string decision_py_float(double v) {
-    if (std::isnan(v)) {
-        return "NaN";
-    }
-    if (std::isinf(v)) {
-        return v > 0 ? "Infinity" : "-Infinity";
-    }
     char buf[64];
     // the fewest digits that read back the same
     for (int prec = 0; prec < 17; prec++) {
@@ -683,8 +674,7 @@ std::string server_decision_context::h2o_cut_state(const std::string & text) con
 }
 
 // the special token texts written in the input are quoted with JSON escapes, so they stay text
-// with images, the first character of the media marker is escaped too
-std::string server_decision_context::h2o_quote(const std::string & text, size_t n_images) const {
+std::string server_decision_context::h2o_quote(const std::string & text) const {
     std::string out;
     for (size_t i = 0; i < text.size();) {
         bool is_quoted = false;
@@ -693,7 +683,7 @@ std::string server_decision_context::h2o_quote(const std::string & text, size_t 
             continue;
         }
         for (const auto & spelling : quoted_spellings) {
-            if (!spelling.empty() && text.compare(i, spelling.size(), spelling) == 0) {
+            if (text.compare(i, spelling.size(), spelling) == 0) {
                 std::string quoted = spelling;
                 string_replace_all(quoted, "<", "\\u003c");
                 string_replace_all(quoted, ">", "\\u003e");
@@ -707,24 +697,18 @@ std::string server_decision_context::h2o_quote(const std::string & text, size_t 
             out += text[i++];
         }
     }
-    if (n_images > 0) {
-        const std::string marker = get_media_marker();
-        size_t len = 0;
-        const std::string escaped = decision_py_escape_cp(decision_utf8_next(marker, len));
-        string_replace_all(out, marker, escaped + marker.substr(len));
-    }
     return out;
 }
 
-json server_decision_context::prepare_state(const json & state, size_t n_images) const {
+json server_decision_context::prepare_state(const json & state) const {
     if (type != COMMON_DECISION_TYPE_H2O_LIGHTNING) {
         return state;
     }
     // done once per request: compact JSON, the cut, the quoting
-    return h2o_quote(h2o_cut_state(state.is_string() ? state.get<std::string>() : decision_py_dumps(state, -1, ",", ":", false)), n_images);
+    return h2o_quote(h2o_cut_state(state.is_string() ? state.get<std::string>() : decision_py_dumps(state, -1, ",", ":", false)));
 }
 
-json server_decision_context::render_h2o(const json & state, const server_decision_question & question, size_t n_images) const {
+json server_decision_context::render_h2o(const json & state, const server_decision_question & question) const {
     // the instructions are JSON with an indent of 1, the descriptions are default JSON, the state is from prepare_state()
     const std::string instructions = decision_py_lstrip(question.instructions.is_string() ?
             question.instructions.get<std::string>() : decision_py_dumps(question.instructions, 1, ",", ": ", true));
@@ -736,9 +720,9 @@ json server_decision_context::render_h2o(const json & state, const server_decisi
         if (question.type == SERVER_DECISION_QUESTION_SCORE && opt.description.is_null()) {
             description = "null";
         } else if (!opt.description.is_null()) {
-            description = h2o_quote(opt.description.is_string() ? opt.description.get<std::string>() : decision_py_dumps(opt.description, -1, ", ", ": ", false), n_images);
+            description = h2o_quote(opt.description.is_string() ? opt.description.get<std::string>() : decision_py_dumps(opt.description, -1, ", ", ": ", false));
         }
-        const std::string key = h2o_quote(opt.key, n_images);
+        const std::string key = h2o_quote(opt.key);
 
         // the user turn is stripped like Python's str.strip(), the template only trims ASCII whitespace
         // so the text that ends the turn is stripped here, a space keeps a description that is only whitespace
@@ -763,7 +747,7 @@ json server_decision_context::render_h2o(const json & state, const server_decisi
     json inp = json::object();
     inp["type"]         = decision_question_type_name(question.type);
     inp["state"]        = state;
-    inp["instructions"] = h2o_quote(instructions, n_images);
+    inp["instructions"] = h2o_quote(instructions);
     inp["options"]      = options;
     return inp;
 }
@@ -935,7 +919,7 @@ std::string server_decision_context::render(
         bool is_audio) const {
     // the template is given raw JSON values, it serializes the ones that are not strings
     // h2o-lightning: the template is given texts
-    json inp = type == COMMON_DECISION_TYPE_H2O_LIGHTNING ? render_h2o(state, question, n_images) : json{
+    json inp = type == COMMON_DECISION_TYPE_H2O_LIGHTNING ? render_h2o(state, question) : json{
         {"id",           question.id},
         {"type",         decision_question_type_name(question.type)},
         {"instructions", question.instructions},
@@ -1416,9 +1400,10 @@ json server_decision_context::format_answer(const server_decision_question & que
     // softmax over the outputs of each variant, then the average of the variants
     // lfm2-d1-omni: image and audio answers are not calibrated
     float temperature = has_media && type == COMMON_DECISION_TYPE_LFM2_D1_OMNI ? 1.0f : get_temperature(question);
-    // h2o-lightning: a request with images has a temperature of its own for all question types
-    if (has_media && type == COMMON_DECISION_TYPE_H2O_LIGHTNING) {
-        temperature = DECISION_H2O_TEMPERATURE_IMAGE;
+    // a model can have its own temperature for requests with media
+    const auto it_image = temperatures.find("image");
+    if (has_media && it_image != temperatures.end()) {
+        temperature = it_image->second;
     }
     std::vector<double> probs(n, 0.0);
     for (size_t v = 0; v < scores.size(); v++) {

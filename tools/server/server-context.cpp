@@ -5769,9 +5769,7 @@ void server_routes::init_routes() {
         const auto questions = decision.parse_questions(body);
 
         std::vector<raw_buffer> files;
-        // parse_state() fills files, so it must run before files.size() is read
-        const json parsed = decision.parse_state(body, files);
-        const json state  = decision.prepare_state(parsed, files.size());
+        const json state = decision.prepare_state(decision.parse_state(body, files));
         if (!files.empty() && (!decision.can_use_images() || !meta->has_inp_image)) {
             res->error(format_error_response("This server does not support image input for decisions. For a model that supports it, start it with `--mmproj`", ERROR_TYPE_NOT_SUPPORTED));
             return res;
