@@ -2141,14 +2141,21 @@ void quantize_row_bf16x_ref(const float * GGML_RESTRICT x, block_bf16x * GGML_RE
         memset(y[i].delta, 0, sizeof(y[i].delta));
         for (int j = 0; j < qk; j++) {
             const ggml_bf16_t b = GGML_FP32_TO_BF16(x[i*qk + j]);
-            const uint8_t s = b.bits >> 15;
-            const uint8_t e = (b.bits >> 7) & 0xFF;
             const uint8_t m = b.bits & 0x7F;
+            const uint8_t e = (b.bits >> 7) & 0xFF;
             const int h = j >> 4;               // 16-element half of the block
             if (j % 16 == 0 || e > y[i].emax[h]) {
                 y[i].emax[h] = e;               // half-block max exponent
             }
-            if (s) {
+            if (j % 16 == 0) {
+                // floor the shared exponent at 7: deltas of blocks with tiny
+                // exponents then never reach the 7-sentinel, so decode needs
+                // no clamp (e = emax - d >= 0 always) and stays exact
+                if (y[i].emax[h] < 7) {
+                    y[i].emax[h] = 7;
+                }
+            }
+            if (b.bits >> 15) {
                 y[i].sgn[j >> 3] |= 1u << (j & 7);
             }
             const int mb = j*7;                 // 7-bit mantissa stream

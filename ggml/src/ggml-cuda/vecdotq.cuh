@@ -804,32 +804,41 @@ static __device__ __forceinline__ float vec_dot_bf16x_q8_1(
     // 16 bits of the unaligned load (little-endian), no shift needed
     const uint32_t sw  = bf16x_load_u32(sb);
 
+    // quantize floors the half-block exponent at 7, so the bf16 bit pattern
+    // assembles with pure integer adds: (e<<7)|m = (emax<<7) + m - (d<<7)
     const uint8_t emax = bx->emax[iqs];
+    const uint32_t em7 = (uint32_t) emax << 7;
     const int8_t * q8 = bq8_1->qs;
 
-    float sumf = 0.0f;
+    // two accumulators break the serial FFMA dependency chain
+    float sum0 = 0.0f;
+    float sum1 = 0.0f;
 #pragma unroll
-    for (int j = 0; j < 16; ++j) {
-        const int b7 = 7 * j;   // mantissa bit offset in the window
-        const int b3 = 3 * j;   // delta bit offset in the window
+    for (int j = 0; j < 16; j += 2) {
+        const int b7 = 7 * j;       // mantissa bit offset of the pair
+        const int b3 = 3 * j;       // delta bit offset of the pair
 
         const uint32_t mw_sel[4] = {mw0, mw1, mw2, mw3};
         const uint32_t dw_sel[2] = {dw0, dw1};
 
-        const uint32_t m = (b7 % 32 + 7 <= 32)
-            ? (mw_sel[b7 / 32] >> (b7 % 32)) & 0x7F
-            : __funnelshift_r(mw_sel[b7 / 32], mw_sel[b7 / 32 + 1], b7 % 32) & 0x7F;
-        const uint32_t d = (b3 % 32 + 3 <= 32)
-            ? (dw_sel[b3 / 32] >> (b3 % 32)) & 0x7
-            : __funnelshift_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32) & 0x7;
+        // one funnel-shift extracts both mantissas / both deltas of the pair
+        const uint32_t v14 = ((b7 % 32 + 14 <= 32)
+            ? (mw_sel[b7 / 32] >> (b7 % 32))
+            : __funnelshift_r(mw_sel[b7 / 32], mw_sel[b7 / 32 + 1], b7 % 32)) & 0x3FFF;
+        const uint32_t v6 = ((b3 % 32 + 6 <= 32)
+            ? (dw_sel[b3 / 32] >> (b3 % 32))
+            : __funnelshift_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32)) & 0x3F;
 
-        const uint8_t e = emax > d ? emax - (uint8_t) d : 0;
-        const uint32_t bits = ((((sw >> j) & 1u) << 15) | (e << 7) | m) << 16;
+        const uint32_t s0 = (sw >> j) & 1u;
+        const uint32_t s1 = (sw >> (j + 1)) & 1u;
+        const uint32_t w0 = ((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | (s0 << 15)) << 16;
+        const uint32_t w1 = ((em7 + (v14 >> 7)    - ((v6 >> 3)    << 7)) | (s1 << 15)) << 16;
 
-        sumf = fmaf(__uint_as_float(bits), (float) q8[iqs * 16 + j], sumf);
+        sum0 = fmaf(__uint_as_float(w0), (float) q8[iqs * 16 + j + 0], sum0);
+        sum1 = fmaf(__uint_as_float(w1), (float) q8[iqs * 16 + j + 1], sum1);
     }
 
-    return __low2float(bq8_1->ds) * sumf;
+    return __low2float(bq8_1->ds) * (sum0 + sum1);
 }
 
 static __device__ __forceinline__ float vec_dot_q4_0_q8_1(

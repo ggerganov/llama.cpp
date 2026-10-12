@@ -251,7 +251,7 @@ class BF16X(__Quant, qtype=GGMLQuantizationType.BF16X):
         expo = ((n >> 7) & 0xFF).astype(np.uint8)
         mant = (n & 0x7F).astype(np.uint8)
         half = expo.reshape(nb, 2, 16)
-        emax = half.max(axis=-1)  # (nb, 2) half-block max exponents
+        emax = np.maximum(half.max(axis=-1), 7)  # (nb, 2), floored at 7 -> decode needs no clamp
         delta = np.minimum(emax.repeat(16, axis=1) - expo, 7)
         out = np.concatenate([
             emax.reshape(nb, 2),
