@@ -32,6 +32,8 @@ struct htp_get_rows_kernel_params {
 
 struct htp_get_rows_vtcm_layout {
     size_t total_bytes;
+    size_t off_src1;
+    size_t src1_bytes;
     size_t off_src0;
     size_t off_dst;
 
@@ -47,10 +49,25 @@ static inline void htp_get_rows_vtcm_layout_build(
     int kernel_type,
     int type,
     uint32_t ne00,
+    uint32_t total_tasks,
+    int idx_type,
     uint32_t n_threads) {
 
+    memset(vtcm_layout, 0, sizeof(*vtcm_layout));
+
+    const size_t elem_size = (idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t);
+    const size_t src1_raw_bytes = total_tasks * elem_size;
+    const size_t src1_bytes = ((src1_raw_bytes + 127) & ~127) + 128;
+
+    vtcm_layout->off_src1   = 0;
+    vtcm_layout->src1_bytes = src1_bytes;
+
+    const size_t spad_base = (src1_bytes + 255) & ~255;
+
     if (kernel_type == HTP_GET_ROWS_KERNEL_SAMETYPE) {
-        memset(vtcm_layout, 0, sizeof(*vtcm_layout));
+        vtcm_layout->off_src0    = spad_base;
+        vtcm_layout->off_dst     = spad_base;
+        vtcm_layout->total_bytes = spad_base;
         return;
     }
 
@@ -63,8 +80,8 @@ static inline void htp_get_rows_vtcm_layout_build(
         vtcm_layout->dst_spad_half_size  = (ne00 * sizeof(float) + 255) & ~255;
         vtcm_layout->src0_bytes_per_thread = 2 * vtcm_layout->src0_spad_half_size;
         vtcm_layout->dst_bytes_per_thread  = 2 * vtcm_layout->dst_spad_half_size;
-        vtcm_layout->off_src0 = 0;
-        vtcm_layout->off_dst  = vtcm_layout->src0_bytes_per_thread * n_threads;
+        vtcm_layout->off_src0 = spad_base;
+        vtcm_layout->off_dst  = vtcm_layout->off_src0 + vtcm_layout->src0_bytes_per_thread * n_threads;
         vtcm_layout->total_bytes = vtcm_layout->off_dst + vtcm_layout->dst_bytes_per_thread * n_threads;
         return;
     }
@@ -103,7 +120,7 @@ static inline void htp_get_rows_vtcm_layout_build(
     vtcm_layout->src0_bytes_per_thread = src0_row_size_aligned * 2;
     vtcm_layout->dst_bytes_per_thread  = dst_row_size_aligned * 2;
 
-    vtcm_layout->off_src0 = 0;
+    vtcm_layout->off_src0 = spad_base;
     vtcm_layout->off_dst  = vtcm_layout->off_src0 + vtcm_layout->src0_bytes_per_thread * n_threads;
     vtcm_layout->total_bytes = vtcm_layout->off_dst + vtcm_layout->dst_bytes_per_thread * n_threads;
 }

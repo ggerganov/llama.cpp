@@ -30,8 +30,9 @@ struct get_rows_context {
     struct htp_ops_context * octx;
     const struct htp_get_rows_kernel_params * kparams;
     struct htp_get_rows_vtcm_layout vtcm_layout;
-    uint8_t * vtcm_base;
-    get_rows_flat_compute_fn_t compute_flat;
+    uint8_t    * vtcm_base;
+    const void * vtcm_src1;
+    get_rows_flat_compute_fn_t  compute_flat;
     get_rows_tiled_compute_fn_t compute_tiled;
     uint32_t task_start;
     uint32_t tasks;
@@ -40,7 +41,7 @@ struct get_rows_context {
     uint32_t tile_stride;
     uint32_t src0_row_size;
     uint32_t dst_row_size;
-    bool index_i32;
+    int idx_type;
 };
 
 #define get_rows_preamble                      \
@@ -73,9 +74,14 @@ struct get_rows_context {
                                                \
     const uint32_t nr = ne10 * ne11 * ne12;
 
-// src1 is gated against extended tensors, safe to dereference directly
-static inline uint32_t get_rows_read_index(dma_addr_t addr, bool index_i32) {
-    return index_i32 ? (uint32_t) *(const int32_t *)(uintptr_t) addr : (uint32_t) *(const int64_t *)(uintptr_t) addr;
+static __attribute__((noinline)) uint32_t get_rows_read_index_vtcm(
+    const void * vtcm_src1,
+    uint32_t idx,
+    int idx_type
+) {
+    const uint32_t off = idx * ((idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t));
+    const HVX_Vector v = hvx_vmemu((const uint8_t *) vtcm_src1 + off);
+    return (uint32_t) hvx_vec_get_i32(v);
 }
 
 static void get_rows_thread_sametype(unsigned int nth, unsigned int ith, void * data) {
@@ -99,8 +105,7 @@ static void get_rows_thread_sametype(unsigned int nth, unsigned int ith, void * 
         const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
         const uint32_t i10 = rem - i11 * ne10;
 
-        const dma_addr_t src1_addr = octx->src[1]->data + i10*nb10 + i11*nb11 + i12*nb12;
-        const uint32_t i01 = get_rows_read_index(src1_addr, grctx->index_i32);
+        const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, i, grctx->idx_type);
         assert(i01 < ne01);
 
         const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
@@ -111,39 +116,14 @@ static void get_rows_thread_sametype(unsigned int nth, unsigned int ith, void * 
         const dma_addr_t src0_data = octx->src[0]->data + i01*nb01 + i02*nb02 + i03*nb03;
         const dma_addr_t dst_data  = octx->dst->data    + i10*nb1  + i11*nb2  + i12*nb3;
 
-        while (!dma_queue_push(dma_q, dma_make_data(dst_data, src0_data), nb1, nb01,
-                               row_size_bytes, 1)) {
+        while (!dma_queue_push(dma_q, dma_make_data(dst_data, src0_data), nb1, nb01, row_size_bytes, 1)) {
             dma_queue_pop(dma_q);
         }
     }
     dma_queue_flush(dma_q);
 }
 
-// Flat compute kernels
 
-static void compute_get_rows_flat_f16(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_f16_f32(dst_spad, src_spad, cur_elems);
-}
-
-static void compute_get_rows_flat_q8_0(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_q8_0_f32(dst_spad, src_spad, cur_elems);
-}
-
-static void compute_get_rows_flat_q4_0(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_q4_0_f32(dst_spad, src_spad, cur_elems);
-}
-
-static void compute_get_rows_flat_q4_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_q4_k_f32(dst_spad, src_spad, cur_elems);
-}
-
-static void compute_get_rows_flat_q5_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_q5_k_f32(dst_spad, src_spad, cur_elems);
-}
-
-static void compute_get_rows_flat_q6_k(float * dst_spad, const void * src_spad, uint32_t cur_elems) {
-    hvx_dequantize_row_q6_k_f32(dst_spad, src_spad, cur_elems);
-}
 
 struct get_rows_flat_task {
     dma_addr_t src0_data;
@@ -171,8 +151,7 @@ static inline struct get_rows_flat_task get_rows_flat_calc_task(
     const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
     const uint32_t i10 = rem - i11 * ne10;
 
-    const dma_addr_t src1_addr = octx->src[1]->data + i10*nb10 + i11*nb11 + i12*nb12;
-    const uint32_t i01 = get_rows_read_index(src1_addr, grctx->index_i32);
+    const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, row_idx, grctx->idx_type);
     assert(i01 < ne01);
 
     const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
@@ -255,161 +234,7 @@ static void get_rows_thread_flat(unsigned int nth, unsigned int ith, void * data
     dma_queue_flush(dma_q);
 }
 
-// Tiled compute kernels
 
-// bytes row, row + 32, row + 64 and row + 96 of v, to bytes 0..3
-static inline HVX_Vector get_rows_gather4(HVX_Vector v, uint32_t row) {
-    v = Q6_V_vror_VR(v, row);
-    HVX_Vector packed = Q6_V_vmux_QVV(Q6_Q_vsetq_R(1), v, Q6_V_vror_VR(v, 31));
-    packed = Q6_V_vmux_QVV(Q6_Q_vsetq_R(2), packed, Q6_V_vror_VR(v, 62));
-    return Q6_V_vmux_QVV(Q6_Q_vsetq_R(3), packed, Q6_V_vror_VR(v, 93));
-}
-
-static void compute_get_rows_tiled_q8_0(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
-    const HVX_VectorPred first2 = Q6_Q_vsetq_R(2);
-    const HVX_VectorPred first4 = Q6_Q_vsetq_R(4);
-
-    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
-        const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
-
-        HVX_Vector vq = Q6_V_vzero();
-        for (int group = 7; group >= 0; --group) {
-            const HVX_Vector v = Q6_V_vror_VR(hvx_vmem(tile + group * VLEN), 2 * row);
-            const HVX_Vector packed = Q6_V_vmux_QVV(first2, v, Q6_V_vror_VR(v, 62));
-            vq = Q6_V_vmux_QVV(first4, packed, Q6_V_vror_VR(vq, VLEN - 4));
-        }
-
-        const HVX_Vector scales = hvx_vmem(tile + 1024);
-        const HVX_Vector scale_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 2 * row));
-        const HVX_Vector scale = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_hf));
-        const HVX_VectorPair p16 = Q6_Wh_vunpack_Vb(vq);
-        const HVX_VectorPair p32 = Q6_Ww_vunpack_Vh(Q6_V_lo_W(p16));
-        HVX_Vector values = hvx_vec_mul_f32_f32(Q6_Vsf_equals_Vw(Q6_V_lo_W(p32)), scale);
-        *(HVX_Vector *) dst = values;
-    }
-}
-
-static void compute_get_rows_tiled_q4_0(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
-    const HVX_VectorPred first4 = Q6_Q_vsetq_R(4);
-
-    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
-        const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
-
-        HVX_Vector vq = Q6_V_vzero();
-        for (int group = 3; group >= 0; --group) {
-            vq = Q6_V_vmux_QVV(first4, get_rows_gather4(hvx_vmem(tile + group * VLEN), row), Q6_V_vror_VR(vq, VLEN - 4));
-        }
-
-        const HVX_Vector lo = Q6_V_vand_VV(vq, Q6_Vb_vsplat_R(0x0F));
-        const HVX_Vector hi = Q6_Vub_vlsr_VubR(vq, 4);
-        vq = Q6_V_lo_W(Q6_W_vshuff_VVR(hi, lo, -1));
-        vq = Q6_Vb_vsub_VbVb(vq, Q6_Vb_vsplat_R(8));
-
-        const HVX_Vector scales = hvx_vmem(tile + 512);
-        const HVX_Vector scale_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 2 * row));
-        const HVX_Vector scale = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_hf));
-        const HVX_VectorPair p16 = Q6_Wh_vunpack_Vb(vq);
-        const HVX_VectorPair p32 = Q6_Ww_vunpack_Vh(Q6_V_lo_W(p16));
-        HVX_Vector values = hvx_vec_mul_f32_f32(Q6_Vsf_equals_Vw(Q6_V_lo_W(p32)), scale);
-        *(HVX_Vector *) dst = values;
-    }
-}
-
-static void compute_get_rows_tiled_q4_k(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
-    const HVX_VectorPred first4 = Q6_Q_vsetq_R(4);
-
-    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
-        const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
-
-        HVX_Vector vq = Q6_V_vzero();
-        for (int group = 3; group >= 0; --group) {
-            vq = Q6_V_vmux_QVV(first4, get_rows_gather4(hvx_vmem(tile + group * VLEN), row), Q6_V_vror_VR(vq, VLEN - 4));
-        }
-
-        const HVX_Vector lo = Q6_V_vand_VV(vq, Q6_Vb_vsplat_R(0x0F));
-        const HVX_Vector hi = Q6_Vub_vlsr_VubR(vq, 4);
-        vq = Q6_V_lo_W(Q6_W_vshuff_VVR(hi, lo, -1));
-
-        const HVX_Vector scales = hvx_vmem(tile + 512);
-        const HVX_Vector scale_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 4 * row));
-        const HVX_Vector scale = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_hf));
-        const HVX_Vector offset_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 4 * row + 2));
-        const HVX_Vector offset = Q6_V_lo_W(hvx_vec_f16_to_f32(offset_hf));
-
-        const HVX_VectorPair p16 = Q6_Wh_vunpack_Vb(vq);
-        const HVX_VectorPair p32 = Q6_Ww_vunpack_Vh(Q6_V_lo_W(p16));
-        HVX_Vector values = hvx_vec_mul_f32_f32(Q6_Vsf_equals_Vw(Q6_V_lo_W(p32)), scale);
-        *(HVX_Vector *) dst = hvx_vec_add_f32_f32(values, offset);
-    }
-}
-
-static void compute_get_rows_tiled_q5_k(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
-    const HVX_VectorPred first4 = Q6_Q_vsetq_R(4);
-    const HVX_Vector one = Q6_Vb_vsplat_R(1);
-
-    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
-        const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
-
-        const HVX_Vector p5 = get_rows_gather4(hvx_vmem(tile + 640), row);
-        HVX_Vector vq = Q6_V_vzero();
-        HVX_Vector vh = Q6_V_vzero();
-        for (int group = 3; group >= 0; --group) {
-            vq = Q6_V_vmux_QVV(first4, get_rows_gather4(hvx_vmem(tile + group * VLEN), row), Q6_V_vror_VR(vq, VLEN - 4));
-            vh = Q6_V_vmux_QVV(first4, Q6_Vub_vlsr_VubR(p5, 2 * group), Q6_V_vror_VR(vh, VLEN - 4));
-        }
-
-        const HVX_Vector lo = Q6_V_vor_VV(Q6_V_vand_VV(vq, Q6_Vb_vsplat_R(0x0F)), Q6_Vw_vasl_VwR(Q6_V_vand_VV(vh, one), 4));
-        const HVX_Vector hi = Q6_V_vor_VV(Q6_Vub_vlsr_VubR(vq, 4), Q6_Vw_vasl_VwR(Q6_V_vand_VV(Q6_Vub_vlsr_VubR(vh, 1), one), 4));
-        vq = Q6_V_lo_W(Q6_W_vshuff_VVR(hi, lo, -1));
-
-        const HVX_Vector scales = hvx_vmem(tile + 512);
-        const HVX_Vector scale_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 4 * row));
-        const HVX_Vector scale = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_hf));
-        const HVX_Vector offset_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 4 * row + 2));
-        const HVX_Vector offset = Q6_V_lo_W(hvx_vec_f16_to_f32(offset_hf));
-
-        const HVX_VectorPair p16 = Q6_Wh_vunpack_Vb(vq);
-        const HVX_VectorPair p32 = Q6_Ww_vunpack_Vh(Q6_V_lo_W(p16));
-        HVX_Vector values = hvx_vec_mul_f32_f32(Q6_Vsf_equals_Vw(Q6_V_lo_W(p32)), scale);
-        *(HVX_Vector *) dst = hvx_vec_add_f32_f32(values, offset);
-    }
-}
-
-static void compute_get_rows_tiled_q6_k(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
-    const HVX_VectorPred first4 = Q6_Q_vsetq_R(4);
-    const HVX_VectorPred first16 = Q6_Q_vsetq_R(16 * sizeof(float));
-    const HVX_Vector mask_0f = Q6_Vb_vsplat_R(0x0F);
-    const HVX_Vector mask_03 = Q6_Vb_vsplat_R(0x03);
-
-    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
-        const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
-
-        HVX_Vector vq = Q6_V_vzero();
-        for (int group = 7; group >= 0; --group) {
-            const HVX_Vector lo_plane = Q6_V_vror_VR(hvx_vmem(tile + (group >> 1) * VLEN), 4 * row);
-            const HVX_Vector hi_plane = Q6_V_vror_VR(hvx_vmem(tile + 512 + (group >> 2) * VLEN), 4 * row);
-            const HVX_Vector lo = (group & 1) ? Q6_Vub_vlsr_VubR(lo_plane, 4) : Q6_V_vand_VV(lo_plane, mask_0f);
-            const HVX_Vector hi = Q6_Vub_vlsr_VubR(hi_plane, 2 * (group & 3));
-            const HVX_Vector packed = Q6_V_vor_VV(lo, Q6_Vw_vasl_VwR(Q6_V_vand_VV(hi, mask_03), 4));
-            vq = Q6_V_vmux_QVV(first4, packed, Q6_V_vror_VR(vq, VLEN - 4));
-        }
-
-        const HVX_Vector scales = hvx_vmem(tile + 768);
-        const HVX_Vector scale_lo_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 2 * row));
-        const HVX_Vector scale_hi_hf = hvx_vec_repl_f16(Q6_V_vror_VR(scales, 64 + 2 * row));
-        const HVX_Vector scale_lo = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_lo_hf));
-        const HVX_Vector scale_hi = Q6_V_lo_W(hvx_vec_f16_to_f32(scale_hi_hf));
-        const HVX_Vector scale = Q6_V_vmux_QVV(first16, scale_lo, scale_hi);
-        const HVX_VectorPair p16 = Q6_Wh_vunpack_Vb(Q6_Vb_vsub_VbVb(vq, Q6_Vb_vsplat_R(32)));
-        const HVX_VectorPair p32 = Q6_Ww_vunpack_Vh(Q6_V_lo_W(p16));
-        *(HVX_Vector *) dst = hvx_vec_mul_f32_f32(Q6_Vsf_equals_Vw(Q6_V_lo_W(p32)), scale);
-    }
-}
 
 struct get_rows_tiled_task {
     dma_addr_t tile_src_base;
@@ -431,8 +256,7 @@ static inline struct get_rows_tiled_task get_rows_tiled_calc_task(
     const uint32_t rem = i - i12 * ne11 * ne10;
     const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
     const uint32_t i10 = rem - i11 * ne10;
-    const dma_addr_t src1_addr = octx->src[1]->data + i10*nb10 + i11*nb11 + i12*nb12;
-    const uint32_t i01 = get_rows_read_index(src1_addr, grctx->index_i32);
+    const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, i, grctx->idx_type);
     assert(i01 < ne01);
 
     const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
@@ -547,10 +371,6 @@ int op_get_rows(struct htp_ops_context * octx) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
-    if (htp_tensor_is_extended(octx->src[1])) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     const struct htp_tensor * dst = octx->dst;
     const uint32_t total_tasks    = kparams->total_tasks;
     const size_t dst_row_size     = htp_tensor_get_row_size(dst->type, dst->ne[0]);
@@ -590,15 +410,17 @@ int op_get_rows(struct htp_ops_context * octx) {
     grctx.tile_stride = (grctx.tile_size + 127) & ~127;
     grctx.src0_row_size = htp_tensor_get_row_size(octx->src[0]->type, ne00);
     grctx.dst_row_size  = (uint32_t) dst_row_size;
-    grctx.index_i32 = octx->src[1]->type == HTP_TYPE_I32;
+    grctx.idx_type      = octx->src[1]->type;
 
-    htp_get_rows_vtcm_layout_build(&grctx.vtcm_layout, kparams->kernel_type, octx->src[0]->type, ne00, n_threads);
+    htp_get_rows_vtcm_layout_build(&grctx.vtcm_layout, kparams->kernel_type, octx->src[0]->type, ne00, total_tasks, grctx.idx_type, n_threads);
 
     if (grctx.vtcm_layout.total_bytes > octx->ctx->vtcm_size) {
         FARF(ERROR, "get-rows: VTCM reservation %zu is too small, needed %zu\n",
              octx->ctx->vtcm_size, grctx.vtcm_layout.total_bytes);
         return HTP_STATUS_INVAL_PARAMS;
     }
+
+    grctx.vtcm_src1 = grctx.vtcm_base + grctx.vtcm_layout.off_src1;
 
     work_queue_func_t q_func = NULL;
     switch (kparams->kernel_type) {
@@ -607,23 +429,23 @@ int op_get_rows(struct htp_ops_context * octx) {
             break;
         case HTP_GET_ROWS_KERNEL_TILED:
             switch (octx->src[0]->type) {
-                case HTP_TYPE_Q8_0: grctx.compute_tiled = compute_get_rows_tiled_q8_0; break;
-                case HTP_TYPE_Q4_0: grctx.compute_tiled = compute_get_rows_tiled_q4_0; break;
-                case HTP_TYPE_Q4_K: grctx.compute_tiled = compute_get_rows_tiled_q4_k; break;
-                case HTP_TYPE_Q5_K: grctx.compute_tiled = compute_get_rows_tiled_q5_k; break;
-                case HTP_TYPE_Q6_K: grctx.compute_tiled = compute_get_rows_tiled_q6_k; break;
+                case HTP_TYPE_Q8_0: grctx.compute_tiled = hvx_dequantize_row_tiled_q8_0_f32; break;
+                case HTP_TYPE_Q4_0: grctx.compute_tiled = hvx_dequantize_row_tiled_q4_0_f32; break;
+                case HTP_TYPE_Q4_K: grctx.compute_tiled = hvx_dequantize_row_tiled_q4_k_f32; break;
+                case HTP_TYPE_Q5_K: grctx.compute_tiled = hvx_dequantize_row_tiled_q5_k_f32; break;
+                case HTP_TYPE_Q6_K: grctx.compute_tiled = hvx_dequantize_row_tiled_q6_k_f32; break;
                 default:            return HTP_STATUS_NO_SUPPORT;
             }
             q_func = get_rows_thread_tiled;
             break;
         case HTP_GET_ROWS_KERNEL_FLAT:
             switch (octx->src[0]->type) {
-                case HTP_TYPE_F16:  grctx.compute_flat = compute_get_rows_flat_f16;  break;
-                case HTP_TYPE_Q8_0: grctx.compute_flat = compute_get_rows_flat_q8_0; break;
-                case HTP_TYPE_Q4_0: grctx.compute_flat = compute_get_rows_flat_q4_0; break;
-                case HTP_TYPE_Q4_K: grctx.compute_flat = compute_get_rows_flat_q4_k; break;
-                case HTP_TYPE_Q5_K: grctx.compute_flat = compute_get_rows_flat_q5_k; break;
-                case HTP_TYPE_Q6_K: grctx.compute_flat = compute_get_rows_flat_q6_k; break;
+                case HTP_TYPE_F16:  grctx.compute_flat = hvx_dequantize_row_flat_f16_f32;  break;
+                case HTP_TYPE_Q8_0: grctx.compute_flat = hvx_dequantize_row_flat_q8_0_f32; break;
+                case HTP_TYPE_Q4_0: grctx.compute_flat = hvx_dequantize_row_flat_q4_0_f32; break;
+                case HTP_TYPE_Q4_K: grctx.compute_flat = hvx_dequantize_row_flat_q4_k_f32; break;
+                case HTP_TYPE_Q5_K: grctx.compute_flat = hvx_dequantize_row_flat_q5_k_f32; break;
+                case HTP_TYPE_Q6_K: grctx.compute_flat = hvx_dequantize_row_flat_q6_k_f32; break;
                 default:            return HTP_STATUS_NO_SUPPORT;
             }
             q_func = get_rows_thread_flat;
@@ -632,6 +454,29 @@ int op_get_rows(struct htp_ops_context * octx) {
             return HTP_STATUS_NO_SUPPORT;
     }
 
+    // DMA fetch src1 into VTCM
+    const uint32_t ne10 = octx->src[1]->ne[0];
+    const uint32_t ne11 = octx->src[1]->ne[1];
+    const uint32_t ne12 = octx->src[1]->ne[2];
+    const uint32_t ne13 = octx->src[1]->ne[3];
+    const uint32_t nb11 = octx->src[1]->nb[1];
+    const uint32_t nb12 = octx->src[1]->nb[2];
+    const uint32_t nb13 = octx->src[1]->nb[3];
+    const uint32_t elem_size = (grctx.idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t);
+
+    dma_queue * dma_q = octx->ctx->dma[0];
+    uint8_t * cur_dst = (uint8_t *) grctx.vtcm_src1;
+    for (uint32_t i13 = 0; i13 < ne13; ++i13) {
+        for (uint32_t i12 = 0; i12 < ne12; ++i12) {
+            const dma_addr_t src_plane = octx->src[1]->data + i12 * nb12 + i13 * nb13;
+            while (!dma_queue_push(dma_q, dma_make_data((dma_addr_t)(uintptr_t) cur_dst, src_plane),
+                                   ne10 * elem_size, nb11, ne10 * elem_size, ne11)) {
+                dma_queue_pop(dma_q);
+            }
+            cur_dst += ne10 * ne11 * elem_size;
+        }
+    }
+    dma_queue_flush(dma_q);
 
     FARF(HIGH, "get-rows: (%ux%ux%ux%u) x (%ux%ux%ux%u) -> (%ux%ux%ux%u) : src0-vtcm-size %zu dst-vtcm-size %zu kernel-type %d n-threads %d\n",
          octx->src[0]->ne[0], octx->src[0]->ne[1], octx->src[0]->ne[2], octx->src[0]->ne[3],

@@ -6197,7 +6197,7 @@ static void ggml_hexagon_precompute_get_rows_params(
 
     struct htp_get_rows_vtcm_layout vtcm_layout = {};
     while (kparams->n_threads > 0) {
-        htp_get_rows_vtcm_layout_build(&vtcm_layout, kparams->kernel_type, src0->type, ne00, kparams->n_threads);
+        htp_get_rows_vtcm_layout_build(&vtcm_layout, kparams->kernel_type, src0->type, ne00, total_tasks, src1->type, kparams->n_threads);
         if (vtcm_layout.total_bytes <= sess->vtcm_size) {
             break;
         }
@@ -6205,7 +6205,7 @@ static void ggml_hexagon_precompute_get_rows_params(
     }
 
     if (kparams->n_threads == 0 && total_tasks > 0) {
-        htp_get_rows_vtcm_layout_build(&vtcm_layout, kparams->kernel_type, src0->type, ne00, 1);
+        htp_get_rows_vtcm_layout_build(&vtcm_layout, kparams->kernel_type, src0->type, ne00, total_tasks, src1->type, 1);
     }
 
     kparams->vtcm_size = (total_tasks == 0) ? 0 : vtcm_layout.total_bytes;
