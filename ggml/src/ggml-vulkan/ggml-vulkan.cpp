@@ -332,7 +332,6 @@ bool ggml_vk_concat_supported(const ggml_tensor * src0, const ggml_tensor * src1
     return ggml_is_contiguous_rows(src0) && ggml_is_contiguous_rows(src1) && ggml_is_contiguous_rows(dst);
 }
 
-// dim-0 concat with a transposed src1, e.g. GDN conv_input = concat(conv_state, transpose(qkv), 0)
 static bool ggml_vk_concat_transpose_supported(const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
     GGML_UNUSED(src0);
     if (ggml_get_op_params_i32(dst, 0) != 0) {
@@ -341,12 +340,11 @@ static bool ggml_vk_concat_transpose_supported(const ggml_tensor * src0, const g
     if (ggml_is_quantized(dst->type) || ggml_vk_concat_unit_size(dst->type) != 4) {
         return false;
     }
-    // src1 is a transposed view (dim 1 contiguous), so ggml_vk_cpy picks the tiled transpose copy for it
+    // Tiled transpose copy requires dim 1 to be contiguous.
     if (src1->nb[1] != ggml_type_size(src1->type)) {
         return false;
     }
-    // conservative cutoff: for small batches such as single-token decode the second dispatch
-    // costs more than the transposed copy saves, so they keep the regular concat shader
+    // Performance cutoff: avoid the extra dispatch for small batches.
     return src1->ne[0] >= 32;
 }
 
@@ -10434,10 +10432,7 @@ void ggml_vk_opt_step_sgd(ggml_backend_vk_context * ctx, vk_context& subctx, con
 
 void ggml_vk_concat(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     if (ggml_vk_concat_transpose_supported(src0, src1, dst)) {
-        // dst = [src0 | src1] along dim 0 as two copies into views of dst: a plain copy for src0 and
-        // the tiled transpose copy for the transposed src1. The two copies write disjoint elements.
-        // dst is not empty here, but a source can be (e.g. a zero-width conv state): skip empty copies,
-        // their push constant setup would divide by zero.
+        // Empty copies would divide by zero during fastdiv setup.
         ggml_tensor dst0 = *dst;
         dst0.ne[0] = src0->ne[0];
         if (!ggml_is_empty(src0)) {
