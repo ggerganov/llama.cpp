@@ -502,6 +502,24 @@ void ggml_vk_buffer_write_2d(vk_buffer& dst, size_t offset, const void * src, si
     if(dst->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
         GGML_ASSERT(dst->memory_property_flags & vk::MemoryPropertyFlagBits::eHostCoherent);
 
+        static const bool host_barrier = getenv("GGML_VK_DBG_WRITE_HOST_BARRIER") != nullptr;
+        if (host_barrier && dst->device->uma) {
+            std::lock_guard<std::recursive_mutex> guard(dst->device->mutex);
+            vk_context subctx = ggml_vk_create_temporary_context(dst->device->compute_queue->cmd_pool);
+            ggml_vk_ctx_begin(dst->device, subctx);
+            subctx->s->buffer->buf.pipelineBarrier(
+                vk::PipelineStageFlagBits::eComputeShader | vk::PipelineStageFlagBits::eTransfer,
+                vk::PipelineStageFlagBits::eHost,
+                {},
+                { { vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferWrite,
+                    vk::AccessFlagBits::eHostRead | vk::AccessFlagBits::eHostWrite } },
+                {}, {});
+            ggml_vk_ctx_end(subctx);
+            ggml_vk_submit(subctx, dst->device->fence);
+            VK_CHECK(dst->device->device.waitForFences({ dst->device->fence }, true, UINT64_MAX), "vk_buffer_write_2d uma waitForFences", dst->device);
+            dst->device->device.resetFences({ dst->device->fence });
+            ggml_vk_queue_command_pools_cleanup(dst->device);
+        }
         if (width == spitch && width == dpitch) {
             memcpy((uint8_t *)dst->ptr + offset, src, width * height);
         } else {
