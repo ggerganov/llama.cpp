@@ -98,6 +98,9 @@ export class HuggingFaceService {
 		Promise<{ org: string; name: string } | null>
 	>();
 
+	/** Hub tag marking decision models, e.g. Kev and Laya. */
+	private static readonly DECISION_MODEL_TAG = 'decision-model';
+
 	// Model details fetched this session, keyed by repo id: the Hub rate limits
 	// aggressively, so each repo costs at most one request per load. Failures stay
 	// uncached so the next mount can retry.
@@ -158,6 +161,8 @@ export class HuggingFaceService {
 		return HuggingFaceService.detailsCache.get(hfRepoId);
 	}
 
+	// GGUF Model Browsing
+
 	/**
 	 * Collapse split GGUF shard sets (`-00001-of-00015.gguf`, ...) to their first
 	 * shard, summing every shard's size so the kept entry reflects the whole
@@ -195,8 +200,6 @@ export class HuggingFaceService {
 
 		return result;
 	}
-
-	// GGUF Model Browsing
 
 	/**
 	 * Extract the GGUF quantization token (e.g. `Q4_K_M`) and any sidecar type
@@ -353,6 +356,8 @@ export class HuggingFaceService {
 		return `${Math.floor(diffDays / DAYS_PER_YEAR)} ${YEARS_AGO_LABEL}`;
 	}
 
+	// Model Details & Files
+
 	/**
 	 * Format a min-max size range with one shared unit, e.g. `19.0-28.6 GB`.
 	 */
@@ -377,8 +382,6 @@ export class HuggingFaceService {
 
 		return `${fmt(min)}-${fmt(max)} ${unit}`;
 	}
-
-	// Model Details & Files
 
 	/**
 	 * Avatar URL for an author (org or user). 404s when the author does not
@@ -482,7 +485,10 @@ export class HuggingFaceService {
 
 		if (!response.ok) throw new Error(`Failed to fetch catalog: ${response.status}`);
 
-		return (await response.json()) as HfCatalogEntry[];
+		const entries = (await response.json()) as HfCatalogEntry[];
+
+		// decision models cannot run as chat models; keep them out of the catalog
+		return entries.filter((entry) => !entry.decision);
 	}
 
 	static getDetails(modelId: string): Promise<HfModelDetailInfo | null> {
@@ -544,11 +550,11 @@ export class HuggingFaceService {
 		return `${HF_BASE_URL}${PATH_SEPARATOR}${modelId}`;
 	}
 
+	// Utility Methods
+
 	static async getMostLiked(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.LIKES });
 	}
-
-	// Utility Methods
 
 	static async getNew(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.CREATED_AT });
@@ -557,6 +563,12 @@ export class HuggingFaceService {
 	static async getPopular(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.DOWNLOADS });
 	}
+
+	/**
+	 * Get repository file tree to list available GGUF variants. Recursive so
+	 * repos that keep quants in per-quant subdirectories (e.g. `UD-Q4_K_XL/`)
+	 * are included; follows cursor pagination for repos over one page.
+	 */
 
 	/**
 	 * Fetch the raw README.md for a repo, with the YAML frontmatter stripped.
@@ -581,12 +593,6 @@ export class HuggingFaceService {
 			return null;
 		}
 	}
-
-	/**
-	 * Get repository file tree to list available GGUF variants. Recursive so
-	 * repos that keep quants in per-quant subdirectories (e.g. `UD-Q4_K_XL/`)
-	 * are included; follows cursor pagination for repos over one page.
-	 */
 
 	static getTree(modelId: string): Promise<HfModelSibling[]> {
 		if (!HuggingFaceService.isEnabled()) return Promise.resolve([]);
@@ -644,9 +650,22 @@ export class HuggingFaceService {
 	}
 
 	/**
-	 * True when the UI may read model metadata from the Hugging Face Hub. Off by
-	 * default: with it off, callers only see what the server's /v1/models reports
-	 * and the org avatars stay hidden.
+	 * True for decision models: they answer with calibrated probabilities instead
+	 * of generated text, so llama-ui cannot use them and they stay out of every
+	 * list the Hub data layer returns.
+	 */
+	static isDecisionModel(model: Pick<HfModelInfo, 'pipeline_tag' | 'tags'>): boolean {
+		return (
+			model.tags.includes(HuggingFaceService.DECISION_MODEL_TAG) ||
+			model.pipeline_tag === 'text-classification'
+		);
+	}
+
+	/**
+	 * True when the UI may read from the Hugging Face Hub API: model display data
+	 * (avatars, context length, chat template) and the Discover Models view. With
+	 * it off, callers only see what the server's /v1/models reports and the org
+	 * avatars stay hidden.
 	 */
 	static isEnabled(): boolean {
 		return settingsStore.config[SETTINGS_KEYS.USE_HUGGING_FACE_HUB] ?? false;
@@ -748,8 +767,10 @@ export class HuggingFaceService {
 			filter: HF_GGUF_FILTER,
 			limit: Math.min(limit, HF_MAX_LIMIT)
 		});
+		const models = await this.fetchWithRetry(url);
 
-		return this.fetchWithRetry(url);
+		// decision models cannot run as chat models; keep them out of every list
+		return models.filter((model) => !HuggingFaceService.isDecisionModel(model));
 	}
 
 	static async searchByQuery(
