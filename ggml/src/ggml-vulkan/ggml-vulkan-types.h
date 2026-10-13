@@ -1334,6 +1334,7 @@ struct vk_instance_t {
     std::shared_mutex               host_allocations_mutex;
 
     size_t host_import_alignment = 0;
+    uint32_t host_import_failed = 0;  // bitmask by device->idx, guarded by host_allocations_mutex
 
     bool multi_device = false;
 };
