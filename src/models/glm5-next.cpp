@@ -1013,9 +1013,7 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
 
     ggml_tensor * sel = ggml_set_rows(ctx0, mask_all, zeros, ggml_reshape_3d(ctx0, sel_idx, n_sel, n_tokens, 1));
 
-    // Fold causal visibility before shared-indexer reuse. Drop the dump rows with a view that already has the
-    // causal mask layout: going through [n_kv, n_tokens] instead would reshape the mask ahead of the add, and
-    // reshape the result back ahead of every layer that reads the selection
+    // Fold causal visibility before shared-indexer reuse.
     GGML_ASSERT(kq_mask->ne[0] == n_kv && kq_mask->ne[1]*kq_mask->ne[2]*kq_mask->ne[3] == n_tokens);
     const size_t row = sel->nb[2];
     sel = ggml_view_4d(ctx0, sel, n_kv, kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3],
