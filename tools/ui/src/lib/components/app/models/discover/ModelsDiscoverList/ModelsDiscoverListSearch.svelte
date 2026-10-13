@@ -21,6 +21,10 @@
 	}
 </script>
 
-<div class="sticky top-0 z-99">
+<!-- Inset from the panel edges so the focus ring has room inside the scroll
+		container, and opaque so rows scroll behind the bar instead of through it.
+		Padding (not margin) for the top room: a sticky margin keeps a gap when
+		stuck, where rows would peek through. -->
+<div class="sticky top-0 z-99 pt-1.5">
 	<SearchInput bind:value onInput={(v) => handleInput(v)} {placeholder} size="sm" />
 </div>
