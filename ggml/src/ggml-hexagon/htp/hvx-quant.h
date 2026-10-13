@@ -546,4 +546,34 @@ static inline void hvx_dequantize_row_tiled_q6_k_f32(float * dst_spad, const uin
     }
 }
 
+static inline HVX_Vector hvx_dequantize_tiled_f16_gather4(const uint8_t * p, uint32_t r_byte) {
+    HVX_Vector w0  = Q6_V_vror_VR(hvx_vmem(p + 0 * VLEN), r_byte);
+    HVX_Vector w1  = Q6_V_vror_VR(hvx_vmem(p + 1 * VLEN), r_byte);
+    HVX_Vector w01 = Q6_V_lo_W(Q6_W_vshuff_VVR(w1, w0, 4));
+    HVX_Vector w2  = Q6_V_vror_VR(hvx_vmem(p + 2 * VLEN), r_byte);
+    HVX_Vector w3  = Q6_V_vror_VR(hvx_vmem(p + 3 * VLEN), r_byte);
+    HVX_Vector w23 = Q6_V_lo_W(Q6_W_vshuff_VVR(w3, w2, 4));
+    return Q6_V_lo_W(Q6_W_vshuff_VVR(w23, w01, 8));
+}
+
+static inline void hvx_dequantize_row_tiled_f16_f32(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row) {
+    const uint32_t r_byte = 4 * row;
+
+    for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
+        const uint8_t * tile = src_spad + k_tile * tile_stride;
+        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+
+        HVX_Vector g0 = hvx_dequantize_tiled_f16_gather4(tile + 0 * VLEN, r_byte);
+        HVX_Vector g1 = hvx_dequantize_tiled_f16_gather4(tile + 4 * VLEN, r_byte);
+        HVX_Vector g01 = Q6_V_lo_W(Q6_W_vshuff_VVR(g1, g0, 16));
+
+        HVX_Vector g2 = hvx_dequantize_tiled_f16_gather4(tile + 8 * VLEN, r_byte);
+        HVX_Vector g3 = hvx_dequantize_tiled_f16_gather4(tile + 12 * VLEN, r_byte);
+        HVX_Vector g23 = Q6_V_lo_W(Q6_W_vshuff_VVR(g3, g2, 16));
+
+        HVX_Vector g = Q6_V_lo_W(Q6_W_vshuff_VVR(g23, g01, 32));
+        *(HVX_Vector *) dst = Q6_V_lo_W(hvx_vec_f16_to_f32(g));
+    }
+}
+
 #endif // HVX_QUANT_H

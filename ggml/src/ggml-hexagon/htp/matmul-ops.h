@@ -233,6 +233,8 @@ static inline uint32_t htp_mm_get_weight_tile_size(int weight_type) {
             return HTP_MM_WEIGHT_TILE_SIZE_Q2_K;
         case HTP_TYPE_MXFP4:
             return HTP_MM_WEIGHT_TILE_SIZE_MXFP4;
+        case HTP_TYPE_F16:
+            return HTP_MM_HMX_TILE_SIZE;
         default:
             return 0;
     }
@@ -258,6 +260,8 @@ static inline uint32_t htp_mm_get_weight_aligned_tile_size(int weight_type) {
             return HTP_MM_WEIGHT_ALIGNED_TILE_SIZE_Q2_K;
         case HTP_TYPE_MXFP4:
             return HTP_MM_WEIGHT_ALIGNED_TILE_SIZE_MXFP4;
+        case HTP_TYPE_F16:
+            return HTP_MM_HMX_TILE_SIZE;
         default:
             return 0;
     }

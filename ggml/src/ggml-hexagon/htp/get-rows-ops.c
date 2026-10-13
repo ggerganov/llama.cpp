@@ -429,6 +429,7 @@ int op_get_rows(struct htp_ops_context * octx) {
             break;
         case HTP_GET_ROWS_KERNEL_TILED:
             switch (octx->src[0]->type) {
+                case HTP_TYPE_F16:  grctx.compute_tiled = hvx_dequantize_row_tiled_f16_f32; break;
                 case HTP_TYPE_Q8_0: grctx.compute_tiled = hvx_dequantize_row_tiled_q8_0_f32; break;
                 case HTP_TYPE_Q4_0: grctx.compute_tiled = hvx_dequantize_row_tiled_q4_0_f32; break;
                 case HTP_TYPE_Q4_K: grctx.compute_tiled = hvx_dequantize_row_tiled_q4_k_f32; break;
