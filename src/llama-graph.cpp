@@ -1430,7 +1430,6 @@ void llm_graph_result::set_outputs(const llm_graph_params & params) {
     }
     if (t_embd != nullptr) {
         ggml_set_output(t_embd);
-        ggml_build_forward_expand(gf, t_embd);
     }
     if (t_embd_pooled != nullptr) {
         ggml_set_output(t_embd_pooled);
