@@ -470,7 +470,7 @@ int op_get_rows(struct htp_ops_context * octx) {
     for (uint32_t i13 = 0; i13 < ne13; ++i13) {
         for (uint32_t i12 = 0; i12 < ne12; ++i12) {
             const dma_addr_t src_plane = octx->src[1]->data + i12 * nb12 + i13 * nb13;
-            while (!dma_queue_push(dma_q, dma_make_data((dma_addr_t)(uintptr_t) cur_dst, src_plane),
+            while (!dma_queue_push(dma_q, dma_make_data(cur_dst, src_plane),
                                    ne10 * elem_size, nb11, ne10 * elem_size, ne11)) {
                 dma_queue_pop(dma_q);
             }
