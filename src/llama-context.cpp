@@ -486,7 +486,15 @@ llama_context::llama_context(
 
     // reduced LM head, must exist before the graph is reserved
     if (!hparams.vocab_only && params.n_vocab_dynamic > 0) {
-        vsub_init(params.n_vocab_dynamic);
+        try {
+            vsub_init(params.n_vocab_dynamic);
+        } catch (const std::exception & e) {
+            // e.g. out of memory, the draft still works with the full head
+            LLAMA_LOG_WARN("%s: vocab_subset: %s, using the full LM head\n", __func__, e.what());
+            vsub.reset();
+            vsub_bufs.clear();
+            vsub_ctxs.clear();
+        }
     }
 
     // init backends
