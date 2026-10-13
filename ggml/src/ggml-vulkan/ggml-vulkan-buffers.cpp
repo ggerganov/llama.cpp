@@ -511,7 +511,7 @@ void ggml_vk_buffer_write_2d(vk_buffer& dst, size_t offset, const void * src, si
                 vk::PipelineStageFlagBits::eHost,
                 {},
                 { { vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferWrite,
-                    vk::AccessFlagBits::eHostRead | vk::AccessFlagBits::eHostWrite } },
+                    vk::AccessFlagBits::eHostWrite } },
                 {}, {});
             ggml_vk_ctx_end(subctx);
             ggml_vk_submit(subctx, dst->device->fence);
