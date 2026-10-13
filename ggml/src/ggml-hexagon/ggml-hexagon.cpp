@@ -5945,9 +5945,19 @@ static bool ggml_hexagon_precompute_binary_params(
     } else if (is_same_shape) {
         kernel_type = HTP_BINARY_KERNEL_SAME_SHAPE;
     } else if (is_complex) {
+        src1_size = hex_round_up(ggml_nelements(src1) * elem_size + 128, 128);
+        if (src1_size > sess->vtcm_size) {
+            return false;
+        }
         kernel_type = HTP_BINARY_KERNEL_COMPLEX;
+        kparams->src1_strided = !ggml_is_contiguous(src1) ? 1 : 0;
     } else {
+        src1_size = hex_round_up(ggml_nelements(src1) * elem_size + 128, 128);
+        if (src1_size > sess->vtcm_size) {
+            return false;
+        }
         kernel_type = HTP_BINARY_KERNEL_REPEAT;
+        kparams->src1_strided = !ggml_is_contiguous(src1) ? 1 : 0;
     }
 
     kparams->kernel_type = kernel_type;
