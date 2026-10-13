@@ -1412,6 +1412,10 @@ bool llama_context::set_adapter_cvec(
 }
 
 llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+    static const bool sync_pre = getenv("LLAMA_SYNC_PRE_UBATCH") != nullptr;
+    if (sync_pre) {
+        ggml_backend_sched_synchronize(sched.get());
+    }
     if (mctx && !mctx->apply()) {
         LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
         ret = GGML_STATUS_FAILED;
