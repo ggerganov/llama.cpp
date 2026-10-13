@@ -230,6 +230,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
         // V32 overlaps Gram work with one output tile per projection warp.
         constexpr bool SPLIT_PROJECTION = C == 16 && V == 32;
         acc            base_output[((C / 16) * (V / N) + WARPS - 1) / WARPS];
+        // delta = beta * (v - decay * K S), base output = decay * Q S
         auto           project = [&]() {
             if constexpr (V == 32) {
                 if (warp < 4) {
@@ -251,6 +252,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
                 }
             }
         };
+        // A = beta * strict_tril(K K^T * decay), P = tril(Q K^T * decay)
         for (int ti = warp; ti < 2 * (C / 16) * (C / N) && (V != 32 || warp < 4); ti += (V == 32 ? 4 : WARPS)) {
             const bool gram = ti < (C / 16) * (C / N);
             const int  t = ti % ((C / 16) * (C / N)), r = (t / (C / N)) * 16, c = (t % (C / N)) * N;
@@ -277,6 +279,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
             project();
         }
         __syncthreads();
+        // inverse = (I + A)^-1 by forward substitution
         for (int row = warp; row < C; row += WARPS) {
             float x[(C + 31) / 32];
 #pragma unroll
@@ -305,6 +308,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
             project();
         }
         __syncthreads();
+        // solved = inverse * delta
         for (int ti = warp; ti < (C / 16) * (V / N); ti += WARPS) {
             const int r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
             acc       x;
@@ -312,6 +316,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
             store(s.scratch.solved, x, r, c);
         }
         __syncthreads();
+        // out = base output + P * solved
         for (int ti = (SPLIT_PROJECTION ? warp - 4 : warp); ti < (C / 16) * (V / N) && (!SPLIT_PROJECTION || warp >= 4);
              ti += WARPS) {
             const int r = (ti / (V / N)) * 16, c = (ti % (V / N)) * N;
@@ -325,6 +330,7 @@ static __global__ __launch_bounds__(256, BLOCKS) void gdn_single(ggml_cuda_gdn_m
                 }
             }
         }
+        // S = decay(chunk) * S + K^T * (solved * decay to chunk end)
         for (int i = tid; i < C * V; i += 256) {
             const int   t = i / V, v = i % V, j = s.scratch.solved.index(t, v);
             const float x = __bfloat162float(s.scratch.solved.hi[j]) + __bfloat162float(s.scratch.solved.lo[j]);
