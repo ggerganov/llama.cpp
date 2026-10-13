@@ -273,7 +273,7 @@ static ggml_cuda_gdn_mma_args ggml_cuda_gdn_mma_args_from_tensor(const ggml_tens
         (int64_t) (beta->nb[2] / sizeof(float)),
         (int64_t) (beta->nb[3] / sizeof(float)),
         1.0f / sqrtf((float) S_v),
-        g->ne[0] == 1 && ggml_get_op_params_i32(dst, 0) == 1 && S_v == 128 && q->ne[0] == 128,
+        g->ne[0] == 1 && ggml_get_op_params_i32(dst, 0) < v->ne[2] && S_v == 128 && q->ne[0] == 128,
     };
 }
 
