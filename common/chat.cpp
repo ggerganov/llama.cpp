@@ -1504,7 +1504,12 @@ std::string common_chat_prompt::str() const {
     if (parts.size() == 1) {
         return parts[0].text;
     }
+    size_t len = 0;
+    for (const auto & part : parts) {
+        len += part.text.size();
+    }
     std::string out;
+    out.reserve(len);
     for (const auto & part : parts) {
         out += part.text;
     }
