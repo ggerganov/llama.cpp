@@ -100,6 +100,32 @@ describe('parseModelId', () => {
 		});
 	});
 
+	it('splits a download tag into quant and sidecar', () => {
+		expect(parseModelId('ggml-org/Qwen3.8-27B-GGUF:Q8_0-dflash')).toMatchObject({
+			orgName: 'ggml-org',
+			params: '27B',
+			quantization: 'Q8_0',
+			sidecar: 'dflash'
+		});
+
+		expect(parseModelId('ggml-org/Qwen3.8-27B-GGUF:Q4_K_M-mtp')).toMatchObject({
+			quantization: 'Q4_K_M',
+			sidecar: 'mtp'
+		});
+
+		// a bare sidecar tag is the sidecar alone, with no quant
+		expect(parseModelId('ggml-org/Qwen3.8-27B-GGUF:mmproj')).toMatchObject({
+			quantization: null,
+			sidecar: 'mmproj'
+		});
+
+		// a plain quant tag stays a quant
+		expect(parseModelId('unsloth/DeepSeek-V4-Flash-0731-GGUF:UD-Q2_K_XL')).toMatchObject({
+			quantization: 'UD-Q2_K_XL',
+			sidecar: null
+		});
+	});
+
 	it('strips trailing container format segments from model names', () => {
 		expect(parseModelId('unsloth/DeepSeek-V4-Flash-0731-GGUF:Q2_K_XL')).toStrictEqual({
 			activatedParams: null,

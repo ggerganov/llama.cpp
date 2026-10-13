@@ -109,6 +109,7 @@ export type {
 	ModelDownloadFileProgress,
 	ModelDownloadProgress,
 	ModelLoadProgress,
+	ModelSidecarBadge,
 	ModalityCapabilities
 } from './models';
 

@@ -26,7 +26,6 @@ import { serverStore } from '$lib/stores/server.svelte';
 import type { ModelSidecarBadge, ParsedModelId } from '$lib/types/models';
 import { getConversationModel } from '$lib/utils/conversation-utils';
 import { repoOf } from '$lib/utils/model-names';
-import { isAuxSidecar } from '$lib/utils/sidecars';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';
 
@@ -582,28 +581,7 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 		// sidecar entries mark downloaded sidecar files, not loadable models, and the router
 		// lists them under their own `<repo>:<quant>-<sidecar>` id: pair each draft with its
 		// repo here and drop the entries below
-		const draftSidecarsByRepo = new SvelteMap<string, ModelSidecarBadge[]>();
-
-		for (const { item, parsed } of entries) {
-			if (!parsed.sidecar || isAuxSidecar(parsed.sidecar)) continue;
-
-			const repo = repoOf(item.id);
-			// the entry id's quant is the sidecar file's own quant
-			const badge: ModelSidecarBadge = {
-				kind: parsed.sidecar,
-				quant: parsed.quantization,
-				repo
-			};
-			const kinds = draftSidecarsByRepo.get(repo);
-
-			if (kinds) {
-				if (!kinds.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
-					kinds.push(badge);
-				}
-			} else {
-				draftSidecarsByRepo.set(repo, [badge]);
-			}
-		}
+		const draftSidecarsByRepo = ModelsService.draftSidecarsByRepo(response.data);
 
 		return (
 			entries

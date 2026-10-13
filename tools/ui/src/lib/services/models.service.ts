@@ -9,13 +9,15 @@
 import { base } from '$app/paths';
 import { API_MODELS, MODEL_ID, type ModelSidecar } from '$lib/constants';
 import { ServerModelStatus } from '$lib/enums';
-import type { ParsedModelId } from '$lib/types/models';
+import type { ModelSidecarBadge, ParsedModelId } from '$lib/types/models';
 import {
 	apiDelete,
 	apiFetch,
 	apiPost,
 	extractSseDataPayload,
+	isAuxSidecar,
 	normalizeModelName,
+	repoOf,
 	sidecarFromFileToken,
 	sidecarFromTag,
 	splitSseRecords
@@ -65,6 +67,44 @@ export class ModelsService {
 	}
 
 	/**
+	 * Draft sidecar badges the router listing reports for downloaded sidecar
+	 * files: they appear as sidecar-only entries under their
+	 * `<repo>:<quant>-<sidecar>` id, keyed here by the repo their model
+	 * belongs to.
+	 */
+	static draftSidecarsByRepo(
+		entries: { id: string; status?: { value?: unknown } }[]
+	): Map<string, ModelSidecarBadge[]> {
+		const byRepo = new Map<string, ModelSidecarBadge[]>();
+
+		for (const { id, status } of entries) {
+			// a sidecar still downloading is not on disk yet; the download row tracks it
+			if (status?.value === ServerModelStatus.DOWNLOADING) continue;
+
+			const parsed = this.parseModelId(id);
+
+			if (!parsed.sidecar || isAuxSidecar(parsed.sidecar)) continue;
+
+			const repo = repoOf(id);
+			// the entry id's quant is the sidecar file's own quant
+			const badge: ModelSidecarBadge = {
+				kind: parsed.sidecar,
+				quant: parsed.quantization,
+				repo
+			};
+			const kinds = byRepo.get(repo);
+
+			if (kinds) {
+				if (!kinds.some((b) => b.kind === badge.kind && b.repo === badge.repo)) kinds.push(badge);
+			} else {
+				byRepo.set(repo, [badge]);
+			}
+		}
+
+		return byRepo;
+	}
+
+	/**
 	 * Check if a model is loaded based on its metadata.
 	 *
 	 * @param model - Model data entry from the API response
@@ -74,10 +114,6 @@ export class ModelsService {
 		return model.status.value === ServerModelStatus.LOADED;
 	}
 
-	static isModelLoading(model: ApiModelDataEntry): boolean {
-		return model.status.value === ServerModelStatus.LOADING;
-	}
-
 	/**
 	 *
 	 *
@@ -85,6 +121,10 @@ export class ModelsService {
 	 *
 	 *
 	 */
+
+	static isModelLoading(model: ApiModelDataEntry): boolean {
+		return model.status.value === ServerModelStatus.LOADING;
+	}
 
 	/**
 	 * True when a router entry id marks a downloaded sidecar file, e.g.
@@ -191,8 +231,22 @@ export class ModelsService {
 		let modelPath: string;
 
 		if (colonIdx !== MODEL_ID.NOT_FOUND) {
-			result.quantization = source.slice(colonIdx + 1) || null;
+			const tag = source.slice(colonIdx + 1);
+
 			modelPath = source.slice(0, colonIdx);
+
+			// a download tag carries the sidecar after the quant, e.g.
+			// `repo:Q8_0-dflash`, or a bare sidecar, e.g. `repo:mmproj`
+			const tagSuffix = tag.match(MODEL_ID.SIDECAR_SUFFIX_REGEX);
+
+			if (tagSuffix && MODEL_ID.QUANTIZATION_SEGMENT_REGEX.test(tagSuffix[1])) {
+				result.sidecar = sidecarFromFileToken(tagSuffix[2].toLowerCase());
+				result.quantization = tagSuffix[1];
+			} else if (sidecarFromFileToken(tag.toLowerCase())) {
+				result.sidecar = sidecarFromFileToken(tag.toLowerCase());
+			} else {
+				result.quantization = tag || null;
+			}
 		} else {
 			modelPath = source;
 		}
