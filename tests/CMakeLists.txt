@@ -166,6 +166,18 @@ if (LLAMA_LLGUIDANCE)
     llama_build_and_test(test-grammar-llguidance.cpp ARGS ${PROJECT_SOURCE_DIR}/models/ggml-vocab-llama-bpe.gguf)
 endif ()
 
+# llama_context state tests: KV and recurrent state save, load, copy, rollback
+set(LLAMA_CONTEXT_TEST_SRC
+    test-llama-context.cpp
+    llama-context/cases-kv.cpp
+    llama-context/cases-rs.cpp
+    llama-context/test-case.cpp
+    llama-context/test-log.cpp
+    llama-context/test-runner.cpp
+    llama-context/test-util.cpp
+)
+llama_build(${LLAMA_CONTEXT_TEST_SRC})
+
 if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     # these tests are disabled on Windows because they use internal functions not exported with LLAMA_API (when building with shared libraries)
     llama_build_and_test(test-unicode.cpp LINK llama)
@@ -210,6 +222,8 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
 
     # llama_build_and_test(test-double-float.cpp) # SLOW
 
+    # TODO: after `test-llama-archs` is refactored to not link internal symbols, we can move all related tests out of
+    #       this branch and run them on all platforms
     llama_build(test-llama-archs.cpp)
 
     set(MODEL_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-models/")
@@ -224,20 +238,6 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     set_tests_properties(test-generate-models PROPERTIES
         FIXTURES_SETUP generate-models
     )
-
-    # llama_context state tests: KV and recurrent state save, load, copy, rollback
-    # TODO: after `test-llama-archs` is refactored to not link internal symbols, we can move all this tests out of
-    #       this branch and run them on all platforms
-    set(LLAMA_CONTEXT_TEST_SRC
-        test-llama-context.cpp
-        llama-context/cases-kv.cpp
-        llama-context/cases-rs.cpp
-        llama-context/test-case.cpp
-        llama-context/test-log.cpp
-        llama-context/test-runner.cpp
-        llama-context/test-util.cpp
-    )
-    llama_build(${LLAMA_CONTEXT_TEST_SRC})
 
     # Test context state handling across all architectures, using the generated dummy models
     llama_test(
