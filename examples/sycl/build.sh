@@ -4,18 +4,18 @@
 #  SPDX-License-Identifier: MIT
 
 print_usage() {
-    echo "Usage: ./build.sh [fp32|fp16] [openssl|noopenssl] [--help]"
+    echo "Usage: ./build.sh [fp32|fp16] [ssl|nossl] [--help]"
     echo ""
     echo "Options:"
     echo "  fp32    Build with FP32 precision (default)"
     echo "  fp16    Build with FP16 precision (faster for long-prompt inference)"
-    echo "  openssl   Build with OpenSSL (default)"
-    echo "  noopenssl Build without OpenSSL"
+    echo "  ssl     Build with OpenSSL (default)"
+    echo "  nossl   Build without OpenSSL"
     echo "  --help  Print this help message"
 }
 
 PRECISION=fp32
-OPENSSL=ON
+SSL=ON
 
 for arg in "$@"; do
     case "$arg" in
@@ -26,11 +26,11 @@ for arg in "$@"; do
         fp32|fp16)
             PRECISION="$arg"
             ;;
-        openssl)
-            OPENSSL=ON
+        ssl)
+            SSL=ON
             ;;
-        noopenssl)
-            OPENSSL=OFF
+        nossl)
+            SSL=OFF
             ;;
         *)
             echo "Error: unknown option '$arg'"
@@ -46,13 +46,13 @@ source /opt/intel/oneapi/setvars.sh
 
 if [ "$PRECISION" = "fp16" ]; then
     #for FP16
-    echo "cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON -DLLAMA_OPENSSL=$OPENSSL # faster for long-prompt inference
+    echo "cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON -DLLAMA_OPENSSL=$SSL # faster for long-prompt inference
 "
-    cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON -DLLAMA_OPENSSL="$OPENSSL" # faster for long-prompt inference
+    cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON -DLLAMA_OPENSSL="$SSL" # faster for long-prompt inference
 else
     #for FP32
-    echo "cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_OPENSSL=$OPENSSL"
-    cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_OPENSSL="$OPENSSL"
+    echo "cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_OPENSSL=$SSL"
+    cmake .. -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_OPENSSL="$SSL"
 fi
 
 #build example/main
