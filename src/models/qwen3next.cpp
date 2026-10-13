@@ -296,10 +296,10 @@ ggml_tensor * llama_model_qwen3next::graph::build_layer_attn(
                 Qcur, Kcur, Vcur, nullptr, nullptr, nullptr, kq_scale, il);
     cb(cur, "attn_pregate", il);
 
+    gate = ggml_cont_2d(ctx0, gate, n_embd_head * n_head, n_tokens);
+
     gate = ggml_sigmoid(ctx0, gate);
     cb(gate, "gate_sigmoid", il);
-
-    gate = ggml_cont_2d(ctx0, gate, n_embd_head * n_head, n_tokens);
 
     cur = ggml_mul(ctx0, cur, gate);
     cb(cur, "attn_gated", il);
