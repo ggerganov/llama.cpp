@@ -2360,11 +2360,11 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_MUL_MAT:
         case GGML_OP_MUL_MAT_ID:
         case GGML_OP_OUT_PROD:
+        case GGML_OP_SET_ROWS:
             {
                 n_tasks = n_threads;
             } break;
         case GGML_OP_GET_ROWS:
-        case GGML_OP_SET_ROWS:
             {
                 // FIXME: get_rows can use additional threads, but the cost of launching additional threads
                 // decreases performance with GPU offloading
@@ -2921,9 +2921,8 @@ struct ggml_cplan ggml_graph_plan(
                     } break;
                 case GGML_OP_SET_ROWS:
                     {
-                        // n_tasks is 1, but all threads run set_rows and each one uses its own row
                         if (node->src[0]->type == GGML_TYPE_F16 && node->type != GGML_TYPE_F16) {
-                            cur = ggml_type_size(GGML_TYPE_F32) * node->src[0]->ne[0] * n_threads;
+                            cur = ggml_type_size(GGML_TYPE_F32) * node->src[0]->ne[0] * n_tasks;
                         }
                     } break;
                 case GGML_OP_SOFT_MAX:
