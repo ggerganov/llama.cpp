@@ -5,7 +5,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { HuggingFaceService } from '$lib/services';
 	import { modelsStore } from '$lib/stores';
-	import type { HfModelSibling, ModelDownloadEntryState } from '$lib/types';
+	import type { HfModelSibling, ModelDownloadEntryState, ModelSelectableFile } from '$lib/types';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -13,6 +13,11 @@
 		file: HfModelSibling;
 		/** Download state of the file, from the parent's status feed. */
 		entry: ModelDownloadEntryState;
+		/**
+		 * Draft sidecar that rides along when this main quant downloads; only
+		 * main chips carry one. Evaluated by the parent at click time.
+		 */
+		companion?: ModelSelectableFile & { state: ModelDownloadEntryState };
 		/**
 		 * Ask the parent to confirm deleting a downloaded model. The chip owns no
 		 * dialog; the parent renders the single confirmation and acts on confirm.
@@ -22,7 +27,7 @@
 		onRequestCancel?: (repoWithTag: string) => void;
 	}
 
-	let { entry, file, onRequestCancel, onRequestDelete }: Props = $props();
+	let { companion, entry, file, onRequestCancel, onRequestDelete }: Props = $props();
 
 	// Sidecar kind (mtp, mmproj, ...) tag shown on every chip state; one source so
 	// the idle, in-flight and downloaded variants stay identical.
@@ -35,6 +40,20 @@
 			if (entry.isFailed) await modelsStore.status.cancelDownload(entry.repoWithTag);
 
 			await modelsStore.status.downloadModel(entry.repoWithTag);
+
+			// the quant-matched draft rides along: speculative decoding is a free
+			// speedup once the main lands, and the manual draft chips stay available
+			// for the flavours the auto-pick skips
+			if (
+				companion &&
+				!companion.state.isDownloaded &&
+				!companion.state.isDownloading &&
+				!companion.state.isPaused
+			) {
+				void modelsStore.status.downloadModel(companion.state.repoWithTag).catch(() => {
+					// the store already toasted the failure
+				});
+			}
 		} catch {
 			// the store already toasted the failure
 		}

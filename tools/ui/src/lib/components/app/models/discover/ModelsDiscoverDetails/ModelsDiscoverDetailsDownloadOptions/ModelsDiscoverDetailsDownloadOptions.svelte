@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { classify, labelFor } from './download-options.utils';
+	import { classify, DRAFT_PREFERENCE_ORDER, labelFor } from './download-options.utils';
 	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
 	import ModelsDiscoverDetailsDownloadOptionsRow from './ModelsDiscoverDetailsDownloadOptionsRow.svelte';
 	import { ChevronDown, Terminal } from '@lucide/svelte';
@@ -112,6 +112,39 @@
 		return files;
 	});
 
+	/**
+	 * The draft sidecar that rides along with a main quant download: the
+	 * quant-matched draft of the most preferred kind the repo ships, skipped
+	 * when it is already on disk or already tracked. Undefined for main files
+	 * with no fitting draft.
+	 */
+	function companionDraftFor(
+		file: ModelSelectableFile
+	): (ModelSelectableFile & { state: ModelDownloadEntryState }) | undefined {
+		const quant = HuggingFaceService.extractQuantMeta(file.path)?.quant;
+
+		if (!quant) return undefined;
+
+		const candidates = selectableFiles.filter(
+			(candidate) =>
+				candidate.kind === ModelSelectableFileKind.DRAFT &&
+				HuggingFaceService.extractQuantMeta(candidate.path)?.quant === quant
+		);
+
+		for (const kind of DRAFT_PREFERENCE_ORDER) {
+			const candidate = candidates.find(
+				(c) => HuggingFaceService.extractQuantMeta(c.path)?.sidecar === kind
+			);
+			const tracked =
+				candidate &&
+				(candidate.state.isDownloaded || candidate.state.isDownloading || candidate.state.isPaused);
+
+			if (candidate && !tracked) return candidate;
+		}
+
+		return undefined;
+	}
+
 	/** Rows for the row component: per-bit-depth files with state attached. */
 	let rows = $derived.by(() =>
 		bitDepthRows.map((row) => {
@@ -158,6 +191,7 @@
 			{#each rows as row (row.bitDepth)}
 				<ModelsDiscoverDetailsDownloadOptionsRow
 					bitDepth={row.bitDepth}
+					{companionDraftFor}
 					files={row.files}
 					onRequestCancel={requestCancel}
 					onRequestDelete={requestDelete}
