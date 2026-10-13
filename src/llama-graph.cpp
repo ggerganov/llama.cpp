@@ -1418,11 +1418,19 @@ void llm_graph_result::set_inputs(const llama_ubatch * ubatch) {
 }
 
 void llm_graph_result::set_outputs(const llm_graph_params & params) {
+    // a pooled embeddings context outputs one vector per sequence, so its graph skips the LM head
+    if (params.cparams.embeddings && params.cparams.pooling_type != LLAMA_POOLING_TYPE_NONE) {
+        t_logits = nullptr;
+    }
+
+    // the models declare t_logits without expanding it, so the LM head is computed only when it is expanded here
     if (t_logits != nullptr) {
         ggml_set_output(t_logits);
+        ggml_build_forward_expand(gf, t_logits);
     }
     if (t_embd != nullptr) {
         ggml_set_output(t_embd);
+        ggml_build_forward_expand(gf, t_embd);
     }
     if (t_embd_pooled != nullptr) {
         ggml_set_output(t_embd_pooled);
