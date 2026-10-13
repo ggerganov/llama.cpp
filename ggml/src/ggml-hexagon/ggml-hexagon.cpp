@@ -351,7 +351,7 @@ static inline size_t ggml_hexagon_tiled_row_size(enum ggml_type type, int64_t ne
 }
 
 static inline bool ggml_hexagon_is_hmx_weight_type(enum ggml_type type) {
-    return ggml_hexagon_is_repack_weight_type(type);
+    return ggml_hexagon_is_repack_weight_type(type) && type != GGML_TYPE_BF16;
 }
 
 struct ggml_hexagon_session;
@@ -5846,7 +5846,9 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     }
 
     // Quantized and repacked HMX kernels only handle flat 2D matmul (or matmul_id wrapping flat 2D matmuls).
-    const bool is_repack = ggml_hexagon_is_repack_weight_tensor(src0);
+    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
+    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
+                                 : ggml_hexagon_is_repack_weight_tensor(src0);
     if (!is_matmul_id && is_batched && is_repack) {
         return false;
     }
@@ -5886,7 +5888,10 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     size_t vtcm_budget,
     struct htp_mm_kernel_params * kparams
 ) {
-    const int aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
+    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
+    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
+                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const int aligned_tile_size = is_repack ? htp_mm_get_weight_aligned_tile_size(wtype) : 0;
     const int n_threads = (int)sess->n_threads;
     const int ne10 = act->ne[0];
 
@@ -5913,7 +5918,6 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     bool use_grouped = false;
     int act_threads_selected = 0;
 
-    const bool is_repack = ggml_hexagon_is_repack_weight_tensor(src0);
     if (is_batched_val && wtype == GGML_TYPE_F16 && !is_repack && group_size > 1) {
         // Try grouped path first
         if (htp_mm_hmx_solve_batched_params(wtype, ne00_padded, ne01_padded, m_for_solver, group_size, n_threads, pipeline, src2_size, vtcm_budget, &m_chunk, &n_chunk, &act_threads_selected, &vtcm_size)) {
@@ -5945,7 +5949,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     kparams->n_chunk = n_chunk;
     kparams->n_threads = n_threads;
     kparams->n_act_threads = act_threads_selected;
-    kparams->tile_size = htp_mm_get_weight_tile_size(wtype);
+    kparams->tile_size = is_repack ? htp_mm_get_weight_tile_size(wtype) : 0;
     kparams->aligned_tile_size = aligned_tile_size;
     kparams->act_row_size = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
     kparams->vtcm_size = vtcm_size;
@@ -6145,7 +6149,9 @@ static void ggml_hexagon_precompute_matmul_params_impl(
     const int ne12 = src1->ne[2];
     const int ne13 = src1->ne[3];
 
-    const bool is_repack = ggml_hexagon_is_repack_weight_tensor(src0);
+    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
+    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
+                                 : ggml_hexagon_is_repack_weight_tensor(src0);
     const int wtype = (is_repack && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_repack ? hex_round_up(ne00, 32) : ne00;
     const int ne01_padded = is_repack ? hex_round_up(ne01, 32) : ne01;
@@ -7310,7 +7316,9 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
     const int ne12 = act->ne[2];
     const int ne13 = act->ne[3];
 
-    const bool is_repack = ggml_hexagon_is_repack_weight_tensor(src0);
+    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
+    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
+                                 : ggml_hexagon_is_repack_weight_tensor(src0);
     const int wtype = (is_repack && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_repack ? hex_round_up(ne00, 32) : ne00;
     const int ne01_padded = is_repack ? hex_round_up(ne01, 32) : ne01;
@@ -8838,14 +8846,16 @@ static bool mm_is_hmx_eligible(const ggml_tensor * t) {
     const ggml_tensor * src0 = t->src[0];
     const ggml_tensor * src1 = t->src[1];
 
+    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
+    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
+                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+
     if (ggml_hexagon_matmul_can_collapse(src0, src1, t)) {
         const ggml_tensor src1_c = ggml_hexagon_tensor_collapse_rows(src1);
-        const bool is_repack = ggml_hexagon_is_repack_weight_tensor(src0);
         const int ne01_padded = is_repack ? hex_round_up(src0->ne[1], 32) : src0->ne[1];
         return ggml_hexagon_matmul_is_hmx_eligible(src0, &src1_c, t, ne01_padded, false, false);
     }
 
-    const bool is_repack    = ggml_hexagon_is_repack_weight_tensor(src0);
     const bool is_matmul_id = (t->op == GGML_OP_MUL_MAT_ID);
     const bool is_batched   = (src0->ne[2] * src0->ne[3] > 1 || src1->ne[2] * src1->ne[3] > 1);
 
