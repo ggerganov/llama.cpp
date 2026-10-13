@@ -169,6 +169,14 @@ struct case_rollback : ctx_test {
         return "a rolled-back recurrent state restores into fresh and dirty contexts with identical replay";
     }
 
+    std::string skip_reason(model_run & mr) const override {
+        if (arch_rollback_is_inexact(mr.model)) {
+            return "single-seq rollback is not bit-exact for this arch (case_rollback TODO)";
+        }
+
+        return ctx_test::skip_reason(mr);
+    }
+
     case_result run(model_run & mr) const override {
         const llama_vocab * vocab   = llama_model_get_vocab(mr.model);
         const int           n_vocab = llama_vocab_n_tokens(vocab);

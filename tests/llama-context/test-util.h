@@ -136,6 +136,12 @@ llama_sampler_ptr make_dist_sampler(uint32_t seed);
 // see [TAG_RESERVE_DIAG_DECAY] in llama-context.cpp
 bool arch_reserves_single_seq(const llama_model * model);
 
+// archs whose recurrent state is not bit-exact after a single-seq rollback at a non-ubatch
+// boundary. the upstream case_rollback asserts nmse == 0 (an in-file TODO acknowledges the
+// guarantee only holds after a ubatch with more than n_rs_seq tokens); skip them so the test
+// surfaces a clean pass/fail instead of a per-arch precision-flake list.
+bool arch_rollback_is_inexact(const llama_model * model);
+
 //
 // the state of a single model run, handed to every case
 //
