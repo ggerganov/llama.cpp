@@ -2921,8 +2921,9 @@ struct ggml_cplan ggml_graph_plan(
                     } break;
                 case GGML_OP_SET_ROWS:
                     {
+                        // n_tasks is 1, but all threads run set_rows and each one uses its own row
                         if (node->src[0]->type == GGML_TYPE_F16 && node->type != GGML_TYPE_F16) {
-                            cur = ggml_type_size(GGML_TYPE_F32) * node->src[0]->ne[0] * n_tasks;
+                            cur = ggml_type_size(GGML_TYPE_F32) * node->src[0]->ne[0] * n_threads;
                         }
                     } break;
                 case GGML_OP_SOFT_MAX:
