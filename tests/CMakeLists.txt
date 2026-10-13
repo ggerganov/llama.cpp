@@ -251,10 +251,6 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
         ENVIRONMENT "GGML_SCHED_DEBUG_REALLOC=1"
     )
 
-    # the context state cases against a real model, the sweep above uses the generated dummy ones
-    llama_test(test-llama-context NAME test-llama-context-model LABEL "model" ARGS -m "${MODEL_DEST}")
-    set_tests_properties(test-llama-context-model PROPERTIES FIXTURES_REQUIRED test-download-model)
-
     llama_build(test-fusion.cpp)
 endif()
 
@@ -294,6 +290,10 @@ add_test(NAME test-download-model COMMAND ${CMAKE_COMMAND}
     -P ${PROJECT_SOURCE_DIR}/cmake/download-models.cmake
 )
 set_tests_properties(test-download-model PROPERTIES FIXTURES_SETUP test-download-model)
+
+# the context state cases against a real model, the sweep above uses the generated dummy ones
+llama_test(test-llama-context NAME test-llama-context-model LABEL "model" ARGS -m "${MODEL_DEST}")
+set_tests_properties(test-llama-context-model PROPERTIES FIXTURES_REQUIRED test-download-model)
 
 llama_build_and_test(test-thread-safety.cpp ARGS -m "${MODEL_DEST}" -ngl 99 -p "The meaning of life is" -n 128 -c 256 -ub 32 -np 4 -t 2)
 set_tests_properties(test-thread-safety PROPERTIES FIXTURES_REQUIRED test-download-model)
