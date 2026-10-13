@@ -631,17 +631,40 @@ static void dequantize_tiled_weight_to_fp16_task_q6_k(
         HVX_Vector v_scale_k16 = Q6_V_lo_W(Q6_W_vshuff_VVR(v_sc_k16, v_sc_k16, -2));
 
         #pragma unroll
-        for (int g = 0; g < 8; g++) {
+        for (int g = 0; g < 8; g += 4) {
             const HVX_Vector v_scale = (g < 4) ? v_scale_k0 : v_scale_k16;
 
-            HVX_Vector     v_q   = unpack_q6_k_group(vptr, g, mask_0f, mask_03, i32);
-            HVX_VectorPair vp16  = Q6_Wh_vunpack_Vb(v_q);
-            HVX_VectorPair vp_k  = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16), Q6_V_lo_W(vp16), -4);
+            HVX_Vector v_q0 = unpack_q6_k_group(vptr, g + 0, mask_0f, mask_03, i32);
+            HVX_Vector v_q1 = unpack_q6_k_group(vptr, g + 1, mask_0f, mask_03, i32);
+            HVX_Vector v_q2 = unpack_q6_k_group(vptr, g + 2, mask_0f, mask_03, i32);
+            HVX_Vector v_q3 = unpack_q6_k_group(vptr, g + 3, mask_0f, mask_03, i32);
 
-            hvx_vmem(dst_ptr + (2 * g + 0) * 64) =
-                Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k)), v_scale));
-            hvx_vmem(dst_ptr + (2 * g + 1) * 64) =
-                Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k)), v_scale));
+            HVX_VectorPair vp16_0 = Q6_Wh_vunpack_Vb(v_q0);
+            HVX_VectorPair vp16_1 = Q6_Wh_vunpack_Vb(v_q1);
+            HVX_VectorPair vp16_2 = Q6_Wh_vunpack_Vb(v_q2);
+            HVX_VectorPair vp16_3 = Q6_Wh_vunpack_Vb(v_q3);
+            HVX_VectorPair vp_k0  = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16_0), Q6_V_lo_W(vp16_0), -4);
+            HVX_VectorPair vp_k1  = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16_1), Q6_V_lo_W(vp16_1), -4);
+            HVX_VectorPair vp_k2  = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16_2), Q6_V_lo_W(vp16_2), -4);
+            HVX_VectorPair vp_k3  = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16_3), Q6_V_lo_W(vp16_3), -4);
+
+            HVX_Vector v_out00 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k0)), v_scale));
+            HVX_Vector v_out01 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k0)), v_scale));
+            HVX_Vector v_out10 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k1)), v_scale));
+            HVX_Vector v_out11 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k1)), v_scale));
+            HVX_Vector v_out20 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k2)), v_scale));
+            HVX_Vector v_out21 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k2)), v_scale));
+            HVX_Vector v_out30 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k3)), v_scale));
+            HVX_Vector v_out31 = Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k3)), v_scale));
+
+            hvx_vmem(dst_ptr + (2 * g + 0) * 64) = v_out00;
+            hvx_vmem(dst_ptr + (2 * g + 1) * 64) = v_out01;
+            hvx_vmem(dst_ptr + (2 * g + 2) * 64) = v_out10;
+            hvx_vmem(dst_ptr + (2 * g + 3) * 64) = v_out11;
+            hvx_vmem(dst_ptr + (2 * g + 4) * 64) = v_out20;
+            hvx_vmem(dst_ptr + (2 * g + 5) * 64) = v_out21;
+            hvx_vmem(dst_ptr + (2 * g + 6) * 64) = v_out30;
+            hvx_vmem(dst_ptr + (2 * g + 7) * 64) = v_out31;
         }
     }
 }
@@ -678,20 +701,29 @@ static void dequantize_tiled_weight_to_fp16_task_q3_k(
     }
 }
 
-// Q2_K stores 2-bit weights and one fp16 scale and offset per 16 k, see HTP_MM_WEIGHT_TILE_SIZE_Q2_K.
+// Q2_K stores 2-bit weights, the ggml scale bytes and d / -dmin per super-block, see HTP_MM_WEIGHT_TILE_SIZE_Q2_K.
 static void dequantize_tiled_weight_to_fp16_task_q2_k(
         const tiled_dequantize_state_t *state,
         uint32_t start_tile, uint32_t end_tile) {
 
     const HVX_Vector mask_03 = Q6_Vb_vsplat_R(0x03);
 
+    HVX_Vector v_d = Q6_V_vzero();
+    HVX_Vector v_dm = Q6_V_vzero();
+
     for (uint32_t t = start_tile; t < end_tile; t++) {
-        const HVX_Vector * vptr = (const HVX_Vector *) (state->src + t * state->aligned_tile_size);
+        const uint8_t * tile = state->src + t * state->aligned_tile_size;
+        const HVX_Vector * vptr = (const HVX_Vector *) tile;
         __fp16 * dst_ptr = state->dst + t * HTP_MM_HMX_TILE_N_ELMS;
 
-        HVX_Vector v_sc       = vptr[2];
+        // rows hold all k tiles and n_k_tiles is a multiple of 8, so t % 8 is the tile within its super-block
+        if (t == start_tile || (t & 7) == 0) {
+            q2_k_load_dmin(tile - (t & 7) * state->aligned_tile_size, &v_d, &v_dm);
+        }
+
+        HVX_Vector v_sc, v_m;
+        q2_k_unpack_scales(tile, v_d, v_dm, &v_sc, &v_m);
         HVX_Vector v_sc_k16   = Q6_V_vror_VR(v_sc, 64);
-        HVX_Vector v_m        = vptr[3];
         HVX_Vector v_m_k16    = Q6_V_vror_VR(v_m, 64);
         HVX_Vector v_scale_k0   = Q6_V_lo_W(Q6_W_vshuff_VVR(v_sc, v_sc, -2));
         HVX_Vector v_scale_k16  = Q6_V_lo_W(Q6_W_vshuff_VVR(v_sc_k16, v_sc_k16, -2));
