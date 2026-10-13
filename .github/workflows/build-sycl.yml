@@ -79,6 +79,18 @@ jobs:
           wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/libze-dev_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O libze-dev.deb
           sudo apt-get install -y ./libze1.deb ./libze-dev.deb
 
+      - name: Download UI build
+        uses: actions/download-artifact@v8
+        with:
+          name: llama-ui.zip
+          path: tools/ui/dist
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+
       - name: ccache
         uses: ggml-org/ccache-action@v1.2.24
         with:
@@ -104,7 +116,7 @@ jobs:
             -DGGML_SYCL=ON \
             -DCMAKE_C_COMPILER=icx \
             -DCMAKE_CXX_COMPILER=icpx \
-            -DLLAMA_OPENSSL=OFF \
+            -DLLAMA_OPENSSL=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_SYCL_F16=${{ matrix.fp16 }} \
             -DGGML_SYCL_SUPPORT_LEVEL_ZERO_API=ON \

@@ -3,23 +3,59 @@
 ::  Copyright (C) 2024 Intel Corporation
 ::  SPDX-License-Identifier: MIT
 
-IF /I "%1"=="--help" (
-    echo Usage: win-build-sycl.bat [fp32^|fp16] [--help]
-    echo.
-    echo Options:
-    echo   fp32    Build with FP32 precision ^(default^)
-    echo   fp16    Build with FP16 precision ^(faster for long-prompt inference^)
-    echo   --help  Print this help message
-    exit /B 0
-)
+SET "PRECISION=fp32"
+SET "OPENSSL=ON"
 
-SET PRECISION=%1
-IF "%PRECISION%"=="" SET PRECISION=fp32
-IF /I NOT "%PRECISION%"=="fp32" IF /I NOT "%PRECISION%"=="fp16" (
-    echo Error: invalid value '%PRECISION%'. Use 'fp32' or 'fp16'.
-    echo Usage: win-build-sycl.bat [fp32^|fp16] [--help]
-    exit /B 1
-)
+:PARSE_ARGS
+IF "%~1"=="" GOTO ARGS_DONE
+IF /I "%~1"=="--help" GOTO HELP
+IF /I "%~1"=="fp32" GOTO ARG_FP32
+IF /I "%~1"=="fp16" GOTO ARG_FP16
+IF /I "%~1"=="openssl" GOTO ARG_OPENSSL
+IF /I "%~1"=="noopenssl" GOTO ARG_NOOPENSSL
+GOTO INVALID_ARG
+
+:ARG_FP32
+SET "PRECISION=fp32"
+GOTO NEXT_ARG
+
+:ARG_FP16
+SET "PRECISION=fp16"
+GOTO NEXT_ARG
+
+:ARG_OPENSSL
+SET "OPENSSL=ON"
+GOTO NEXT_ARG
+
+:ARG_NOOPENSSL
+SET "OPENSSL=OFF"
+GOTO NEXT_ARG
+
+:NEXT_ARG
+SHIFT
+GOTO PARSE_ARGS
+
+:HELP
+SET "ARG_ERROR=0"
+GOTO PRINT_USAGE
+
+:INVALID_ARG
+SET "ARG_ERROR=1"
+echo Error: unknown option '%~1'
+
+:PRINT_USAGE
+echo Usage: win-build-sycl.bat [fp32^|fp16] [openssl^|noopenssl] [--help]
+echo.
+echo Options:
+echo   fp32      Build with FP32 precision ^(default^)
+echo   fp16      Build with FP16 precision ^(faster for long-prompt inference^)
+echo   openssl   Build with OpenSSL ^(default^)
+echo   noopenssl Build without OpenSSL
+echo   --help    Print this help message
+IF "%ARG_ERROR%"=="1" exit /B 1
+exit /B 0
+
+:ARGS_DONE
 
 IF not exist build (mkdir build)
 cd build
@@ -31,10 +67,10 @@ if %errorlevel% neq 0 goto ERROR
 IF /I "%PRECISION%"=="fp16" (
     ::  for FP16
     ::  faster for long-prompt inference
-    cmake -G "MinGW Makefiles" .. -DLLAMA_OPENSSL=OFF -DGGML_SYCL=ON -DCMAKE_CXX_COMPILER=icx -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DGGML_SYCL_F16=ON
+    cmake -G "MinGW Makefiles" .. -DLLAMA_OPENSSL=%OPENSSL% -DGGML_SYCL=ON -DCMAKE_CXX_COMPILER=icx -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DGGML_SYCL_F16=ON
 ) ELSE (
     ::  for FP32
-    cmake -G "Ninja" .. -DLLAMA_OPENSSL=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=icx -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+    cmake -G "Ninja" .. -DLLAMA_OPENSSL=%OPENSSL% -DGGML_SYCL=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=icx -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
 )
 if %errorlevel% neq 0 goto ERROR
 
