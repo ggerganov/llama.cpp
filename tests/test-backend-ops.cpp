@@ -1293,6 +1293,9 @@ struct test_case {
     virtual std::vector<ggml_tensor *> fusion_test_nodes() { return {}; }
     virtual bool use_weight_context() { return false; }
 
+    // restrict a test to specific backends (checked against the backend under test, not the CPU reference)
+    virtual bool supports_backend(ggml_backend_t backend) { GGML_UNUSED(backend); return true; }
+
     ggml_cgraph * gf = nullptr;
     ggml_cgraph * gb = nullptr;
 
@@ -1415,6 +1418,10 @@ struct test_case {
         // check if the backends support the ops
         bool supported = true;
         std::string unsupported_str;
+        if (!supports_backend(backend1)) {
+            supported = false;
+            unsupported_str = ggml_backend_name(backend1);
+        }
         for (ggml_backend_t backend : {backend1, backend2}) {
             for (ggml_tensor * t = ggml_get_first_tensor(ctx.get()); t != NULL; t = ggml_get_next_tensor(ctx.get(), t)) {
                 if (!ggml_backend_supports_op(backend, t)) {
@@ -1593,7 +1600,7 @@ struct test_case {
             return true;
         }
 
-        if (!ggml_backend_supports_op(backend, out)) {
+        if (!supports_backend(backend) || !ggml_backend_supports_op(backend, out)) {
             // Create test result for unsupported performance test
             test_result result(ggml_backend_name(backend), current_op_name, vars(), "perf", false, false,
                                "not supported");
@@ -1741,7 +1748,7 @@ struct test_case {
             return true;
         }
 
-        bool supported = ggml_backend_supports_op(backend, out);
+        bool supported = supports_backend(backend) && ggml_backend_supports_op(backend, out);
 
         std::string device_desc = ggml_backend_dev_description(ggml_backend_get_device(backend));
         std::string backend_reg_name = ggml_backend_reg_name(ggml_backend_dev_backend_reg(ggml_backend_get_device(backend)));
@@ -5531,6 +5538,10 @@ struct test_mul_mat_id : public test_case {
 struct test_mul_mat_id_dup : public test_mul_mat_id {
     using test_mul_mat_id::test_mul_mat_id;
     std::string vars() override { return test_mul_mat_id::vars() + ",dup=1"; }
+    bool supports_backend(ggml_backend_t backend) override {
+        ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend));
+        return strncmp(ggml_backend_reg_name(reg), "Vulkan", 6) == 0;
+    }
     void initialize_tensors(ggml_context * ctx) override {
         std::default_random_engine rng(1234);
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
