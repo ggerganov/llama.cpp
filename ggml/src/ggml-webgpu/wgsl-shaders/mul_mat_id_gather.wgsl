@@ -16,12 +16,10 @@ struct MulMatIdGatherParams {
 
 @group(0) @binding(3) var<uniform> params: MulMatIdGatherParams;
 
-// per expert: the slot count after the counting loop, replaced by the first slot of the expert in
-// ids_slot_pos by the prefix sum, and advanced as the write cursor of the expert in the store loop
+// per expert: the slot count, replaced by the first slot of the expert in ids_slot_pos by the prefix sum, then advanced as its write cursor
 var<workgroup> ids_count: array<atomic<u32>, N_EXPERT>;
 
-// launched as a single workgroup, the threads process the (token, slot) elements of ids in parallel,
-// each taking every WG_SIZE-th slot
+// launched as a single workgroup, where the threads process the elements of ids in parallel with atomics
 @compute @workgroup_size(WG_SIZE)
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
 
@@ -44,8 +42,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
 
     workgroupBarrier();
 
-    // exclusive prefix sum over the counts, which replaces each count by the first slot of the
-    // expert in ids_slot_pos, and emit the tile descriptors of mul_mat_id.wgsl
+    // exclusive prefix sum over the counts, and emit one tile descriptor per `TILE_N_SLOTS` slots of each expert
     if (thread_id == 0u) {
         var base: u32 = 0;
         var tile: u32 = 0;
