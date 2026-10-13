@@ -736,7 +736,6 @@ llama_model_qwen3next::graph_mtp::graph_mtp(const llama_model & model, const llm
             ggml_element_size(Qcur_full) * n_embd_head);
 
     gate = ggml_cont_2d(ctx0, gate, n_embd_head * n_head, n_tokens);
-    
     cb(gate, "mtp_gate", il);
 
     cur = ggml_mul(ctx0, cur, ggml_sigmoid(ctx0, gate));
