@@ -4,8 +4,8 @@
 	import ModelsManager from '$lib/components/app/models/ModelsManager/ModelsManager.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { MODEL_ICON } from '$lib/constants';
-	import { uiStore } from '$lib/stores';
+	import { MODEL_ICON, SETTINGS_KEYS } from '$lib/constants';
+	import { modelsStore, settingsStore, uiStore } from '$lib/stores';
 	import { untrack } from 'svelte';
 
 	interface Props {
@@ -25,6 +25,13 @@
 	let view = $state<View>('manage');
 	let shownView = $state<View>('manage');
 	let isSwapping = $state(false);
+	/** Set while an entry opens the dialog on an explicit view, so the open reset keeps hands off. */
+	let viewRequested = false;
+
+	// the discover view exists only while its setting is on
+	let discoverEnabled = $derived(
+		settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS) !== false
+	);
 
 	$effect(() => {
 		const next = view;
@@ -58,9 +65,38 @@
 
 		untrack(() => {
 			uiStore.discoverModelsOpen = false;
-			view = 'discover';
+			view = discoverEnabled ? 'discover' : 'manage';
+
+			// the dialog may already be open, so no open transition will follow
+			if (open) return;
+
+			viewRequested = true;
 			handleOpenChange(true);
 		});
+	});
+
+	// opening always lands on the manager, unless an entry requested the discover view
+	$effect(() => {
+		if (!open) return;
+
+		untrack(() => {
+			if (viewRequested) {
+				viewRequested = false;
+			} else {
+				view = 'manage';
+			}
+
+			// sync point: the table opens on cached state and corrects itself when
+			// the list fetch lands; a no-op outside router mode
+			void modelsStore.fetchRouterModels();
+		});
+	});
+
+	// the discover view disappears with its setting; fall back to the manager
+	$effect(() => {
+		if (!discoverEnabled && view === 'discover') {
+			untrack(() => (view = 'manage'));
+		}
 	});
 
 	function handleOpenChange(value: boolean) {
@@ -128,19 +164,21 @@
 			{#if shownView === 'manage'}
 				<ModelsManager class="h-full">
 					{#snippet toolbarEnd()}
-						<Button
-							class="gap-1.5"
-							onclick={() => (view = 'discover')}
-							size="sm"
-							variant="tertiary"
-						>
-							<Compass class="h-3.5 w-3.5" />
+						{#if discoverEnabled}
+							<Button
+								class="gap-1.5"
+								onclick={() => (view = 'discover')}
+								size="sm"
+								variant="tertiary"
+							>
+								<Compass class="h-3.5 w-3.5" />
 
-							Discover Models
-						</Button>
+								Discover Models
+							</Button>
+						{/if}
 					{/snippet}
 				</ModelsManager>
-			{:else}
+			{:else if shownView === 'discover'}
 				<div class="grid h-full overflow-hidden" style="grid-template-columns: auto 1fr;">
 					<ModelsDiscover />
 				</div>
