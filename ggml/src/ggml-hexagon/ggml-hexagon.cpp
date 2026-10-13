@@ -86,6 +86,8 @@ using u32vec  = std::vector<uint32_t>;
 
 #define GGML_HEXAGON_FENCE_SLOT_SIZE       128
 
+#define GGML_HEXAGON_GUARD_SIZE            4096 // guard page after the data of each shared buffer
+
 struct ggml_hexagon_device_config {
     int         physical_idx = 0;
     int         virtual_idx  = 0;
@@ -758,8 +760,8 @@ struct ggml_hexagon_shared_buffer {
         this->extended = false;
 
         // Size adjustment inside the buffer class: 4K aligned data size + 4K guard page
-        size_t guard_offset = (size + 4095) & ~4095;
-        size_t total_size   = guard_offset + 4096;
+        size_t guard_offset = GGML_PAD(size, GGML_HEXAGON_GUARD_SIZE);
+        size_t total_size   = guard_offset + GGML_HEXAGON_GUARD_SIZE;
         if (!pinned && opt_dma64) {
             constexpr size_t extended_align = 2 * 1024 * 1024;
             total_size = (total_size + extended_align - 1) & ~(extended_align - 1);
@@ -2838,10 +2840,10 @@ static size_t parse_size(const char * str, size_t default_unit = 1024 * 1024) {
     return (size_t) (val * default_unit);
 }
 
-// the IOMMU maps a buffer in a slot aligned to the next power of two of its size: keep the 4 KiB guard page of
-// ggml_hexagon_shared_buffer inside the limit, a full chunk of limit + 4 KiB would take a slot twice as large
+// the IOMMU maps a buffer in a slot aligned to the next power of two of its size: keep the guard page of
+// ggml_hexagon_shared_buffer inside the limit, a full chunk of limit + guard would take a slot twice as large
 static size_t ggml_hexagon_chunk_limit(size_t limit) {
-    return limit > 4096 ? limit - 4096 : limit;
+    return limit > GGML_HEXAGON_GUARD_SIZE ? limit - GGML_HEXAGON_GUARD_SIZE : limit;
 }
 
 static size_t ggml_backend_hexagon_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
