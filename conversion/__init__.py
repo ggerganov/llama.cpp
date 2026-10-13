@@ -293,6 +293,7 @@ TEXT_MODEL_MAP: dict[str, str] = {
     "UnlimitedOCRForCausalLM": "deepseek",
     "VLlama3ForCausalLM": "llama",
     "VllmDecision2Model": "vllm_decision2",
+    "VllmDec2Qwen35Model": "vllm_decision2",
     "VoxtralForConditionalGeneration": "llama",
     "WavTokenizerDec": "wavtokenizer",
     "XLMRobertaForSequenceClassification": "bert",

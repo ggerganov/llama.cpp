@@ -4,9 +4,11 @@
 
 #include <cmath>
 
-void llama_model_vllm_decision2::load_arch_hparams(llama_model_loader & ml) {
-    llama_model_qwen3::load_arch_hparams(ml);
+//
+// the head, shared by the backbones
+//
 
+void llama_decision2_head::load_hparams(llama_hparams & hparams, llama_model_loader & ml) const {
     // used by the head
     ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
@@ -14,10 +16,9 @@ void llama_model_vllm_decision2::load_arch_hparams(llama_model_loader & ml) {
     hparams.n_embd_out_impl = 1;
 }
 
-void llama_model_vllm_decision2::load_arch_tensors(llama_model_loader & ml) {
-    llama_model_qwen3::load_arch_tensors(ml);
-
-    LLAMA_LOAD_LOCALS;
+void llama_decision2_head::load_tensors(llama_model_base & model, llama_model_loader & ml) {
+    const LLM_TN tn(model.arch);
+    const int64_t n_embd = model.hparams.n_embd;
 
     const auto * w_key = ml.get_weight(tn(LLM_TENSOR_DECISION_KEY, "weight").str().c_str());
     if (w_key == nullptr) {
@@ -25,21 +26,17 @@ void llama_model_vllm_decision2::load_arch_tensors(llama_model_loader & ml) {
     }
     const int64_t n_embd_h = w_key->tensor->ne[1];
 
-    option_norm   = create_tensor(tn(LLM_TENSOR_DECISION_OPTION_NORM, "weight"), {n_embd}, 0);
-    option_norm_b = create_tensor(tn(LLM_TENSOR_DECISION_OPTION_NORM, "bias"),   {n_embd}, 0);
-    query_norm    = create_tensor(tn(LLM_TENSOR_DECISION_QUERY_NORM,  "weight"), {n_embd}, 0);
-    query_norm_b  = create_tensor(tn(LLM_TENSOR_DECISION_QUERY_NORM,  "bias"),   {n_embd}, 0);
+    option_norm   = model.create_tensor(tn(LLM_TENSOR_DECISION_OPTION_NORM, "weight"), {n_embd}, 0);
+    option_norm_b = model.create_tensor(tn(LLM_TENSOR_DECISION_OPTION_NORM, "bias"),   {n_embd}, 0);
+    query_norm    = model.create_tensor(tn(LLM_TENSOR_DECISION_QUERY_NORM,  "weight"), {n_embd}, 0);
+    query_norm_b  = model.create_tensor(tn(LLM_TENSOR_DECISION_QUERY_NORM,  "bias"),   {n_embd}, 0);
 
-    key          = create_tensor(tn(LLM_TENSOR_DECISION_KEY,        "weight"), {n_embd, n_embd_h}, 0);
-    query        = create_tensor(tn(LLM_TENSOR_DECISION_QUERY,      "weight"), {n_embd, n_embd_h}, 0);
-    option_mlp   = create_tensor(tn(LLM_TENSOR_DECISION_OPTION_MLP, "weight"), {n_embd, n_embd_h}, 0);
-    option_mlp_b = create_tensor(tn(LLM_TENSOR_DECISION_OPTION_MLP, "bias"),   {n_embd_h}, 0);
-    query_mlp    = create_tensor(tn(LLM_TENSOR_DECISION_QUERY_MLP,  "weight"), {n_embd, n_embd_h}, 0);
-    scorer_out   = create_tensor(tn(LLM_TENSOR_DECISION_SCORER_OUT, "weight"), {n_embd_h, 1}, 0);
-}
-
-std::unique_ptr<llm_graph_context> llama_model_vllm_decision2::build_arch_graph(const llm_graph_params & params) const {
-    return std::make_unique<graph>(*this, params);
+    key          = model.create_tensor(tn(LLM_TENSOR_DECISION_KEY,        "weight"), {n_embd, n_embd_h}, 0);
+    query        = model.create_tensor(tn(LLM_TENSOR_DECISION_QUERY,      "weight"), {n_embd, n_embd_h}, 0);
+    option_mlp   = model.create_tensor(tn(LLM_TENSOR_DECISION_OPTION_MLP, "weight"), {n_embd, n_embd_h}, 0);
+    option_mlp_b = model.create_tensor(tn(LLM_TENSOR_DECISION_OPTION_MLP, "bias"),   {n_embd_h}, 0);
+    query_mlp    = model.create_tensor(tn(LLM_TENSOR_DECISION_QUERY_MLP,  "weight"), {n_embd, n_embd_h}, 0);
+    scorer_out   = model.create_tensor(tn(LLM_TENSOR_DECISION_SCORER_OUT, "weight"), {n_embd_h, 1}, 0);
 }
 
 // output rows read by the head: the last token of each option span and the last token of the question span
@@ -99,9 +96,9 @@ static decision2_rows decision2_get_rows(const llama_ubatch & ubatch) {
     return res;
 }
 
-class llama_model_vllm_decision2::input_decision : public llm_graph_input_i {
+class llama_decision2_head::input : public llm_graph_input_i {
 public:
-    input_decision(const llama_ubatch & ubatch) : n_options(decision2_get_rows(ubatch).options.size()) {}
+    input(const llama_ubatch & ubatch) : n_options(decision2_get_rows(ubatch).options.size()) {}
 
     void set_input(const llama_ubatch * ubatch) override {
         const auto rows = decision2_get_rows(*ubatch);
@@ -127,28 +124,13 @@ public:
     const size_t n_options;
 };
 
-llama_model_vllm_decision2::graph::graph(const llama_model & model_base, const llm_graph_params & params) :
-    llama_model_qwen3::graph(params, no_build()), model(static_cast<const llama_model_vllm_decision2 &>(model_base)) {
-    auto inp_decision_ptr = std::make_unique<input_decision>(ubatch);
-    auto * inp_decision   = inp_decision_ptr.get();
-    res->add_input(std::move(inp_decision_ptr));
+void llama_decision2_head::build(llm_graph_context & gc, ggml_tensor * hidden) const {
+    ggml_context * ctx0 = gc.ctx0;
 
-    ggml_tensor * cur = build_backbone(model);
+    auto inp_ptr = std::make_unique<input>(gc.ubatch);
+    auto * inp   = inp_ptr.get();
+    gc.res->add_input(std::move(inp_ptr));
 
-    // the head is always evaluated, so that the graph has the same nodes for every batch
-    cur = build_head(cur, inp_decision);
-
-    // row i of the output is the score of option i
-    cur = ggml_pad(ctx0, cur, 0, n_outputs - cur->ne[1], 0, 0);
-    cur = ggml_add(ctx0, cur, inp_decision->status);
-    cb(cur, "result_decision", -1);
-
-    res->t_embd = cur;
-
-    ggml_build_forward_expand(gf, cur);
-}
-
-ggml_tensor * llama_model_vllm_decision2::graph::build_head(ggml_tensor * hidden, input_decision * inp) {
     inp->options = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, inp->n_options);
     inp->query   = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 1);
     inp->status  = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
@@ -156,24 +138,79 @@ ggml_tensor * llama_model_vllm_decision2::graph::build_head(ggml_tensor * hidden
         ggml_set_input(t);
     }
 
-    ggml_tensor * options = ggml_get_rows(ctx0, hidden, inp->options); // [n_embd, n_options]
-    ggml_tensor * query   = ggml_get_rows(ctx0, hidden, inp->query);   // [n_embd, 1]
+    // the head is always evaluated, so that the graph has the same nodes for every batch
+    ggml_tensor * h_options = ggml_get_rows(ctx0, hidden, inp->options); // [n_embd, n_options]
+    ggml_tensor * h_query   = ggml_get_rows(ctx0, hidden, inp->query);   // [n_embd, 1]
 
-    options = build_norm(options, model.option_norm, model.option_norm_b, LLM_NORM, -1);
-    query   = build_norm(query,   model.query_norm,  model.query_norm_b,  LLM_NORM, -1);
+    h_options = gc.build_norm(h_options, option_norm, option_norm_b, LLM_NORM, -1);
+    h_query   = gc.build_norm(h_query,   query_norm,  query_norm_b,  LLM_NORM, -1);
 
     // scaled dot product of the option key and the query
-    ggml_tensor * k = ggml_mul_mat(ctx0, model.key,   options); // [n_embd_h, n_options]
-    ggml_tensor * q = ggml_mul_mat(ctx0, model.query, query);   // [n_embd_h, 1]
+    ggml_tensor * k = ggml_mul_mat(ctx0, key,   h_options); // [n_embd_h, n_options]
+    ggml_tensor * q = ggml_mul_mat(ctx0, query, h_query);   // [n_embd_h, 1]
     ggml_tensor * bilinear = ggml_sum_rows(ctx0, ggml_mul(ctx0, k, q));
     bilinear = ggml_scale(ctx0, bilinear, 1.0f / sqrtf((float) k->ne[0])); // [1, n_options]
 
-    ggml_tensor * mlp = ggml_add(ctx0, ggml_mul_mat(ctx0, model.option_mlp, options), model.option_mlp_b);
-    mlp = ggml_add(ctx0, mlp, ggml_mul_mat(ctx0, model.query_mlp, query));
+    ggml_tensor * mlp = ggml_add(ctx0, ggml_mul_mat(ctx0, option_mlp, h_options), option_mlp_b);
+    mlp = ggml_add(ctx0, mlp, ggml_mul_mat(ctx0, query_mlp, h_query));
     mlp = ggml_gelu_erf(ctx0, mlp);
-    ggml_tensor * nonlinear = ggml_mul_mat(ctx0, model.scorer_out, mlp); // [1, n_options]
+    ggml_tensor * nonlinear = ggml_mul_mat(ctx0, scorer_out, mlp); // [1, n_options]
 
-    ggml_tensor * scores = ggml_add(ctx0, bilinear, nonlinear);
-    cb(scores, "decision_scores", -1);
-    return scores;
+    ggml_tensor * cur = ggml_add(ctx0, bilinear, nonlinear);
+    gc.cb(cur, "decision_scores", -1);
+
+    // row i of the output is the score of option i
+    cur = ggml_pad(ctx0, cur, 0, gc.n_outputs - cur->ne[1], 0, 0);
+    cur = ggml_add(ctx0, cur, inp->status);
+    gc.cb(cur, "result_decision", -1);
+
+    gc.res->t_embd = cur;
+
+    ggml_build_forward_expand(gc.gf, cur);
+}
+
+//
+// Qwen3 backbone
+//
+
+void llama_model_vllm_decision2::load_arch_hparams(llama_model_loader & ml) {
+    llama_model_qwen3::load_arch_hparams(ml);
+    head.load_hparams(hparams, ml);
+}
+
+void llama_model_vllm_decision2::load_arch_tensors(llama_model_loader & ml) {
+    llama_model_qwen3::load_arch_tensors(ml);
+    head.load_tensors(*this, ml);
+}
+
+std::unique_ptr<llm_graph_context> llama_model_vllm_decision2::build_arch_graph(const llm_graph_params & params) const {
+    return std::make_unique<graph>(*this, params);
+}
+
+llama_model_vllm_decision2::graph::graph(const llama_model & model, const llm_graph_params & params) :
+    llama_model_qwen3::graph(params, no_build()) {
+    static_cast<const llama_model_vllm_decision2 &>(model).head.build(*this, build_backbone(model));
+}
+
+//
+// Qwen3.5 backbone
+//
+
+void llama_model_vllm_dec2_qwen35::load_arch_hparams(llama_model_loader & ml) {
+    llama_model_qwen35::load_arch_hparams(ml);
+    head.load_hparams(hparams, ml);
+}
+
+void llama_model_vllm_dec2_qwen35::load_arch_tensors(llama_model_loader & ml) {
+    llama_model_qwen35::load_arch_tensors(ml);
+    head.load_tensors(*this, ml);
+}
+
+std::unique_ptr<llm_graph_context> llama_model_vllm_dec2_qwen35::build_arch_graph(const llm_graph_params & params) const {
+    return std::make_unique<graph>(*this, params);
+}
+
+llama_model_vllm_dec2_qwen35::graph::graph(const llama_model & model, const llm_graph_params & params) :
+    llama_model_qwen35::graph(model, params, no_build()) {
+    static_cast<const llama_model_vllm_dec2_qwen35 &>(model).head.build(*this, build_backbone(model));
 }
