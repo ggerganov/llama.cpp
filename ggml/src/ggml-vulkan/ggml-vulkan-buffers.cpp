@@ -502,8 +502,7 @@ void ggml_vk_buffer_write_2d(vk_buffer& dst, size_t offset, const void * src, si
     if(dst->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
         GGML_ASSERT(dst->memory_property_flags & vk::MemoryPropertyFlagBits::eHostCoherent);
 
-        static const bool host_barrier = getenv("GGML_VK_DBG_WRITE_HOST_BARRIER") != nullptr;
-        if (host_barrier && dst->device->uma) {
+        if (dst->device->uma) {
             std::lock_guard<std::recursive_mutex> guard(dst->device->mutex);
             vk_context subctx = ggml_vk_create_temporary_context(dst->device->compute_queue->cmd_pool);
             ggml_vk_ctx_begin(dst->device, subctx);
