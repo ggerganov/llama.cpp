@@ -1488,8 +1488,8 @@ static mapping_ranges sub_ranges(const mapping_ranges & a, const mapping_ranges 
     return res;
 }
 
-std::vector<llama_model_loader::mapping_range> llama_model_loader::get_mapping_ranges(int idx, ggml_context * ctx) const {
-    GGML_ASSERT((size_t) idx < mappings.size());
+std::vector<llama_model_loader::mapping_range> llama_model_loader::get_mapping_ranges(uint32_t idx, ggml_context * ctx) const {
+    GGML_ASSERT(idx < mappings.size());
 
     // data of this context, and data of the other contexts that share the same file
     // a weight that is mapped in several contexts (e.g. the token embedding) is not foreign data
@@ -1499,7 +1499,7 @@ std::vector<llama_model_loader::mapping_range> llama_model_loader::get_mapping_r
 
     for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
         const auto * weight = get_weight(ggml_get_name(tensor));
-        if (!weight || weight->idx != (uint32_t) idx) {
+        if (!weight || weight->idx != idx) {
             continue;
         }
         own.insert(weight);
@@ -1513,7 +1513,7 @@ std::vector<llama_model_loader::mapping_range> llama_model_loader::get_mapping_r
 
         for (ggml_tensor * tensor = ggml_get_first_tensor(it.second.get()); tensor; tensor = ggml_get_next_tensor(it.second.get(), tensor)) {
             const auto * weight = get_weight(ggml_get_name(tensor));
-            if (!weight || weight->idx != (uint32_t) idx || own.count(weight)) {
+            if (!weight || weight->idx != idx || own.count(weight)) {
                 continue;
             }
             other.push_back({ weight->offs, weight->offs + ggml_nbytes(tensor) });
@@ -1552,7 +1552,7 @@ const void * llama_model_loader::load_data_range(const llama_tensor_weight & w, 
 
 bool llama_model_loader::load_all_data(
         struct ggml_context * ctx,
-        llama_buf_map & bufs,
+        std::vector<ggml_backend_buffer_t> & bufs,
         llama_mlocks * lmlocks,
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
@@ -1588,7 +1588,7 @@ bool llama_model_loader::load_all_data(
         }
         // When not using mmaped io use async uploads from pinned memory to GPU memory.
         // First determine if the backend supports the necessary features for async uploads.
-        auto * buf = bufs.count(0) ? bufs.at(0) : nullptr;
+        auto * buf = bufs.empty() ? nullptr : bufs[0];
         if (!buf) {
             LLAMA_LOG_DEBUG("%s: no buffer found for async uploads\n", func);
             return nullptr;
@@ -1659,7 +1659,7 @@ bool llama_model_loader::load_all_data(
     if (upload_backend) {
         LLAMA_LOG_DEBUG("%s: using async uploads for device %s, buffer type %s, backend %s\n", __func__,
             ggml_backend_dev_name(ggml_backend_get_device(upload_backend)),
-            ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs.at(0))),
+            ggml_backend_buft_name(ggml_backend_buffer_get_type(bufs[0])),
             ggml_backend_name(upload_backend));
     }
 
@@ -1705,9 +1705,9 @@ bool llama_model_loader::load_all_data(
             // the tensors of a file can be spread across several buffers - find the one containing this tensor's data
             ggml_backend_buffer_t buf_mmap = nullptr;
             for (const auto & buf : bufs) {
-                const uint8_t * base = (const uint8_t *) ggml_backend_buffer_get_base(buf.second);
-                if (base && base <= data && data + n_size <= base + ggml_backend_buffer_get_size(buf.second)) {
-                    buf_mmap = buf.second;
+                const uint8_t * base = (const uint8_t *) ggml_backend_buffer_get_base(buf);
+                if (base && base <= data && data + n_size <= base + ggml_backend_buffer_get_size(buf)) {
+                    buf_mmap = buf;
                     break;
                 }
             }
