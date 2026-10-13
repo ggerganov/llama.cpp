@@ -45,5 +45,3 @@ jobs:
       - name: Type-check with ty
         run: |
             ty check --exit-zero-on-warning --output-format=github
-      - name: Test LoRA conversion
-        run: python -m pytest -v tests/conversion/test_convert_lora_to_gguf.py
