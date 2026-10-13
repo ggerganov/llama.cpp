@@ -14,12 +14,63 @@
 	import { HuggingFaceService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore, uiStore } from '$lib/stores';
 	import type { HfModelDetailInfo, HfModelInfo, HfModelSibling } from '$lib/types';
+	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
 
 	let selectedId = $state<string | null>(null);
 	let searchQuery = $state('');
 	// running and paused downloads both lead the list; a search owns the pane, so the
 	// section steps aside while a query is active
 	let downloadEntries = $derived(modelsStore.status.getDownloadEntries());
+
+	// one item per repo: its live download when one runs, a plain row otherwise,
+	// with the repo's draft sub-lines carried inside the item - the ones on disk
+	// with a check, the ones in flight live
+	type DownloadRow =
+		| {
+				drafts: ModelDownloadEntry[];
+				entry: ModelDownloadEntry;
+				key: string;
+				kind: 'main';
+				sidecars: ModelSidecarBadge[];
+		  }
+		| {
+				drafts: ModelDownloadEntry[];
+				key: string;
+				kind: 'parent';
+				repo: string;
+				sidecars: ModelSidecarBadge[];
+		  };
+
+	let downloadRows = $derived.by(() => {
+		const rows: DownloadRow[] = [];
+
+		for (const cluster of modelsStore.status.getDownloadClusters()) {
+			// sidecars already on disk show as downloaded sub-lines
+			const sidecars = modelsStore.status.getDraftSidecars(cluster.repo);
+
+			if (cluster.mains.length > 0) {
+				rows.push({
+					drafts: cluster.drafts,
+					entry: cluster.mains[0],
+					key: cluster.mains[0].repoWithTag,
+					kind: 'main',
+					sidecars
+				});
+			} else {
+				// the repo's main weights are not downloading; the row anchors the drafts
+				rows.push({
+					drafts: cluster.drafts,
+					key: `parent:${cluster.repo}`,
+					kind: 'parent',
+					repo: cluster.repo,
+					sidecars
+				});
+			}
+		}
+
+		return rows;
+	});
+
 	let isSearching = $derived(searchQuery.trim().length > 0);
 
 	/** Repo id of a download tag, e.g. `org/repo:Q8_0-mtp` reports `org/repo`. */
@@ -197,23 +248,38 @@
 				<Download class="h-3.5 w-3.5 shrink-0" />
 			{/snippet}
 
-			{#each downloadEntries as entry (entry.repoWithTag)}
-				<!-- the row is the list's own, so a download opens the same details pane a
-				     result does; only the state line and the trailing control differ -->
-				{@const repo = repoOf(entry.repoWithTag)}
+			{#each downloadRows as row (row.key)}
+				{#if row.kind === 'main'}
+					{@const repo = repoOf(row.entry.repoWithTag)}
 
-				<ModelsDiscoverListItem
-					active={repo === selectedId}
-					download={{
-						isPaused: entry.isPaused,
-						onRequestCancel: requestCancel,
-						progress: entry.progress,
-						repoWithTag: entry.repoWithTag
-					}}
-					model={recordOf(repo)}
-					onSelect={(id) => (selectedId = id)}
-					showBaseModelAvatar
-				/>
+					<!-- the row is the list's own, so a download opens the same details pane a
+					     result does; only the state line and the trailing control differ -->
+					<ModelsDiscoverListItem
+						active={repo === selectedId}
+						download={{
+							isPaused: row.entry.isPaused,
+							onRequestCancel: requestCancel,
+							progress: row.entry.progress,
+							repoWithTag: row.entry.repoWithTag
+						}}
+						drafts={row.drafts}
+						model={recordOf(repo)}
+						onSelect={(id) => (selectedId = id)}
+						showBaseModelAvatar
+						sidecarBadges={row.sidecars}
+					/>
+				{:else if row.kind === 'parent'}
+					<!-- the repo's main weights are not downloading; the row anchors its draft
+				     sub-lines and reads as the model they belong to -->
+					<ModelsDiscoverListItem
+						active={row.repo === selectedId}
+						drafts={row.drafts}
+						model={recordOf(row.repo)}
+						onSelect={(id) => (selectedId = id)}
+						showBaseModelAvatar
+						sidecarBadges={row.sidecars}
+					/>
+				{/if}
 			{/each}
 		</ModelsSection>
 	{/if}
@@ -265,6 +331,7 @@
 <DialogConfirmDownload
 	action={ModelDownloadConfirmAction.CANCEL}
 	onClose={() => (cancelOpen = false)}
+	onConfirm={() => void modelsStore.status.cancelDownloadWithDrafts(pendingCancel)}
 	open={cancelOpen}
 	repoWithTag={pendingCancel}
 />

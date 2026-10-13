@@ -3,6 +3,7 @@
 	import ModelCapabilities from '../ModelCapabilities.svelte';
 	import ModelContext from '../ModelContext.svelte';
 	import ModelDownloadProgressBar from '../ModelDownloadProgressBar.svelte';
+	import ModelDraftSubline from '../ModelDraftSubline.svelte';
 	import ModelId from '../ModelId.svelte';
 	import ModelsManagerStatusCell from './ModelsManagerStatusCell.svelte';
 	import { modelRowActions } from './row-actions';
@@ -11,21 +12,34 @@
 	import { DropdownMenuActions } from '$lib/components/app';
 	import { MODEL_ROW_GRID_CLASS, MODEL_ROW_TRAILING_CELL_CLASS } from '$lib/constants';
 	import { ModelRowDownloadState } from '$lib/enums';
-	import { deviceStore, modelsStore, uiStore } from '$lib/stores';
-	import type { ModelOption } from '$lib/types/models';
-	import { repoOf } from '$lib/utils';
+	import { ModelsService } from '$lib/services';
+	import { deviceStore, modelsStore } from '$lib/stores';
+	import type { ModelDownloadEntry, ModelOption, ModelSidecarBadge } from '$lib/types/models';
 
 	interface Props {
+		/** Draft downloads hanging off the row, when it stands for a download. */
+		draftEntries?: ModelDownloadEntry[];
 		isFavorite: (option: ModelOption) => boolean;
 		option: ModelOption;
 		onDelete: (option: ModelOption) => void;
 		onSelect: (option: ModelOption) => void;
 		selected: boolean;
+		/** Draft sidecars already on disk, when the row stands for a download. */
+		sidecarBadges?: ModelSidecarBadge[];
 		/** Left padding in px, from the nesting depth. */
 		indent?: number;
 	}
 
-	let { indent = 0, isFavorite, onDelete, onSelect, option, selected }: Props = $props();
+	let {
+		draftEntries,
+		indent = 0,
+		isFavorite,
+		onDelete,
+		onSelect,
+		option,
+		selected,
+		sidecarBadges
+	}: Props = $props();
 
 	let favorite = $derived(isFavorite(option));
 	let isHidden = $derived(modelsStore.isHidden(option.id));
@@ -40,16 +54,8 @@
 				: null
 	);
 
-	/** Repo of the row's model, which is what the Discover details are keyed by. */
-	function openInDiscover(): void {
-		uiStore.openModelsDiscover(repoOf(option.model));
-	}
-
-	// a tracked download has nothing to configure yet, so its row opens the Discover
-	// details, where the sizes, variants and download options live
 	function activate(): void {
-		if (download) openInDiscover();
-		else onSelect(option);
+		onSelect(option);
 	}
 </script>
 
@@ -61,41 +67,72 @@
 		selected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/40'
 	]}
 >
-	<!-- the row holds a load control and an actions menu, so only the model itself is
+	<div class="flex min-w-0 flex-col">
+		<!-- the row holds a load control and an actions menu, so only the model itself is
 	     the button: a button nested in a role="button" row is invalid -->
-	<button
-		aria-pressed={download ? undefined : selected}
-		class="flex min-w-0 cursor-pointer items-center gap-3 text-left max-md:gap-2 max-md:pr-9"
-		onclick={activate}
-		style="padding-left: {indent}px"
-		type="button"
-	>
-		<ModelAvatar {option} size="size-7 md:size-9" />
+		<button
+			aria-pressed={download ? undefined : selected}
+			class="flex min-w-0 cursor-pointer items-center gap-3 text-left max-md:gap-2 max-md:pr-9"
+			onclick={activate}
+			style="padding-left: {indent}px"
+			type="button"
+		>
+			<ModelAvatar {option} size="size-7 md:size-9" />
 
-		<span class="flex min-w-0 items-center gap-1.25">
-			<ModelId
-				aliases={option.aliases}
-				class="min-w-0 flex-1 max-md:text-sm"
-				draftSidecars={option.draftSidecars}
-				hideCapabilities
-				hideModalities
-				modalities={option.modalities}
-				modelId={option.model}
-				tags={option.tags}
-				title={option.model}
-			/>
+			<span class="flex min-w-0 items-center gap-1.25">
+				<ModelId
+					aliases={option.aliases}
+					class="min-w-0 flex-1 max-md:text-sm"
+					draftSidecars={option.draftSidecars}
+					hideCapabilities
+					hideModalities
+					modalities={option.modalities}
+					modelId={option.model}
+					tags={option.tags}
+					title={option.model}
+				/>
 
-			<!-- a phone has no width for the modality icons, the id needs it more -->
-			<ModelCapabilities hideModalities={deviceStore.isMobile} {option} />
+				<!-- a phone has no width for the modality icons, the id needs it more -->
+				<ModelCapabilities hideModalities={deviceStore.isMobile} {option} />
 
-			{#if favorite}
-				<!-- the heart is decorative, the button's text carries the state -->
-				<Heart aria-hidden="true" class="h-3.5 w-3.5 shrink-0 text-rose-500" />
+				{#if favorite}
+					<!-- the heart is decorative, the button's text carries the state -->
+					<Heart aria-hidden="true" class="h-3.5 w-3.5 shrink-0 text-rose-500" />
 
-				<span class="sr-only">favorited</span>
-			{/if}
-		</span>
-	</button>
+					<span class="sr-only">favorited</span>
+				{/if}
+			</span>
+		</button>
+
+		{#if draftEntries?.length || sidecarBadges?.length}
+			<!-- w-fit keeps the trailing state beside the badges instead of floating
+			     to the end of the wide model column -->
+			<div class="flex w-fit flex-col pb-1">
+				{#each draftEntries as draft (draft.repoWithTag)}
+					{@const parsed = ModelsService.parseModelId(draft.repoWithTag)}
+
+					<ModelDraftSubline
+						connectorClass="ml-8"
+						kind={parsed.sidecar ?? ''}
+						percent={draft.progress && draft.progress.totalBytes > 0
+							? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
+							: null}
+						quant={parsed.quantization}
+						state={draft.isPaused ? 'paused' : 'downloading'}
+					/>
+				{/each}
+
+				{#each sidecarBadges ?? [] as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+					<ModelDraftSubline
+						connectorClass="ml-8"
+						kind={badge.kind}
+						quant={badge.quant}
+						state="downloaded"
+					/>
+				{/each}
+			</div>
+		{/if}
+	</div>
 
 	<ModelContext
 		class="justify-self-end max-md:hidden"

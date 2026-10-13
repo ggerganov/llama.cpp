@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ModelDownloadProgressBar from '../../ModelDownloadProgressBar.svelte';
+	import ModelDraftSubline from '../../ModelDraftSubline.svelte';
 	import ModelId from '../../ModelId.svelte';
 	import ModelOrgAvatar from '../../ModelOrgAvatar.svelte';
 	import { Pause, Play, X } from '@lucide/svelte';
@@ -7,10 +8,16 @@
 	import { HF_MMPROJ_FILENAME_TOKEN, HF_MODALITY_PIPELINE_TAGS } from '$lib/constants';
 	import { ModelDraftSidecar } from '$lib/enums';
 	import { HuggingFaceService } from '$lib/services';
+	import { ModelsService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore } from '$lib/stores';
 	import type { ModelsDiscoverSizeRange } from '$lib/stores/models-discover/index.svelte';
 	import type { HfModelInfo } from '$lib/types/huggingface';
-	import type { ModelDownloadProgress, ModelModalities } from '$lib/types/models';
+	import type {
+		ModelDownloadEntry,
+		ModelDownloadProgress,
+		ModelModalities,
+		ModelSidecarBadge
+	} from '$lib/types/models';
 	import { detectThinkingSupport, detectToolUseSupport, isDraftSidecar, orgOf } from '$lib/utils';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -26,12 +33,24 @@
 			/** Ask the list to confirm cancelling; the list owns the single dialog. */
 			onRequestCancel?: (repoWithTag: string) => void;
 		};
+		/** The repo's draft downloads, rendered as sub-lines inside the item. */
+		drafts?: ModelDownloadEntry[];
 		/** Show the original (base) model's org avatar instead of the repo's org. */
 		showBaseModelAvatar?: boolean;
+		/** Draft sidecars already on disk, rendered as checked sub-lines. */
+		sidecarBadges?: ModelSidecarBadge[];
 		onSelect?: (modelId: string) => void;
 	}
 
-	let { active = false, download, model, onSelect, showBaseModelAvatar = false }: Props = $props();
+	let {
+		active = false,
+		download,
+		drafts = [],
+		model,
+		onSelect,
+		showBaseModelAvatar = false,
+		sidecarBadges = []
+	}: Props = $props();
 
 	let percent = $derived(
 		download?.progress && download.progress.totalBytes > 0
@@ -111,78 +130,108 @@
 </script>
 
 <li
-	class="group relative flex items-center gap-0.5 overflow-hidden rounded-lg transition-colors {active
+	class="group relative overflow-hidden rounded-lg transition-colors {active
 		? 'bg-primary/10 hover:bg-primary/15'
 		: 'hover:bg-muted/60'}"
 >
-	<button
-		aria-current={active ? 'page' : undefined}
-		class="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 p-2.5 text-left"
-		onclick={() => onSelect?.(model.id)}
-		type="button"
-	>
-		<ModelOrgAvatar class="mt-1" org={avatarOrg} quantOrg={showBaseModelAvatar ? org : undefined} />
-
-		<span class="min-w-0 flex-1">
-			<ModelId
-				class="min-w-0"
-				{contextLength}
-				{draftKinds}
-				hideOrgName
-				iconsOnNewLine
-				{modalities}
-				modelId={model.id}
-				{sizeRange}
-				{supportsThinking}
-				{supportsToolUse}
-				wrap
+	<div class="flex items-center gap-0.5">
+		<button
+			aria-current={active ? 'page' : undefined}
+			class="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 p-2.5 text-left"
+			onclick={() => onSelect?.(model.id)}
+			type="button"
+		>
+			<ModelOrgAvatar
+				class="mt-1"
+				org={avatarOrg}
+				quantOrg={showBaseModelAvatar ? org : undefined}
 			/>
-		</span>
-	</button>
 
-	{#if download}
-		{@const state = download}
+			<span class="min-w-0 flex-1">
+				<!-- a download row names what is downloading: the tag's quant and sidecar
+			     badges, not the repo's whole sidecar offering -->
+				<ModelId
+					class="min-w-0"
+					{contextLength}
+					draftKinds={download ? undefined : draftKinds}
+					hideOrgName
+					iconsOnNewLine
+					{modalities}
+					modelId={download ? download.repoWithTag : model.id}
+					{sizeRange}
+					{supportsThinking}
+					{supportsToolUse}
+					wrap
+				/>
+			</span>
+		</button>
 
-		<!-- the percent sits on the row's centre line, and the download's controls take
+		{#if download}
+			{@const state = download}
+
+			<!-- the percent sits on the row's centre line, and the download's controls take
 		     its place on hover, the way the table's status column does -->
-		<span class="flex shrink-0 items-center gap-0.5 pr-2.5">
-			<span
-				class="text-xs text-muted-foreground tabular-nums group-hover:hidden [@media(pointer:coarse)]:hidden"
-			>
-				{percent !== null ? `${percent}%` : state.isPaused ? 'Paused' : 'Downloading'}
+			<span class="flex shrink-0 items-center gap-0.5 pr-2.5">
+				<span
+					class="text-xs text-muted-foreground tabular-nums group-hover:hidden [@media(pointer:coarse)]:hidden"
+				>
+					{percent !== null ? `${percent}%` : state.isPaused ? 'Paused' : 'Downloading'}
+				</span>
+
+				<span class="hidden items-center gap-0.5 group-hover:flex [@media(pointer:coarse)]:flex">
+					<ActionIcon
+						icon={state.isPaused ? Play : Pause}
+						iconSize="h-4 w-4"
+						onclick={() => void modelsStore.status.toggleDownloadWithDrafts(state.repoWithTag)}
+						stopPropagationOnClick
+						tooltip={state.isPaused ? 'Resume downloading' : 'Pause downloading'}
+						tooltipAsTitle
+					/>
+
+					<ActionIcon
+						class="text-muted-foreground hover:text-destructive"
+						icon={X}
+						iconSize="h-4 w-4"
+						onclick={() => state.onRequestCancel?.(state.repoWithTag)}
+						stopPropagationOnClick
+						tooltip="Cancel downloading"
+						tooltipAsTitle
+					/>
+				</span>
 			</span>
-
-			<span class="hidden items-center gap-0.5 group-hover:flex [@media(pointer:coarse)]:flex">
-				<ActionIcon
-					icon={state.isPaused ? Play : Pause}
-					iconSize="h-4 w-4"
-					onclick={() =>
-						void (state.isPaused
-							? modelsStore.status.downloadModel(state.repoWithTag)
-							: modelsStore.status.pauseDownload(state.repoWithTag))}
-					stopPropagationOnClick
-					tooltip={state.isPaused ? 'Resume downloading' : 'Pause downloading'}
-					tooltipAsTitle
-				/>
-
-				<ActionIcon
-					class="text-muted-foreground hover:text-destructive"
-					icon={X}
-					iconSize="h-4 w-4"
-					onclick={() => state.onRequestCancel?.(state.repoWithTag)}
-					stopPropagationOnClick
-					tooltip="Cancel downloading"
-					tooltipAsTitle
-				/>
-			</span>
-		</span>
-
-		{#if state.progress && state.progress.totalBytes > 0}
-			<ModelDownloadProgressBar
-				downloadedBytes={state.progress.downloadedBytes}
-				overlay
-				totalBytes={state.progress.totalBytes}
-			/>
 		{/if}
+	</div>
+
+	<div class="flex flex-col px-2.5 pb-1.5">
+		{#each drafts as draft (draft.repoWithTag)}
+			{@const parsed = ModelsService.parseModelId(draft.repoWithTag)}
+
+			<ModelDraftSubline
+				connectorClass="ml-8"
+				kind={parsed.sidecar ?? ''}
+				percent={draft.progress && draft.progress.totalBytes > 0
+					? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
+					: null}
+				quant={parsed.quantization}
+				state={draft.isPaused ? 'paused' : 'downloading'}
+			/>
+		{/each}
+
+		{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+			<ModelDraftSubline
+				connectorClass="ml-8"
+				kind={badge.kind}
+				quant={badge.quant}
+				state="downloaded"
+			/>
+		{/each}
+	</div>
+
+	{#if download?.progress && download.progress.totalBytes > 0}
+		<ModelDownloadProgressBar
+			downloadedBytes={download.progress.downloadedBytes}
+			overlay
+			totalBytes={download.progress.totalBytes}
+		/>
 	{/if}
 </li>

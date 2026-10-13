@@ -1,9 +1,12 @@
 <script lang="ts">
 	import ModelsSelectorDownloadItem from './ModelsSelectorDownloadItem.svelte';
-	import { Heart, Power } from '@lucide/svelte';
+	import { Check, Heart, Power } from '@lucide/svelte';
 	import {
 		GroupedList,
 		ModelAvatar,
+		ModelDraftSubline,
+		ModelId,
+		ModelOrgAvatar,
 		ModelsSection,
 		ModelsSelectorOption
 	} from '$lib/components/app';
@@ -15,13 +18,16 @@
 		SELECTOR_GROUP_STICKY_OFFSET,
 		SETTINGS_KEYS
 	} from '$lib/constants';
-	import { ModelDownloadConfirmAction } from '$lib/enums';
+	import { ModelDownloadConfirmAction, ServerModelStatus } from '$lib/enums';
+	import { ModelsService } from '$lib/services';
 	import { modelsStore, settingsStore } from '$lib/stores';
+	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
 	import {
 		type GroupedModelOptions,
 		groupModelFamilies,
 		type ModelFamilyGroup,
 		type ModelItem,
+		orgOf,
 		windowLocalGroups
 	} from '$lib/utils';
 
@@ -95,6 +101,49 @@
 	let downloadEntries = $derived(
 		modelsStore.status.getDownloadEntries().filter((entry) => !entry.isPaused)
 	);
+
+	// one item per repo: its live download when one runs, the listing state
+	// otherwise, with the repo's draft sub-lines carried inside the item - the
+	// ones on disk with a check, the ones in flight live
+	type DownloadRow =
+		| {
+				drafts: ModelDownloadEntry[];
+				entry: ModelDownloadEntry;
+				kind: 'main';
+				sidecars: ModelSidecarBadge[];
+		  }
+		| {
+				drafts: ModelDownloadEntry[];
+				kind: 'parent';
+				repo: string;
+				sidecars: ModelSidecarBadge[];
+				status: ServerModelStatus | null;
+		  };
+
+	let downloadRows = $derived.by(() => {
+		const rows: DownloadRow[] = [];
+
+		for (const cluster of modelsStore.status.getDownloadClusters()) {
+			const mains = cluster.mains.filter((entry) => !entry.isPaused);
+			const drafts = cluster.drafts.filter((entry) => !entry.isPaused);
+			// sidecars already on disk show as downloaded sub-lines
+			const sidecars = modelsStore.status.getDraftSidecars(cluster.repo);
+
+			if (mains.length > 0) {
+				rows.push({ drafts, entry: mains[0], kind: 'main', sidecars });
+			} else {
+				rows.push({
+					drafts,
+					kind: 'parent',
+					repo: cluster.repo,
+					sidecars,
+					status: modelsStore.status.mainStatus(cluster.repo)
+				});
+			}
+		}
+
+		return rows;
+	});
 
 	// cancel is confirmed once for the whole list, so one dialog serves every row
 	// The target is kept while the dialog closes so its copy stays rendered.
@@ -201,8 +250,56 @@
 {#if downloadEntries.length > 0}
 	<p class={headerClass} style={headerStyle}>Downloading</p>
 
-	{#each downloadEntries as entry (entry.repoWithTag)}
-		<ModelsSelectorDownloadItem {entry} onRequestCancel={requestCancel} {showOrgName} />
+	{#each downloadRows as row (row.kind === 'main' ? row.entry.repoWithTag : `parent:${row.repo}`)}
+		{#if row.kind === 'main'}
+			<ModelsSelectorDownloadItem
+				drafts={row.drafts}
+				entry={row.entry}
+				onRequestCancel={requestCancel}
+				{showOrgName}
+				sidecars={row.sidecars}
+			/>
+		{:else}
+			<!-- no main download runs for the repo; the row anchors its draft sub-lines -->
+			<div class="rounded-sm transition-colors hover:bg-accent/50">
+				<div class="flex items-center gap-2 p-2 text-sm">
+					<ModelOrgAvatar org={orgOf(row.repo)} size="h-6 w-6" />
+
+					<ModelId class="flex-1" hideOrgName={!showOrgName} modelId={row.repo} showRawTooltip />
+
+					{#if row.status === ServerModelStatus.LOADED}
+						<span class="h-2 w-2 shrink-0 rounded-full bg-green-500"></span>
+					{:else if row.status === ServerModelStatus.DOWNLOADED}
+						<Check class="h-4 w-4 shrink-0 text-green-500" />
+					{/if}
+				</div>
+
+				<div class="flex flex-col px-2 pb-1.5">
+					{#each row.drafts as draft (draft.repoWithTag)}
+						{@const parsedDraft = ModelsService.parseModelId(draft.repoWithTag)}
+
+						<ModelDraftSubline
+							connectorClass="ml-4"
+							kind={parsedDraft.sidecar ?? ''}
+							percent={draft.progress && draft.progress.totalBytes > 0
+								? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
+								: null}
+							quant={parsedDraft.quantization}
+							state={draft.isPaused ? 'paused' : 'downloading'}
+						/>
+					{/each}
+
+					{#each row.sidecars as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+						<ModelDraftSubline
+							connectorClass="ml-4"
+							kind={badge.kind}
+							quant={badge.quant}
+							state="downloaded"
+						/>
+					{/each}
+				</div>
+			</div>
+		{/if}
 	{/each}
 {/if}
 
@@ -230,6 +327,7 @@
 <DialogConfirmDownload
 	action={ModelDownloadConfirmAction.CANCEL}
 	onClose={() => (cancelOpen = false)}
+	onConfirm={() => void modelsStore.status.cancelDownloadWithDrafts(pendingCancel)}
 	open={cancelOpen}
 	repoWithTag={pendingCancel}
 />
