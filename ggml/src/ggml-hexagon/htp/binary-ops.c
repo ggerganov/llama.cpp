@@ -236,17 +236,17 @@ DEFINE_COMPUTE_REPEAT(div_f32, float,    hvx_div_f32_uuu)
 DEFINE_COMPUTE_REPEAT(div_f16, _Float16, hvx_div_f16_uuu)
 
 typedef void (*compute_add_id_t)(
-    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_data, const char * src2_data,
-    uint32_t i01, uint32_t i02, uint32_t nb20, uint32_t nb21, uint32_t src1_stride,
+    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_data, const int32_t * src2_ids,
+    uint32_t i01, uint32_t i02, uint32_t ne01, uint32_t src1_stride,
     uint32_t n_rows, size_t dst_stride, size_t src0_stride, uint32_t ne00);
 
 static void compute_add_id_f32(
-    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_data, const char * src2_data,
-    uint32_t i01, uint32_t i02, uint32_t nb20, uint32_t nb21, uint32_t src1_stride,
+    uint8_t * dst, const uint8_t * src0, const uint8_t * src1_data, const int32_t * src2_ids,
+    uint32_t i01, uint32_t i02, uint32_t ne01, uint32_t src1_stride,
     uint32_t n_rows, size_t dst_stride, size_t src0_stride, uint32_t ne00) {
     for (uint32_t r = 0; r < n_rows; r++) {
         uint32_t r_i01 = i01 + r;
-        const int32_t idx = *(const int32_t *)(src2_data + r_i01 * nb20 + i02 * nb21);
+        const int32_t idx = src2_ids[i02 * ne01 + r_i01];
         if (idx < 0) {
             memcpy(dst + r * dst_stride, src0 + r * src0_stride, ne00 * sizeof(float));
             continue;
@@ -730,7 +730,6 @@ static void binary_thread_add_id_f32(unsigned int nth, unsigned int ith, void * 
 
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * src1 = octx->src[1];
-    const struct htp_tensor * src2 = octx->src[2];
     const struct htp_tensor * dst  = octx->dst;
 
     const uint32_t ne00 = src0->ne[0];
@@ -756,6 +755,7 @@ static void binary_thread_add_id_f32(unsigned int nth, unsigned int ith, void * 
     uint8_t * src0_spad_base = VTCM_LAYOUT_PTR(uint8_t, bctx->vtcm_base, layout->off_src0) + (ith * layout->src0_bytes_per_thread);
     uint8_t * dst_spad_base  = VTCM_LAYOUT_PTR(uint8_t, bctx->vtcm_base, layout->off_dst)  + (ith * layout->dst_bytes_per_thread);
     const uint8_t * vtcm_src1 = VTCM_LAYOUT_PTR(const uint8_t, bctx->vtcm_base, layout->off_src1);
+    const int32_t * vtcm_src2 = VTCM_LAYOUT_PTR(const int32_t, bctx->vtcm_base, layout->off_src2);
     size_t src0_spad_half    = layout->src0_spad_half_size;
     size_t dst_spad_half     = layout->dst_spad_half_size;
 
@@ -796,8 +796,8 @@ static void binary_thread_add_id_f32(unsigned int nth, unsigned int ith, void * 
 
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir);
         compute_add_id_t compute = (compute_add_id_t) bctx->compute;
-        compute(d_spad, s0_spad, vtcm_src1, (const char *)(uintptr_t)src2->data,
-                i01, i02, src2->nb[0], src2->nb[1], src1_stride,
+        compute(d_spad, s0_spad, vtcm_src1, vtcm_src2,
+                i01, i02, ne01, src1_stride,
                 current_block_size, bctx->dst_row_size_aligned, bctx->src0_row_size_aligned, ne00);
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir);
 
@@ -1155,9 +1155,7 @@ static int execute_op_binary(struct htp_ops_context * octx) {
                kparams->kernel_type == HTP_BINARY_KERNEL_COMPLEX) {
         if (!kparams->src1_strided) {
             const size_t src1_bytes = (size_t) src1->ne[0] * src1->ne[1] * src1->ne[2] * src1->ne[3] * elem_size;
-            while (!dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, src1_bytes, 1)) {
-                dma_queue_pop(dma_q);
-            }
+            dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data), bctx.vtcm_layout.src1_size, 0, src1_bytes, 1);
         } else {
             const uint32_t ne11 = src1->ne[1];
             const uint32_t ne12 = src1->ne[2];
@@ -1175,9 +1173,15 @@ static int execute_op_binary(struct htp_ops_context * octx) {
             }
         }
     } else if (kparams->kernel_type == HTP_BINARY_KERNEL_ADD_ID) {
+        const struct htp_tensor * src2 = octx->src[2];
+        uint8_t * vtcm_src2 = VTCM_LAYOUT_PTR(uint8_t, bctx.vtcm_base, bctx.vtcm_layout.off_src2);
         dma_queue_push(dma_q, dma_make_data(vtcm_src1, src1->data),
                        kparams->src1_row_size_aligned, src1->nb[1],
                        src1->ne[0] * elem_size, src1->ne[1]);
+        const size_t src2_row_bytes = src2->ne[0] * sizeof(int32_t);
+        dma_queue_push(dma_q, dma_make_data(vtcm_src2, src2->data),
+                       src2_row_bytes, src2->nb[1],
+                       src2_row_bytes, src2->ne[1]);
     }
 
     bctx.octx                  = octx;

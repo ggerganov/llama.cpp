@@ -344,7 +344,8 @@ static bool ggml_hexagon_precompute_binary_params(
     const struct ggml_tensor * src0,
     const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
-    struct htp_binary_kernel_params * kparams
+    struct htp_binary_kernel_params * kparams,
+    const struct ggml_tensor * src2 = nullptr
 );
 
 static void ggml_hexagon_precompute_get_rows_params(
@@ -5864,7 +5865,8 @@ static bool ggml_hexagon_precompute_binary_params(
     const struct ggml_tensor * src0,
     const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
-    struct htp_binary_kernel_params * kparams
+    struct htp_binary_kernel_params * kparams,
+    const struct ggml_tensor * src2
 ) {
     memset(kparams, 0, sizeof(*kparams));
 
@@ -5928,10 +5930,16 @@ static bool ggml_hexagon_precompute_binary_params(
 
     enum htp_binary_kernel_type kernel_type;
     size_t src1_size = 0;
+    size_t src2_size = 0;
 
     if (is_add_id) {
+        GGML_ASSERT(src2 != nullptr);
         kernel_type = HTP_BINARY_KERNEL_ADD_ID;
         src1_size = hex_round_up(src1->ne[1] * src1_row_size_aligned, 128);
+        src2_size = hex_round_up(ggml_nelements(src2) * sizeof(int32_t), 128);
+        if (src1_size + src2_size > sess->vtcm_size) {
+            return false;
+        }
     } else if (is_row_bcast) {
         kernel_type = HTP_BINARY_KERNEL_ROW_BCAST;
         src1_size = src1_row_size_aligned;
@@ -5966,6 +5974,7 @@ static bool ggml_hexagon_precompute_binary_params(
     kparams->src1_row_size_aligned = src1_row_size_aligned;
     kparams->dst_row_size_aligned  = dst_row_size_aligned;
     kparams->src1_size             = src1_size;
+    kparams->src2_size             = src2_size;
 
     const bool src0_contig_dim1 = (src0->nb[2] == src0->ne[1] * src0->nb[1]);
     const bool src1_contig_dim1 = (src1->nb[2] == src1->ne[1] * src1->nb[1]);
@@ -7182,9 +7191,12 @@ static bool ggml_hexagon_supported_add_id(const struct ggml_hexagon_session * se
     if (!ggml_is_contiguous(src0) || !ggml_is_contiguous(src1) || !ggml_is_contiguous(dst)) {
         return false;
     }
+    if (src2->nb[1] < src2->ne[0] * sizeof(int32_t)) {
+        return false;
+    }
 
     struct htp_binary_kernel_params kparams;
-    return ggml_hexagon_precompute_binary_params(sess, HTP_OP_ADD_ID, src0, src1, dst, &kparams);
+    return ggml_hexagon_precompute_binary_params(sess, HTP_OP_ADD_ID, src0, src1, dst, &kparams, src2);
 }
 
 static bool ggml_hexagon_supported_unary(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
@@ -8547,9 +8559,10 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 );
             } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID || node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
                 const ggml_tensor * src1 = node.node->src[1];
+                const ggml_tensor * src2 = (node.opcode == HTP_OP_ADD_ID) ? node.node->src[2] : nullptr;
                 GGML_ASSERT(ggml_hexagon_precompute_binary_params(sess,
                     node.opcode, node.node->src[0], src1, node.node,
-                    (struct htp_binary_kernel_params *) node.kernel_params));
+                    (struct htp_binary_kernel_params *) node.kernel_params, src2));
             } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
                 ggml_hexagon_precompute_flash_attn_params(sess,
                     node.node,
