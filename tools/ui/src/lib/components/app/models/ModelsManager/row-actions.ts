@@ -16,15 +16,15 @@ export function modelRowActions(
 ) {
 	const viewInDiscover = {
 		icon: Compass,
-		label: 'View in Discover',
+		label: 'See in Discover',
 		// the details pane is keyed by repo, not by `<repo>:<quant>`
 		onclick: () => uiStore.openModelsDiscover(repoOf(option.model)),
 		separator: true
 	};
 
 	// a tracked download is paused, resumed or dropped: it is not loaded, hidden or
-	// drafted. Deleting it stops the download and removes what is on disk, which is
-	// what the same wording offers on a cached model
+	// drafted. An in-flight row cancels, which stops the download and removes the
+	// partial files; a paused one deletes, which removes the partials from disk
 	if (download) {
 		const isPaused = download === ModelRowDownloadState.PAUSED;
 
@@ -32,14 +32,11 @@ export function modelRowActions(
 			{
 				icon: isPaused ? MODEL_DOWNLOAD_ICONS.resume : MODEL_DOWNLOAD_ICONS.pause,
 				label: isPaused ? 'Resume downloading' : 'Pause downloading',
-				onclick: () =>
-					void (isPaused
-						? modelsStore.status.downloadModel(option.model)
-						: modelsStore.status.pauseDownload(option.model))
+				onclick: () => void modelsStore.status.toggleDownloadWithDrafts(option.model)
 			},
 			{
 				icon: Trash2,
-				label: 'Delete from disk',
+				label: isPaused ? 'Delete from disk' : 'Cancel download',
 				onclick: () => onDelete(option),
 				separator: true,
 				variant: 'destructive' as const
