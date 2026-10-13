@@ -287,15 +287,15 @@ AEEResult htp_iface_munmap(remote_handle64 handle, uint32 fd) {
 }
 
 static void vtcm_acquire(struct htp_context * ctx) {
-    if (!ctx->vtcm_valid) {
+    if (!atomic_load(&ctx->vtcm_valid)) {
         int err = HAP_compute_res_acquire_cached(ctx->vtcm_rctx, 10000000u);
         if (err != 0) {
             FARF(ERROR, "ggml-hex: failed to acquire VTCM: 0x%08x", (unsigned)err);
             abort();
         }
 
-        ctx->vtcm_needs_release = false;
-        ctx->vtcm_valid = true;
+        atomic_store(&ctx->vtcm_needs_release, false);
+        atomic_store(&ctx->vtcm_valid, true);
 
         // Drop the priority to make sure we get the release callback from other GGML-HTP and QNN-HTP sessions
         HAP_compute_res_update_priority(ctx->vtcm_rctx, ctx->thread_prio + 10);
@@ -303,16 +303,16 @@ static void vtcm_acquire(struct htp_context * ctx) {
 }
 
 static void vtcm_release(struct htp_context * ctx) {
-    if (ctx->vtcm_valid) {
-        ctx->vtcm_valid         = false;
-        ctx->vtcm_needs_release = false;
+    if (atomic_load(&ctx->vtcm_valid)) {
+        atomic_store(&ctx->vtcm_valid, false);
+        atomic_store(&ctx->vtcm_needs_release, false);
         HAP_compute_res_release_cached(ctx->vtcm_rctx);
     }
 }
 
 static int vtcm_release_callback(unsigned int rctx, void * state) {
     struct htp_context * ctx = (struct htp_context *) state;
-    ctx->vtcm_needs_release = true;
+    atomic_store(&ctx->vtcm_needs_release, true);
     return 0;
 }
 
@@ -345,8 +345,8 @@ static int vtcm_alloc(struct htp_context * ctx) {
     ctx->vtcm_base          = (uint8_t *) vtcm_ptr;
     ctx->vtcm_size          = vtcm_size;
     ctx->vtcm_rctx          = rctx;
-    ctx->vtcm_valid         = false;
-    ctx->vtcm_needs_release = false;
+    atomic_store(&ctx->vtcm_valid, false);
+    atomic_store(&ctx->vtcm_needs_release, false);
 
     return 0;
 }
@@ -851,12 +851,15 @@ static int execute_op(struct htp_ops_context * octx) {
         case HTP_OP_UNARY_SIGMOID:
         case HTP_OP_UNARY_SILU:
         case HTP_OP_UNARY_GELU:
+        case HTP_OP_UNARY_GELU_QUICK:
+        case HTP_OP_UNARY_GELU_ERF:
         case HTP_OP_UNARY_NEG:
         case HTP_OP_UNARY_EXP:
         case HTP_OP_UNARY_TANH:
         case HTP_OP_UNARY_ABS:
         case HTP_OP_UNARY_LOG:
         case HTP_OP_UNARY_RELU:
+        case HTP_OP_UNARY_STEP:
         case HTP_OP_L2_NORM:
             return op_unary(octx);
 
@@ -865,6 +868,7 @@ static int execute_op(struct htp_ops_context * octx) {
         case HTP_OP_GLU_SWIGLU_CLAMP:
         case HTP_OP_GLU_GEGLU:
         case HTP_OP_GLU_GEGLU_QUICK:
+        case HTP_OP_GLU_GEGLU_ERF:
             return op_activations(octx);
 
         case HTP_OP_SOFTMAX:
@@ -882,6 +886,9 @@ static int execute_op(struct htp_ops_context * octx) {
         case HTP_OP_GET_ROWS:
             return op_get_rows(octx);
 
+        case HTP_OP_SUM:
+            return op_sum(octx);
+
         case HTP_OP_SUM_ROWS:
             return op_sum_rows(octx);
 
@@ -897,6 +904,9 @@ static int execute_op(struct htp_ops_context * octx) {
 
         case HTP_OP_TOP_K:
             return op_top_k(octx);
+
+        case HTP_OP_ARGMAX:
+            return op_argmax(octx);
 
         case HTP_OP_SSM_CONV:
             return op_ssm_conv(octx);
@@ -919,8 +929,17 @@ static int execute_op(struct htp_ops_context * octx) {
         case HTP_OP_IM2COL:
             return op_im2col(octx);
 
+        case HTP_OP_IM2COL_3D:
+            return op_im2col_3d(octx);
+
         case HTP_OP_ROLL:
             return op_roll(octx);
+
+        case HTP_OP_POOL_2D:
+            return op_pool_2d(octx);
+
+        case HTP_OP_POOL_1D:
+            return op_pool_1d(octx);
 
         case HTP_OP_CONCAT:
             return op_concat(octx);
@@ -1290,7 +1309,7 @@ static void process_ops(struct htp_context * ctx) {
 
     vtcm_acquire(ctx);
 
-    while (!ctx->vtcm_needs_release && !atomic_load(&ctx->killed)) {
+    while (!atomic_load(&ctx->vtcm_needs_release) && !atomic_load(&ctx->killed)) {
         struct htp_opbatch_req req;
         uint32_t r_size = sizeof(req);
 
