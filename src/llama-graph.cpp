@@ -1418,15 +1418,8 @@ void llm_graph_result::set_inputs(const llama_ubatch * ubatch) {
 }
 
 void llm_graph_result::set_outputs(const llm_graph_params & params) {
-    // a pooled embeddings context outputs one vector per sequence, so its graph skips the LM head
-    if (params.cparams.embeddings && params.cparams.pooling_type != LLAMA_POOLING_TYPE_NONE) {
-        t_logits = nullptr;
-    }
-
-    // the models declare t_logits without expanding it, so the LM head is computed only when it is expanded here
     if (t_logits != nullptr) {
         ggml_set_output(t_logits);
-        ggml_build_forward_expand(gf, t_logits);
     }
     if (t_embd != nullptr) {
         ggml_set_output(t_embd);
@@ -4182,6 +4175,18 @@ void llm_graph_context::build_sampling() const {
         }
     }
     */
+}
+
+void llm_graph_context::build_logits() const {
+    // a pooled embeddings context outputs one vector per sequence, so its graph skips the LM head
+    if (cparams.embeddings && pooling_type != LLAMA_POOLING_TYPE_NONE) {
+        res->t_logits = nullptr;
+    }
+
+    // the models declare t_logits without expanding it, so the LM head is computed only when it is expanded here
+    if (res->t_logits != nullptr) {
+        ggml_build_forward_expand(gf, res->t_logits);
+    }
 }
 
 int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional) {

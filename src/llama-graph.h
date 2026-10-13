@@ -1443,6 +1443,12 @@ struct llm_graph_context {
             ggml_tensor * dense_2,
             ggml_tensor * dense_2_b,
             ggml_tensor * dense_3) const;
+
+    //
+    // logits
+    //
+
+    void build_logits() const;
 };
 
 // TODO: better name
