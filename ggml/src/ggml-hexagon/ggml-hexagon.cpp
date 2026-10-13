@@ -8990,11 +8990,8 @@ static bool ggml_hexagon_cpy_tensor_async_virt(ggml_backend_t backend_src, ggml_
     HEX_VERBOSE("ggml-hex: %s cpy-tensor-async %s -> %s size %zu\n",
                 sess_dst->name.c_str(), src->name, dst->name, ggml_nbytes(src));
 
-    // src may come from ops still queued on sess_src, and those may need ops queued on sess_dst before this copy:
-    // run them now, a later flush of the peers could send the copy first
-    sess_src->flush_sync();
-
     sess_dst->enqueue_cpy(src, dst);
+    sess_dst->add_peer(sess_src);
 
     return true;
 }
@@ -9143,8 +9140,6 @@ static void ggml_backend_hexagon_set_tensor_async(ggml_backend_t backend, struct
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     HEX_VERBOSE("ggml-hex: %s set-tensor-async %s : data %p offset %zu size %zu usage %d\n",
                 sess->c_name(), tensor->name, data, offset, size, tensor->buffer ? (int) tensor->buffer->usage : -1);
-    // the host writes the memory directly: queued ops may still read or write it
-    sess->flush_sync();
     ggml_backend_tensor_set(tensor, data, offset, size);
 }
 
@@ -9170,8 +9165,6 @@ static void ggml_backend_hexagon_set_tensor_2d_async(ggml_backend_t backend,
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     HEX_VERBOSE("ggml-hex: %s set-tensor-2d-async %s : data %p offset %zu size %zu n_copies %zu stride_tensor %zu stride_data %zu usage %d\n",
                 sess->c_name(), tensor->name, data, offset, size, n_copies, stride_tensor, stride_data, tensor->buffer ? (int) tensor->buffer->usage : -1);
-    // the host writes the memory directly: queued ops may still read or write it
-    sess->flush_sync();
     ggml_backend_tensor_set_2d(tensor, data, offset, size, n_copies, stride_tensor, stride_data);
 }
 
