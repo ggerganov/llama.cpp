@@ -15,7 +15,7 @@ template <int R, int C> struct matrix {
 #ifdef GGML_USE_HIP
         return r * C + c;
 #else
-        return ggml_cuda_mma::swizzle_bytes<true, nv_bfloat162>(r, c / 2, C / 2) / 2 + c % 2;
+        return 2 * ggml_cuda_mma::swizzle<C / 2, nv_bfloat162>(r * (C / 2) + c / 2, r) + c % 2;
 #endif // GGML_USE_HIP
     }
 
@@ -83,9 +83,9 @@ __device__ __forceinline__ tile_t load(const matrix<R, C> & m, int row, int col,
 #else
     const auto * packed = reinterpret_cast<const nv_bfloat162 *>(data);
     if constexpr (TRANS) {
-        load_ldmatrix_trans<true>(t, packed, col, row / 2, C / 2);
+        load_ldmatrix_trans_swizzled<C / 2>(t, packed, col * (C / 2) + row / 2);
     } else {
-        load_ldmatrix<true>(t, packed, row, col / 2, C / 2);
+        load_ldmatrix_swizzled<C / 2>(t, packed, row * (C / 2) + col / 2);
     }
 #endif // GGML_USE_HIP
     return t;
