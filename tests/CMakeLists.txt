@@ -166,20 +166,6 @@ if (LLAMA_LLGUIDANCE)
     llama_build_and_test(test-grammar-llguidance.cpp ARGS ${PROJECT_SOURCE_DIR}/models/ggml-vocab-llama-bpe.gguf)
 endif ()
 
-# llama_context state tests: KV and recurrent state save, load, copy, rollback
-# the cases use internal headers, so they are built here; they are grouped per file and the
-# interface they implement is in llama-context/test-case.h
-set(LLAMA_CONTEXT_TEST_SRC
-    test-llama-context.cpp
-    llama-context/cases-kv.cpp
-    llama-context/cases-rs.cpp
-    llama-context/test-case.cpp
-    llama-context/test-log.cpp
-    llama-context/test-runner.cpp
-    llama-context/test-util.cpp
-)
-llama_build(${LLAMA_CONTEXT_TEST_SRC})
-
 if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     # these tests are disabled on Windows because they use internal functions not exported with LLAMA_API (when building with shared libraries)
     llama_build_and_test(test-unicode.cpp LINK llama)
@@ -239,6 +225,20 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
         FIXTURES_SETUP generate-models
     )
 
+    # llama_context state tests: KV and recurrent state save, load, copy, rollback
+    # TODO: after `test-llama-archs` is refactored to not link internal symbols, we can move all this tests out of
+    #       this branch and run them on all platforms
+    set(LLAMA_CONTEXT_TEST_SRC
+        test-llama-context.cpp
+        llama-context/cases-kv.cpp
+        llama-context/cases-rs.cpp
+        llama-context/test-case.cpp
+        llama-context/test-log.cpp
+        llama-context/test-runner.cpp
+        llama-context/test-util.cpp
+    )
+    llama_build(${LLAMA_CONTEXT_TEST_SRC})
+
     # Test context state handling across all architectures, using the generated dummy models
     llama_test(
         test-llama-context
@@ -250,6 +250,10 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
         FIXTURES_REQUIRED generate-models
         ENVIRONMENT "GGML_SCHED_DEBUG_REALLOC=1"
     )
+
+    # the context state cases against a real model, the sweep above uses the generated dummy ones
+    llama_test(test-llama-context NAME test-llama-context-model LABEL "model" ARGS -m "${MODEL_DEST}")
+    set_tests_properties(test-llama-context-model PROPERTIES FIXTURES_REQUIRED test-download-model)
 
     llama_build(test-fusion.cpp)
 endif()
@@ -315,10 +319,6 @@ llama_build_and_test(test-tiled-mulmat.cpp LINK ggml)
 llama_build_and_test(test-model-load-cancel.cpp LABEL "model")
 llama_build_and_test(test-autorelease.cpp       LABEL "model")
 llama_build_and_test(test-backend-sampler.cpp   LABEL "model")
-
-# the context state cases against a real model, the sweep above uses the generated dummy ones
-llama_test(test-llama-context NAME test-llama-context-model LABEL "model" ARGS -m "${MODEL_DEST}")
-set_tests_properties(test-llama-context-model PROPERTIES FIXTURES_REQUIRED test-download-model)
 
 if (APPLE)
     llama_build(test-rset-release.cpp)
