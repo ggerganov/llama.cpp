@@ -699,8 +699,7 @@ void ggml_vec_dot_q1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const voi
 }
 
 #if defined(__AVX2__)
-// four consecutive Q2_0 weights per byte: byte b becomes b & 3, (b >> 2) & 3, (b >> 4) & 3, (b >> 6) & 3 (OR, never add:
-// the overlapping copies only touch masked-off bits)
+// four consecutive Q2_0 weights per byte: byte b becomes b & 3, (b >> 2) & 3, (b >> 4) & 3, (b >> 6) & 3 (OR, never add: the overlapping copies only touch masked-off bits)
 static inline __m256i q2_0_unpack_32_avx2(const uint8_t * qs) {
     __m256i v = _mm256_cvtepu8_epi32(_mm_loadl_epi64((const __m128i *) qs));
     v = _mm256_or_si256(v, _mm256_slli_epi32(v, 12));
