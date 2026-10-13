@@ -1,3 +1,4 @@
+#ifndef GGML_USE_KNC
 #include "ggml-backend-dl.h"
 
 #ifdef _WIN32
@@ -44,5 +45,7 @@ const char * dl_error() {
     const char *rslt = dlerror();
     return rslt != nullptr ? rslt : "";
 }
+
+#endif
 
 #endif

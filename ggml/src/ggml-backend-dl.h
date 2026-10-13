@@ -11,9 +11,13 @@
 #    include <dlfcn.h>
 #    include <unistd.h>
 #endif
+#include <memory>
+#include <type_traits>
+#ifndef GGML_USE_KNC
 #include <filesystem>
 
 namespace fs = std::filesystem;
+#endif
 
 #ifdef _WIN32
 
@@ -39,7 +43,9 @@ struct dl_handle_deleter {
 
 using dl_handle_ptr = std::unique_ptr<dl_handle, dl_handle_deleter>;
 
+#ifndef GGML_USE_KNC
 dl_handle * dl_load_library(const fs::path & path);
+#endif
 void * dl_get_sym(dl_handle * handle, const char * name);
 const char * dl_error();
 

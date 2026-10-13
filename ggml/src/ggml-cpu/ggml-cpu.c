@@ -155,7 +155,11 @@ static void atomic_thread_fence(memory_order mo) {
     MemoryBarrier();
 }
 #else // clang
+#ifdef __k1om__
+#include "arch/knc/knc-atomics.h"
+#else
 #include <stdatomic.h>
+#endif
 #endif
 
 typedef HANDLE pthread_t;
@@ -187,7 +191,11 @@ static int sched_yield (void) {
 #else
 
 #include <pthread.h>
+#ifdef __k1om__
+#include "arch/knc/knc-atomics.h"
+#else
 #include <stdatomic.h>
+#endif
 #include <sched.h>
 #if defined(__FreeBSD__)
 #include <pthread_np.h>
@@ -460,7 +468,11 @@ typedef pthread_mutex_t    ggml_mutex_t;
 #define ggml_lock_init(x)    UNUSED(x)
 #define ggml_lock_destroy(x) UNUSED(x)
 #if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64) && !defined(_M_ARM64EC))
+#ifdef __k1om__
+#define ggml_lock_lock(x)    __asm__ __volatile__("pause" ::: "memory")
+#else
 #define ggml_lock_lock(x)    _mm_pause()
+#endif
 #else
 #define ggml_lock_lock(x)    UNUSED(x)
 #endif
@@ -523,7 +535,11 @@ static inline void ggml_thread_cpu_relax(void) {
 }
 #elif defined(__x86_64__)
 static inline void ggml_thread_cpu_relax(void) {
+#ifdef __k1om__
+    __asm__ __volatile__("pause" ::: "memory");
+#else
     _mm_pause();
+#endif
 }
 #elif defined(__riscv)
 static inline void ggml_thread_cpu_relax(void) {
@@ -681,7 +697,11 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
 #   if !defined(SYS_getcpu) && defined(SYS_get_cpu)
 #       define SYS_getcpu SYS_get_cpu // some older glibc versions use this name
 #   endif
+#ifdef SYS_getcpu
     getcpu_ret = syscall(SYS_getcpu, &current_cpu, &g_state.numa.current_node);
+#else
+    getcpu_ret = -1;
+#endif
 #endif
 
     if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0) {
@@ -1252,6 +1272,11 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     }
 }
 
+#ifdef GGML_USE_KNC
+#include "arch/knc/knc-mq.h"
+#include "arch/knc/matmul.inc"
+#endif
+
 void ggml_compute_forward_mul_mat(
         const struct ggml_compute_params * params,
               struct ggml_tensor * dst) {
@@ -1264,6 +1289,12 @@ void ggml_compute_forward_mul_mat(
         ggml_compute_forward_fwht(params, dst);
         return;
     }
+
+#ifdef GGML_USE_KNC
+    if (ggml_knc_mq_mul_mat(params, dst)) {
+        return;
+    }
+#endif
 
     // If tiled is supported, it will execute the full op here and we return
     if (ggml_compute_forward_mul_mat_tiled(params, dst)) {
@@ -3863,6 +3894,9 @@ int ggml_cpu_has_sme2(void) {
 }
 
 void ggml_cpu_init(void) {
+#ifdef GGML_USE_KNC
+    ggml_knc_mq_init();
+#endif
     // needed to initialize ggml_time
     {
         struct ggml_init_params params = { 0, NULL, false };

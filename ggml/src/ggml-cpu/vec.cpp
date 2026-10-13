@@ -8,6 +8,10 @@ ggml_fp16_t ggml_table_gelu_f16[1 << 16];
 // precomputed quick gelu table for f16 (128 KB)
 ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 
+#ifdef GGML_USE_KNC
+extern "C" void ggml_knc_vec_dot_f32_generic(int, float *, size_t, const float *, size_t, const float *, size_t, int);
+#define ggml_vec_dot_f32 ggml_knc_vec_dot_f32_generic
+#endif
 void ggml_vec_dot_f32(int n, float * GGML_RESTRICT s, size_t bs, const float * GGML_RESTRICT x, size_t bx, const float * GGML_RESTRICT y, size_t by, int nrc) {
    assert(nrc == 1);
    GGML_UNUSED(nrc);

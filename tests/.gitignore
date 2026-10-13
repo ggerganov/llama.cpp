@@ -1,4 +1,8 @@
 *
+!knc/
+!knc/*.c
+!knc/*.h
+!knc/*.py
 !*.*
 !snapshots/
 !fusion/

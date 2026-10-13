@@ -616,7 +616,7 @@ ggml_add_backend(OPENVINO)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
-    target_compile_features   (${target} PRIVATE c_std_11 cxx_std_17) # don't bump
+    target_compile_features   (${target} PRIVATE c_std_11 cxx_std_${GGML_CXX_STANDARD}) # don't bump
 endforeach()
 
 target_link_libraries(ggml-base PRIVATE Threads::Threads)

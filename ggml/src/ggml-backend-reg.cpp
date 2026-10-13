@@ -4,7 +4,9 @@
 #include "ggml-impl.h"
 #include <algorithm>
 #include <cstring>
+#ifndef GGML_USE_KNC
 #include <filesystem>
+#endif
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -90,6 +92,7 @@
 #include "ggml-et.h"
 #endif
 
+#ifndef GGML_USE_KNC
 namespace fs = std::filesystem;
 
 static std::string path_str(const fs::path & path) {
@@ -106,6 +109,8 @@ static std::string path_str(const fs::path & path) {
         return std::string();
     }
 }
+
+#endif
 
 struct ggml_backend_reg_entry {
     ggml_backend_reg_t reg;
@@ -217,6 +222,7 @@ struct ggml_backend_registry {
         devices.push_back(device);
     }
 
+#ifndef GGML_USE_KNC
     ggml_backend_reg_t load_backend(const fs::path & path, bool silent) {
         dl_handle_ptr handle { dl_load_library(path) };
         if (!handle) {
@@ -262,6 +268,8 @@ struct ggml_backend_registry {
 
         return reg;
     }
+
+#endif
 
     void unload_backend(ggml_backend_reg_t reg, bool silent) {
         auto it = std::find_if(backends.begin(), backends.end(),
@@ -391,13 +399,23 @@ ggml_backend_t ggml_backend_init_best(void) {
 
 // Dynamic loading
 ggml_backend_reg_t ggml_backend_load(const char * path) {
+#ifdef GGML_USE_KNC
+    GGML_UNUSED(path);
+    GGML_LOG_ERROR("%s: dynamic backend loading is unavailable on KNC\n", __func__);
+    return nullptr;
+#else
     return get_reg().load_backend(path, false);
+#endif
 }
 
 void ggml_backend_unload(ggml_backend_reg_t reg) {
     get_reg().unload_backend(reg, true);
 }
 
+#ifdef GGML_USE_KNC
+void ggml_backend_load_all() { (void) get_reg(); }
+void ggml_backend_load_all_from_path(const char * path) { GGML_UNUSED(path); (void) get_reg(); }
+#else
 static fs::path get_executable_path() {
 #if defined(__APPLE__)
     // get executable path
@@ -603,3 +621,5 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
         ggml_backend_load(backend_path);
     }
 }
+
+#endif

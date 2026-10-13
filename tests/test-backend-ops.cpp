@@ -40,7 +40,13 @@
 #include <set>
 #include <sstream>
 #include <string>
+#if __cplusplus < 201703L
+#include <experimental/string_view>
+using test_string_view = std::experimental::string_view;
+#else
 #include <string_view>
+using test_string_view = std::string_view;
+#endif
 #include <thread>
 #include <vector>
 #include <unordered_map>
@@ -1155,12 +1161,12 @@ static void print_test_result_locked(printer * output_printer, const test_result
 
 // Splits the -o filter into comma separated entries. Commas inside parentheses
 // (i.e. inside a full test case string) are not treated as separators.
-static std::vector<std::string_view> op_filter_entries(const char * op_names_filter) {
-    std::vector<std::string_view> entries;
+static std::vector<test_string_view> op_filter_entries(const char * op_names_filter) {
+    std::vector<test_string_view> entries;
     if (op_names_filter == nullptr) {
         return entries;
     }
-    std::string_view filter(op_names_filter);
+    test_string_view filter(op_names_filter);
     while (!filter.empty()) {
         auto comma_pos = filter.find_first_of(',');
         const auto lparen_pos = filter.find_first_of('(');
@@ -1169,7 +1175,7 @@ static std::vector<std::string_view> op_filter_entries(const char * op_names_fil
             comma_pos = filter.find_first_of(',', rparen_pos);
         }
         entries.push_back(filter.substr(0, comma_pos));
-        filter = comma_pos != std::string_view::npos ? filter.substr(comma_pos + 1) : "";
+        filter = comma_pos != test_string_view::npos ? filter.substr(comma_pos + 1) : "";
     }
     return entries;
 }
@@ -1177,17 +1183,17 @@ static std::vector<std::string_view> op_filter_entries(const char * op_names_fil
 // An entry from the -o filter matches an op if it is either
 //   * an exact op name as given by ggml_op_desc() (e.g. "ADD"), or
 //   * a regex that matches the op name (e.g. "DSV4.*")
-static bool op_filter_entry_matches(std::string_view entry, std::string_view op_name) {
+static bool op_filter_entry_matches(test_string_view entry, test_string_view op_name) {
     if (entry == op_name) {
         return true;
     }
     // plain op names are matched exactly, anything else is treated as a regex
-    if (std::regex_match(std::string(entry), std::regex("[A-Z0-9_]+"))) {
+    if (std::regex_match(std::string(entry.data(), entry.size()), std::regex("[A-Z0-9_]+"))) {
         return false;
     }
     std::regex re;
     try {
-        re = std::regex(std::string(entry));
+        re = std::regex(std::string(entry.data(), entry.size()));
     } catch (const std::regex_error &) {
         return false;
     }
@@ -1365,7 +1371,7 @@ struct test_case {
         const auto op_name = op_desc(op);
         const auto op_full_name = op_name + "(" + vars() + ")";
         for (const auto & entry : op_filter_entries(op_names_filter)) {
-            if (entry.find_first_of('(') != std::string_view::npos) {
+            if (entry.find_first_of('(') != test_string_view::npos) {
                 // a full test case string, matched exactly
                 if (entry == op_full_name) {
                     return true;
@@ -10727,10 +10733,20 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F32, GGML_TYPE_F32, 32, 509, 2112, {1, 1}, {1, 1}));
     test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32, 32, 509, 2112, {1, 1}, {1, 1}));
 
+    // K-quant row-tile tails, excess workers, multiple columns and batched fallback.
+    for (ggml_type type : {GGML_TYPE_Q3_K, GGML_TYPE_Q4_K, GGML_TYPE_Q5_K, GGML_TYPE_Q6_K}) {
+        for (int64_t m : {1, 7, 8, 17, 33, 65}) {
+            for (int64_t n : {1, 3}) {
+                test_cases.emplace_back(new test_mul_mat(type, GGML_TYPE_F32, m, n, 512, {1, 1}, {1, 1}));
+            }
+        }
+        test_cases.emplace_back(new test_mul_mat(type, GGML_TYPE_F32, 17, 3, 512, {2, 1}, {1, 1}));
+    }
+
     // few src1 rows (speculative verify): odd m, a single K block, long K, every tile width, broadcast batches
     for (int64_t n : {2, 3, 5, 8, 9, 13, 16}) {
-        for (auto [m, k] : std::vector<std::pair<int64_t, int64_t>>{{40, 32}, {100, 96}, {1000, 5120}, {3000, 1024}, {6144, 5120}, {17408, 512}}) {
-            test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32, m, n, k, {1, 1}, {1, 1}));
+        for (const auto & shape : std::vector<std::pair<int64_t, int64_t>>{{40, 32}, {100, 96}, {1000, 5120}, {3000, 1024}, {6144, 5120}, {17408, 512}}) {
+            test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32, shape.first, n, shape.second, {1, 1}, {1, 1}));
         }
         test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32, 64, n, 256, {3, 2}, {2, 1}));
         for (ggml_type type_a : {GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16, GGML_TYPE_Q4_1, GGML_TYPE_Q5_0, GGML_TYPE_Q5_1,
@@ -11970,9 +11986,9 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     for (int kv : { 256 }) {
         for (int bs : { 1, 512 }) {
             for (int nh : { 4, 32, 64 }) {
-                for (auto [ns, nm] : { std::pair{1, 1}, std::pair{4, 4}, std::pair{4, 1} }) {
+                for (const auto & shape : { std::pair<int, int>{1, 1}, std::pair<int, int>{4, 4}, std::pair<int, int>{4, 1} }) {
                     for (ggml_type type_K : {GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16, GGML_TYPE_Q8_0, GGML_TYPE_Q5_1, GGML_TYPE_Q5_0, GGML_TYPE_Q4_1, GGML_TYPE_Q4_0, GGML_TYPE_IQ4_NL}) {
-                        test_cases.emplace_back(new test_lightning_indexer(128, nh, kv, bs, ns, nm, type_K));
+                        test_cases.emplace_back(new test_lightning_indexer(128, nh, kv, bs, shape.first, shape.second, type_K));
                     }
                 }
             }
@@ -12584,7 +12600,7 @@ static bool op_names_filter_selects(const char * op_names_filter, const char * o
     for (const auto & entry : op_filter_entries(op_names_filter)) {
         // a full test case string is matched by its op name prefix
         const auto lparen_pos = entry.find_first_of('(');
-        const auto op_entry = lparen_pos != std::string_view::npos ? entry.substr(0, lparen_pos) : entry;
+        const auto op_entry = lparen_pos != test_string_view::npos ? entry.substr(0, lparen_pos) : entry;
         if (op_filter_entry_matches(op_entry, op_name)) {
             return true;
         }
@@ -12664,14 +12680,10 @@ static bool test_backend(ggml_backend_t backend, ggml_backend_dev_t dev, test_mo
 
         std::regex params_filter_regex(params_filter);
 
-        for (auto it = test_cases.begin(); it != test_cases.end();) {
-            if (!std::regex_search((*it)->vars(), params_filter_regex)) {
-                it = test_cases.erase(it);
-                continue;
-            }
-
-            it++;
-        }
+        test_cases.erase(std::remove_if(test_cases.begin(), test_cases.end(),
+            [&](const std::unique_ptr<test_case> & test) {
+                return !std::regex_search(test->vars(), params_filter_regex);
+            }), test_cases.end());
     };
 
     std::vector<std::unique_ptr<test_case>> test_cases;
@@ -12709,8 +12721,8 @@ static bool test_backend(ggml_backend_t backend, ggml_backend_dev_t dev, test_mo
             set_use_ref(backend_cpu.get(), true);
         }
 
-        std::atomic<size_t> n_ok = 0;
-        std::atomic<size_t> tests_run = 0;
+        std::atomic<size_t> n_ok{0};
+        std::atomic<size_t> tests_run{0};
         std::vector<std::string> failed_tests;
         std::mutex failed_tests_mutex;
 
@@ -12718,7 +12730,7 @@ static bool test_backend(ggml_backend_t backend, ggml_backend_dev_t dev, test_mo
         // run out of work so that a few slow tests at the tail get spread across
         // workers instead of landing on one unlucky thread.
         constexpr size_t MAX_TESTS_PER_ITER = 100;
-        std::atomic<size_t> test_idx = 0;
+        std::atomic<size_t> test_idx{0};
 
         const auto & next_chunk = [&](size_t & my_begin, size_t & my_end) {
             const size_t cur = test_idx.load(std::memory_order_relaxed);
@@ -12755,7 +12767,7 @@ static bool test_backend(ggml_backend_t backend, ggml_backend_dev_t dev, test_mo
             // extra CPU backend init.
             run_tests(backend, backend_cpu.get());
         } else {
-            std::atomic<size_t> workers_started = 0;
+            std::atomic<size_t> workers_started{0};
 
             const auto & eval_worker = [&]() {
                 ggml_backend_ptr b(ggml_backend_dev_init(dev, NULL));

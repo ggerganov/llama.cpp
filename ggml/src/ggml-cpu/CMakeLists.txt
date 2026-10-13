@@ -58,7 +58,7 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         ggml-cpu/ops.cpp
         )
 
-    target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_17)
+    target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_${GGML_CXX_STANDARD})
     target_include_directories(${GGML_CPU_NAME} PRIVATE . ggml-cpu)
 
     if (APPLE AND GGML_ACCELERATE)
@@ -99,7 +99,9 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         target_link_libraries(${GGML_CPU_NAME} PUBLIC memkind)
     endif()
 
-    if (GGML_SYSTEM_ARCH STREQUAL "ARM")
+    if (GGML_KNC)
+        include(${CMAKE_CURRENT_SOURCE_DIR}/ggml-cpu/arch/knc/knc.cmake)
+    elseif (GGML_SYSTEM_ARCH STREQUAL "ARM")
         message(STATUS "ARM detected")
         list(APPEND GGML_CPU_SOURCES
             ggml-cpu/arch/arm/quants.c

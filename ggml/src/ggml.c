@@ -228,7 +228,9 @@ void ggml_print_backtrace(void) {
         _Exit(0);
     } else { // parent
 #if defined(__linux__)
+#ifdef PR_SET_PTRACER
         prctl(PR_SET_PTRACER, child_pid);
+#endif
         close(lock[1]);
         close(lock[0]);
 #endif

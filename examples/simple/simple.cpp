@@ -18,7 +18,7 @@ static void batch_set_tokens(llama_batch_ext * batch, const llama_token * tokens
 
 static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
-    printf("\n    %s -m model.gguf [-n n_predict] [-ngl n_gpu_layers] [prompt]\n", argv[0]);
+    printf("\n    %s -m model.gguf [-n n_predict] [-ngl n_gpu_layers] [-t n_threads] [prompt]\n", argv[0]);
     printf("\n");
 }
 
@@ -33,6 +33,7 @@ int main(int argc, char ** argv) {
     int ngl = 99;
     // number of tokens to predict
     int n_predict = 32;
+    int n_threads = 0;
 
     // parse command line arguments
 
@@ -55,6 +56,23 @@ int main(int argc, char ** argv) {
                         return 1;
                     }
                 } else {
+                    print_usage(argc, argv);
+                    return 1;
+                }
+            } else if (strcmp(argv[i], "-t") == 0) {
+                if (i + 1 >= argc) {
+                    print_usage(argc, argv);
+                    return 1;
+                }
+                try {
+                    size_t used = 0;
+                    const std::string value = argv[++i];
+                    n_threads = std::stoi(value, &used);
+                    if (used != value.size() || n_threads < 1 || n_threads > GGML_MAX_N_THREADS) {
+                        print_usage(argc, argv);
+                        return 1;
+                    }
+                } catch (...) {
                     print_usage(argc, argv);
                     return 1;
                 }
@@ -124,6 +142,10 @@ int main(int argc, char ** argv) {
     ctx_params.n_batch = n_prompt;
     // enable performance counters
     ctx_params.no_perf = false;
+    if (n_threads > 0) {
+        ctx_params.n_threads = n_threads;
+        ctx_params.n_threads_batch = n_threads;
+    }
 
     llama_context * ctx = llama_init_from_model(model, ctx_params);
 
