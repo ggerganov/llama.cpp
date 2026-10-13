@@ -230,6 +230,8 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
         llama_test(test-llama-archs NAME test-fp8-requantize ARGS -a llama -b CPU -s 1)
     endif()
 
+    llama_test(test-llama-archs NAME test-fp8-kv ARGS -a ^llama$ -b CPU -s 0)
+
     set(MODEL_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-models/")
     file(MAKE_DIRECTORY "${MODEL_DIR}")
 
