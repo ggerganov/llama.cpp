@@ -588,6 +588,18 @@ ggml_tensor * clip_graph::build_inp_raw(int channels) {
     return inp_raw;
 }
 
+static std::string get_attn_mask_name(int idx) {
+    return idx == 0 ? "attn_mask" : "attn_mask_" + std::to_string(idx);
+}
+
+ggml_tensor * clip_graph::build_inp_attn_mask(int64_t n_kv, int64_t n_q, int idx) {
+    const ggml_type type = flash_attn_type == CLIP_FLASH_ATTN_TYPE_ENABLED ? GGML_TYPE_F16 : GGML_TYPE_F32;
+    ggml_tensor * mask = ggml_new_tensor_2d(ctx0, type, n_kv, n_q);
+    ggml_set_name(mask, get_attn_mask_name(idx).c_str());
+    ggml_set_input(mask);
+    return mask;
+}
+
 ggml_tensor * clip_graph::build_norm(
         ggml_tensor * cur,
         ggml_tensor * mw,
@@ -777,9 +789,8 @@ ggml_tensor * clip_graph::build_attn(
 
         k = ggml_cast(ctx0, k, GGML_TYPE_F16);
         v = ggml_cast(ctx0, v, GGML_TYPE_F16);
-        if (kq_mask) {
-            kq_mask = ggml_cast(ctx0, kq_mask, GGML_TYPE_F16);
-        }
+        // mask must be f16 here, use build_inp_attn_mask()
+        GGML_ASSERT(!kq_mask || kq_mask->type == GGML_TYPE_F16);
 
         cur = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, 0.0f, 0.0f);
         ggml_prec_set_acc(cur, GGML_PREC_F32);
@@ -898,6 +909,16 @@ ggml_tensor * clip_graph::build_stack(ggml_tensor * cur, int32_t stack_factor, i
 
 // aka pixel_shuffle / pixel_unshuffle / patch_merger (Kimi-VL)
 // support dynamic resolution
+ggml_tensor * clip_graph::build_suffix(ggml_tensor * cur) {
+    for (int idx : clip_suffix_rows(img.suffix_type)) {
+        GGML_ASSERT(model.tok_embd_sep && idx < model.tok_embd_sep->ne[1]);
+        ggml_tensor * row = ggml_view_2d(ctx0, model.tok_embd_sep, model.tok_embd_sep->ne[0], 1,
+                                         model.tok_embd_sep->nb[1], idx * model.tok_embd_sep->nb[1]);
+        cur = ggml_concat(ctx0, cur, ggml_cast(ctx0, row, cur->type), 1);
+    }
+    return cur;
+}
+
 ggml_tensor * clip_graph::build_patch_merge_permute(ggml_tensor * cur, int scale_factor) {
     GGML_ASSERT(scale_factor > 1);
 
@@ -1009,6 +1030,7 @@ static std::unique_ptr<clip_graph> clip_get_graph_builder(clip_ctx * ctx, const 
                 builder = std::make_unique<clip_graph_minicpmv>(ctx, img);
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             {
                 builder = std::make_unique<clip_graph_minicpmv4_6>(ctx, img);
             } break;
@@ -1321,6 +1343,7 @@ struct clip_model_loader {
             if (is_vision) {
                 get_u32(KEY_IMAGE_SIZE, hparams.image_size);
                 get_u32(KEY_PATCH_SIZE, hparams.patch_size);
+                get_u32(KEY_MAX_SLICE_NUMS, hparams.max_slice_nums, false);
                 get_i32(KEY_MINICPMV_VERSION, hparams.minicpmv_version, false); // legacy
                 get_u32(KEY_MINICPMV_QUERY_NUM, hparams.minicpmv_query_num, false);
                 if (hparams.minicpmv_query_num == 0) {
@@ -1460,12 +1483,17 @@ struct clip_model_loader {
                         }
                     } break;
                 case PROJECTOR_TYPE_MINICPMV4_6:
+                case PROJECTOR_TYPE_MINICPMV4_7:
                     {
-                        // MiniCPM-V 4.6 unified merger projector
+                        // MiniCPM-V 4.6/4.7 unified merger projector
                         // ViT merger 2x2 + final merger 2x2 = 4x spatial merge per dimension
                         hparams.n_merge = 4;
                         get_u32(KEY_PROJ_SCALE_FACTOR, hparams.n_merge, false);
                         GGML_ASSERT(hparams.n_merge == 2 || hparams.n_merge == 4);
+
+                        // no padding: the reference stretches the refined image to the target size
+                        hparams.image_pad_ov = PAD_NONE;
+                        hparams.image_pad_rf = PAD_NONE;
 
                         // borrow wa_layer_indexes for vit_merger insertion point
                         std::vector<int> wa_layer_indexes_vec;
@@ -2382,6 +2410,7 @@ struct clip_model_loader {
                     || model.proj_type == PROJECTOR_TYPE_IDEFICS3
                     || model.proj_type == PROJECTOR_TYPE_MINICPMV
                     || model.proj_type == PROJECTOR_TYPE_MINICPMV4_6
+                    || model.proj_type == PROJECTOR_TYPE_MINICPMV4_7
                 ) && layer.ff_up_w && layer.ff_down_w && layer.ff_down_w->ne[0] == hparams.n_embd;
             if (is_ffn_swapped) {
                 // swap up and down weights
@@ -2484,6 +2513,7 @@ struct clip_model_loader {
                     model.mm_model_ln_post_b = get_tensor(string_format(TN_MINICPMV_LN, "post", "bias"));
                 } break;
             case PROJECTOR_TYPE_MINICPMV4_6:
+            case PROJECTOR_TYPE_MINICPMV4_7:
                 {
                     const bool merger_required = hparams.n_merge == 4;
                     auto get_merger_tensor = [&](const std::string & name, bool required = true) {
@@ -2515,6 +2545,7 @@ struct clip_model_loader {
                     model.mm_ffn_up_b     = get_tensor(string_format(TN_MM_UP,   "bias"), false);
                     model.mm_ffn_down_w   = get_tensor(string_format(TN_MM_DOWN, "weight"));
                     model.mm_ffn_down_b   = get_tensor(string_format(TN_MM_DOWN, "bias"), false);
+                    model.tok_embd_sep    = get_tensor(TN_TOK_EMBD_SEP, model.proj_type == PROJECTOR_TYPE_MINICPMV4_7);
                 } break;
             case PROJECTOR_TYPE_GLM_EDGE:
                 {
@@ -4158,6 +4189,8 @@ int clip_n_output_tokens_x(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_MUSE_GLIMMER:
             return (img->nx() / params.patch_size) / 2;
         case PROJECTOR_TYPE_STEP3VL:
+        case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             return img->nx() / (params.patch_size * params.n_merge);
         case PROJECTOR_TYPE_DEEPSEEKOCR:
         case PROJECTOR_TYPE_DEEPSEEKOCR2:
@@ -4186,6 +4219,8 @@ int clip_n_output_tokens_y(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_MUSE_GLIMMER:
             return (img->ny() / params.patch_size) / 2;
         case PROJECTOR_TYPE_STEP3VL:
+        case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             return img->ny() / (params.patch_size * params.n_merge);
         default:
             break;
@@ -4251,6 +4286,7 @@ int clip_n_output_tokens(const clip_ctx * ctx, const clip_image_f32 * img) {
                 }
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             {
                 n_patches /= params.n_merge * params.n_merge;
             } break;
@@ -4502,6 +4538,8 @@ int clip_n_output_tokens(const clip_ctx * ctx, const clip_image_f32 * img) {
             GGML_ABORT("unsupported projector type");
     }
 
+    n_patches += (int) clip_suffix_rows(img->suffix_type).size();
+
     return n_patches;
 }
 
@@ -4591,6 +4629,20 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
         ggml_backend_tensor_set(cur, values.data(), 0, ggml_nbytes(cur));
     };
 
+    // mask from build_inp_attn_mask(), f16 if flash attn is enabled
+    auto set_input_attn_mask = [&get_inp_tensor](const std::vector<float> & values, int idx = 0) {
+        ggml_tensor * cur = get_inp_tensor(get_attn_mask_name(idx).c_str());
+        GGML_ASSERT(ggml_nelements(cur) == (int64_t)values.size());
+        if (cur->type == GGML_TYPE_F16) {
+            std::vector<ggml_fp16_t> values_f16(values.size());
+            ggml_fp32_to_fp16_row(values.data(), values_f16.data(), values.size());
+            ggml_backend_tensor_set(cur, values_f16.data(), 0, ggml_nbytes(cur));
+        } else {
+            GGML_ASSERT(cur->type == GGML_TYPE_F32);
+            ggml_backend_tensor_set(cur, values.data(), 0, ggml_nbytes(cur));
+        }
+    };
+
     auto set_input_i32 = [&get_inp_tensor](const char * name, std::vector<int32_t> & values) {
         ggml_tensor * cur = get_inp_tensor(name);
         GGML_ASSERT(cur->type == GGML_TYPE_I32);
@@ -4639,7 +4691,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                 }
             }
         }
-        set_input_f32("kq_mask", mask);
+        set_input_attn_mask(mask);
     };
 
     // set input pixel values
@@ -4753,7 +4805,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                         off += s;
                     }
                 }
-                set_input_f32("muse_glimmer_sp_mask", sp_mask);
+                set_input_attn_mask(sp_mask);
 
                 // pixel-shuffle gather (original order): f*f spatial neighbours grouped
                 std::vector<int32_t> dsp; dsp.reserve(n_tok);
@@ -4811,6 +4863,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                 set_input_f32("omega", omega);
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             {
                 const bool is_4x = hparams.n_merge == 2;
 
@@ -4876,7 +4929,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                             }
                         }
                     }
-                    set_input_f32("vit_merger_window_mask", window_mask_data);
+                    set_input_attn_mask(window_mask_data);
 
                     // ViT merger 2x2 downsample indices
                     auto vit_merger_ds_0 = make_ds_idx(0, 0, half_h, half_w, pos_w);
@@ -5061,7 +5114,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
 
                     set_input_i32("window_idx",     idx);
                     set_input_i32("inv_window_idx", inv_idx);
-                    set_input_f32("window_mask",    mask);
+                    set_input_attn_mask(mask);
                 } else {
                     for (int i = 0; i < ph * pw; i++) {
                         idx[i] = i;
@@ -5172,7 +5225,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                 set_input_i32("mimovl_positions_row", positions_row);
                 set_input_i32("mimovl_positions_col", positions_col);
                 set_input_f32("mimovl_idx_col",       idx_col);
-                set_input_f32("mimovl_window_mask",   mask);
+                set_input_attn_mask(mask);
             } break;
         case PROJECTOR_TYPE_PIXTRAL:
         case PROJECTOR_TYPE_KIMIVL:
@@ -5366,7 +5419,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                             qwen2_mask[static_cast<size_t>(i) * seq_len + j] = zero ? 0.0f : -1e9f;
                         }
                     }
-                    set_input_f32("qwen2_attn_mask", qwen2_mask);
+                    set_input_attn_mask(qwen2_mask);
                 }
             } break;
         case PROJECTOR_TYPE_GEMMA3:
@@ -5612,8 +5665,8 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                         window_mask[(size_t) q * n_pos + k] = (causal_ok && (q - k) <= window) ? 0.0f : neg_inf;
                     }
                 }
-                set_input_f32("mimo_audio_full_mask", full_mask);
-                set_input_f32("mimo_audio_window_mask", window_mask);
+                set_input_attn_mask(full_mask, 0);
+                set_input_attn_mask(window_mask, 1);
 
                 // input_local_transformer: block-diagonal mask + in-group positions
                 {
@@ -5636,7 +5689,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                             local_mask[(size_t) q * n_padded + k] = same_group ? 0.0f : neg_inf;
                         }
                     }
-                    set_input_f32("mimo_audio_local_mask", local_mask);
+                    set_input_attn_mask(local_mask, 2);
                 }
             } break;
         case PROJECTOR_TYPE_LFM2A:
@@ -6055,6 +6108,7 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         case PROJECTOR_TYPE_MINICPMV:
             return ctx->model.mm_model_proj->ne[0];
         case PROJECTOR_TYPE_MINICPMV4_6:
+        case PROJECTOR_TYPE_MINICPMV4_7:
             return ctx->model.mm_ffn_down_w->ne[1];
         case PROJECTOR_TYPE_GLM_EDGE:
             return ctx->model.mm_model_mlp_3_w->ne[1];

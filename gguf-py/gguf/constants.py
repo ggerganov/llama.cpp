@@ -259,6 +259,7 @@ class Keys:
         DIMENSION_COUNT           = "{arch}.rope.dimension_count"
         DIMENSION_COUNT_SWA       = "{arch}.rope.dimension_count_swa"
         DIMENSION_SECTIONS        = "{arch}.rope.dimension_sections"
+        SECTION_ORDER             = "{arch}.rope.section_order"
         FREQ_BASE                 = "{arch}.rope.freq_base"
         FREQ_BASE_SWA             = "{arch}.rope.freq_base_swa"
         SCALING_TYPE              = "{arch}.rope.scaling.type"
@@ -331,6 +332,7 @@ class Keys:
         HEAD_COUNT         = "{arch}.decision.head_count"
         MAX_HEAD_TOKENS    = "{arch}.decision.max_head_tokens"
         TEMPERATURE        = "{arch}.decision.temperature.{name}"  # name: "<type>" or "<type>.<n_opt bucket>"
+        SCORE_BIAS         = "{arch}.decision.score_bias.{n}.{i}"  # added to the logit of level i of a score question with n levels
 
     class Tokenizer:
         MODEL                = "tokenizer.ggml.model"
@@ -409,6 +411,7 @@ class Keys:
         BLOCK_COUNT           = "clip.vision.block_count"
         IMAGE_MEAN            = "clip.vision.image_mean"
         IMAGE_STD             = "clip.vision.image_std"
+        MAX_SLICE_NUMS        = "clip.vision.max_slice_nums"
         IMAGE_RESIZE_ALGO     = "clip.vision.image_resize_algo"
         SPATIAL_MERGE_SIZE    = "clip.vision.spatial_merge_size"
         SWIGLU_CLAMP          = "clip.vision.swiglu_clamp"
@@ -493,6 +496,19 @@ class Keys:
         BETA                = "xielu.beta"
         EPS                 = "xielu.eps"
 
+    class PrismHadamard:
+        VERSION              = "prism.hadamard.version"
+        TIED_OUTPUT          = "prism.hadamard.tied_output"
+        BLOCK_SIZE           = "prism.hadamard.block_size"
+        TRANSFORM            = "prism.hadamard.transform"
+        AXIS                 = "prism.hadamard.axis"
+        SIGN_MODE            = "prism.hadamard.sign_mode"
+        SIGN_WIDTHS          = "prism.hadamard.sign_widths"
+        SIGN_VALUES          = "prism.hadamard.sign_values"
+        WEIGHT_NAMES         = "prism.hadamard.weight_names"
+        INVERSE_WEIGHT_NAMES = "prism.hadamard.inverse_weight_names"
+        GDN_V_GROUPED        = "prism.hadamard.gdn_v_grouped"
+
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -544,6 +560,7 @@ class MODEL_ARCH(IntEnum):
     QWEN35           = auto()
     QWEN35MOE        = auto()
     CLEF             = auto()
+    VLLM_DECISION2   = auto()
     QWEN4EXP         = auto()
     PHI2             = auto()
     PHI3             = auto()
@@ -908,6 +925,11 @@ class MODEL_TENSOR(IntEnum):
     DECISION_SCALES               = auto()
     DECISION_SCORER               = auto()
     DECISION_SCORER_OUT           = auto()
+    DECISION_QUERY_NORM           = auto()
+    DECISION_KEY                  = auto()
+    DECISION_QUERY                = auto()
+    DECISION_OPTION_MLP           = auto()
+    DECISION_QUERY_MLP            = auto()
     CONV1D               = auto()
     CONVNEXT_DW          = auto()
     CONVNEXT_NORM        = auto()
@@ -1051,6 +1073,7 @@ class MODEL_TENSOR(IntEnum):
     V_SAM_NET_3          = auto() # Deepseek-OCR
     V_ENC_EMBD_IMGNL     = auto() # Deepseek-OCR
     V_ENC_EMBD_VSEP      = auto() # Deepseek-OCR
+    V_TOK_EMBD_SEP       = auto() # MiniCPM-V 4.7
     V_RESMPL_QUERY_768   = auto() # Deepseek-OCR-2
     V_RESMPL_QUERY_1024  = auto() # Deepseek-OCR-2
 
@@ -1327,6 +1350,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN35:           "qwen35",
     MODEL_ARCH.QWEN35MOE:        "qwen35moe",
     MODEL_ARCH.CLEF:             "clef",
+    MODEL_ARCH.VLLM_DECISION2:   "vllm-decision2",
     MODEL_ARCH.QWEN4EXP:         "qwen4exp",
     MODEL_ARCH.PHI2:             "phi2",
     MODEL_ARCH.PHI3:             "phi3",
@@ -1690,6 +1714,11 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.DECISION_SCALES:               "decision.scales",
     MODEL_TENSOR.DECISION_SCORER:               "decision.scorer",
     MODEL_TENSOR.DECISION_SCORER_OUT:           "decision.scorer_out",
+    MODEL_TENSOR.DECISION_QUERY_NORM:           "decision.query_norm",
+    MODEL_TENSOR.DECISION_KEY:                  "decision.key",
+    MODEL_TENSOR.DECISION_QUERY:                "decision.query",
+    MODEL_TENSOR.DECISION_OPTION_MLP:           "decision.option_mlp",
+    MODEL_TENSOR.DECISION_QUERY_MLP:            "decision.query_mlp",
     MODEL_TENSOR.CONV1D:                    "conv1d",
     MODEL_TENSOR.CONVNEXT_DW:               "convnext.{bid}.dw",
     MODEL_TENSOR.CONVNEXT_NORM:             "convnext.{bid}.norm",
@@ -1832,6 +1861,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.V_SAM_NET_3:               "v.sam.net_3",
     MODEL_TENSOR.V_ENC_EMBD_IMGNL:          "v.image_newline", # Deepseek-OCR, Granite4Vision
     MODEL_TENSOR.V_ENC_EMBD_VSEP:           "v.view_seperator", # Deepseek-OCR
+    MODEL_TENSOR.V_TOK_EMBD_SEP:            "v.tok_embd_sep", # MiniCPM-V 4.7
     MODEL_TENSOR.V_RESMPL_QUERY_768:        "v.resample_query_768", # Deepseek-OCR-2 qwen2
     MODEL_TENSOR.V_RESMPL_QUERY_1024:       "v.resample_query_1024", # Deepseek-OCR-2 qwen2
     # Granite4 Vision
@@ -2079,6 +2109,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.V_ENC_EMBD_POS,
         MODEL_TENSOR.V_ENC_EMBD_IMGNL,
         MODEL_TENSOR.V_ENC_EMBD_VSEP,
+        MODEL_TENSOR.V_TOK_EMBD_SEP,
         MODEL_TENSOR.V_ENC_INPUT_NORM,
         MODEL_TENSOR.V_ENC_ATTN_QKV,
         MODEL_TENSOR.V_ENC_ATTN_Q,
@@ -3014,6 +3045,29 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.DECISION_OPTION_NORM,
         MODEL_TENSOR.DECISION_SCALES,
         MODEL_TENSOR.DECISION_SCORER,
+        MODEL_TENSOR.DECISION_SCORER_OUT,
+    ],
+    MODEL_ARCH.VLLM_DECISION2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        # decision head
+        MODEL_TENSOR.DECISION_OPTION_NORM,
+        MODEL_TENSOR.DECISION_QUERY_NORM,
+        MODEL_TENSOR.DECISION_KEY,
+        MODEL_TENSOR.DECISION_QUERY,
+        MODEL_TENSOR.DECISION_OPTION_MLP,
+        MODEL_TENSOR.DECISION_QUERY_MLP,
         MODEL_TENSOR.DECISION_SCORER_OUT,
     ],
     MODEL_ARCH.QWEN35MOE: [
@@ -5927,6 +5981,12 @@ class RopeScalingType(Enum):
     LONGROPE = 'longrope'
 
 
+# M-RoPE: input position slot (t, y, x, z) that feeds each RoPE section, in section order
+class RopeSectionOrder(Enum):
+    TYXZ = 'tyxz' # default
+    ZYXT = 'zyxt'
+
+
 class PoolingType(IntEnum):
     NONE = 0
     MEAN = 1
@@ -6076,6 +6136,8 @@ class DecisionType:
     NIMBLE  = "nimble"   # same as openjev, the prompt lists all the questions of the request
     CLEF    = "clef"     # joint head over all questions, one score per option
     PPLX_DECIDER = "pplx-decider"  # same as openjev, label codes of 1 or 2 letters
+    VLLM_DECISION2 = "vllm-decision2"  # head over the end token of each option and the last token, one score per option
+    VLLM_D3 = "vllm-d3"  # same as pplx-decider, non-causal attention
     LFM2_D1 = "lfm2-d1"  # same as openjev, the labels depend on the question type
     LFM2_D1_OMNI = "lfm2-d1-omni"  # same head as laya on a bidirectional LFM2 trunk, other prompt layout
 
@@ -6133,6 +6195,7 @@ class VisionProjectorType:
     PARAKEET       = "parakeet"  # audio
     MINIMAXM3      = "minimax_m3"
     MINICPMV4_6    = "minicpmv4_6"
+    MINICPMV4_7    = "minicpmv4_7"
     GRANITE_SPEECH = "granite_speech"  # audio
     MIMOVL         = "mimovl"
     MIMO_AUDIO     = "mimo_audio"
