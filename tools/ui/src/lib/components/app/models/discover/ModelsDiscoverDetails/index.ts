@@ -16,6 +16,15 @@
 export { default as ModelsDiscoverDetails } from './ModelsDiscoverDetails.svelte';
 
 /**
+ * **ModelsDiscoverDetailsContainer** - Self-fetching detail view
+ *
+ * Loads the details, files and readme for one repo and renders
+ * ModelsDiscoverDetails, so hosts outside the Discover view can show the
+ * details without owning the fetching.
+ */
+export { default as ModelsDiscoverDetailsContainer } from './ModelsDiscoverDetailsContainer.svelte';
+
+/**
  * **ModelsDiscoverDetailsHeader** - Detail view header
  *
  * Shows the model avatar (base org + quant org corner badge), name, base model

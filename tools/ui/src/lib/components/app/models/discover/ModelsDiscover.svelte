@@ -4,7 +4,7 @@
 	import { ModelsSection } from '$lib/components/app';
 	import { DialogConfirmDownload } from '$lib/components/app/dialogs';
 	import {
-		ModelsDiscoverDetails,
+		ModelsDiscoverDetailsContainer,
 		ModelsDiscoverList,
 		ModelsDiscoverListSearch
 	} from '$lib/components/app/models/discover';
@@ -13,7 +13,7 @@
 	import { ModelDownloadConfirmAction } from '$lib/enums';
 	import { HuggingFaceService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore, uiStore } from '$lib/stores';
-	import type { HfModelDetailInfo, HfModelInfo, HfModelSibling } from '$lib/types';
+	import type { HfModelInfo } from '$lib/types';
 	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
 
 	let selectedId = $state<string | null>(null);
@@ -70,7 +70,6 @@
 
 		return rows;
 	});
-
 	let isSearching = $derived(searchQuery.trim().length > 0);
 
 	/** Repo id of a download tag, e.g. `org/repo:Q8_0-mtp` reports `org/repo`. */
@@ -131,12 +130,6 @@
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Detail pane state, reloaded when the selection changes.
-	let details = $state<HfModelDetailInfo | null>(null);
-	let files = $state<HfModelSibling[]>([]);
-	let readme = $state<string | null>(null);
-	let detailLoading = $state(false);
-	let detailError = $state<string | null>(null);
-
 	// Load the sidebar list on mount (the component is mounted when the dialog opens).
 	$effect(() => {
 		void modelsDiscoverStore.fetch();
@@ -171,54 +164,6 @@
 			void modelsDiscoverStore.search(value);
 		}, 300);
 	}
-
-	// Load the detail pane for the selected model (component is reused across
-	// selections, so this re-fetches on every change).
-	$effect(() => {
-		const id = selectedId;
-
-		if (!id) return;
-
-		let cancelled = false;
-
-		detailLoading = true;
-		detailError = null;
-
-		void (async () => {
-			try {
-				const [info, tree, readmeText] = await Promise.all([
-					HuggingFaceService.getDetails(id),
-					HuggingFaceService.getTree(id),
-					HuggingFaceService.getReadme(id)
-				]);
-
-				if (cancelled) return;
-
-				if (!info) {
-					detailError = 'Model not found';
-
-					return;
-				}
-
-				details = info;
-				files = HuggingFaceService.filterByExtension(
-					HuggingFaceService.collapseGgufShards(tree),
-					'.gguf'
-				);
-				readme = readmeText;
-			} catch (err) {
-				if (cancelled) return;
-
-				detailError = err instanceof Error ? err.message : 'Failed to load model';
-			} finally {
-				if (!cancelled) detailLoading = false;
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	});
 </script>
 
 {#snippet catalog()}
@@ -317,14 +262,7 @@
 
 <main class="overflow-y-auto">
 	{#if selectedId}
-		<ModelsDiscoverDetails
-			{details}
-			error={detailError}
-			{files}
-			loading={detailLoading}
-			modelId={selectedId}
-			{readme}
-		/>
+		<ModelsDiscoverDetailsContainer modelId={selectedId} />
 	{/if}
 </main>
 

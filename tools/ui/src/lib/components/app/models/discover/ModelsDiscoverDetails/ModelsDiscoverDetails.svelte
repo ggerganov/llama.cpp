@@ -23,9 +23,11 @@
 		loading?: boolean;
 		/** Error message when loading failed. */
 		error?: string | null;
+		/** Close the pane, for hosts that show the details in their own side panel. */
+		onClose?: () => void;
 	}
 
-	let { details, error = null, files, loading = false, modelId, readme }: Props = $props();
+	let { details, error = null, files, loading = false, modelId, onClose, readme }: Props = $props();
 
 	let gguf = $derived(details?.gguf);
 	let baseModels = $derived(HuggingFaceService.getBaseModels(details));
@@ -77,7 +79,7 @@
 		<p class="text-sm text-destructive">{error}</p>
 	</div>
 {:else if details}
-	<div class="space-y-6 p-6 pr-0">
+	<div class="@container space-y-6 p-6 pr-0">
 		<ModelsDiscoverDetailsHeader
 			{baseModels}
 			{details}
@@ -87,6 +89,7 @@
 			{hasVision}
 			{licenseTag}
 			{modelId}
+			{onClose}
 		/>
 
 		<ModelsDiscoverDetailsDownloadOptions {bitDepthRows} {modelId} />
