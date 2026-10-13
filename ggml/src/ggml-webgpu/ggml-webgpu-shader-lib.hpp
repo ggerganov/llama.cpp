@@ -1279,15 +1279,15 @@ class ggml_webgpu_shader_lib {
     std::unordered_map<ggml_webgpu_mul_mat_pipeline_key, webgpu_pipeline, ggml_webgpu_mul_mat_pipeline_key_hash>
         mul_mat_fast_pipelines;  // fast mat-mat (reg-tile or subgroup)
     std::unordered_map<ggml_webgpu_quantize_q8_pipeline_key, webgpu_pipeline, ggml_webgpu_quantize_q8_pipeline_key_hash>
-                                             quantize_q8_pipelines;
+        quantize_q8_pipelines;
     std::unordered_map<ggml_webgpu_mul_mat_id_gather_pipeline_key,
                        webgpu_pipeline,
                        ggml_webgpu_mul_mat_id_gather_pipeline_key_hash>
         mul_mat_id_gather_pipelines;  // n_experts
     std::unordered_map<ggml_webgpu_mul_mat_id_pipeline_key, webgpu_pipeline, ggml_webgpu_mul_mat_id_pipeline_key_hash>
-        mul_mat_id_pipelines;                                              // src0_type/src1_type
+        mul_mat_id_pipelines;         // src0_type/src1_type
     std::unordered_map<ggml_webgpu_mul_mat_id_pipeline_key, webgpu_pipeline, ggml_webgpu_mul_mat_id_pipeline_key_hash>
-        mul_mat_id_vec_pipelines;                                          // src0_type/src1_type
+        mul_mat_id_vec_pipelines;     // src0_type/src1_type
 
     std::unordered_map<ggml_webgpu_set_rows_pipeline_key, webgpu_pipeline, ggml_webgpu_set_rows_pipeline_key_hash>
         set_rows_pipelines;
@@ -2361,8 +2361,8 @@ class ggml_webgpu_shader_lib {
         auto decisions     = std::make_shared<ggml_webgpu_generic_shader_decisions>();
         decisions->wg_size = context.max_wg_size;
 
-        webgpu_pipeline pipeline       = ggml_webgpu_create_pipeline(device, processed, "mul_mat_id_gather");
-        pipeline.context               = decisions;
+        webgpu_pipeline pipeline         = ggml_webgpu_create_pipeline(device, processed, "mul_mat_id_gather");
+        pipeline.context                 = decisions;
         mul_mat_id_gather_pipelines[key] = pipeline;
         return pipeline;
     }
