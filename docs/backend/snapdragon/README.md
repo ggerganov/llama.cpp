@@ -354,9 +354,6 @@ on 4 physical NPUs, or `--devices 'HTP0[0-1:0],HTP1[0-1:1]'` on 2 physical NPUs 
       `GGML_HEXAGON_POWER_MODE=balanced llama-completion ...`
       `./scripts/snapdragon/run.py --hex-power-mode sustained_high_performance ...`
 
-- `GGML_HEXAGON_HOSTBUF=1`
-  Controls whether the Hexagon backend allocates host buffers. By default, all buffers except for REPACK are host buffers.
-  This option is required for testing Ops that require REPACK buffers (MUL_MAT and MUL_MAT_ID).
 
 - `GGML_HEXAGON_VERBOSE=1`
   Enables verbose logging of Ops from the backend. Example output:
