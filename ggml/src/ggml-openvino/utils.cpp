@@ -39,6 +39,10 @@
 #include <unordered_map>
 #include <vector>
 
+// Non-throwing lookup used where inp_pos may legitimately be absent (e.g. split-model
+// fragments); defined alongside get_inp_pos_tensor() further down.
+static const ggml_tensor * find_inp_pos_tensor(const ggml_cgraph * cgraph);
+
 namespace {
 // For a KV cache input, return an ov::Tensor sized to n_kv (== attention_size
 // for that layer) instead of the fully-allocated ctx_per_seq. Pre-conditions:
@@ -855,7 +859,15 @@ enum ggml_status ov_graph_compute_dynamic(ggml_cgraph * cgraph, const std::share
     // graph_key first (a few hundred us), and if the same key is already in decoder_cache
     // we know the graph is not splitted (only not-splitted graphs get inserted there).
     const int64_t cache_key_start_time = ggml_time_us();
-    graph_key key(cgraph);
+    // Prefill and decode graphs can share n_nodes/first/last node name, but
+    // compute_op_case() bakes shape-dependent structural decisions into the compiled model, so
+    // the two phases must never share a cache entry. Graphs without inp_pos (e.g. split-model
+    // fragments) keep the old untagged key, same as before this distinction existed.
+    bool is_prefill = false;
+    if (const auto * inp_pos = find_inp_pos_tensor(cgraph)) {
+        is_prefill = get_is_prefill(cgraph, inp_pos);
+    }
+    graph_key key(cgraph, /*include_inputs=*/false, is_prefill);
     const int64_t cache_key_compute_time = ggml_time_us() - cache_key_start_time;
     int64_t cache_lookup_time = 0;
     bool key_seen = false;
@@ -948,6 +960,7 @@ enum ggml_status ov_graph_compute_dynamic(ggml_cgraph * cgraph, const std::share
 
         if (cache_hit) {
             std::map<std::string, std::shared_ptr<ov::Node>> model_weights;
+            ggml_decoder->m_is_prefill = is_prefill;
             ggml_decoder->set_compute_params(c_params);
             ggml_decoder->set_model_params(m_params);
             if (old_m_params.kv_buffer_changed(m_params) || !ggml_decoder->is_bound_to(cgraph)) {
@@ -1067,7 +1080,7 @@ enum ggml_status ov_graph_compute_dynamic(ggml_cgraph * cgraph, const std::share
             std::unique_lock<std::mutex> compile_lock(shared_cache->mutex);
             auto weight_names = get_weight_names(cgraph);
             ggml_decoder = std::make_shared<GgmlOvDecoder>(cgraph, m_params, c_params, weight_names,
-                                                          is_static, r_ctx->stateful, model_is_splitted);
+                                                          is_static, r_ctx->stateful, model_is_splitted, is_prefill);
             const std::string model_cache_dir = ggml_openvino_model_cache_dir();
             const std::string exact_key = cache_enabled ? compiled_graph_key(cgraph, *ggml_decoder, device) : "";
             uint64_t model_fp = 0;
@@ -2067,7 +2080,7 @@ void print_output_tensor_info(const std::string & name, const ov::Tensor & tenso
     }
 }
 
-const ggml_tensor * get_inp_pos_tensor(ggml_cgraph * cgraph) {
+static const ggml_tensor * find_inp_pos_tensor(const ggml_cgraph * cgraph) {
     for (int i = 0; i < cgraph->n_nodes; ++i) {
         auto * op = cgraph->nodes[i];
         for (int j = 0; j < GGML_MAX_SRC; ++j) {
@@ -2080,8 +2093,16 @@ const ggml_tensor * get_inp_pos_tensor(ggml_cgraph * cgraph) {
             }
         }
     }
-    GGML_LOG_ERROR("get_inp_pos_tensor: inp_pos not found in cgraph");
-    throw std::runtime_error("get_inp_pos_tensor: inp_pos not found in cgraph");
+    return nullptr;
+}
+
+const ggml_tensor * get_inp_pos_tensor(ggml_cgraph * cgraph) {
+    const ggml_tensor * inp_pos = find_inp_pos_tensor(cgraph);
+    if (inp_pos == nullptr) {
+        GGML_LOG_ERROR("get_inp_pos_tensor: inp_pos not found in cgraph");
+        throw std::runtime_error("get_inp_pos_tensor: inp_pos not found in cgraph");
+    }
+    return inp_pos;
 }
 
 int64_t get_inp_pos_n_tokens(ggml_cgraph * cgraph, const ggml_tensor * inp_pos) {

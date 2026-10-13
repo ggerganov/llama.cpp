@@ -23,12 +23,19 @@
 struct graph_key {
     int n_nodes;
     int n_leaves;
+    // Prefill (n_tokens > 1) and decode (n_tokens == 1) graphs can otherwise share the same
+    // node count and end names, but compute_op_case() bakes shape-dependent structural
+    // decisions (e.g. GDN/view slicing) into the translated model at construction time, so a
+    // decode-shaped call must never reuse a model/infer_request compiled from a prefill-shaped
+    // one (or vice versa).
+    bool is_prefill = false;
     std::string first_node_name;
     std::string last_node_name;
     // Each entry: "<node_idx>:<src_idx>:<op_type>"
     std::vector<std::string> input_srcs;
 
-    graph_key(const ggml_cgraph * cgraph, bool include_inputs = false) : n_nodes(cgraph->n_nodes), n_leaves(cgraph->n_leafs) {
+    graph_key(const ggml_cgraph * cgraph, bool include_inputs = false, bool is_prefill = false) :
+        n_nodes(cgraph->n_nodes), n_leaves(cgraph->n_leafs), is_prefill(is_prefill) {
         if (n_nodes > 0) {
             first_node_name = cgraph->nodes[0]->name;
             last_node_name = cgraph->nodes[n_nodes - 1]->name;
@@ -60,7 +67,7 @@ struct graph_key {
     }
 
     bool operator==(const graph_key & other) const {
-        return n_nodes == other.n_nodes && n_leaves == other.n_leaves &&
+        return n_nodes == other.n_nodes && n_leaves == other.n_leaves && is_prefill == other.is_prefill &&
                first_node_name == other.first_node_name &&
                last_node_name == other.last_node_name && input_srcs == other.input_srcs;
     }
@@ -70,6 +77,7 @@ struct graph_key_hash {
     size_t operator()(const graph_key & key) const {
         size_t hash = std::hash<int>{}(key.n_nodes);
         hash ^= std::hash<int>{}(key.n_leaves) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        hash ^= std::hash<bool>{}(key.is_prefill) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
         if (key.n_nodes > 0) {
             hash ^= std::hash<std::string>{}(key.first_node_name) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
             hash ^= std::hash<std::string>{}(key.last_node_name) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
