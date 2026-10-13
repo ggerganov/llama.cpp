@@ -2235,7 +2235,6 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
     const auto n_embd     = hparams.n_embd;
     const auto n_embd_out = hparams.n_embd_out();
 
-    // LFM2 builds logits only when embeddings are off, and set_embeddings() re-reserves only a pooled context
     bool has_logits     = !cparams.embeddings || graph_has_logits;
     bool has_embd       = cparams.embeddings;
     bool has_embd_nextn = cparams.embeddings_nextn;
