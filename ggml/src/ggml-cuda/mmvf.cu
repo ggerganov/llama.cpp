@@ -506,7 +506,7 @@ void launch_mul_mat_vec_f_cuda(
         } break;
         default: {
             GGML_ABORT("fatal error");
-        } break;
+        }
     }
 }
 
@@ -603,7 +603,6 @@ static void mul_mat_vec_f_cuda_switch_ncols_dst(
             break;
         default:
             GGML_ABORT("fatal error");
-            break;
     }
 }
 

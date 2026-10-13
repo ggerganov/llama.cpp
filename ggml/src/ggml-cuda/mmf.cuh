@@ -743,7 +743,7 @@ void mul_mat_f_cuda(
         } break;
         default: {
             GGML_ABORT("fatal error");
-        } break;
+        }
     }
 
     GGML_UNUSED_VARS(nchannels_y);
@@ -847,7 +847,7 @@ static void mul_mat_f_switch_cols_per_block(
         } break;
         default: {
             GGML_ABORT("fatal error");
-        } break;
+        }
     }
 }
 

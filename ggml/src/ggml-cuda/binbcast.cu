@@ -582,6 +582,6 @@ void ggml_cuda_op_repeat_back(ggml_backend_cuda_context & ctx, ggml_tensor * dst
         } break;
         default: {
             GGML_ASSERT(false);
-        } break;
+        }
     }
 }
