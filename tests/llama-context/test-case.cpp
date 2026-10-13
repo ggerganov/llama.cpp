@@ -1,7 +1,5 @@
 #include "test-case.h"
 
-#include "test-log.h"
-
 #include <iterator>
 
 const char * test_status_str(test_status status) {
@@ -59,7 +57,7 @@ const std::vector<ctx_test_ptr> & test_cases() {
     static const std::vector<ctx_test_ptr> cases = [] {
         std::vector<ctx_test_ptr> res;
 
-        for (auto & maker : { make_kv_cases, make_rs_cases }) {
+        for (const auto & maker : { make_kv_cases, make_rs_cases }) {
             auto part = maker();
             res.insert(res.end(), std::make_move_iterator(part.begin()), std::make_move_iterator(part.end()));
         }

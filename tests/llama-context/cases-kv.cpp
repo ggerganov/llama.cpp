@@ -1,7 +1,4 @@
-// KV cache state cases: save, load, copy and restore of sequences
-//
-// every case is one struct: what it verifies is in the comment above it, what it requires is in
-// its name() / group() / needs_baseline() overrides, and run() holds nothing but the scenario
+// KV cache state cases
 //
 #include "test-case.h"
 

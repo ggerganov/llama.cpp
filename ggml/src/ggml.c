@@ -329,10 +329,7 @@ void ggml_log_callback_default(enum ggml_log_level level, const char * text, voi
 #endif
 
 
-// the thread sanitizer does not intercept vm_allocate and vm_deallocate, so it never sees a page
-// range change hands - a thread that writes a range recycled from another one still sees the
-// accesses of the previous owner as unsynchronized and reports a data race. posix_memalign is
-// intercepted, so allocate with it when the sanitizer is enabled
+// the thread sanitizer does not intercept vm_allocate and vm_deallocate, so it produces false positives
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
 #define GGML_TSAN_ENABLED 1

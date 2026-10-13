@@ -94,10 +94,8 @@ LLAMA_API llama_memory_breakdown llama_get_memory_breakdown(const struct llama_c
 // the backend buffers that a state write of this memory would touch - empty caches report none
 LLAMA_API std::vector<ggml_backend_buffer_t> llama_memory_get_buffers(const llama_memory_t mem);
 
-// Turn the KV cache attention rotation on or off for the contexts created from this model. It is
-// on by default, and applies only where the KV cache type allows it
-// Unlike the LLAMA_ATTN_ROT_DISABLE environment variable, this is safe to use while other threads
-// are inside llama
+// Turn the KV cache attention rotation on or off for the contexts created from this model.
+// Useful for testing purposes.
 LLAMA_API void llama_model_set_attn_rot(struct llama_model * model, bool value);
 
 // Set whether the context outputs nextn embeddings or not

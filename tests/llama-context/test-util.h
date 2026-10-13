@@ -1,24 +1,18 @@
 #pragma once
 
-#include "arg.h"
 #include "llama-cpp.h"
 #include "llama.h"
+
+#include "common.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
+//
 // shared helpers of the context state cases
 //
-// the conventions the helpers enforce, so that no case has to repeat them:
-//   - every helper reports its own failure with a precise message, the case only decides
-//     whether that failure is fatal for it
-//   - nothing is asserted with GGML_ASSERT: a model that cannot do something is skipped by the
-//     case, a model that can do it but got it wrong fails
-//
 
-// logits replayed after a state load must match the baseline bit-for-bit on real models,
-// dummy models drift a little, so the replay cases allow a small NMSE
 extern const double NMSE_THRESHOLD;
 
 //

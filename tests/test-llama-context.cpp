@@ -1,27 +1,5 @@
 //
-// test-llama-context - exercises the state handling of llama_context: KV and recurrent cache
-// save, load, copy and rollback
-//
-// the test runs the same set of cases against every model it is given and prints a matrix -
-// one row per model, one column per case - so that an architecture-specific regression is
-// visible at a glance. the cases are driven by the runner of this directory, the suite harness
-// of tests/testing.h is deliberately not used: a run here is a matrix of verdicts rather than a
-// tree of subtests, and it needs none of the filtering or nesting that the harness offers.
-//
-// layout:
-//   tests/llama-context/test-case.h     the interface a case implements, and the registry
-//   tests/llama-context/test-runner.*   how cases are selected, executed and reported
-//   tests/llama-context/test-log.*      the per-model log capture and its dump on failure
-//   tests/llama-context/test-util.*     shared decode / state / comparison helpers
-//   tests/llama-context/cases-kv.cpp    the KV state cases
-//   tests/llama-context/cases-rs.cpp    the recurrent state cases
-//
-// two modes:
-//   -m model.gguf   run the cases against a single model, one line per case, then a summary
-//   --models DIR    run them against every .gguf in DIR and print the result matrix
-//
-// the log of llama, ggml and the backends is captured per model, so that a failure of one model
-// in --models mode still shows its details without flooding the matrix
+// test-llama-context - exercises the state handling of llama_context
 //
 
 #include "llama-context/test-case.h"
@@ -37,15 +15,11 @@
 #include <algorithm>
 #include <atomic>
 #include <clocale>
-#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <mutex>
 #include <random>
-#include <regex>
 #include <string>
 #include <thread>
 #include <vector>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "test-log.h"
 #include "test-util.h"
 
 #include <memory>
@@ -9,24 +8,6 @@
 
 //
 // the interface of a single context state case
-//
-// this suite does not use the harness of the other tests (tests/testing.h) - a case is a struct
-// with a name, a short description, a group and a run() body that returns a verdict, and the
-// runner (test-runner.h) owns everything else:
-//
-//   - which models the case applies to        -> skip_reason()
-//   - whether it is also run against a dirty cache
-//   - whether it needs the logits of the baseline case
-//   - the log of the run, the verdict line, the table cell
-//
-// the body expresses only the scenario and the checks:
-//
-//   CTX_REQUIRE(cond, "why");                            a check did not hold
-//   return case_result::fail("why");                     the same, from hand-written code
-//   return case_result::skip("why");                     this model cannot exercise the case
-//   return case_result::pass();                          everything held
-//
-// a FAIL is fatal for the run, a SKIP is not - see merge_status()
 //
 
 enum class test_status {

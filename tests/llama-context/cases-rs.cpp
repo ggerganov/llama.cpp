@@ -1,10 +1,5 @@
-// recurrent state cases: rollback of a rolled-back sequence, replay across ubatch boundaries
-// and shared cells between sequences
-//
-// these cases are skipped for architectures without a recurrent cache, and the runner runs each
-// of them twice - once against a fresh cache and once against a cache pre-filled with a known
-// pattern, so that a restore reading cells it never wrote cannot pass
-//
+// recurrent state cases
+
 #include "test-case.h"
 
 #include "test-log.h"
