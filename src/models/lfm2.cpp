@@ -35,7 +35,8 @@ void llama_model_lfm2::load_arch_hparams(llama_model_loader & ml) {
         hparams.n_embd_out_impl = N_DECISION_TYPES;
     }
 
-    if (const auto is_swa = ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false); is_swa && hparams.n_swa > 0) {
+    const auto is_swa = ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
+    if (is_swa && hparams.n_swa > 0) {
         hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
         for (uint32_t il = 0; il < hparams.n_layer(); ++il) {
             hparams.is_swa_impl[il] = !hparams.is_recr_impl[il];
@@ -184,8 +185,11 @@ llama_model_lfm2::graph<iswa>::graph(const llama_model & model, const llm_graph_
         const auto n_embd_head = hparams.n_embd_head_v();
         const auto n_head_kv   = hparams.n_head_kv(il);
 
-        auto [q, k, v] = build_qkv(model.layers[il], cur,
+        auto  values_1 = build_qkv(model.layers[il], cur,
                 n_embd_head, n_head, n_head_kv, il);
+        auto & q = values_1.q;
+        auto & k = values_1.k;
+        auto & v = values_1.v;
 
         // qk norm
         q = build_norm(q, model.layers[il].attn_q_norm, NULL, LLM_NORM_RMS, il);
@@ -289,12 +293,7 @@ llama_model_lfm2::graph<iswa>::graph(const llama_model & model, const llm_graph_
 
     ggml_build_forward_expand(gf, cur);
 
-    inp_hybrid_type * inp_hybrid = nullptr;
-    if constexpr (iswa) {
-        inp_hybrid = build_inp_mem_hybrid_iswa();
-    } else {
-        inp_hybrid = build_inp_mem_hybrid();
-    }
+    inp_hybrid_type * inp_hybrid = build_input<inp_hybrid_type>();
 
     ggml_tensor * inp_pos     = build_inp_pos();
     ggml_tensor * inp_out_ids = build_inp_out_ids();
@@ -353,6 +352,22 @@ static bool lfm2_is_media(const llama_ubatch & ubatch, int64_t i) {
 // non-causal within a sequence, the media never reads the text, so it is a function of the media alone
 // in the head, the text and the media only read their own kind
 class llm_graph_input_attn_media : public llm_graph_input_attn_no_cache {
+    template<typename T>
+    void fill_mask(T * data, T zero, T ninf, const llama_ubatch * ubatch, const std::vector<bool> & is_media) const {
+        const int64_t n_tokens = ubatch->n_tokens;
+        for (int64_t i1 = 0; i1 < n_tokens; ++i1) {
+            for (int64_t i0 = 0; i0 < n_tokens; ++i0) {
+                bool visible = ubatch->seq_id[i0][0] == ubatch->seq_id[i1][0];
+                if (is_head) {
+                    visible = visible && is_media[i0] == is_media[i1];
+                } else {
+                    visible = visible && !(is_media[i1] && !is_media[i0]);
+                }
+                data[i1 * n_tokens + i0] = visible ? zero : ninf;
+            }
+        }
+    }
+
 public:
     llm_graph_input_attn_media(const llama_hparams & hparams, const llama_cparams & cparams, bool is_head) :
         llm_graph_input_attn_no_cache(hparams, cparams), is_head(is_head) {}
@@ -365,25 +380,11 @@ public:
             is_media[i] = lfm2_is_media(*ubatch, i);
         }
 
-        const auto fill_mask = [&](auto * data, auto zero, auto ninf) {
-            for (int64_t i1 = 0; i1 < n_tokens; ++i1) {
-                for (int64_t i0 = 0; i0 < n_tokens; ++i0) {
-                    bool visible = ubatch->seq_id[i0][0] == ubatch->seq_id[i1][0];
-                    if (is_head) {
-                        visible = visible && is_media[i0] == is_media[i1];
-                    } else {
-                        visible = visible && !(is_media[i1] && !is_media[i0]);
-                    }
-                    data[i1 * n_tokens + i0] = visible ? zero : ninf;
-                }
-            }
-        };
-
         GGML_ASSERT(ggml_backend_buffer_is_host(self_kq_mask->buffer));
         if (self_kq_mask->type == GGML_TYPE_F16) {
-            fill_mask((ggml_fp16_t *) self_kq_mask->data, ggml_fp32_to_fp16(0.0f), ggml_fp32_to_fp16(-INFINITY));
+            fill_mask((ggml_fp16_t *) self_kq_mask->data, ggml_fp32_to_fp16(0.0f), ggml_fp32_to_fp16(-INFINITY), ubatch, is_media);
         } else {
-            fill_mask((float *) self_kq_mask->data, 0.0f, -INFINITY);
+            fill_mask((float *) self_kq_mask->data, 0.0f, -INFINITY, ubatch, is_media);
         }
     }
 
@@ -478,7 +479,10 @@ llama_model_lfm2::graph_decision::graph_decision(const llama_model & model, cons
             cur = build_lora_mm(layer.shortconv.out_proj, ggml_mul(ctx0, c, y));
             cb(cur, "model.layers.{}.conv.out_proj", il);
         } else {
-            auto [q, k, v] = build_qkv(layer, cur, n_embd_head, n_head, hparams.n_head_kv(il), il);
+            auto  values_2 = build_qkv(layer, cur, n_embd_head, n_head, hparams.n_head_kv(il), il);
+            auto & q = values_2.q;
+            auto & k = values_2.k;
+            auto & v = values_2.v;
 
             q = build_norm(q, layer.attn_q_norm, NULL, LLM_NORM_RMS, il);
             k = build_norm(k, layer.attn_k_norm, NULL, LLM_NORM_RMS, il);
@@ -539,7 +543,10 @@ ggml_tensor * llama_model_lfm2::graph_decision::build_decision_head(
             cb(cur, "attn_norm", il);
 
             // no positional encoding in the head
-            auto [Qcur, Kcur, Vcur] = build_qkv(layer, cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+            auto  values_3 = build_qkv(layer, cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+            auto & Qcur = values_3.q;
+            auto & Kcur = values_3.k;
+            auto & Vcur = values_3.v;
 
             cur = build_attn(inp_attn,
                         layer.wo, layer.wo_b, layer.wo_s,

@@ -1,3 +1,5 @@
+#include "ggml-cpp-compat.h"
+#include <tuple>
 #include "ops.h"
 
 #include "ggml-cpu.h"
@@ -88,7 +90,7 @@ static void ggml_compute_forward_dup_flt(
     // case: dst tensor is contiguous
     if (ggml_is_contiguous(dst)) {
         if (nb00 == sizeof(src_t)) {
-            if constexpr (std::is_same_v<dst_t, src_t>) {
+            GGML_IF_CONSTEXPR (std::is_same<dst_t, src_t>::value) {
                 // same type
                 size_t id = 0;
                 const size_t rs = ne00 * nb00;
@@ -156,7 +158,7 @@ static void ggml_compute_forward_dup_flt(
     int64_t i12 = 0;
     int64_t i13 = 0;
 
-    if constexpr (std::is_same_v<dst_t, src_t>) {
+    GGML_IF_CONSTEXPR (std::is_same<dst_t, src_t>::value) {
         for (int64_t i03 = 0; i03 < ne03; i03++) {
             for (int64_t i02 = 0; i02 < ne02; i02++) {
                 i10 += ne00 * ir0;
@@ -1423,7 +1425,9 @@ static void ggml_compute_forward_cumsum_f32(
     GGML_ASSERT(ne2 == ne02);
     GGML_ASSERT(ne3 == ne03);
 
-    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const auto  values_1 = get_thread_range(params, src0);
+    auto & ir0 = std::get<0>(values_1);
+    auto & ir1 = std::get<1>(values_1);
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne02*ne01);
@@ -2283,7 +2287,9 @@ static void ggml_compute_forward_fill_f32(const ggml_compute_params * params, gg
     GGML_TENSOR_LOCALS(int64_t, ne, dst, ne);
     GGML_TENSOR_LOCALS(size_t,  nb, dst, nb);
 
-    const auto [ir0, ir1] = get_thread_range(params, dst);
+    const auto  values_2 = get_thread_range(params, dst);
+    auto & ir0 = std::get<0>(values_2);
+    auto & ir1 = std::get<1>(values_2);
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne2*ne1);
@@ -2302,7 +2308,9 @@ static void ggml_compute_forward_fill_f16(const ggml_compute_params * params, gg
     GGML_TENSOR_LOCALS(int64_t, ne, dst, ne);
     GGML_TENSOR_LOCALS(size_t,  nb, dst, nb);
 
-    const auto [ir0, ir1] = get_thread_range(params, dst);
+    const auto  values_3 = get_thread_range(params, dst);
+    auto & ir0 = std::get<0>(values_3);
+    auto & ir1 = std::get<1>(values_3);
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne2*ne1);
@@ -2345,7 +2353,9 @@ static void ggml_compute_forward_tri_f32(const ggml_compute_params * params, ggm
 
     GGML_TENSOR_UNARY_OP_LOCALS
 
-    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const auto  values_4 = get_thread_range(params, src0);
+    auto & ir0 = std::get<0>(values_4);
+    auto & ir1 = std::get<1>(values_4);
 
     bool (*bipred)(int, int);
 
@@ -3532,7 +3542,7 @@ static void ggml_compute_forward_swiglu_oai_f32(
 
         for (int k = 0; k < nc; k++) {
             const float x = std::min(src0_p[k], limit);
-            const float y = std::clamp(src1_p[k], -limit, limit);
+            const float y = ggml_clamp(src1_p[k], -limit, limit);
             const float out_glu = x / (1.f + expf(alpha * (-x)));
             dst_p[k] = out_glu * (y + 1.f);
         }
@@ -3612,7 +3622,7 @@ static void ggml_compute_forward_swiglu_clamp_f32(const ggml_compute_params * pa
 
         for (int k = 0; k < nc; k++) {
             const float gate = std::min(src0_p[k], limit);
-            const float up   = std::clamp(src1_p[k], -limit, limit);
+            const float up   = ggml_clamp(src1_p[k], -limit, limit);
             dst_p[k]         = gate / (1.f + expf(-gate)) * up;
         }
 
@@ -3671,7 +3681,7 @@ static void ggml_compute_forward_swiglu_clamp_f16(const ggml_compute_params * pa
 
         for (int k = 0; k < nc; k++) {
             const float gate = std::min(GGML_FP16_TO_FP32(src0_p[k]), limit);
-            const float up   = std::clamp(GGML_FP16_TO_FP32(src1_p[k]), -limit, limit);
+            const float up   = ggml_clamp(GGML_FP16_TO_FP32(src1_p[k]), -limit, limit);
             dst_p[k]         = GGML_FP32_TO_FP16(gate / (1.f + expf(-gate)) * up);
         }
 
@@ -4113,7 +4123,7 @@ static void ggml_compute_forward_rms_norm_f32(
     const ggml_tensor * src1 = nullptr;
     ggml_tensor       * dst  = dst_rms_norm;
 
-    if constexpr (FUSE_OP == GGML_RMS_NORM_FUSE_OP_MUL) {
+    GGML_IF_CONSTEXPR (FUSE_OP == GGML_RMS_NORM_FUSE_OP_MUL) {
         src1 = (dst_fused->src[0] == dst_rms_norm) ? dst_fused->src[1] : dst_fused->src[0];
         dst  = dst_fused;
     }
@@ -4151,7 +4161,7 @@ static void ggml_compute_forward_rms_norm_f32(
 
                 float * y = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
 
-                if constexpr (FUSE_OP == GGML_RMS_NORM_FUSE_OP_MUL) {
+                GGML_IF_CONSTEXPR (FUSE_OP == GGML_RMS_NORM_FUSE_OP_MUL) {
                     const int64_t i11 = i01 % ne11;
                     const int64_t i12 = i02 % ne12;
                     const int64_t i13 = i03 % ne13;
@@ -5487,11 +5497,11 @@ static void ggml_compute_forward_set_rows_impl(
 
                 GGML_ASSERT(i1 >= 0 && i1 < ne1);
 
-                if constexpr (std::is_same_v<src_t, float>) {
+                GGML_IF_CONSTEXPR (std::is_same<src_t, float>::value) {
                     from_float(
                             (const float *) ((char *) src0->data +  i*nb01 + i02*nb02 + i03*nb03),
                                             ((char *)  dst->data + i1*nb1  + i02*nb2  + i03*nb3), nc);
-                } else if constexpr (std::is_same_v<src_t, ggml_fp16_t>) {
+                } else GGML_IF_CONSTEXPR (std::is_same<src_t, ggml_fp16_t>::value) {
                     if (dst->type == GGML_TYPE_F16) {
                         memcpy(
                                             ((char *)  dst->data + i1*nb1  + i02*nb2  + i03*nb3),
@@ -7586,6 +7596,14 @@ void ggml_compute_forward_conv_3d(
     ggml_compute_forward_conv_3d_impl(params, src0, src1, dst, src0->type);
 }
 
+static void ggml_conv_transpose_dot(int n, float * result, ggml_fp16_t * a, ggml_fp16_t * b) {
+    ggml_vec_dot_f16(n, result, 0, a, 0, b, 0, 1);
+}
+
+static void ggml_conv_transpose_dot(int n, float * result, float * a, float * b) {
+    ggml_vec_dot_f32(n, result, 0, a, 0, b, 0, 1);
+}
+
 template <typename kernel_t>
 static void ggml_compute_forward_conv_transpose_2d_impl(
     const ggml_compute_params * params,
@@ -7638,7 +7656,7 @@ static void ggml_compute_forward_conv_transpose_2d_impl(
                         const float * const src = (float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11);
                         kernel_t * dst_data = wdata_b + i11*ne10*ne12;
                         for (int i10 = 0; i10 < ne10; i10++) {
-                            if constexpr (std::is_same_v<kernel_t, ggml_fp16_t>) {
+                            GGML_IF_CONSTEXPR (std::is_same<kernel_t, ggml_fp16_t>::value) {
                                 dst_data[i10*ne12 + i12] = GGML_CPU_FP32_TO_FP16(src[i10]);
                             } else {
                                 dst_data[i10*ne12 + i12] = src[i10];
@@ -7679,15 +7697,8 @@ static void ggml_compute_forward_conv_transpose_2d_impl(
                     for (int i01 = 0; i01 < ne01; i01++) {
                         for (int i00 = 0; i00 < ne00; i00++) {
                             float v = 0;
-                            if constexpr (std::is_same_v<kernel_t, ggml_fp16_t>) {
-                                ggml_vec_dot_f16(ne03, &v, 0,
-                                        wdata_src_b + i1n, 0,
-                                        wdata_kernel + i01*ne00*ne03 + i00*ne03, 0, 1);
-                            } else {
-                                ggml_vec_dot_f32(ne03, &v, 0,
-                                        wdata_src_b + i1n, 0,
-                                        wdata_kernel + i01*ne00*ne03 + i00*ne03, 0, 1);
-                            }
+                            ggml_conv_transpose_dot(ne03, &v, wdata_src_b + i1n,
+                                    wdata_kernel + i01*ne00*ne03 + i00*ne03);
                             dst_data[(i11*stride + i01)*ne0 + i10*stride + i00] += v;
                         }
                     }
@@ -8451,7 +8462,7 @@ static void ggml_compute_forward_pad_f32(
             for (int64_t i0 = 0; i0 < ne0; ++i0) {
                 for (int64_t i3 = 0; i3 < ne3; ++i3) {
                     // circular means wrap around on a torus, so x and y loop around
-                    if constexpr (circular_t) {
+                    GGML_IF_CONSTEXPR (circular_t) {
                         const int64_t dst_idx = i3*(ne0*ne1*ne2) + i2*(ne0*ne1) + i1*ne0 + i0;
                         const int64_t src_i0 = ggml_wrap_around(i0 - lp0, ne00);
                         const int64_t src_i1 = ggml_wrap_around(i1 - lp1, ne01);
@@ -8706,7 +8717,7 @@ template<enum ggml_sort_order order>
 struct cmp_argsort {
     const float * data;
     bool operator()(int32_t a, int32_t b) const {
-        if constexpr (order == GGML_SORT_ORDER_ASC) {
+        GGML_IF_CONSTEXPR (order == GGML_SORT_ORDER_ASC) {
             return data[a] < data[b];
         } else {
             return data[a] > data[b];
@@ -12256,7 +12267,7 @@ static void ggml_compute_forward_fwht_impl(const ggml_compute_params * params, g
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
 
-    GGML_ASSERT(src1->type == (std::is_same_v<src_t, float> ? GGML_TYPE_F32 : GGML_TYPE_F16));
+    GGML_ASSERT(src1->type == (std::is_same<src_t, float>::value ? GGML_TYPE_F32 : GGML_TYPE_F16));
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
     GGML_TENSOR_BINARY_OP_LOCALS

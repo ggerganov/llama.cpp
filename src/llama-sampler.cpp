@@ -1,3 +1,4 @@
+#include "../ggml/src/ggml-cpp-compat.h"
 #include "llama-sampler.h"
 
 #include "llama-impl.h"
@@ -1019,6 +1020,8 @@ int32_t llama_sampler_chain_n(const struct llama_sampler * chain) {
 // greedy
 
 struct llama_sampler_greedy : public llama_sampler_backend {
+    explicit llama_sampler_greedy(const char * name) : llama_sampler_backend(name) {}
+
 };
 
 static const char * llama_sampler_greedy_name(const struct llama_sampler * smpl) {
@@ -1122,6 +1125,14 @@ struct llama_sampler * llama_sampler_init_greedy() {
 // dist
 
 struct llama_sampler_dist : public llama_sampler_backend {
+    llama_sampler_dist(const char * name, uint32_t seed, uint32_t seed_cur, std::mt19937 rng,
+            bool backend_transactional, std::mt19937 rng_backend, size_t n_backend_draws_generated,
+            size_t n_backend_draws_committed, std::vector<ggml_tensor *> inp_uniforms)
+        : llama_sampler_backend(name), seed(seed), seed_cur(seed_cur), rng(std::move(rng)),
+          backend_transactional(backend_transactional), rng_backend(std::move(rng_backend)),
+          n_backend_draws_generated(n_backend_draws_generated), n_backend_draws_committed(n_backend_draws_committed),
+          inp_uniforms(std::move(inp_uniforms)) {}
+
     const uint32_t seed;
           uint32_t seed_cur;
 
@@ -1444,6 +1455,8 @@ void llama_sampler_backend_begin(llama_sampler * sampler) {
 // top-k
 
 struct llama_sampler_top_k : public llama_sampler_backend {
+    llama_sampler_top_k(const char * name, int32_t k) : llama_sampler_backend(name), k(k) {}
+
     const int32_t k;
 };
 
@@ -1541,6 +1554,9 @@ struct llama_sampler * llama_sampler_init_top_k(int32_t k) {
 // top-p
 
 struct llama_sampler_top_p : public llama_sampler_backend {
+    llama_sampler_top_p(const char * name, float p, size_t min_keep, std::vector<llama_token_data> buf_sort)
+        : llama_sampler_backend(name), p(p), min_keep(min_keep), buf_sort(std::move(buf_sort)) {}
+
     const float  p;
     const size_t min_keep;
 
@@ -1743,6 +1759,9 @@ struct llama_sampler * llama_sampler_init_top_p(float p, size_t min_keep) {
 // min-p
 
 struct llama_sampler_min_p : public llama_sampler_backend {
+    llama_sampler_min_p(const char * name, float p, size_t min_keep)
+        : llama_sampler_backend(name), p(p), min_keep(min_keep) {}
+
     const float  p;
     const size_t min_keep;
 };
@@ -2016,6 +2035,8 @@ struct llama_sampler * llama_sampler_init_typical(float p, size_t min_keep) {
 // temp
 
 struct llama_sampler_temp : public llama_sampler_backend {
+    llama_sampler_temp(const char * name, float temp) : llama_sampler_backend(name), temp(temp) {}
+
     const float temp;
 };
 
@@ -2126,6 +2147,9 @@ struct llama_sampler * llama_sampler_init_temp(float temp) {
 // temp-ext
 
 struct llama_sampler_temp_ext : public llama_sampler_backend {
+    llama_sampler_temp_ext(const char * name, float temp, float delta, float exponent)
+        : llama_sampler_backend(name), temp(temp), delta(delta), exponent(exponent) {}
+
     const float temp;
     const float delta;
     const float exponent;
@@ -3772,8 +3796,8 @@ static void llama_sampler_adaptive_p_apply(struct llama_sampler * smpl, llama_to
     }
 
     // using the EMA, compute the adapted target probability for the current sampling step
-    auto target = std::clamp(ctx->target, 0.0f, 1.0f);
-    float adapted_target = std::clamp(
+    auto target = ggml_clamp(ctx->target, 0.0f, 1.0f);
+    float adapted_target = ggml_clamp(
         ctx->total_weight == 0.0f ? target : 2.0f * target - (ctx->weighted_sum / ctx->total_weight),
         0.0f, 1.0f
     );
@@ -3869,7 +3893,7 @@ struct llama_sampler * llama_sampler_init_adaptive_p(
     uint32_t seed
 ) {
     auto seed_cur = get_rng_seed(seed);
-    float clamped_decay = std::clamp(decay, 0.0f, 0.99f);
+    float clamped_decay = ggml_clamp(decay, 0.0f, 0.99f);
     return llama_sampler_init(
         /* .iface = */ &llama_sampler_adaptive_p_i,
         /* .ctx   = */ new llama_sampler_adaptive_p {
@@ -3890,6 +3914,11 @@ struct llama_sampler * llama_sampler_init_adaptive_p(
 // logit-bias
 
 struct llama_sampler_logit_bias : public llama_sampler_backend {
+    llama_sampler_logit_bias(const char * name, int32_t n_vocab, std::vector<llama_logit_bias> logit_bias,
+            std::vector<llama_logit_bias> to_search, ggml_tensor * inp_logit_bias, ggml_tensor * inp_logit_idxs)
+        : llama_sampler_backend(name), n_vocab(n_vocab), logit_bias(std::move(logit_bias)),
+          to_search(std::move(to_search)), inp_logit_bias(inp_logit_bias), inp_logit_idxs(inp_logit_idxs) {}
+
     const int32_t n_vocab;
 
     const std::vector<llama_logit_bias> logit_bias;

@@ -9,6 +9,7 @@
 #include "llama-model.h"
 #include "llama-vocab.h"
 
+#include <tuple>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
@@ -201,7 +202,9 @@ void llama_model_saver::add_kv_from_model() {
         std::vector<int8_t> values;
         tensor_names.reserve(model->prec_policy.prec_src1.size());
         values.reserve(model->prec_policy.prec_src1.size());
-        for (const auto & [w, prec] : model->prec_policy.prec_src1) {
+        for (const auto & entry_1 : model->prec_policy.prec_src1) {
+            auto & w = std::get<0>(entry_1);
+            auto & prec = std::get<1>(entry_1);
             tensor_names.push_back(ggml_get_name(w));
             values.push_back(prec == GGML_PREC_Q8 ? 0 : 1);
         }

@@ -191,8 +191,11 @@ llama_model_glm4_moe::graph_mtp::graph_mtp(const llama_model & model, const llm_
     cur = build_norm(cur, layer.attn_norm, nullptr, LLM_NORM_RMS, il);
     cb(cur, "mtp_attn_norm", il);
 
-    auto [Qcur, Kcur, Vcur] = build_qkv(layer, cur,
+    auto  values_1 = build_qkv(layer, cur,
             n_embd_head, n_head, n_head_kv, il);
+    auto & Qcur = values_1.q;
+    auto & Kcur = values_1.k;
+    auto & Vcur = values_1.v;
 
     if (layer.attn_q_norm) {
         Qcur = build_norm(Qcur, layer.attn_q_norm, nullptr, LLM_NORM_RMS, il);
@@ -319,8 +322,11 @@ llama_model_glm4_moe::graph::graph(const llama_model & model, const llm_graph_pa
 
         // self-attention
         {
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_2 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_2.q;
+            auto & Kcur = values_2.k;
+            auto & Vcur = values_2.v;
 
             // Apply Q/K norm if available (GLM-4.5 355B variant)
             if (model.layers[il].attn_q_norm) {

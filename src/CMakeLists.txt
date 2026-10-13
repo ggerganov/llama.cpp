@@ -1,4 +1,7 @@
 llama_add_compile_flags()
+if (NOT DEFINED GGML_CXX_STANDARD)
+    set(GGML_CXX_STANDARD 17)
+endif()
 
 #
 # libraries
@@ -67,7 +70,7 @@ configure_file(llama-version.h.in ${CMAKE_CURRENT_BINARY_DIR}/llama-version.h @O
 
 target_include_directories(llama PRIVATE . ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(llama PUBLIC ../include)
-target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
+target_compile_features   (llama PRIVATE cxx_std_${GGML_CXX_STANDARD}) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
 

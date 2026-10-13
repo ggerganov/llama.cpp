@@ -1115,7 +1115,7 @@ static struct ggml_backend_meta_split_state ggml_backend_meta_get_split_state(
         return split_state;
     };
 
-    const std::pair key = std::make_pair(tensor, assume_sync);
+    const auto key = std::make_pair(tensor, assume_sync);
     auto it = buf_ctx->split_state_cache.find(key);
     if (it != buf_ctx->split_state_cache.end() && memcmp(it->second.second, (const char *) tensor, sizeof(it->second.second)) != 0) {
         buf_ctx->split_state_cache.clear();

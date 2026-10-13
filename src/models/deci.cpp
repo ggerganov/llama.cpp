@@ -122,8 +122,11 @@ llama_model_deci::graph::graph(const llama_model & model, const llm_graph_params
             ggml_tensor * rope_factors = model.get_rope_factors(cparams, il);
 
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             Qcur = ggml_rope_ext(ctx0, Qcur, inp_pos, rope_factors, n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                                  ext_factor, attn_factor, beta_fast, beta_slow);

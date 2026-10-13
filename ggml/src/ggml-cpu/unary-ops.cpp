@@ -1,3 +1,4 @@
+#include <tuple>
 #include "unary-ops.h"
 
 static inline float op_abs(float x) {
@@ -118,7 +119,9 @@ static void apply_unary_op(const ggml_compute_params * params, ggml_tensor * dst
     GGML_ASSERT( nb0 == sizeof(dst_t));
     GGML_ASSERT(nb00 == sizeof(src0_t));
 
-    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const auto  values_1 = get_thread_range(params, src0);
+    auto & ir0 = std::get<0>(values_1);
+    auto & ir1 = std::get<1>(values_1);
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne02*ne01);
@@ -198,7 +201,9 @@ static void apply_unary_op_functor(const ggml_compute_params * params, ggml_tens
     GGML_ASSERT( nb0 == sizeof(dst_t));
     GGML_ASSERT(nb00 == sizeof(src0_t));
 
-    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const auto  values_2 = get_thread_range(params, src0);
+    auto & ir0 = std::get<0>(values_2);
+    auto & ir1 = std::get<1>(values_2);
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne02*ne01);

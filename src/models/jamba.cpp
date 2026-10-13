@@ -129,8 +129,11 @@ llama_model_jamba::graph::graph(const llama_model & model, const llm_graph_param
         } else {
             // Attention
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             // No RoPE :)
             cur = build_attn(inp_hybrid->get_attn(),

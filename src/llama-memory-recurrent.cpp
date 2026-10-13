@@ -6,6 +6,7 @@
 #include "llama-batch.h"
 #include "llama-model.h"
 
+#include <tuple>
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -62,7 +63,7 @@ llama_memory_recurrent::llama_memory_recurrent(
                 return nullptr;
             }
 
-            ctx_map.emplace(buft, ctx);
+            ctx_map.emplace(buft, ggml_context_ptr(ctx));
 
             return ctx;
         }
@@ -115,14 +116,16 @@ llama_memory_recurrent::llama_memory_recurrent(
     }
 
     // allocate tensors and initialize the buffers to avoid NaNs in the padding
-    for (auto & [buft, ctx] : ctx_map) {
+    for (auto & entry_1 : ctx_map) {
+        auto & buft = std::get<0>(entry_1);
+        auto & ctx = std::get<1>(entry_1);
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx.get(), buft);
         if (!buf) {
             throw std::runtime_error("failed to allocate buffer for rs cache");
         }
         ggml_backend_buffer_clear(buf, 0);
         LLAMA_LOG_INFO("%s: %10s RS buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
-        ctxs_bufs.emplace_back(std::move(ctx), buf);
+        ctxs_bufs.emplace_back(std::move(ctx), ggml_backend_buffer_ptr(buf));
     }
 
     if (is_empty()) {
@@ -157,7 +160,8 @@ void llama_memory_recurrent::clear(bool data) {
     used = 0;
 
     if (data) {
-        for (auto & [_, buf] : ctxs_bufs) {
+        for (auto & entry_2 : ctxs_bufs) {
+            auto & buf = std::get<1>(entry_2);
             ggml_backend_buffer_clear(buf.get(), 0);
         }
     }
@@ -435,7 +439,8 @@ void llama_memory_recurrent::set_rs_idx(llama_seq_id seq_id, uint32_t idx) {
 
 std::map<ggml_backend_buffer_type_t, size_t> llama_memory_recurrent::memory_breakdown() const {
     std::map<ggml_backend_buffer_type_t, size_t> ret;
-    for (const auto & [_, buf] : ctxs_bufs) {
+    for (const auto & entry_3 : ctxs_bufs) {
+        auto & buf = std::get<1>(entry_3);
         ret[ggml_backend_buffer_get_type(buf.get())] += ggml_backend_buffer_get_size(buf.get());
     }
     return ret;
@@ -742,7 +747,8 @@ bool llama_memory_recurrent::is_empty() const {
 
 size_t llama_memory_recurrent::total_size() const {
     size_t size = 0;
-    for (const auto & [_, buf] : ctxs_bufs) {
+    for (const auto & entry_4 : ctxs_bufs) {
+        auto & buf = std::get<1>(entry_4);
         size += ggml_backend_buffer_get_size(buf.get());
     }
 

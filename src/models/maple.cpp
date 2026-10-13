@@ -80,7 +80,10 @@ llama_model_maple::graph::graph(const llama_model & model, const llm_graph_param
         cb(cur, "attn_norm", il);
 
         {
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur, n_embd_head, n_head, n_head_kv, il);
+            auto  values_1 = build_qkv(model.layers[il], cur, n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             Qcur = build_norm(Qcur, model.layers[il].attn_q_norm, nullptr, LLM_NORM_RMS, il);
             Kcur = build_norm(Kcur, model.layers[il].attn_k_norm, nullptr, LLM_NORM_RMS, il);

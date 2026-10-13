@@ -99,8 +99,11 @@ llama_model_mpt::graph::graph(const llama_model & model, const llm_graph_params 
         {
             cur = attn_norm;
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             // Q/K Layernorm
             if (model.layers[il].attn_q_norm) {

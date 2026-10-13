@@ -302,6 +302,20 @@ namespace GGUFMeta {
     llama_model_loader::get_arr_n<uint32_t>(const std::string & key, uint32_t & result, bool required);
 
     template<typename T>
+    static T gguf_array_item(const gguf_context * ctx, int kid, size_t i) {
+        const void * data = gguf_get_arr_data(ctx, kid);
+        if (gguf_get_arr_type(ctx, kid) == GGUF_TYPE_BOOL) {
+            return static_cast<T>(static_cast<const int8_t *>(data)[i] != 0);
+        }
+        return static_cast<const T *>(data)[i];
+    }
+
+    template<>
+    std::string gguf_array_item<std::string>(const gguf_context * ctx, int kid, size_t i) {
+        return gguf_get_arr_str(ctx, kid, i);
+    }
+
+    template<typename T>
     bool llama_model_loader::get_arr(const std::string & key, std::vector<T> & result, bool required) {
         const gguf_context * ctx = metadata;
         const int kid = gguf_find_key(ctx, key.c_str());
@@ -331,17 +345,9 @@ namespace GGUFMeta {
             throw std::runtime_error(format("%s has wrong array element type %s", key.c_str(), gguf_type_name(arr_info.gt)));
         }
 
-        if constexpr (std::is_same<T, std::string>::value) {
-            const size_t n_items = gguf_get_arr_n(ctx, kid);
-            result.clear();
-
-            for (size_t i = 0; i < n_items; i++) {
-                const T value = gguf_get_arr_str(ctx, kid, i);
-                result.emplace_back(value);
-            }
-        } else {
-            result.resize(arr_info.length);
-            result.assign((const T*)arr_info.data, (const T *)arr_info.data + arr_info.length);
+        result.resize(arr_info.length);
+        for (size_t i = 0; i < arr_info.length; ++i) {
+            result[i] = gguf_array_item<T>(ctx, kid, i);
         }
 
         return true;
@@ -382,22 +388,8 @@ namespace GGUFMeta {
             throw std::runtime_error(format("array length %u for key %s exceeds max %u", (uint32_t) arr_info.length, key.c_str(), (uint32_t) N_MAX));
         }
 
-        if constexpr (std::is_same<T, std::string>::value) {
-            const size_t n_items = gguf_get_arr_n(ctx, kid);
-
-            for (size_t i = 0; i < n_items; i++) {
-                const T value = gguf_get_arr_str(ctx, kid, i);
-                result[i] = value;
-            }
-        } else {
-            if (arr_info.gt == GGUF_TYPE_BOOL) {
-                const int8_t * values = (const int8_t *) arr_info.data;
-                std::transform(values, values + arr_info.length, result.begin(), [](int8_t x) {
-                    return static_cast<T>(x != 0);
-                });
-            } else {
-                std::copy((const T*)arr_info.data, (const T *)arr_info.data + arr_info.length, result.begin());
-            }
+        for (size_t i = 0; i < arr_info.length; ++i) {
+            result[i] = gguf_array_item<T>(ctx, kid, i);
         }
 
         return true;
@@ -1144,7 +1136,7 @@ struct ggml_tensor * llama_model_loader::create_tensor(
                 throw std::runtime_error(format("failed to create ggml context"));
             }
 
-            ctx_map.emplace(key, ctx);
+            ctx_map.emplace(key, ggml_context_ptr(ctx));
 
             return ctx;
         }

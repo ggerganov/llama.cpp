@@ -2,6 +2,7 @@
 
 #include "llama-impl.h"
 
+#include <tuple>
 #include <map>
 #include <vector>
 
@@ -1112,7 +1113,8 @@ std::string LLM_TN_IMPL::str() const {
 std::vector<llm_arch> llm_arch_all() {
     std::vector<llm_arch> ret;
     ret.reserve(LLM_ARCH_NAMES.size());
-    for (const auto & [arch, _] : LLM_ARCH_NAMES) {
+    for (const auto & entry_1 : LLM_ARCH_NAMES) {
+        auto & arch = std::get<0>(entry_1);
         ret.push_back(arch);
     }
     return ret;

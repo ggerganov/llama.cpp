@@ -268,7 +268,10 @@ ggml_tensor * llama_model_nemotron_h::graph::build_attention_layer(ggml_tensor *
                                                           const llama_model &       model,
                                                                 int64_t             n_embd_head,
                                                                 int                 il) {
-    auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+    auto  values_1 = build_qkv(model.layers[il], cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+    auto & Qcur = values_1.q;
+    auto & Kcur = values_1.k;
+    auto & Vcur = values_1.v;
 
     const float kq_scale =
         hparams.f_attention_scale == 0.0f ? 1.0f / sqrtf(float(n_embd_head)) : hparams.f_attention_scale;

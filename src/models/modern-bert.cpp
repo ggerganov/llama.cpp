@@ -174,8 +174,11 @@ llama_model_modern_bert::graph::graph(const llama_model & model, const llm_graph
         }
 
         // self attention
-        auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+        auto  values_1 = build_qkv(model.layers[il], cur,
                 n_embd_head, n_head, n_head_kv, il);
+        auto & Qcur = values_1.q;
+        auto & Kcur = values_1.k;
+        auto & Vcur = values_1.v;
 
         // RoPE
         Qcur = ggml_rope_ext(
@@ -267,7 +270,10 @@ ggml_tensor * llama_model_modern_bert::graph::build_decision_head(
             cb(cur, "attn_norm", il);
 
             // no positional encoding in the head
-            auto [Qcur, Kcur, Vcur] = build_qkv(layer, cur, n_embd_head, n_head, n_head_kv, il);
+            auto  values_2 = build_qkv(layer, cur, n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_2.q;
+            auto & Kcur = values_2.k;
+            auto & Vcur = values_2.v;
 
             cur = build_attn(inp_attn,
                         layer.wo, layer.wo_b, layer.wo_s,

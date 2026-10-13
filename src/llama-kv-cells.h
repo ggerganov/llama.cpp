@@ -25,7 +25,7 @@ struct llama_kv_cell_ext {
     }
 
     void reset() {
-        static_assert(std::is_trivially_copyable_v<llama_kv_cell_ext>);
+        static_assert(std::is_trivially_copyable<llama_kv_cell_ext>::value, "KV cell must be trivially copyable");
 
         *this = llama_kv_cell_ext{};
     }

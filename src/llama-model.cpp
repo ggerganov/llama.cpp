@@ -25,6 +25,7 @@
 #include "ggml.h"
 #include "ggml-cpp.h"
 
+#include <tuple>
 #include <algorithm>
 #include <cassert>
 #include <cfloat>
@@ -34,11 +35,32 @@
 #include <functional>
 #include <map>
 #include <numeric>
+
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+// Tensor split granularities are non-negative, and must fit in int64_t.
+static int64_t llama_split_lcm(int64_t a, int64_t b) {
+    if (a < 0 || b < 0) {
+        throw std::runtime_error("negative tensor split granularity");
+    }
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    int64_t x = a, y = b;
+    while (y != 0) {
+        const int64_t remainder = x % y;
+        x = y;
+        y = remainder;
+    }
+    if (a / x > INT64_MAX / b) {
+        throw std::runtime_error("tensor split granularity overflow");
+    }
+    return (a / x) * b;
+}
 
 static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params & params) {
     switch (arch) {
@@ -713,8 +735,8 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
         if (hparams.is_recr(il)) {
             // linear attention
             const int64_t head_dim        = hparams.ssm_d_state;
-            const int64_t blck_size_perf  = std::lcm(blck_size, 128);
-            const int64_t granularity_qkv = std::lcm(blck_size_perf, head_dim);
+            const int64_t blck_size_perf  = llama_split_lcm(blck_size, 128);
+            const int64_t granularity_qkv = llama_split_lcm(blck_size_perf, head_dim);
             if (std::regex_match(tensor_name, pattern_qkv_weight) || std::regex_match(tensor_name, pattern_attn_gate_weight) ||
                     std::regex_match(tensor_name, pattern_ssm_conv1d) || std::regex_match(tensor_name, pattern_ssm_out_weight)) {
                 return std::vector<int64_t>(segments.size(), granularity_qkv);
@@ -743,7 +765,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 blck_size_perf *= 2;
             }
 
-            const int64_t granularity_q    = std::lcm(n_embd_q, blck_size_perf);
+            const int64_t granularity_q    = llama_split_lcm(n_embd_q, blck_size_perf);
             const int64_t granularity_head = granularity_q / hparams.n_embd_head_k(il); // for tensors with one value per head
             if (std::regex_match(tensor_name, pattern_attn_sinks)) {
                 GGML_ASSERT(segments.size() == 1);
@@ -777,7 +799,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 // TODO: deduplicate condition [TAG_SPLIT_QGATE_QWEN]
                 if (ud->model->arch == LLM_ARCH_QWEN3NEXT || ud->model->arch == LLM_ARCH_QWEN35 || ud->model->arch == LLM_ARCH_QWEN35MOE || ud->model->arch == LLM_ARCH_CLEF ||
                         ud->model->arch == LLM_ARCH_QWEN4EXP) {
-                    return {std::lcm(2*n_embd_q, blck_size_perf)};
+                    return {llama_split_lcm(2*n_embd_q, blck_size_perf)};
                 }
                 return {granularity_q};
             }
@@ -811,7 +833,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 // TODO: deduplicate condition [TAG_SPLIT_QGATE_QWEN]
                 if (ud->model->arch == LLM_ARCH_QWEN3NEXT || ud->model->arch == LLM_ARCH_QWEN35 || ud->model->arch == LLM_ARCH_QWEN35MOE || ud->model->arch == LLM_ARCH_CLEF ||
                         ud->model->arch == LLM_ARCH_QWEN4EXP) {
-                    return {std::lcm(2*n_embd_q, blck_size_perf), granularity_kv};
+                    return {llama_split_lcm(2*n_embd_q, blck_size_perf), granularity_kv};
                 }
                 if (segments.size() == 3) {
                     // uneven K/V head sizes: per-segment granularity, V aligned to whole V heads
@@ -830,7 +852,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 std::regex_match(tensor_name, pattern_ffn_up_shexp_weight) ||
                 std::regex_match(tensor_name, pattern_ffn_gate_shexp_weight) ||
                 std::regex_match(tensor_name, pattern_ffn_down_shexp_weight)) {
-            const int64_t blck_size_perf = std::lcm(blck_size, 128);
+            const int64_t blck_size_perf = llama_split_lcm(blck_size, 128);
             GGML_ASSERT(segments.size() == 1);
             return {blck_size_perf};
         }
@@ -1310,7 +1332,9 @@ void llama_prec_policy::load(llama_model_loader & ml, const llama_model & model)
     }
 
     // resolve names to tensor pointers
-    for (const auto & [name, w] : model.tensors_by_name) {
+    for (const auto & entry_1 : model.tensors_by_name) {
+        auto & name = std::get<0>(entry_1);
+        auto & w = std::get<1>(entry_1);
         if (want.count(name)) {
             prec_src1.emplace(w, GGML_PREC_Q8);
         }
@@ -1862,7 +1886,8 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             output->type == GGML_TYPE_NVFP4 &&
             (output_s || output_in_s)));
     // populate tensors_by_name
-    for (auto & [_, ctx_ptr] : ml.ctx_map) {
+    for (auto & entry_2 : ml.ctx_map) {
+        auto & ctx_ptr = std::get<1>(entry_2);
         for (auto * cur = ggml_get_first_tensor(ctx_ptr.get()); cur != NULL; cur = ggml_get_next_tensor(ctx_ptr.get(), cur)) {
             tensors_by_name.emplace_back(ggml_get_name(cur), cur);
         }
@@ -1882,7 +1907,9 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     const size_t n_max_backend_buffer = ml.ctx_map.size() * ml.files.size();
     pimpl->ctxs_bufs.reserve(n_max_backend_buffer);
 
-    for (auto & [ctx_key, ctx_ptr] : ml.ctx_map) {
+    for (auto & entry_3 : ml.ctx_map) {
+        auto & ctx_key = std::get<0>(entry_3);
+        auto & ctx_ptr = std::get<1>(entry_3);
         ggml_backend_buffer_type_t buft = ctx_key.buft;
         ggml_context * ctx = ctx_ptr.get();
 
@@ -1987,7 +2014,8 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     }
 
     // print memory requirements per buffer type
-    for (auto & [_, bufs] : pimpl->ctxs_bufs) {
+    for (auto & entry_4 : pimpl->ctxs_bufs) {
+        auto & bufs = std::get<1>(entry_4);
         for (auto & buf: bufs) {
             LLAMA_LOG_INFO("%s: %12s model buffer size = %8.2f MiB\n",
                 __func__, ggml_backend_buffer_name(buf.get()), ggml_backend_buffer_get_size(buf.get()) / 1024.0 / 1024.0);
@@ -2007,7 +2035,9 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     }
 
     // load tensor data
-    for (auto & [ctx, buf_map] : ctx_buf_maps) {
+    for (auto & entry_5 : ctx_buf_maps) {
+        auto & ctx = std::get<0>(entry_5);
+        auto & buf_map = std::get<1>(entry_5);
         if (!ml.load_all_data(ctx, buf_map, use_mlock ? &pimpl->mlock_mmaps : NULL, params.progress_callback, params.progress_callback_user_data)) {
             return false;
         }
@@ -2211,7 +2241,9 @@ void llama_model_base::load_tensors_hadamard() {
     // inverse transforms use the buffer type of the forward rotations, not the host type of a CPU-mapped table (no PCIe round trip per token)
     ggml_backend_buffer_type_t preferred_buft = nullptr;
 
-    for (const auto & [blocks, target] : groups) {
+    for (const auto & entry_6 : groups) {
+        auto & blocks = std::get<0>(entry_6);
+        auto & target = std::get<1>(entry_6);
         for (const auto & entry : *blocks) {
             const std::string & weight_name = entry.first;
             const uint32_t block_size = entry.second;
@@ -2409,7 +2441,9 @@ llama_split_mode llama_model::split_mode() const {
 
 std::map<ggml_backend_buffer_type_t, size_t> llama_model::memory_breakdown() const {
     std::map<ggml_backend_buffer_type_t, size_t> ret;
-    for (const auto & [ctx, bufs] : pimpl->ctxs_bufs) {
+    for (const auto & entry_7 : pimpl->ctxs_bufs) {
+        auto & ctx = std::get<0>(entry_7);
+        auto & bufs = std::get<1>(entry_7);
         if (hparams.no_alloc) {
             GGML_ASSERT(bufs.size() == 1);
             ggml_backend_buffer_t buf = bufs[0].get();
@@ -2522,7 +2556,8 @@ void llama_model::print_info() const {
                            hparams.n_layer_all).c_str());
         }
         // MRoPE (Multi-axis Rotary Position Embedding) sections
-        if (const auto & s = hparams.rope_sections; s[0] || s[1] || s[2] || s[3]) {
+        const auto & s = hparams.rope_sections;
+        if (s[0] || s[1] || s[2] || s[3]) {
             LLAMA_LOG_INFO("%s: mrope sections        = [%d, %d, %d, %d]\n", __func__, s[0], s[1], s[2], s[3]);
         }
         if (hparams.rope_section_order != LLAMA_ROPE_SECTION_ORDER_TYXZ) {
@@ -3597,13 +3632,15 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_HRM_TEXT:
             return LLAMA_ROPE_TYPE_NEOX;
 
-        case LLM_ARCH_DFLASH:
+        case LLM_ARCH_DFLASH: {
             // drafts for M-RoPE targets carry rope sections and follow the target's temporal dim
-            if (const auto & s = model->hparams.rope_sections; s[0] || s[1] || s[2] || s[3]) {
+            const auto & s = model->hparams.rope_sections;
+            if (s[0] || s[1] || s[2] || s[3]) {
                 return LLAMA_ROPE_TYPE_MROPE;
             }
             // DSV4 DSpark drafters use DeepSeek-V4's normal RoPE; legacy DFlash backbones are NeoX
             return model->hparams.dsv4_hc_mult > 0 ? LLAMA_ROPE_TYPE_NORM : LLAMA_ROPE_TYPE_NEOX;
+        }
 
         case LLM_ARCH_QWEN2VL:
         case LLM_ARCH_PADDLEOCR:

@@ -287,11 +287,14 @@ ggml_tensor * llama_model_qwen35moe::graph::build_layer_attn(
     // Order: joint QG projection, QG split, Q norm, KV projection, K norm, RoPE, attention
 
     // Qwen3Next uses a single Q projection that outputs query + gate
-    auto [Qcur_full, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+    auto  values_1 = build_qkv(model.layers[il], cur,
             n_embd_head * 2, n_head,
             n_embd_head,     n_head_kv,
             n_embd_head,     n_head_kv,
             il, false);
+    auto & Qcur_full = values_1.q;
+    auto & Kcur = values_1.k;
+    auto & Vcur = values_1.v;
     cb(Qcur_full, "Qcur_full", il);
     cb(Kcur, "Kcur", il);
     cb(Vcur, "Vcur", il);
@@ -619,11 +622,14 @@ llama_model_qwen35moe::graph_mtp::graph_mtp(const llama_model & model, const llm
     cur = build_norm(cur, layer.attn_norm, nullptr, LLM_NORM_RMS, il);
     cb(cur, "mtp_attn_norm", il);
 
-    auto [Qcur_full, Kcur, Vcur] = build_qkv(layer, cur,
+    auto  values_2 = build_qkv(layer, cur,
             n_embd_head * 2, n_head,
             n_embd_head,     n_head_kv,
             n_embd_head,     n_head_kv,
             il, false);
+    auto & Qcur_full = values_2.q;
+    auto & Kcur = values_2.k;
+    auto & Vcur = values_2.v;
     cb(Qcur_full, "mtp_Qcur_full", il);
 
     ggml_tensor * Qcur = ggml_view_3d(ctx0, Qcur_full,

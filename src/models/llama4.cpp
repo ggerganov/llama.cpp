@@ -121,13 +121,7 @@ llama_model_llama4::graph<iswa>::graph(const llama_model & model, const llm_grap
     inp_attn_scale = build_inp_attn_scale();
 
     using inp_attn_type = std::conditional_t<iswa, llm_graph_input_attn_kv_iswa, llm_graph_input_attn_kv>;
-    inp_attn_type * inp_attn = nullptr;
-
-    if constexpr (iswa) {
-        inp_attn = build_attn_inp_kv_iswa();
-    } else {
-        inp_attn = build_attn_inp_kv();
-    }
+    inp_attn_type * inp_attn = build_input<inp_attn_type>();
 
     const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
 
@@ -155,8 +149,11 @@ llama_model_llama4::graph<iswa>::graph(const llama_model & model, const llm_grap
             ggml_tensor * rope_factors = model.get_rope_factors(cparams, il);
 
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             if (use_rope) {
                 Qcur = ggml_rope_ext(

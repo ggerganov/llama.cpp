@@ -734,6 +734,39 @@ uint32_t llama_memory_hybrid_idx_context::get_n_kpool_new() const {
     return kpool_cur().n_new_g;
 }
 
+template<typename T>
+static void fill_kpool_mask(T * data, const llama_ubatch * ubatch,
+        const llama_memory_hybrid_idx::kpool_layout & lay,
+        const std::vector<uint32_t> & seq_pool_start, const std::vector<llama_pos> & pool_end,
+        const std::vector<int64_t> & rank, bool by_order, uint32_t kpool, uint32_t n_pool,
+        float * gm, uint32_t n_sel, uint32_t n_top) {
+    const uint32_t n_tokens = ubatch->n_tokens;
+    const T keep = llama_cast<T>(0.0f);
+    const T drop = llama_cast<T>(-INFINITY);
+
+    for (uint32_t i = 0; i < n_tokens; ++i) {
+        const llama_seq_id s = ubatch->seq_id[i][0];
+        const llama_pos    p = ubatch->pos[i];
+
+        T * row = data + (size_t) i*n_pool;
+        std::fill(row, row + n_pool, drop);
+
+        const uint32_t p0 = seq_pool_start[s];
+        const uint32_t p1 = p0 + (uint32_t) lay.seqs[s].pools.size();
+        const uint32_t nv = by_order ? std::min(p1 - p0, (uint32_t) ((rank[i] + 1)/kpool)) :
+            (uint32_t) (std::upper_bound(pool_end.begin() + p0, pool_end.begin() + p1, p) - (pool_end.begin() + p0));
+        std::fill(row + p0, row + p0 + nv, keep);
+
+        // Finite visible pools occupy the first min(nv, n_top) ranked slots.
+        if (gm != nullptr) {
+            const uint32_t nvc = std::min(nv, n_top);
+            float * grow = gm + (size_t) i*n_sel;
+            std::fill(grow,                        grow + (size_t) nvc*kpool,  0.0f);
+            std::fill(grow + (size_t) nvc*kpool,   grow + (size_t) n_top*kpool, -INFINITY);
+        }
+    }
+}
+
 void llama_memory_hybrid_idx_context::set_input_kpool(ggml_tensor * pool_cells, ggml_tensor * pool_idxs, ggml_tensor * pool_mask, ggml_tensor * tail_idxs,
         ggml_tensor * sel_mask, ggml_tensor * new_pool_idxs, ggml_tensor * new_pool_rep,
         const llama_ubatch * ubatch, ggml_tensor * new_pool_pos) const {
@@ -913,37 +946,12 @@ void llama_memory_hybrid_idx_context::set_input_kpool(ggml_tensor * pool_cells, 
     }
 
     // a pool is visible when it belongs to the token's sequence and ends at or before it
-    auto fill_mask = [&](auto * data) {
-        using T = std::remove_pointer_t<decltype(data)>;
-        const T keep = llama_cast<T>(0.0f);
-        const T drop = llama_cast<T>(-INFINITY);
-
-        for (uint32_t i = 0; i < n_tokens; ++i) {
-            const llama_seq_id s = ubatch->seq_id[i][0];
-            const llama_pos    p = ubatch->pos[i];
-
-            T * row = data + (size_t) i*n_pool;
-            std::fill(row, row + n_pool, drop);
-
-            const uint32_t p0 = seq_pool_start[s];
-            const uint32_t p1 = p0 + (uint32_t) lay.seqs[s].pools.size();
-            const uint32_t nv = by_order ? std::min(p1 - p0, (uint32_t) ((rank[i] + 1)/kpool)) :
-                (uint32_t) (std::upper_bound(pool_end.begin() + p0, pool_end.begin() + p1, p) - (pool_end.begin() + p0));
-            std::fill(row + p0, row + p0 + nv, keep);
-
-            // Finite visible pools occupy the first min(nv, n_top) ranked slots.
-            if (gm != nullptr) {
-                const uint32_t nvc = std::min(nv, n_top);
-                float * grow = gm + (size_t) i*n_sel;
-                std::fill(grow,                        grow + (size_t) nvc*kpool,  0.0f);
-                std::fill(grow + (size_t) nvc*kpool,   grow + (size_t) n_top*kpool, -INFINITY);
-            }
-        }
-    };
     if (pool_mask->type == GGML_TYPE_F16) {
-        fill_mask((ggml_fp16_t *) pool_mask->data);
+        fill_kpool_mask((ggml_fp16_t *) pool_mask->data, ubatch, lay, seq_pool_start, pool_end,
+                rank, by_order, kpool, n_pool, gm, n_sel, n_top);
     } else {
-        fill_mask((float *) pool_mask->data);
+        fill_kpool_mask((float *) pool_mask->data, ubatch, lay, seq_pool_start, pool_end,
+                rank, by_order, kpool, n_pool, gm, n_sel, n_top);
     }
 
     int32_t * tidx = (int32_t *) tail_idxs->data;

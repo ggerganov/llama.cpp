@@ -1,3 +1,4 @@
+#include "ggml-cpp-compat.h"
 #pragma once
 
 #define GGML_COMMON_DECL_CPP
@@ -11,13 +12,13 @@
 ggml_backend_buffer_type_t ggml_backend_cpu_repack_buffer_type(void);
 
 template <int K> constexpr int QK_0() {
-    if constexpr (K == 1) {
+    GGML_IF_CONSTEXPR (K == 1) {
         return QK1_0;
     }
-    if constexpr (K == 4) {
+    GGML_IF_CONSTEXPR (K == 4) {
         return QK4_0;
     }
-    if constexpr (K == 8) {
+    GGML_IF_CONSTEXPR (K == 8) {
         return QK8_0;
     }
     return -1;

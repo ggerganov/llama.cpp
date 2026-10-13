@@ -71,11 +71,14 @@ llama_model_minimax_m2::graph::graph(const llama_model & model, const llm_graph_
             cur = build_norm(inpL, model.layers[il].attn_norm, NULL, LLM_NORM_RMS, il);
             cb(cur, "attn_norm", il);
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head,
                     n_embd_head, n_head_kv,
                     n_embd_head, n_head_kv,
                     il, false);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
             cb(Qcur, "Qcur", il);
             cb(Kcur, "Kcur", il);
             cb(Vcur, "Vcur", il);

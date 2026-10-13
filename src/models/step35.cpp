@@ -207,11 +207,14 @@ llama_model_step35::graph::graph(const llama_model & model, const llm_graph_para
         {
             cur = build_norm(cur, model.layers[il].attn_norm, nullptr, LLM_NORM_RMS, il);
             cb(cur, "attn_norm", il);
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head_k, n_head_l,
                     n_embd_head_k, n_head_kv_l,
                     n_embd_head_v, n_head_kv_l,
                     il, false);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             cb(Qcur, "Qcur", il);
             cb(Kcur, "Kcur", il);
@@ -421,11 +424,14 @@ llama_model_step35::graph_mtp::graph_mtp(const llama_model & model, const llm_gr
     cur = build_norm(cur, layer.attn_norm, nullptr, LLM_NORM_RMS, il);
     cb(cur, "mtp_attn_norm", il);
 
-    auto [Qcur, Kcur, Vcur] = build_qkv(layer, cur,
+    auto  values_2 = build_qkv(layer, cur,
             n_embd_head_k, n_head_l,
             n_embd_head_k, n_head_kv_l,
             n_embd_head_v, n_head_kv_l,
             il, false);
+    auto & Qcur = values_2.q;
+    auto & Kcur = values_2.k;
+    auto & Vcur = values_2.v;
     cb(Qcur, "mtp_Qcur", il);
     cb(Kcur, "mtp_Kcur", il);
     cb(Vcur, "mtp_Vcur", il);

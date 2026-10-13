@@ -103,8 +103,11 @@ llama_model_bert::graph::graph(const llama_model & model, const llm_graph_params
         ggml_tensor * cur = inpL;
 
         {
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             if (model.layers[il].attn_q_norm) {
                 Qcur = ggml_reshape_2d(ctx0, Qcur, n_embd_head * n_head, n_tokens);

@@ -75,13 +75,7 @@ llama_model_olmo2::graph<iswa>::graph(const llama_model & model, const llm_graph
     ggml_tensor * inp_pos = build_inp_pos();
 
     using inp_attn_type = std::conditional_t<iswa, llm_graph_input_attn_kv_iswa, llm_graph_input_attn_kv>;
-    inp_attn_type * inp_attn = nullptr;
-
-    if constexpr (iswa) {
-        inp_attn = build_attn_inp_kv_iswa();
-    } else {
-        inp_attn = build_attn_inp_kv();
-    }
+    inp_attn_type * inp_attn = build_input<inp_attn_type>();
     ggml_tensor * inp_out_ids = build_inp_out_ids();
 
     for (int il = 0; il < n_layer; ++il) {
@@ -91,11 +85,14 @@ llama_model_olmo2::graph<iswa>::graph(const llama_model & model, const llm_graph
 
         // self_attention
         {
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head,
                     n_embd_head, n_head_kv,
                     n_embd_head, n_head_kv,
                     il, false);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
             cb(Qcur, "Qcur", il);
             cb(Kcur, "Kcur", il);
             cb(Vcur, "Vcur", il);

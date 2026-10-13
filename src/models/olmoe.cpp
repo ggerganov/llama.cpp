@@ -79,11 +79,14 @@ llama_model_olmoe::graph::graph(const llama_model & model, const llm_graph_param
 
         // self_attention
         {
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head,
                     n_embd_head, n_head_kv,
                     n_embd_head, n_head_kv,
                     il, false);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
             cb(Qcur, "Qcur", il);
             cb(Kcur, "Kcur", il);
             cb(Vcur, "Vcur", il);

@@ -112,12 +112,7 @@ llama_model_llama::graph<embed>::graph(const llama_model & model, const llm_grap
 
     using inp_attn_type = std::conditional_t<embed, llm_graph_input_attn_no_cache, llm_graph_input_attn_kv>;
 
-    inp_attn_type * inp_attn = nullptr;
-    if constexpr (embed) {
-        inp_attn = build_attn_inp_no_cache();
-    } else {
-        inp_attn = build_attn_inp_kv();
-    }
+    inp_attn_type * inp_attn = build_input<inp_attn_type>();
 
     const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f/sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
 
@@ -140,8 +135,11 @@ llama_model_llama::graph<embed>::graph(const llama_model & model, const llm_grap
             ggml_tensor * rope_factors = model.get_rope_factors(cparams, il);
 
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             Qcur = ggml_rope_ext(
                     ctx0, Qcur, inp_pos, rope_factors,
@@ -235,7 +233,7 @@ llama_model_llama::graph<embed>::graph(const llama_model & model, const llm_grap
     cb(cur, "result_norm", -1);
     res->t_embd = cur;
 
-    if constexpr (!embed) {
+    if (!embed) {
         // lm_head
         cur = build_lora_mm(model.output, cur, model.output_s);
 

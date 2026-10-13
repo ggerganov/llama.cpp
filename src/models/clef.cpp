@@ -316,27 +316,27 @@ llama_model_clef::graph::graph(const llama_model & model_base, const llm_graph_p
 
 // causal mask by batch order: the tokens of an image share the same position
 class llm_graph_input_attn_clef : public llm_graph_input_attn_no_cache {
+    template<typename T>
+    void fill_mask(T * data, T zero, T ninf, const llama_ubatch * ubatch) const {
+        const int64_t n_kv     = self_kq_mask->ne[0];
+        const int64_t n_tokens = ubatch->n_tokens;
+        for (int64_t i1 = 0; i1 < n_tokens; ++i1) {
+            for (int64_t i0 = 0; i0 < n_kv; ++i0) {
+                const bool visible = i0 <= i1 && ubatch->seq_id[i0][0] == ubatch->seq_id[i1][0];
+                data[i1 * n_kv + i0] = visible ? zero : ninf;
+            }
+        }
+    }
+
 public:
     using llm_graph_input_attn_no_cache::llm_graph_input_attn_no_cache;
 
     void set_input(const llama_ubatch * ubatch) override {
-        const int64_t n_kv     = self_kq_mask->ne[0];
-        const int64_t n_tokens = ubatch->n_tokens;
-
-        const auto fill_mask = [&](auto * data, auto zero, auto ninf) {
-            for (int64_t i1 = 0; i1 < n_tokens; ++i1) {
-                for (int64_t i0 = 0; i0 < n_kv; ++i0) {
-                    const bool visible = i0 <= i1 && ubatch->seq_id[i0][0] == ubatch->seq_id[i1][0];
-                    data[i1 * n_kv + i0] = visible ? zero : ninf;
-                }
-            }
-        };
-
         GGML_ASSERT(ggml_backend_buffer_is_host(self_kq_mask->buffer));
         if (self_kq_mask->type == GGML_TYPE_F16) {
-            fill_mask((ggml_fp16_t *) self_kq_mask->data, ggml_fp32_to_fp16(0.0f), ggml_fp32_to_fp16(-INFINITY));
+            fill_mask((ggml_fp16_t *) self_kq_mask->data, ggml_fp32_to_fp16(0.0f), ggml_fp32_to_fp16(-INFINITY), ubatch);
         } else {
-            fill_mask((float *) self_kq_mask->data, 0.0f, -INFINITY);
+            fill_mask((float *) self_kq_mask->data, 0.0f, -INFINITY, ubatch);
         }
     }
 };
@@ -365,11 +365,14 @@ ggml_tensor * llama_model_clef::graph::build_layer_attn(
     const int64_t n_embd_head = hparams.n_embd_head_v();
 
     // the Q projection outputs query + gate
-    auto [Qcur_full, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+    auto  values_1 = build_qkv(model.layers[il], cur,
             n_embd_head * 2, n_head,
             n_embd_head,     n_head_kv,
             n_embd_head,     n_head_kv,
             il, false);
+    auto & Qcur_full = values_1.q;
+    auto & Kcur = values_1.k;
+    auto & Vcur = values_1.v;
 
     ggml_tensor * Qcur = ggml_view_3d(ctx0, Qcur_full, n_embd_head, n_head, n_tokens,
         ggml_element_size(Qcur_full) * n_embd_head * 2,

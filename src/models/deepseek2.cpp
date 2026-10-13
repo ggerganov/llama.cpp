@@ -470,8 +470,11 @@ llama_model_deepseek2::graph::graph(const llama_model & model, const llm_graph_p
             const int ocr_rope_type = GGML_ROPE_TYPE_NEOX;
             GGML_ASSERT(n_embed_head == n_embd_head_k && n_embed_head == n_embd_head_v);
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embed_head, n_head, n_head, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
             cb(Qcur, "q", il);
             cb(Kcur, "k", il);
             cb(Vcur, "v", il);

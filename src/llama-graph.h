@@ -5,6 +5,7 @@
 #include "llama-hparams.h"
 #include "llama-adapter.h"
 
+#include <tuple>
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
@@ -814,7 +815,9 @@ struct llm_graph_params {
         if (lhs.size() != rhs.size()) {
             return false;
         }
-        for (const auto & [seq_id, sampler] : lhs) {
+        for (const auto & entry_1 : lhs) {
+            auto & seq_id = std::get<0>(entry_1);
+            auto & sampler = std::get<1>(entry_1);
             auto it = rhs.find(seq_id);
             if (it == rhs.end() || it->second != sampler) {
                 return false;
@@ -1248,6 +1251,8 @@ struct llm_graph_context {
                   float   kq_scale,
                     int   il) const;
 
+    template<typename T> T * build_input() const;
+
     llm_graph_input_attn_no_cache * build_attn_inp_no_cache() const;
 
     ggml_tensor * build_attn(
@@ -1447,3 +1452,23 @@ struct llm_graph_context {
 
 // TODO: better name
 int32_t llama_relative_position_bucket(llama_pos x, llama_pos y, uint64_t n_buckets, bool bidirectional);
+
+template<> inline llm_graph_input_attn_no_cache * llm_graph_context::build_input<llm_graph_input_attn_no_cache>() const {
+    return build_attn_inp_no_cache();
+}
+
+template<> inline llm_graph_input_attn_kv * llm_graph_context::build_input<llm_graph_input_attn_kv>() const {
+    return build_attn_inp_kv();
+}
+
+template<> inline llm_graph_input_attn_kv_iswa * llm_graph_context::build_input<llm_graph_input_attn_kv_iswa>() const {
+    return build_attn_inp_kv_iswa();
+}
+
+template<> inline llm_graph_input_mem_hybrid * llm_graph_context::build_input<llm_graph_input_mem_hybrid>() const {
+    return build_inp_mem_hybrid();
+}
+
+template<> inline llm_graph_input_mem_hybrid_iswa * llm_graph_context::build_input<llm_graph_input_mem_hybrid_iswa>() const {
+    return build_inp_mem_hybrid_iswa();
+}

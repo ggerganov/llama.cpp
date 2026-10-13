@@ -117,7 +117,7 @@ struct llama_batch_ext {
         bool         output = false; // TODO: have dedicated output flags
         int32_t      decision_order = 0; // see llama_batch_ext_set_decision_order()
         std::unordered_set<llama_seq_id> seq_ids;
-        std::array<llama_pos, GGML_MROPE_SECTIONS> pos = {0, 0, 0, 0};
+        std::array<llama_pos, GGML_MROPE_SECTIONS> pos = {{0, 0, 0, 0}};
     };
     std::vector<token> tokens;
     std::vector<float> embd;

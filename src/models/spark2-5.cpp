@@ -78,7 +78,10 @@ llama_model_spark2_5::graph::graph(const llama_model & model, const llm_graph_pa
         const float freq_scale_i = model.get_rope_freq_scale(cparams, il);
 
         ggml_tensor * attn_inp = cur;
-        auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur, n_embd_head, n_head_i, n_head_kv_i, il);
+        auto  values_1 = build_qkv(model.layers[il], cur, n_embd_head, n_head_i, n_head_kv_i, il);
+        auto & Qcur = values_1.q;
+        auto & Kcur = values_1.k;
+        auto & Vcur = values_1.v;
 
         Qcur = ggml_rope_ext(ctx0, Qcur, inp_pos, nullptr,
                 n_rot_i, rope_type, n_ctx_orig, freq_base_i, freq_scale_i,

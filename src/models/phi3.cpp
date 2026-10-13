@@ -79,13 +79,7 @@ llama_model_phi3::graph<iswa>::graph(const llama_model & model, const llm_graph_
     ggml_tensor * inp_pos = build_inp_pos();
 
     using inp_attn_type = std::conditional_t<iswa, llm_graph_input_attn_kv_iswa, llm_graph_input_attn_kv>;
-    inp_attn_type * inp_attn = nullptr;
-
-    if constexpr (iswa) {
-        inp_attn = build_attn_inp_kv_iswa();
-    } else {
-        inp_attn = build_attn_inp_kv();
-    }
+    inp_attn_type * inp_attn = build_input<inp_attn_type>();
     ggml_tensor * inp_out_ids = build_inp_out_ids();
 
     for (int il = 0; il < n_layer; ++il) {
@@ -102,8 +96,11 @@ llama_model_phi3::graph<iswa>::graph(const llama_model & model, const llm_graph_
                     LLM_NORM_RMS, il);
             cb(attn_norm_output, "attn_norm", il);
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], attn_norm_output,
+            auto  values_1 = build_qkv(model.layers[il], attn_norm_output,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
             Qcur = ggml_rope_ext(
                     ctx0, Qcur, inp_pos, rope_factors,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,

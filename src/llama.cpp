@@ -16,6 +16,7 @@
 #include "ggml-backend.h"
 #include "gguf.h"
 
+#include <tuple>
 #include <algorithm>
 #include <cassert>
 #include <cinttypes>
@@ -426,7 +427,9 @@ static struct llama_model * llama_model_load_from_file_impl(
         };
     }
 
-    const auto [status, model] = llama_model_load(metadata, set_tensor_data, set_tensor_data_ud, path_model, splits, file, params);
+    const auto  values_1 = llama_model_load(metadata, set_tensor_data, set_tensor_data_ud, path_model, splits, file, params);
+    auto & status = std::get<0>(values_1);
+    auto & model = std::get<1>(values_1);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
         if (status == -1) {

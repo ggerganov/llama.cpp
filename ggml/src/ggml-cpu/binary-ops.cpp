@@ -1,6 +1,7 @@
 #include "binary-ops.h"
 
 #if defined(GGML_USE_ACCELERATE)
+#include <tuple>
 #include <Accelerate/Accelerate.h>
 
 using vDSP_fn_t = void (*)(const float *, vDSP_Stride, const float *, vDSP_Stride, float *, vDSP_Stride, vDSP_Length);
@@ -58,7 +59,9 @@ static void apply_binary_op(const ggml_compute_params * params, ggml_tensor * ds
     GGML_ASSERT( nb0 == sizeof(dst_t));
     GGML_ASSERT(nb00 == sizeof(src0_t));
 
-    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const auto  values_1 = get_thread_range(params, src0);
+    auto & ir0 = std::get<0>(values_1);
+    auto & ir1 = std::get<1>(values_1);
     const bool is_src1_contiguous_rows = ggml_is_contiguous_rows(src1);
 
 #ifdef GGML_USE_ACCELERATE

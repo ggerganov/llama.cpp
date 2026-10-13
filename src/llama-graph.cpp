@@ -17,6 +17,7 @@
 #include "llama-memory-hybrid-iswa.h"
 #include "llama-memory-recurrent.h"
 
+#include <tuple>
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -461,63 +462,65 @@ static void print_mask(const T * data, int64_t n_tokens, int64_t n_kv, int64_t n
     }
 }
 
-void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
-    const int64_t n_kv     = self_kq_mask->ne[0];
+template<typename T>
+static void fill_attn_no_cache_mask(const llm_graph_input_attn_no_cache & inp, const llama_ubatch * ubatch, int debug, T * data, int64_t ne, int n_swa, llama_swa_type swa_type) {
+    const int64_t n_kv = inp.self_kq_mask->ne[0];
     const int64_t n_tokens = ubatch->n_tokens;
+    const auto & hparams = inp.hparams;
+    const auto & cparams = inp.cparams;
+    std::fill(data, data + ne, llama_cast<T>(-INFINITY));
 
-    const auto fill_mask = [&](auto * data, int64_t ne, int n_swa, llama_swa_type swa_type) {
-        using T = std::remove_reference_t<decltype(*data)>;
-        std::fill(data, data + ne, llama_cast<T>(-INFINITY));
+    for (int i1 = 0; i1 < n_tokens; ++i1) {
+        const llama_seq_id s1 = ubatch->seq_id[i1][0];
+        const llama_pos    p1 = ubatch->pos[i1];
 
-        for (int i1 = 0; i1 < n_tokens; ++i1) {
-            const llama_seq_id s1 = ubatch->seq_id[i1][0];
-            const llama_pos    p1 = ubatch->pos[i1];
+        const uint64_t idst = i1*n_kv;
 
-            const uint64_t idst = i1*n_kv;
+        for (int i0 = 0; i0 < n_tokens; ++i0) {
+            const llama_seq_id s0 = ubatch->seq_id[i0][0];
+            const llama_pos p0    = ubatch->pos[i0];
 
-            for (int i0 = 0; i0 < n_tokens; ++i0) {
-                const llama_seq_id s0 = ubatch->seq_id[i0][0];
-                const llama_pos p0    = ubatch->pos[i0];
-
-                // mask different sequences
-                if (s0 != s1) {
-                    continue;
-                }
-
-                // mask future tokens
-                if (cparams.causal_attn && p0 > p1) {
-                    continue;
-                }
-
-                // apply SWA if any
-                if (llama_hparams::is_masked_swa(n_swa, swa_type, p0, p1)) {
-                    continue;
-                }
-
-                data[idst + i0] = llama_cast<T>(hparams.use_alibi ? -std::abs(p0 - p1) : 0.0f);
+            // mask different sequences
+            if (s0 != s1) {
+                continue;
             }
-        }
 
-        if (debug) {
-            print_mask(data, n_tokens, n_kv, n_swa, swa_type);
+            // mask future tokens
+            if (cparams.causal_attn && p0 > p1) {
+                continue;
+            }
+
+            // apply SWA if any
+            if (llama_hparams::is_masked_swa(n_swa, swa_type, p0, p1)) {
+                continue;
+            }
+
+            data[idst + i0] = llama_cast<T>(hparams.use_alibi ? -std::abs(p0 - p1) : 0.0f);
         }
-    };
+    }
+
+    if (debug) {
+        print_mask(data, n_tokens, n_kv, n_swa, swa_type);
+    }
+}
+
+void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
 
     GGML_ASSERT(self_kq_mask);
     GGML_ASSERT(ggml_backend_buffer_is_host(self_kq_mask->buffer));
     if (self_kq_mask->type == GGML_TYPE_F16) {
-        fill_mask((ggml_fp16_t *) self_kq_mask->data, ggml_nelements(self_kq_mask), 0, LLAMA_SWA_TYPE_NONE);
+        fill_attn_no_cache_mask(*this, ubatch, debug, (ggml_fp16_t *) self_kq_mask->data, ggml_nelements(self_kq_mask), 0, LLAMA_SWA_TYPE_NONE);
     } else {
-        fill_mask((float       *) self_kq_mask->data, ggml_nelements(self_kq_mask), 0, LLAMA_SWA_TYPE_NONE);
+        fill_attn_no_cache_mask(*this, ubatch, debug, (float       *) self_kq_mask->data, ggml_nelements(self_kq_mask), 0, LLAMA_SWA_TYPE_NONE);
     }
 
     if (hparams.swa_type != LLAMA_SWA_TYPE_NONE) {
         GGML_ASSERT(self_kq_mask_swa);
         GGML_ASSERT(ggml_backend_buffer_is_host(self_kq_mask_swa->buffer));
         if (self_kq_mask_swa->type == GGML_TYPE_F16) {
-            fill_mask((ggml_fp16_t *) self_kq_mask_swa->data, ggml_nelements(self_kq_mask_swa), hparams.n_swa, hparams.swa_type);
+            fill_attn_no_cache_mask(*this, ubatch, debug, (ggml_fp16_t *) self_kq_mask_swa->data, ggml_nelements(self_kq_mask_swa), hparams.n_swa, hparams.swa_type);
         } else {
-            fill_mask((float       *) self_kq_mask_swa->data, ggml_nelements(self_kq_mask_swa), hparams.n_swa, hparams.swa_type);
+            fill_attn_no_cache_mask(*this, ubatch, debug, (float       *) self_kq_mask_swa->data, ggml_nelements(self_kq_mask_swa), hparams.n_swa, hparams.swa_type);
         }
     }
 }
@@ -1110,39 +1113,40 @@ bool llm_graph_input_dsv4::can_reuse(const llm_graph_params & params) {
     return res;
 }
 
+template<typename T>
+static void fill_attn_cross_mask(const llm_graph_input_attn_cross & inp, const llama_ubatch * ubatch, T * data) {
+    const int64_t n_enc = inp.cross_kq_mask->ne[0];
+    const int64_t n_tokens = ubatch->n_tokens;
+    const auto * cross = inp.cross;
+    for (int i = 0; i < n_tokens; ++i) {
+        GGML_ASSERT(!cross->seq_ids_enc.empty() && "llama_encode must be called first");
+        for (int j = 0; j < n_enc; ++j) {
+            float f = -INFINITY;
+
+            for (int s = 0; s < ubatch->n_seq_id[i]; ++s) {
+                const llama_seq_id seq_id = ubatch->seq_id[i][s];
+
+                if (cross->seq_ids_enc[j].find(seq_id) != cross->seq_ids_enc[j].end()) {
+                    f = 0.0f;
+                }
+            }
+
+            data[i*n_enc + j] = llama_cast<T>(f);
+        }
+    }
+}
+
 void llm_graph_input_attn_cross::set_input(const llama_ubatch * ubatch) {
     GGML_ASSERT(cross_kq_mask);
-
-    const int64_t n_enc    = cross_kq_mask->ne[0];
-    const int64_t n_tokens = ubatch->n_tokens;
 
     GGML_ASSERT(ggml_backend_buffer_is_host(cross_kq_mask->buffer));
     GGML_ASSERT(!ubatch->equal_seqs()); // TODO: use ubatch->n_seqs instead of failing
 
-    const auto fill_mask = [&](auto * data) {
-        using T = std::remove_reference_t<decltype(*data)>;
-        for (int i = 0; i < n_tokens; ++i) {
-            GGML_ASSERT(!cross->seq_ids_enc.empty() && "llama_encode must be called first");
-            for (int j = 0; j < n_enc; ++j) {
-                float f = -INFINITY;
-
-                for (int s = 0; s < ubatch->n_seq_id[i]; ++s) {
-                    const llama_seq_id seq_id = ubatch->seq_id[i][s];
-
-                    if (cross->seq_ids_enc[j].find(seq_id) != cross->seq_ids_enc[j].end()) {
-                        f = 0.0f;
-                    }
-                }
-
-                data[i*n_enc + j] = llama_cast<T>(f);
-            }
-        }
-    };
 
     if (cross_kq_mask->type == GGML_TYPE_F16) {
-        fill_mask((ggml_fp16_t *) cross_kq_mask->data);
+        fill_attn_cross_mask(*this, ubatch, (ggml_fp16_t *) cross_kq_mask->data);
     } else {
-        fill_mask((float *) cross_kq_mask->data);
+        fill_attn_cross_mask(*this, ubatch, (float *) cross_kq_mask->data);
     }
 }
 
@@ -1352,7 +1356,9 @@ bool llm_graph_input_sampling::can_reuse(const llm_graph_params & params) {
         return false;
     }
 
-    for (const auto & [seq_id, sampler] : params.samplers) {
+    for (const auto & entry_1 : params.samplers) {
+        auto & seq_id = std::get<0>(entry_1);
+        auto & sampler = std::get<1>(entry_1);
         if (samplers[seq_id] != sampler) {
             return false;
         }
@@ -2593,7 +2599,8 @@ ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd, float to
     auto build_tok = [&](ggml_tensor * cur, ggml_tensor * ids) {
         // a Hadamard-latent table stores rotated rows: restore the primal basis, h = s * (H z)
         if (hdmd) {
-            if (const auto it = hdmd->inv.find(tok_embd); it != hdmd->inv.end()) {
+            const auto it = hdmd->inv.find(tok_embd);
+            if (it != hdmd->inv.end()) {
                 cur = llama_mul_mat_hadamard(ctx0, cur, it->second.rot);
                 if (it->second.signs) {
                     cur = ggml_mul(ctx0, cur, it->second.signs);
@@ -4104,7 +4111,9 @@ void llm_graph_context::build_sampling() const {
 
     // every sampler builds n_outputs_max_per_seq chains, like the reserve, so the graph keeps its topology
     // whatever rows the ubatch outputs: a chain without a row works on the first row and is not selected
-    for (const auto & [seq_id, sampler] : samplers) {
+    for (const auto & entry_2 : samplers) {
+        auto & seq_id = std::get<0>(entry_2);
+        auto & sampler = std::get<1>(entry_2);
         const auto it = sampling_rows.find(seq_id);
         const auto & rows = it != sampling_rows.end() ? it->second : no_rows;
 
@@ -4162,7 +4171,9 @@ void llm_graph_context::build_sampling() const {
 
     // TODO: Call backend_accept after all samplers have been applied.
     /*
-    for (const auto & [seq_id, sampler] : samplers) {
+    for (const auto & entry_3 : samplers) {
+        auto & seq_id = std::get<0>(entry_3);
+        auto & sampler = std::get<1>(entry_3);
         const auto it = sampling_rows.find(seq_id);
         if (it == sampling_rows.end()) {
             continue;

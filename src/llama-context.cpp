@@ -14,6 +14,7 @@
 #include "llama-sampler.h"
 #include "llama.h"
 
+#include <tuple>
 #include <cinttypes>
 #include <cmath>
 #include <cstring>
@@ -35,7 +36,9 @@ static void llama_verify_hadamard_graph(
         const llama_moe_cache * moe_cache) {
     // the MoE cache gives the matmul a copy of the expert weights, so the copy also needs the transform of its source
     llama_hadamard_rotations forward = rotations;
-    for (const auto & [w, t] : rotations) {
+    for (const auto & entry_1 : rotations) {
+        auto & w = std::get<0>(entry_1);
+        auto & t = std::get<1>(entry_1);
         if (const ggml_tensor * cached = moe_cache ? moe_cache->get_experts(w) : nullptr) {
             forward.emplace(cached, t);
         }
@@ -90,7 +93,9 @@ static void llama_verify_hadamard_graph(
         }
     }
 
-    for (const auto & [node, ok] : lookups) {
+    for (const auto & entry_2 : lookups) {
+        auto & node = std::get<0>(entry_2);
+        auto & ok = std::get<1>(entry_2);
         if (!ok) {
             for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
                 const ggml_tensor * n2 = ggml_graph_node(gf, i);
@@ -691,7 +696,9 @@ static int llama_graph_n_input_tensors(ggml_cgraph * gf) {
         }
     }
 
-    for (const auto & [tensor, nodes] : users) {
+    for (const auto & entry_3 : users) {
+        auto & tensor = std::get<0>(entry_3);
+        auto & nodes = std::get<1>(entry_3);
         GGML_ASSERT(tensor->op == GGML_OP_NONE);
         for (const ggml_tensor * node : nodes) {
             LLAMA_LOG_DEBUG("%s: input tensor '%32s' [%s, ne = { %5" PRId64 ", %5" PRId64 ", %5" PRId64 ", %5" PRId64 " }] is used by node '%s' (%s)\n",
@@ -2534,7 +2541,8 @@ uint32_t llama_context::graph_max_nodes(uint32_t n_tokens) const {
     }
 
     // every sampler builds n_outputs_max_per_seq chains, see llm_graph_context::build_sampling
-    for (const auto & [seq_id, sampler] : sampling.samplers) {
+    for (const auto & entry_4 : sampling.samplers) {
+        auto & sampler = std::get<1>(entry_4);
         res += llama_sampler_backend_n_nodes(sampler) * cparams.n_outputs_max_per_seq;
     }
 
@@ -3070,7 +3078,8 @@ public:
             mbufs_new[buft].total_size += winfo.size;
         }
 
-        for (auto & [buft, mbuf] : mbufs_new) {
+        for (auto & entry_5 : mbufs_new) {
+            auto & mbuf = std::get<1>(entry_5);
             ggml_init_params params = {
                 /*.mem_size   =*/ 2*mbuf.n_tensors*ggml_tensor_overhead(),
                 /*.mem_buffer =*/ NULL,
@@ -3094,7 +3103,9 @@ public:
             mbuf.cpy.push_back(ggml_new_tensor_1d(mbuf.ctx.get(), winfo.tensor->type, n));
         }
 
-        for (auto & [buft, mbuf] : mbufs_new) {
+        for (auto & entry_6 : mbufs_new) {
+            auto & buft = std::get<0>(entry_6);
+            auto & mbuf = std::get<1>(entry_6);
             auto & mbuf_cur = mbufs[buft];
 
             bool need_alloc = false;
@@ -3202,7 +3213,8 @@ public:
             mbufs_new[buft].total_size += rinfo.size;
         }
 
-        for (auto & [buft, mbuf] : mbufs_new) {
+        for (auto & entry_7 : mbufs_new) {
+            auto & mbuf = std::get<1>(entry_7);
             ggml_init_params params = {
                 /*.mem_size   =*/ mbuf.n_tensors*ggml_tensor_overhead(),
                 /*.mem_buffer =*/ NULL,
@@ -3226,7 +3238,9 @@ public:
             ggml_backend_view_init(mbuf.org.back());
         }
 
-        for (auto & [buft, mbuf] : mbufs_new) {
+        for (auto & entry_8 : mbufs_new) {
+            auto & buft = std::get<0>(entry_8);
+            auto & mbuf = std::get<1>(entry_8);
             const auto & mbuf_cur = mbufs.at(buft);
 
             if (!mbuf_cur.buf || mbuf_cur.total_size != mbuf.total_size) {
@@ -3695,16 +3709,22 @@ void llama_context::perf_reset() {
 
 llama_memory_breakdown llama_context::memory_breakdown() const {
     std::map<ggml_backend_buffer_type_t, llama_memory_breakdown_data> ret;
-    for (const auto & [buft, size] : model.memory_breakdown()) {
+    for (const auto & entry_9 : model.memory_breakdown()) {
+        auto & buft = std::get<0>(entry_9);
+        auto & size = std::get<1>(entry_9);
         ret[buft].model += size;
     }
     if (memory) {
-        for (const auto & [buft, size] : memory->memory_breakdown()) {
+        for (const auto & entry_10 : memory->memory_breakdown()) {
+            auto & buft = std::get<0>(entry_10);
+            auto & size = std::get<1>(entry_10);
             ret[buft].context += size;
         }
     }
     if (moe_cache) {
-        for (const auto & [buft, size] : moe_cache->memory_breakdown()) {
+        for (const auto & entry_11 : moe_cache->memory_breakdown()) {
+            auto & buft = std::get<0>(entry_11);
+            auto & size = std::get<1>(entry_11);
             ret[buft].context += size;
         }
     }

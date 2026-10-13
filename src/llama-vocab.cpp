@@ -1,3 +1,10 @@
+#if __cplusplus < 201703L
+#include <experimental/string_view>
+using llama_string_view = std::experimental::string_view;
+#else
+#include <string_view>
+using llama_string_view = std::string_view;
+#endif
 #include "llama-vocab.h"
 
 #include "ggml.h"
@@ -1557,7 +1564,7 @@ struct llm_tokenizer_plamo2 : llm_tokenizer {
         // pass 1: <|plamo:...|>
         {
             static constexpr uint32_t prefix[]   = { '<', '|', 'p', 'l', 'a', 'm', 'o', ':' };
-            const size_t              prefix_len = std::size(prefix);
+            const size_t              prefix_len = sizeof(prefix) / sizeof(prefix[0]);
             size_t                    i          = 0;
             while (i + prefix_len <= n) {
                 if (!std::equal(prefix, prefix + prefix_len, unicode_data.begin() + i)) {
@@ -3197,9 +3204,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
     //NOTE: Per token attributes are missing from the GGUF file.
     //TODO: Extract attributes from GGUF file.
     {
-        auto _contains_any = [] (const std::string & str, const std::vector<std::string_view> & substrs) -> bool {
+        auto _contains_any = [] (const std::string & str, const std::vector<llama_string_view> & substrs) -> bool {
             for (const auto & substr : substrs) {
-                if (str.find(substr) != std::string::npos) {
+                if (str.find(substr.data(), 0, substr.size()) != std::string::npos) {
                     return true;
                 }
             }
@@ -3414,7 +3421,7 @@ void llama_vocab::impl::tokenizer_st_partition(std::forward_list<fragment_buffer
                     //  passing offset argument only limit the "search area" but match coordinates
                     //  are still relative to the source full raw_text
                     //  string_view begins at pos 0 for the same reason
-                    auto match = std::string_view(raw_text.data(), raw_text_base_offset + raw_text_base_length).find(text, raw_text_base_offset);
+                    auto match = llama_string_view(raw_text.data(), raw_text_base_offset + raw_text_base_length).find(text, raw_text_base_offset);
 
                     // no occurrences found, stop processing this fragment for a given special token
                     if (match == std::string::npos) break;

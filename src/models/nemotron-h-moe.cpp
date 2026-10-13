@@ -71,7 +71,10 @@ llama_model_nemotron_h_moe::graph_mtp::graph_mtp(const llama_model & model, cons
     cb(cur, "mtp_attn_norm", il);
 
     {
-        auto [Qcur, Kcur, Vcur] = build_qkv(layer, cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+        auto  values_1 = build_qkv(layer, cur, n_embd_head, hparams.n_head(il), hparams.n_head_kv(il), il);
+        auto & Qcur = values_1.q;
+        auto & Kcur = values_1.k;
+        auto & Vcur = values_1.v;
         const float kq_scale = hparams.f_attention_scale == 0.0f
             ? 1.0f / sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
         cur = build_attn(inp_attn, layer.wo, layer.wo_b, layer.wo_s,

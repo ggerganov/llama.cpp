@@ -4,6 +4,7 @@
 #include "llama-ext.h"
 #include "llama.h"
 
+#include <tuple>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -54,7 +55,8 @@ static std::string remap_layer(const std::string & orig_name, const std::vector<
     }
 
     static const std::regex pattern(R"(blk\.(\d+)\.)");
-    if (std::smatch match; std::regex_search(orig_name, match, pattern)) {
+    std::smatch match;
+    if (std::regex_search(orig_name, match, pattern)) {
         const int blk = std::stoi(match[1]);
         std::string new_name = orig_name;
 
@@ -82,7 +84,8 @@ static std::string remap_imatrix(const std::string & orig_name, const std::map<i
     }
 
     static const std::regex pattern(R"(blk\.(\d+)\.)");
-    if (std::smatch match; std::regex_search(orig_name, match, pattern)) {
+    std::smatch match;
+    if (std::regex_search(orig_name, match, pattern)) {
         const std::string blk(match[1]);
         std::string new_name = orig_name;
 
@@ -729,7 +732,9 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, const llama_mod
         bool named = false;
         if (std::strcmp(tensor->name, "per_layer_token_embd.weight") == 0) {
             const std::string tensor_name(tensor->name);
-            for (const auto & [pattern, qtype] : qs.tensor_type_patterns) {
+            for (const auto & entry_1 : qs.tensor_type_patterns) {
+                auto & pattern = std::get<0>(entry_1);
+                auto & qtype = std::get<1>(entry_1);
                 if (std::regex_search(tensor_name, pattern)) {
                     named = true;
                     break;
@@ -752,7 +757,9 @@ static ggml_type llama_tensor_get_type(quantize_state_impl & qs, const llama_mod
         bool manual = false;
         if (!qs.tensor_type_patterns.empty()) {
             const std::string tensor_name(tensor->name);
-            for (const auto & [pattern, qtype] : qs.tensor_type_patterns) {
+            for (const auto & entry_2 : qs.tensor_type_patterns) {
+                auto & pattern = std::get<0>(entry_2);
+                auto & qtype = std::get<1>(entry_2);
                 if (std::regex_search(tensor_name, pattern)) {
                     if (qtype != new_type) {
                         LLAMA_LOG_WARN("%s: %-36s - applying manual override: %s -> %s\n",

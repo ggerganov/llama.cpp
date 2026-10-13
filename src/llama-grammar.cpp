@@ -4,6 +4,7 @@
 #include "llama-vocab.h"
 #include "llama-sampler.h"
 
+#include <tuple>
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
@@ -878,7 +879,9 @@ static void llama_grammar_advance_stack(
         llama_grammar_stack curr_stack_candidate = std::move(todo.back());
         todo.pop_back();
 
-        auto [curr_stack_it, inserted] = seen.insert(std::move(curr_stack_candidate));
+        auto  values_2 = seen.insert(std::move(curr_stack_candidate));
+        auto & curr_stack_it = std::get<0>(values_2);
+        auto & inserted = std::get<1>(values_2);
         if (!inserted) {
             continue;
         }
@@ -1296,7 +1299,8 @@ struct llama_grammar * llama_grammar_init_impl(
     }
     for (size_t i = 0; i < num_trigger_patterns; i++) {
         GGML_ASSERT(trigger_patterns != nullptr);
-        auto & trigger = vec_trigger_patterns.emplace_back();
+        vec_trigger_patterns.emplace_back();
+        auto & trigger = vec_trigger_patterns.back();
         trigger.pattern = trigger_patterns[i];
         trigger.regex = std::regex(trigger.pattern);
     }
@@ -1422,8 +1426,12 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
                     grammar.awaiting_trigger = false;
 
                     // replay tokens that overlap with [start, end)
-                    for (const auto & [tok, tok_pos] : grammar.trigger_buffer_positions) {
-                        auto [tok_start, tok_end] = tok_pos;
+                    for (const auto & entry_1 : grammar.trigger_buffer_positions) {
+                        auto & tok = std::get<0>(entry_1);
+                        auto & tok_pos = std::get<1>(entry_1);
+                        auto  values_3 = tok_pos;
+                        auto & tok_start = std::get<0>(values_3);
+                        auto & tok_end = std::get<1>(values_3);
                         if (tok_end <= start) {
                             continue;
                         }

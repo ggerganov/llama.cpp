@@ -87,8 +87,11 @@ llama_model_bailingmoe::graph::graph(const llama_model & model, const llm_graph_
             ggml_tensor * rope_factors = model.get_rope_factors(cparams, il);
 
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head_k, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             Qcur = ggml_rope_ext(
                     ctx0, Qcur, inp_pos, rope_factors,

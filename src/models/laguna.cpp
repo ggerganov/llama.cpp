@@ -200,8 +200,11 @@ llama_model_laguna::graph::graph(const llama_model & model, const llm_graph_para
         {
             ggml_tensor * attn_inp = cur;  // saved for the gate projection
 
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head_il, n_head_kv_il, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             // g_proj on the *pre-attention* hidden state (matches HF
             // reference: gate is computed from the same `hidden_states`

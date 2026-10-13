@@ -1,3 +1,4 @@
+#include "ggml-cpp-compat.h"
 // mulmat microtile kernels
 
 #include "tiled-kernel.h"
@@ -56,12 +57,12 @@ static void tiled_run_microtile_scalar(const tiled_tile_src0 & src0, const tiled
 
                 // BIAS: subtract BIAS*bsum (src1's per-subblock code sum) from the exact int raw
                 int32_t corr = raw;
-                if constexpr (BIAS != 0) {
+                GGML_IF_CONSTEXPR (BIAS != 0) {
                     corr -= BIAS * bsum;
                 }
                 const int32_t scales_raw = (int32_t) src0.scales[ar * nb_stride + nb_off + s] * corr;
                 // d is NOT applied here: it is constant over the s-loop, so we apply it last before write-out
-                if constexpr (HAS_MIN) {
+                GGML_IF_CONSTEXPR (HAS_MIN) {
                     const int32_t mins_bsum = (int32_t) src0.mins[ar * nb_stride + nb_off + s] * bsum;
                     acc[i][j] += (float) src0.d[d_off] * (float) scales_raw
                               - (float) src0.dmin[d_off] * (float) mins_bsum;
@@ -120,7 +121,7 @@ static void tiled_run_micro_vnni_8x16(const tiled_tile_src0 & src0, const tiled_
     __m512i s1_acc[NUM_ROWS];
     for (int t = 0; t < NUM_ROWS; t++) { s1_acc[t] = _mm512_setzero_si512(); }
     __m512i s2_acc[NUM_ROWS];
-    if constexpr (HAS_MIN) {
+    GGML_IF_CONSTEXPR (HAS_MIN) {
         for (int t = 0; t < NUM_ROWS; t++) { s2_acc[t] = _mm512_setzero_si512(); }
     }
 
@@ -132,7 +133,7 @@ static void tiled_run_micro_vnni_8x16(const tiled_tile_src0 & src0, const tiled_
         }
 
         __m512i bias32 = _mm512_setzero_si512();
-        if constexpr (BIAS != 0) {
+        GGML_IF_CONSTEXPR (BIAS != 0) {
             bias32 = _mm512_mullo_epi32(bsums32, _mm512_set1_epi32(BIAS));
         }
 
@@ -158,7 +159,7 @@ static void tiled_run_micro_vnni_8x16(const tiled_tile_src0 & src0, const tiled_
         for (int t = 0; t < NUM_ROWS; t++) {
             const int ar = i0 + t;
             __m512i rawi = acc16[t];
-            if constexpr (BIAS != 0) {
+            GGML_IF_CONSTEXPR (BIAS != 0) {
                 rawi = _mm512_sub_epi32(rawi, bias32);
             }
             s1_acc[t] = _mm512_add_epi32(s1_acc[t],
@@ -168,7 +169,7 @@ static void tiled_run_micro_vnni_8x16(const tiled_tile_src0 & src0, const tiled_
 
     // s2_acc += mins*bsums; independent of the dpbusd results, so it runs here instead of in the
     // band pass: the band pass keeps the register budget for the 8-row band
-    if constexpr (HAS_MIN) {
+    GGML_IF_CONSTEXPR (HAS_MIN) {
         for (int s = 0; s < NB; s++) {
             __m512i bsums32 = _mm512_load_si512((const __m512i *) &bsums[(bs_off + s * NS) * bs_stride + j0]);
             for (int u = 1; u < NS; u++) {
@@ -187,7 +188,7 @@ static void tiled_run_micro_vnni_8x16(const tiled_tile_src0 & src0, const tiled_
         const int d_off = seff * TILED_MICRO + ar;
         __m512 f1 = _mm512_cvtepi32_ps(s1_acc[t]);
         __m512 result = _mm512_mul_ps(f1, _mm512_set1_ps(src0.d[d_off]));
-        if constexpr (HAS_MIN) {
+        GGML_IF_CONSTEXPR (HAS_MIN) {
             __m512 f2 = _mm512_cvtepi32_ps(s2_acc[t]);
             result = _mm512_fnmadd_ps(_mm512_set1_ps(src0.dmin[d_off]), f2, result);
         }
@@ -277,15 +278,15 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
                 acc[t] = _mm256_setzero_si256();
             }
 
-            if constexpr (SUBBLK == 32) {
+            GGML_IF_CONSTEXPR (SUBBLK == 32) {
                 for (int s = 0; s < NB; s++) {
                     // OPTIMIZATION 1: Use aligned loads (_mm256_load_si256)
                     const __m256i q0_32 = _mm256_load_si256((const __m256i *) &q0[s * SUBBLK]);
                     const __m256i scales16 = _mm256_set1_epi16(scales_row[s]);
 
-                    if constexpr (BIAS != 0) {
+                    GGML_IF_CONSTEXPR (BIAS != 0) {
                         const __m256i w = _mm256_sub_epi8(q0_32, _mm256_set1_epi8((int8_t) BIAS)); // debiased weight
-                        if constexpr (ACTBIAS) {
+                        GGML_IF_CONSTEXPR (ACTBIAS) {
                             // activation pre-biased (+128) by repack; q1b unsigned, w signed
                             #pragma GCC unroll 8
                             for (int t = 0; t < GROUP; t++) {
@@ -312,7 +313,7 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
                         }
                     }
 
-                    if constexpr (HAS_MIN) {
+                    GGML_IF_CONSTEXPR (HAS_MIN) {
                         const __m256i bsums_v = _mm256_add_epi32(
                             _mm256_load_si256((const __m256i *) &src1.bsums[(bs_off + s * 2) * bs_stride + j0 + g]),
                             _mm256_load_si256((const __m256i *) &src1.bsums[(bs_off + s * 2 + 1) * bs_stride + j0 + g]));
@@ -323,9 +324,9 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
                 for (int sp = 0; sp < NB; sp += 2) {
                     const __m256i q0_32 = _mm256_load_si256((const __m256i *) &q0[sp * SUBBLK]);
                     const __m256i scalesv = _mm256_set_m128i(_mm_set1_epi16(scales_row[sp + 1]), _mm_set1_epi16(scales_row[sp]));
-                    if constexpr (BIAS != 0) {
+                    GGML_IF_CONSTEXPR (BIAS != 0) {
                         const __m256i w = _mm256_sub_epi8(q0_32, _mm256_set1_epi8((int8_t) BIAS)); // debiased weight
-                        if constexpr (ACTBIAS) {
+                        GGML_IF_CONSTEXPR (ACTBIAS) {
                             // activation pre-biased (+128) by repack; q1b unsigned, w signed
                             #pragma GCC unroll 8
                             for (int t = 0; t < GROUP; t++) {
@@ -352,7 +353,7 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
                         }
                     }
 
-                    if constexpr (HAS_MIN) {
+                    GGML_IF_CONSTEXPR (HAS_MIN) {
                         const __m256i bsums0_v = _mm256_load_si256((const __m256i *) &src1.bsums[(bs_off + sp) * bs_stride + j0 + g]);
                         const __m256i bsums1_v = _mm256_load_si256((const __m256i *) &src1.bsums[(bs_off + sp + 1) * bs_stride + j0 + g]);
                         s2 = _mm256_add_epi32(s2, _mm256_add_epi32(
@@ -371,7 +372,7 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
             }
             __m256i s1_vec = _mm256_load_si256((const __m256i *) s1_vals);
 
-            if constexpr (BIAS != 0 && ACTBIAS) {
+            GGML_IF_CONSTEXPR (BIAS != 0 && ACTBIAS) {
                 // act-bias correction: raw = desired + 128*sum_s scales[s]*w_bsum[s]; corr precomputed in repack_src0
                 s1_vec = _mm256_sub_epi32(s1_vec, _mm256_set1_epi32(mins_row[0]));
             }
@@ -379,7 +380,7 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
             const __m256 src1_d_vec = _mm256_load_ps(&src1.d[seff * TILED_MICRO + j0 + g]);
             __m256 res_vec = _mm256_mul_ps(_mm256_set1_ps(d0), _mm256_cvtepi32_ps(s1_vec));
 
-            if constexpr (HAS_MIN) {
+            GGML_IF_CONSTEXPR (HAS_MIN) {
 #if defined(__FMA__)
                 // FMA3 implementation: res_vec = res_vec - (dmin0 * s2)
                 res_vec = _mm256_fnmadd_ps(_mm256_set1_ps(dmin0), _mm256_cvtepi32_ps(s2), res_vec);
@@ -447,7 +448,7 @@ static void tiled_run_microtile_avx(const tiled_tile_src0 & src0, const tiled_ti
 
             for (int s = 0; s < NB; s++) {
                 const __m128i scales16 = _mm_set1_epi16(scales_row[s]);
-                if constexpr (HAS_MIN) {
+                GGML_IF_CONSTEXPR (HAS_MIN) {
                     __m128i bsums_v = _mm_setzero_si128(); // per-col bsums as a 4-lane i32 vector
                     for (int u = 0; u < NS; u++) {
                         bsums_v = _mm_add_epi32(bsums_v, _mm_loadu_si128(
@@ -457,7 +458,7 @@ static void tiled_run_microtile_avx(const tiled_tile_src0 & src0, const tiled_ti
                 }
                 for (int u = 0; u < NS; u++) {
                     const __m128i a16 = _mm_loadu_si128((const __m128i *) &q0[s * SUBBLK + u * 16]);
-                    if constexpr (BIAS != 0) {
+                    GGML_IF_CONSTEXPR (BIAS != 0) {
                         // debiased weight w = a16 - BIAS; signed dot via the sign trick (see header)
                         const __m128i a16s = _mm_sub_epi8(a16, _mm_set1_epi8((int8_t) BIAS));
                         const __m128i ax    = _mm_sign_epi8(a16s, a16s);
@@ -477,7 +478,7 @@ static void tiled_run_microtile_avx(const tiled_tile_src0 & src0, const tiled_ti
             }
 
             int32_t s2_s[GROUP] = { 0, 0, 0, 0 };
-            if constexpr (HAS_MIN) {
+            GGML_IF_CONSTEXPR (HAS_MIN) {
                 _mm_storeu_si128((__m128i *) s2_s, s2);
             }
 
@@ -490,7 +491,7 @@ static void tiled_run_microtile_avx(const tiled_tile_src0 & src0, const tiled_ti
                 const int32_t s1 = _mm_cvtsi128_si32(acc[t]);
 
                 float res = d0 * (float) s1;
-                if constexpr (HAS_MIN) {
+                GGML_IF_CONSTEXPR (HAS_MIN) {
                     res -= dmin0 * (float) s2_s[t];
                 }
                 buf[ar * buf_stride + j0 + g + t] += src1.d[seff * TILED_MICRO + j0 + g + t] * res;

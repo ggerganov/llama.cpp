@@ -94,13 +94,7 @@ llama_model_gemma3::graph<iswa>::graph(const llama_model & model, const llm_grap
 
     // TODO: is causal == true correct? might need some changes
     using inp_attn_type = std::conditional_t<iswa, llm_graph_input_attn_kv_iswa, llm_graph_input_attn_kv>;
-    inp_attn_type * inp_attn = nullptr;
-
-    if constexpr (iswa) {
-        inp_attn = build_attn_inp_kv_iswa();
-    } else {
-        inp_attn = build_attn_inp_kv();
-    }
+    inp_attn_type * inp_attn = build_input<inp_attn_type>();
 
     ggml_tensor * inp_out_ids = build_inp_out_ids();
 
@@ -108,7 +102,7 @@ llama_model_gemma3::graph<iswa>::graph(const llama_model & model, const llm_grap
         float freq_base_l  = 0.0f;
         float freq_scale_l = 0.0f;
 
-        if constexpr (iswa) {
+        if (iswa) {
             freq_base_l  = model.get_rope_freq_base (cparams, il);
             freq_scale_l = model.get_rope_freq_scale(cparams, il);
         } else {
@@ -123,8 +117,11 @@ llama_model_gemma3::graph<iswa>::graph(const llama_model & model, const llm_grap
         // self-attention
         {
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
+            auto  values_1 = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
+            auto & Qcur = values_1.q;
+            auto & Kcur = values_1.k;
+            auto & Vcur = values_1.v;
 
             Qcur = build_norm(Qcur, model.layers[il].attn_q_norm, NULL, LLM_NORM_RMS, il);
             cb(Qcur, "Qcur_normed", il);

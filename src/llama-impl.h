@@ -42,16 +42,26 @@ struct no_init {
 };
 
 template <typename dst_t, typename src_t>
+struct llama_cast_impl;
+
+template <typename T>
+struct llama_cast_impl<T, T> {
+    static T cast(T v) { return v; }
+};
+
+template <>
+struct llama_cast_impl<float, ggml_fp16_t> {
+    static float cast(ggml_fp16_t v) { return ggml_fp16_to_fp32(v); }
+};
+
+template <>
+struct llama_cast_impl<ggml_fp16_t, float> {
+    static ggml_fp16_t cast(float v) { return ggml_fp32_to_fp16(v); }
+};
+
+template <typename dst_t, typename src_t>
 static inline dst_t llama_cast(src_t v) {
-    if constexpr (std::is_same_v<src_t, dst_t>) {
-        return v;
-    } else if constexpr (std::is_same_v<src_t, ggml_fp16_t> && std::is_same_v<dst_t, float>) {
-        return ggml_fp16_to_fp32(v);
-    } else if constexpr (std::is_same_v<src_t, float> && std::is_same_v<dst_t, ggml_fp16_t>) {
-        return ggml_fp32_to_fp16(v);
-    } else {
-        static_assert(std::is_same_v<dst_t, void>, "unsupported type combination");
-    }
+    return llama_cast_impl<dst_t, src_t>::cast(v);
 }
 
 static inline ggml_tensor * llama_mul_mat_hadamard(
