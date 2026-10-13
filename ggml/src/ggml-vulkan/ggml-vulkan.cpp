@@ -3988,6 +3988,11 @@ static bool ggml_vk_external_memory_host_usable(vk::DriverId driver_id) {
     return driver_id != vk::DriverId::eMoltenvk;
 }
 
+static bool ggml_vk_host_buffer_import_usable(uint32_t vendor_id) {
+    // amdgpu re-faults all pages of every imported host allocation on each submission
+    return vendor_id != VK_VENDOR_ID_AMD;
+}
+
 vk_device ggml_vk_get_device(size_t idx) {
     VK_LOG_DEBUG("ggml_vk_get_device(" << idx << ")");
 
@@ -5413,7 +5418,7 @@ void ggml_vk_instance_init() {
     }
     GGML_LOG_DEBUG("ggml_vulkan: Found %zu Vulkan devices:\n", vk_instance.device_indices.size());
 
-    bool all_external_memory_host = vk_instance.device_indices.size() > 1;
+    size_t host_buffer_import_count = 0;
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         vk::PhysicalDevice vkdev = devices[vk_instance.device_indices[i]];
         std::vector<vk::ExtensionProperties> extensionprops = vkdev.enumerateDeviceExtensionProperties();
@@ -5430,6 +5435,7 @@ void ggml_vk_instance_init() {
 
         vk_instance.device_supports_membudget.push_back(membudget_supported);
 
+        bool host_buffer_import = false;
         if (external_memory_host_supported) {
             vk::PhysicalDeviceProperties2 props2;
             vk::PhysicalDeviceDriverProperties driver_props;
@@ -5437,19 +5443,19 @@ void ggml_vk_instance_init() {
             props2.pNext = &driver_props;
             driver_props.pNext = &ext_props;
             vkdev.getProperties2(&props2);
-            external_memory_host_supported = ggml_vk_external_memory_host_usable(driver_props.driverID);
-            if (external_memory_host_supported) {
+            host_buffer_import = ggml_vk_external_memory_host_usable(driver_props.driverID) &&
+                                 ggml_vk_host_buffer_import_usable(props2.properties.vendorID);
+            if (host_buffer_import) {
                 vk_instance.host_import_alignment = std::max<size_t>(vk_instance.host_import_alignment, ext_props.minImportedHostPointerAlignment);
+                host_buffer_import_count++;
             }
         }
-        if (!external_memory_host_supported) {
-            all_external_memory_host = false;
-        }
+        vk_instance.device_host_buffer_import.push_back(host_buffer_import);
 
         ggml_vk_print_gpu_info(i);
     }
 
-    vk_instance.multi_device = all_external_memory_host;
+    vk_instance.multi_device = host_buffer_import_count > 1 && vk_instance.device_host_buffer_import[0];
 }
 
 void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {

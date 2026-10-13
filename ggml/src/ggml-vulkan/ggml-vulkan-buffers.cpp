@@ -363,7 +363,7 @@ void ggml_vk_host_get(const vk_device& device, const void * ptr, vk_buffer& buf,
 
     if (entry.views[device->idx] == nullptr) {
         const uint32_t bit = 1u << device->idx;
-        if (!vk_instance.multi_device || (vk_instance.host_import_failed & bit)) {
+        if (!vk_instance.multi_device || !vk_instance.device_host_buffer_import[device->idx] || (vk_instance.host_import_failed & bit)) {
             return;
         }
         GGML_ASSERT(device->external_memory_host);
