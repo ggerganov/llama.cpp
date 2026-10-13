@@ -2565,6 +2565,12 @@ common_params common_base_params_to_speculative(const common_params & params) {
     result.n_outputs_max = params.n_parallel;
     result.n_outputs_max_per_seq = 1;
 
+    // the draft context processes the draft tokens in its own ubatches, so it can use a smaller
+    // physical batch than the target - that shrinks its compute buffer and spares VRAM
+    if (params_spec.n_ubatch > 0) {
+        result.n_ubatch = params_spec.n_ubatch;
+    }
+
     // the MoE cache is only used by the target context
     result.moe_cache_size = 0;
 
