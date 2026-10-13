@@ -266,8 +266,8 @@ public:
     // tags of unfinished downloads (thread-safe)
     std::vector<std::string> get_unfinished_downloads();
 
-    // forget a download that will never be resumed (thread-safe)
-    void clear_unfinished_download(const std::string & name);
+    // drop a download that will never be resumed, its tag and its partial files (thread-safe)
+    void remove_unfinished_download(const std::string & name);
 
     // return a copy of model metadata (thread-safe)
     std::optional<server_model_meta> get_meta(const std::string & name);

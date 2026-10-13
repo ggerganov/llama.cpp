@@ -718,12 +718,11 @@ void server_models::save_unfinished_downloads() {
     for (const auto & tag : unfinished_downloads) {
         data["downloads"].push_back(tag);
     }
-    std::ofstream out(unfinished_downloads_path(), std::ios::trunc);
-    if (!out) {
-        LOG_WRN("failed to record unfinished downloads in %s\n", unfinished_downloads_path().c_str());
-        return;
+    try {
+        fs_write_atomic(std::filesystem::u8path(unfinished_downloads_path()), data.dump());
+    } catch (const std::exception & e) {
+        LOG_WRN("failed to record unfinished downloads: %s\n", e.what());
     }
-    out << data.dump();
 }
 
 std::vector<std::string> server_models::get_unfinished_downloads() {
@@ -731,11 +730,14 @@ std::vector<std::string> server_models::get_unfinished_downloads() {
     return { unfinished_downloads.begin(), unfinished_downloads.end() };
 }
 
-void server_models::clear_unfinished_download(const std::string & name) {
-    std::lock_guard<std::mutex> lk(mutex);
+void server_models::remove_unfinished_download(const std::string & name) {
+    std::unique_lock<std::mutex> lk(mutex);
     if (unfinished_downloads.erase(name) > 0) {
         save_unfinished_downloads();
     }
+    lk.unlock();
+    bool ok = common_download_remove(name, base_params.hf_token);
+    SRV_INF("removing unfinished download name=%s (%s)\n", name.c_str(), ok ? "succeeded" : "nothing on disk");
 }
 
 void server_models::notify_sse(const std::string & event, const std::string & model_id, const json & data) {
@@ -1516,18 +1518,20 @@ bool server_models::remove(const std::string & name) {
             save_unfinished_downloads();
         }
         lk.unlock();
-        bool ok = common_download_remove(name);
+        bool ok = common_download_remove(name, base_params.hf_token);
         SRV_INF("removing model name=%s from cache (%s)\n", name.c_str(), ok ? "succeeded" : "partial");
         notify_sse("model_remove", name, {});
         return true;
     }
 
-    // remove from disk (best-effort: cancelled downloads may have no cached files)
-    bool ok = common_download_remove(name);
     mapping.erase(name);
     if (unfinished_downloads.erase(name) > 0) {
         save_unfinished_downloads();
     }
+    lk.unlock();
+
+    // remove from disk (best-effort: cancelled downloads may have no cached files)
+    bool ok = common_download_remove(name, base_params.hf_token);
     if (!ok) {
         SRV_WRN("removing model name=%s from disk returned false (no cached files?)\n", name.c_str());
     }
@@ -2350,10 +2354,10 @@ void server_models_routes::init_routes() {
             throw std::invalid_argument("model must be a non-empty string");
         }
 
-        // a download listed from an earlier run has no instance: dropping its tag is
-        // the whole removal, and its partial files stay on disk for a later resume
+        // a download listed from an earlier run has no instance, only its tag and
+        // its partial files
         if (!models.has_model(name)) {
-            models.clear_unfinished_download(name);
+            models.remove_unfinished_download(name);
             res_ok(res, {{"success", true}});
             return res;
         }
