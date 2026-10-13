@@ -12230,8 +12230,7 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
         // there is no auxiliary memory use, it shouldn't be necessary to call ggml_vk_sync_buffers
         // outside of this logic. When a node uses one of the prealloc buffers for something like
         // dequantization or split_k, additional synchronization is needed between those passes.
-        static const bool force_sync = getenv("GGML_VK_FORCE_SYNC") != nullptr;
-        bool need_sync = force_sync;
+        bool need_sync = false;
 
         // Check whether "node" requires synchronization. The node requires synchronization if it
         // overlaps in memory with another unsynchronized node and at least one of them is a write.
@@ -13332,10 +13331,6 @@ static bool ggml_backend_vk_cpy_tensor_async(ggml_backend_t backend_src, ggml_ba
     }
 
     if (ggml_backend_buffer_is_host(src->buffer)) {
-        static const bool no_host_async = getenv("GGML_VK_NO_HOST_ASYNC_CPY") != nullptr;
-        if (no_host_async) {
-            return false;
-        }
         vk_buffer pinned_buf = nullptr;
         size_t pinned_offset = 0;
         ggml_vk_host_get(ctx->device, src->data, pinned_buf, pinned_offset);
@@ -14690,8 +14685,7 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         ctx->perf_logger->print_timings();
     }
 
-    static const bool sync_graph_end = getenv("GGML_VK_SYNC_GRAPH_END") != nullptr;
-    if (!ctx->device->support_async || sync_graph_end) {
+    if (!ctx->device->support_async) {
         ggml_vk_synchronize(ctx);
     }
 
@@ -15180,7 +15174,7 @@ ggml_backend_t ggml_backend_vk_init(size_t dev_num) {
         /* .context = */ ctx,
     };
 
-    if (!ctx->device->support_async || getenv("GGML_VK_NO_GET_ASYNC") != nullptr) {
+    if (!ctx->device->support_async) {
         vk_backend->iface.get_tensor_async = nullptr;
     }
 
