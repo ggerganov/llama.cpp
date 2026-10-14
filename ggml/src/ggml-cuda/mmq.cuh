@@ -118,6 +118,10 @@ struct tile_x_sizes {
 #define MMQ_TILE_Y_K     (MMQ_TILE_NE_K + MMQ_TILE_NE_K / QI8_1)
 #define MMQ_TILE_Y_FP4_K MMQ_TILE_Y_K
 
+// the activation y-tile is copied with int4 stores: exact 4-int groups, 16-byte aligned blocks
+static_assert(MMQ_TILE_Y_K % 4 == 0, "activation y-tile is copied in int4 groups of 4");
+static_assert(sizeof(block_q8_1_mmq) % 16 == 0, "activation staging rows must stay 16-byte aligned");
+
 enum ggml_cuda_mmq_sram_layout {
     GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0,
     GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1,
@@ -910,10 +914,12 @@ static __device__ __forceinline__ void mul_mat_q_process_tile(
         {
             const int * by0 = y + ncols_y * (kb0 * qk / ne_block) * sz;
 #pragma unroll
-            for (int l0 = 0; l0 < J * MMQ_TILE_Y_K; l0 += nwarps * warp_size) {
+            for (int l0 = 0; l0 < J * MMQ_TILE_Y_K / 4; l0 += nwarps * warp_size) {
                 int l = l0 + threadIdx.y*warp_size + threadIdx.x;
 
-                tile_y[l] = by0[l];
+                if (l < J * MMQ_TILE_Y_K / 4) {
+                    ((int4 *) tile_y)[l] = ((const int4 *) by0)[l];
+                }
             }
         }
 
@@ -926,10 +932,12 @@ static __device__ __forceinline__ void mul_mat_q_process_tile(
         {
             const int * by0 = y + ncols_y * ((kb0 * qk / ne_block) * sz + sz);
 #pragma unroll
-            for (int l0 = 0; l0 < J * MMQ_TILE_Y_K; l0 += nwarps * warp_size) {
+            for (int l0 = 0; l0 < J * MMQ_TILE_Y_K / 4; l0 += nwarps * warp_size) {
                 int l = l0 + threadIdx.y*warp_size + threadIdx.x;
 
-                tile_y[l] = by0[l];
+                if (l < J * MMQ_TILE_Y_K / 4) {
+                    ((int4 *) tile_y)[l] = ((const int4 *) by0)[l];
+                }
             }
         }
 
