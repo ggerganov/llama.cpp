@@ -22,6 +22,7 @@ Identify what actually changed and which area checklists below apply. Run `git d
 - `ggml/` (any backend, op, or `ggml.h`) -> **ggml / backend**
 - `include/llama.h` and other public headers -> **Public API**
 - `tools/server/` -> **Server**
+- `tools/ui/` (or the legacy `tools/server/webui/`) -> **WebUI**
 - `tests/`, `tools/server/tests/`, or any other added/changed test -> **Tests**
 - anything else, plus all of the above -> **General** (always runs)
 
@@ -114,6 +115,69 @@ Public API changes carry a higher bar than internal ones (`CONTRIBUTING.md`). Re
 - Is the feature within server's defined scope? Check `tools/server/README-dev.md` - out-of-scope features get declined.
 - Security: don't trust client-supplied headers (e.g. `X-Forwarded-For`) or add footguns; things like IP allowlisting belong at a reverse proxy unless there's a trusted-proxy design.
 - Wire new behavior into the existing request/response and checkpoint paths correctly; watch for resource leaks across requests.
+
+## WebUI (`tools/ui/`)
+
+These apply only to changes under `tools/ui/` (formerly `tools/server/webui/`) - the SvelteKit + Svelte 5 frontend. They are frontend conventions, not repo-wide ones, so do not apply them to C++ or other tool code.
+
+The dominant review theme in this area is placement: most accepted nits are about putting a value, function, or piece of logic in the layer where it belongs.
+
+### Constants, enums, and magic values
+
+- No inline magic strings, numbers, or regexes anywhere - including seemingly trivial ones like `/`, newlines, `'[DONE]'`, file extensions, CSS class strings, and `data-` attribute names. Move them to `$lib/constants` (single values, config objects) or `$lib/enums` (closed sets of values such as roles, types, statuses, kinds).
+- Grep `$lib/constants` before adding a new one - use the existing constant instead of re-declaring a near-duplicate. Regexes are constants too (`*_REGEX` naming).
+- Repeated styling tokens (icon size classes, colors per modality/capability) come from a constant config object, not per-component inline literals.
+- Prefer enums over bare string unions when the value set is closed; enum values are lowercase, enum/type names carry a domain prefix (e.g. `Model...`).
+
+### Placement and layering
+
+- Components render; they don't own business logic. Data derivation, naming/parsing logic, and multi-store orchestration belong in a store method, a `$lib/utils` function, or a `$lib/hooks` hook. A component should call `store.doSomething()` rather than reimplement it.
+- Keep the layers deliberate: stores (`*.svelte.ts`, stateful), services (stateless clients), utils (pure functions), hooks (`*.svelte.ts`, reusable reactivity), `$lib/types` (types), `$lib/constants` (constants). If a new file blurs these, flag it and name the layer it belongs in.
+- A stateful "service" is misnamed - it's a store or belongs in the scope that uses it. Conversely, a one-off `.svelte.ts` module (which is effectively a store) for logic only one component uses is overkill; keep it in that component or a context.
+- Before introducing a new abstraction (store/service/hook/context), ask whether it will ever have a second consumer; if not, keep the logic in the existing scope. KISS first, iterate later.
+- Barrel files (`index.ts`) export from the correct scope with a short JSDoc per export; constants and types are not re-exported from store barrels.
+
+### DRY and dead code
+
+- Reuse before writing: grep for an existing helper, component, or store method before adding a new one (truncation, copy/download, file preview, sanitization, and formatting helpers all already exist).
+- Sibling variants (e.g. Dropdown vs Sheet versions of the same picker) must render from one shared config / single source of truth, not duplicate markup and logic.
+- Flag dead code, commented-out markup, and leftovers from renamed or removed features. Intentional-but-temporary leftovers get `@deprecated` JSDoc so they can be found and removed later.
+
+### Components and Svelte 5
+
+- Break bloated components into focused sub-components (plus dedicated `*Skeleton.svelte` loading states); use `{#snippet}` for repeated in-component markup.
+- Use the existing `$lib/components/ui` primitives instead of hand-rolling dialogs, tooltips, inputs, or dropdowns.
+- Rune syntax only: `$props()` deconstruction, `$derived` (reach for `$derived.by` only when a simple expression won't do), `$state`. Avoid `$effect` for things `$state`/`$derived` can express - a wall of `$effect` is a design smell.
+- Handle window/document events via `<svelte:window>` / `<svelte:document>`, not manual add/remove-listener plumbing.
+- Svelte 5 supports arrays in the `class` attribute - don't reach for `cn()` for simple conditional classes.
+- Use `SvelteMap`/`SvelteSet` for reactive collections.
+
+### Comments
+
+- Same bar as the General checklist, enforced harder here: no comments that restate the code, no verbose JSDoc on obvious functions, no commented-out code. Edge cases and tricky behavior are documented by unit tests, not prose - move the example into a Vitest test and delete the comment.
+
+### Types, naming, and style
+
+- `===` over `==`, `includes()` over index checks, no redundant null-coalescing after an `Array.isArray` check.
+- One spelling per concept across the codebase (e.g. pick `cwd` vs `currentWorkingDirectory` and apply it everywhere); explicit, self-describing names over clever ones.
+
+### Performance (streaming UI)
+
+- Anything running per streamed chunk must be cheap: throttle before computing, not after; apply block-level regex passes globally and scan lines backwards with early exit; don't re-parse the whole message per update.
+- Smooth height/expand transitions consistent with the rest of the UI (see the CSS `calc-size()` technique for animating auto-height).
+
+### Security (frontend side)
+
+- Sanitize anything rendered from model or remote data: the rehype/`{@html}` pipeline, SVG content, and URLs (use the `$lib/utils` URL sanitizer rather than ad-hoc checks or a third-party lib for trivial cases).
+- Proxy headers and agent/tool filesystem access are security boundaries - scope enforcement (e.g. browse-root sandboxing) must be validated end-to-end, not just in the UI; loop in server reviewers for the C++ side.
+
+### PR hygiene specific to `tools/ui`
+
+- The static build output must be rebuilt and committed (`npm run build`, then the generated bundle/output files) or covered by the CI build - stale output is a merge blocker.
+- `npm run lint && npm run check` (and `npm run format`) must pass; a failing Storybook test is blocking.
+- PRs need a short video demo in the description showing the change working (screenshots are acceptable for pure-visual tweaks).
+- Scope discipline: changes that belong to another stacked PR don't ride along in this one - call them out and move them there. Flag unrelated edits to deprecated/legacy files and ask whether they're intentional.
+- New nontrivial utils and parsing logic get Vitest unit tests; reusable UI components get Storybook stories/tests when practical.
 
 ## Multimodal (`tools/mtmd/`)
 
