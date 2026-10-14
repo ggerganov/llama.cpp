@@ -388,3 +388,31 @@ describe('parseModelId', () => {
 		});
 	});
 });
+
+describe('draftSidecarsByRepo', () => {
+	const entry = (id: string) => ({ id, status: { value: 'downloaded' } });
+
+	it('keeps one badge per kind and quant', () => {
+		const byRepo = ModelsService.draftSidecarsByRepo([
+			entry('ggml-org/model:Q4_0-mtp'),
+			entry('ggml-org/model:Q8_0-mtp')
+		]);
+
+		expect(byRepo.get('ggml-org/model')).toEqual([
+			{ kind: ModelDraftSidecar.MTP, quant: 'Q4_0', repo: 'ggml-org/model' },
+			{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo: 'ggml-org/model' }
+		]);
+	});
+
+	it('drops duplicates and aux sidecars', () => {
+		const byRepo = ModelsService.draftSidecarsByRepo([
+			entry('ggml-org/model:Q4_0-mtp'),
+			entry('ggml-org/model:Q4_0-mtp'),
+			entry('ggml-org/model:Q4_0-mmproj')
+		]);
+
+		expect(byRepo.get('ggml-org/model')).toEqual([
+			{ kind: ModelDraftSidecar.MTP, quant: 'Q4_0', repo: 'ggml-org/model' }
+		]);
+	});
+});

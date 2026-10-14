@@ -78,8 +78,13 @@ export class ModelsService {
 		const byRepo = new Map<string, ModelSidecarBadge[]>();
 
 		for (const { id, status } of entries) {
-			// a sidecar still downloading is not on disk yet; the download row tracks it
-			if (status?.value === ServerModelStatus.DOWNLOADING) continue;
+			// a sidecar still downloading or unfinished is not on disk yet; the
+			// download row tracks it
+			if (
+				status?.value === ServerModelStatus.DOWNLOADING ||
+				status?.value === ServerModelStatus.INCOMPLETE
+			)
+				continue;
 
 			const parsed = this.parseModelId(id);
 
@@ -95,7 +100,12 @@ export class ModelsService {
 			const kinds = byRepo.get(repo);
 
 			if (kinds) {
-				if (!kinds.some((b) => b.kind === badge.kind && b.repo === badge.repo)) kinds.push(badge);
+				if (
+					!kinds.some(
+						(b) => b.kind === badge.kind && b.repo === badge.repo && b.quant === badge.quant
+					)
+				)
+					kinds.push(badge);
 			} else {
 				byRepo.set(repo, [badge]);
 			}

@@ -5,12 +5,13 @@
  * Created and owned by modelsStore, which also owns the router rows it updates.
  */
 
+import { browser } from '$app/environment';
 import {
 	CLI_FLAGS,
 	HF_UD_QUANT_PREFIX_REGEX,
 	MODEL_ID,
 	PATH_SEPARATOR,
-	PAUSED_MODEL_DOWNLOADS_LOCALSTORAGE_KEY
+	STORAGE_APP_NAME
 } from '$lib/constants';
 import { ModelDownloadStopRequest, ServerModelsSseEventType, ServerModelStatus } from '$lib/enums';
 import { HuggingFaceService } from '$lib/services/huggingface.service';
@@ -24,6 +25,11 @@ import type {
 	ModelDownloadEntry,
 	ModelDownloadProgress
 } from '$lib/types';
+import type { ModelSidecarBadge } from '$lib/types/models';
+import { repoOf } from '$lib/utils/model-names';
+import { isAuxSidecar } from '$lib/utils/sidecars';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { toast } from 'svelte-sonner';
 
 /** One repo's tracked downloads: the main weights first, its draft sidecars after. */
 export interface ModelDownloadCluster {
@@ -31,11 +37,6 @@ export interface ModelDownloadCluster {
 	mains: ModelDownloadEntry[];
 	repo: string;
 }
-import type { ModelSidecarBadge } from '$lib/types/models';
-import { repoOf } from '$lib/utils/model-names';
-import { isAuxSidecar } from '$lib/utils/sidecars';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { toast } from 'svelte-sonner';
 
 /**
  * The slice of modelsStore the manager drives. Kept narrow on purpose so it
@@ -140,7 +141,11 @@ export class ModelStatusManager {
 				const kinds = result.get(baseRepo);
 
 				if (kinds) {
-					if (!kinds.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
+					if (
+						!kinds.some(
+							(b) => b.kind === badge.kind && b.repo === badge.repo && b.quant === badge.quant
+						)
+					) {
 						kinds.push(badge);
 					}
 				} else {
@@ -233,12 +238,12 @@ export class ModelStatusManager {
 	}
 
 	/**
-	 * Cancel a download together with the draft sidecars downloading alongside
-	 * it, confirmed once for the whole cluster.
+	 * Cancel a download together with its quant-matched draft sidecars,
+	 * confirmed once.
 	 */
 	async cancelDownloadWithDrafts(repoWithTag: string): Promise<boolean> {
 		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const tags = [repoWithTag, ...(cluster?.drafts ?? []).map((draft) => draft.repoWithTag)];
+		const tags = [repoWithTag, ...this.quantMatchedDrafts(repoWithTag, cluster?.drafts ?? [])];
 
 		let ok = true;
 
@@ -269,20 +274,9 @@ export class ModelStatusManager {
 	}
 
 	constructor(private host: ModelStatusHost) {
-		// the server has no notion of a paused download, so the ids survive in
-		// localStorage; the progress snapshot is stale after a reload and stays null
-		try {
-			const raw = localStorage.getItem(PAUSED_MODEL_DOWNLOADS_LOCALSTORAGE_KEY);
-			const parsed: unknown = JSON.parse(raw ?? '[]');
-
-			if (!Array.isArray(parsed)) return;
-
-			for (const repoWithTag of parsed.filter((id): id is string => typeof id === 'string')) {
-				this.pausedDownloads.set(repoWithTag, null);
-			}
-		} catch {
-			// unreadable or corrupt: start without the paused set
-		}
+		// the paused-ids registry moved to the server's unfinished-downloads record;
+		// drop the key this store used to persist
+		if (browser) localStorage.removeItem(`${STORAGE_APP_NAME}.pausedModelDownloads`);
 	}
 
 	/**
@@ -300,9 +294,9 @@ export class ModelStatusManager {
 		// the feed must be live so the resulting models_reload event refreshes the list
 		this.subscribe();
 
-		// a paused download keeps its marker and its last reported progress until the
-		// request is accepted: dropping the marker first lets the next list refresh
-		// adopt the tag again as paused, which leaves the row stuck on that state
+		// the marker and its last reported progress survive until the request is
+		// accepted: dropping them first would drop the paused state, which reads as
+		// a lost download if the server rejects the resume
 		const snapshot = this.pausedDownloads.get(repoWithTag) ?? null;
 		const wasPaused = this.pausedDownloads.has(repoWithTag);
 
@@ -370,6 +364,7 @@ export class ModelStatusManager {
 		return [...clusters.values()];
 	}
 
+	/** Tracked downloads (in flight or paused) for the selector's "Download in progress" section. */
 	getDownloadEntries(): ModelDownloadEntry[] {
 		const inFlight = Array.from(this.downloadProgress, ([repoWithTag, progress]) => ({
 			isPaused: false,
@@ -405,7 +400,12 @@ export class ModelStatusManager {
 		const merged = [...badges];
 
 		for (const badge of listed) {
-			if (!merged.some((b) => b.kind === badge.kind && b.repo === badge.repo)) merged.push(badge);
+			if (
+				!merged.some(
+					(b) => b.kind === badge.kind && b.repo === badge.repo && b.quant === badge.quant
+				)
+			)
+				merged.push(badge);
 		}
 
 		return merged;
@@ -440,10 +440,13 @@ export class ModelStatusManager {
 	isModelDownloaded(repoWithTag: string): boolean {
 		const key = downloadIdKey(repoWithTag);
 
-		// a tag the router still lists as downloading is an unfinished download, not a
-		// model on disk, so the download options offer it as resumable instead
+		// an unfinished download (downloading or incomplete) is not a model on disk,
+		// so the download options offer it as resumable instead
 		return this.host.routerModels.some(
-			(m) => downloadIdKey(m.id) === key && m.status?.value !== ServerModelStatus.DOWNLOADING
+			(m) =>
+				downloadIdKey(m.id) === key &&
+				m.status?.value !== ServerModelStatus.DOWNLOADING &&
+				m.status?.value !== ServerModelStatus.INCOMPLETE
 		);
 	}
 
@@ -485,10 +488,6 @@ export class ModelStatusManager {
 		}
 	}
 
-	/**
-	 * Tracked downloads (in flight or paused) for the selector's
-	 * "Download in progress" section.
-	 */
 	/**
 	 * Status of a repo's main weights as the listing reports it, null when the
 	 * repo has no main entry (e.g. only a sidecar was downloaded).
@@ -540,6 +539,7 @@ export class ModelStatusManager {
 		}
 	}
 
+	/** Open the /models/sse feed with auto reconnect; idempotent, router mode only. */
 	subscribe(): void {
 		if (this.statusReaderActive) return;
 
@@ -550,18 +550,16 @@ export class ModelStatusManager {
 		void this.runStatusReader(this.statusAbort.signal);
 	}
 
-	/** Open the /models/sse feed with auto reconnect; idempotent, router mode only. */
 	/**
-	 * A model the server lists as downloading that this session never started is a
-	 * download left unfinished by an earlier run: the server keeps no partial-file
-	 * index, so this is how a refresh or a fresh open learns about it. It is offered
-	 * as paused, and re-posting the tag resumes it from the files already on disk.
+	 * A model the server lists as incomplete is a download that never finished: it
+	 * runs in no tab and carries no progress. Offer it as paused, and re-posting
+	 * the tag resumes it from the files already on disk.
 	 */
 	syncPausedDownloads(): void {
 		for (const model of this.host.routerModels) {
-			if (model.status?.value !== ServerModelStatus.DOWNLOADING) continue;
+			if (model.status?.value !== ServerModelStatus.INCOMPLETE) continue;
 
-			if (this.downloadProgress.has(model.id) || this.pausedDownloads.has(model.id)) continue;
+			if (this.pausedDownloads.has(model.id)) continue;
 
 			this.setPausedDownload(model.id, null);
 		}
@@ -575,9 +573,10 @@ export class ModelStatusManager {
 	async toggleDownloadWithDrafts(repoWithTag: string): Promise<void> {
 		const resume = this.isDownloadPaused(repoWithTag);
 		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const drafts = (cluster?.drafts ?? [])
-			.filter((draft) => (resume ? draft.isPaused : !draft.isPaused))
-			.map((draft) => draft.repoWithTag);
+		const drafts = this.quantMatchedDrafts(
+			repoWithTag,
+			(cluster?.drafts ?? []).filter((draft) => (resume ? draft.isPaused : !draft.isPaused))
+		);
 
 		for (const tag of [repoWithTag, ...drafts]) {
 			if (resume) await this.downloadModel(tag);
@@ -797,22 +796,19 @@ export class ModelStatusManager {
 	}
 
 	private deletePausedDownload(repoWithTag: string): boolean {
-		if (!this.pausedDownloads.delete(repoWithTag)) return false;
-
-		this.persistPausedDownloads();
-
-		return true;
+		return this.pausedDownloads.delete(repoWithTag);
 	}
 
-	private persistPausedDownloads(): void {
-		try {
-			localStorage.setItem(
-				PAUSED_MODEL_DOWNLOADS_LOCALSTORAGE_KEY,
-				JSON.stringify(Array.from(this.pausedDownloads.keys()))
-			);
-		} catch {
-			// storage unavailable: the pauses just do not survive a reload
-		}
+	/**
+	 * Draft tags of the repo's cluster that share the main's quant, so every
+	 * cascade acts on exactly what a delete would take with it.
+	 */
+	private quantMatchedDrafts(repoWithTag: string, drafts: ModelDownloadEntry[]): string[] {
+		const quant = ModelsService.parseModelId(repoWithTag).quantization;
+
+		return drafts
+			.filter((draft) => ModelsService.parseModelId(draft.repoWithTag).quantization === quant)
+			.map((draft) => draft.repoWithTag);
 	}
 
 	private rejectStatus(modelId: string, error: Error): void {
@@ -848,7 +844,6 @@ export class ModelStatusManager {
 
 	private setPausedDownload(repoWithTag: string, progress: ModelDownloadProgress | null): void {
 		this.pausedDownloads.set(repoWithTag, progress);
-		this.persistPausedDownloads();
 	}
 
 	// reassign the array: mutating an entry in place would not trigger reactivity
