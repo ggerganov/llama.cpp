@@ -1895,10 +1895,10 @@ static void test_tool_defer_loading() {
 
         auto params = common_chat_templates_apply(tmpls.get(), inputs);
 
-        if (params.prompt.find("special_function") == std::string::npos) {
+        if (params.prompt.str().find("special_function") == std::string::npos) {
             throw std::runtime_error("visible tool missing from the prompt");
         }
-        if (params.prompt.find(python_tool.name) != std::string::npos) {
+        if (params.prompt.str().find(python_tool.name) != std::string::npos) {
             throw std::runtime_error("deferred tool leaked into the prompt");
         }
         if (params.grammar.find(python_tool.name) == std::string::npos) {
@@ -1906,20 +1906,126 @@ static void test_tool_defer_loading() {
         }
     }
 
-    // 5. deferring everything would render a prompt that never mentions tools
-    //    while the grammar still expects calls - reject it instead.
-    {
-        common_chat_tool other = special_function_tool;
-        other.defer_loading    = true;
-        bool threw             = false;
+    common_chat_tool deferred_special = special_function_tool;
+    deferred_special.defer_loading    = true;
+
+    auto expect_throw = [](const std::function<void()> & fn, const std::string & what) {
+        bool threw = false;
         try {
-            common_chat_tools_parse_oaicompat(
-                common_chat_tools_to_json_oaicompat({ deferred_tool, other }));
+            fn();
         } catch (const std::exception &) {
             threw = true;
         }
         if (!threw) {
-            throw std::runtime_error("expected an error when every tool sets defer_loading");
+            throw std::runtime_error("expected an error: " + what);
+        }
+    };
+
+    // a tool message that reveals the deferred tool, as returned by a client-side tool search
+    auto reveal_msgs = []() {
+        common_chat_msg user;
+        user.role    = "user";
+        user.content = "hey";
+        common_chat_msg search = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}");
+        search.tool_calls[0].id = "call_1";
+        common_chat_msg result;
+        result.role         = "tool";
+        result.tool_call_id = "call_1";
+        result.content_parts.push_back({ "tool_reference", python_tool.name });
+        return std::vector<common_chat_msg>{ user, search, result };
+    };
+
+    // 5. tool_reference parts parse from either key and round trip
+    {
+        auto msgs = common_chat_msgs_parse_oaicompat(json::array({
+            json{
+                { "role", "tool" },
+                { "tool_call_id", "call_1" },
+                { "content", json::array({
+                    json{ { "type", "tool_reference" }, { "tool_name", "a" } },
+                    json{ { "type", "tool_reference" }, { "name", "b" } },
+                }) },
+            },
+        }));
+        assert_equals((size_t) 2, msgs[0].content_parts.size());
+        assert_equals(std::string("a"), msgs[0].content_parts[0].text);
+        assert_equals(std::string("b"), msgs[0].content_parts[1].text);
+        auto back = common_chat_msgs_to_json_oaicompat(msgs).at(0).at("content").at(1);
+        assert_equals(std::string("tool_reference"), back.at("type").get<std::string>());
+        assert_equals(std::string("b"), back.at("name").get<std::string>());
+    }
+
+    // 6. template without defer_loading support: the reference is expanded to the tool definition here,
+    //    an unknown reference is an error, and deferring every tool is rejected
+    {
+        auto tmpls = read_templates("models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja");
+        assert_equals(false, common_chat_templates_get_caps(tmpls.get()).at("supports_tool_defer_loading"));
+
+        common_chat_templates_inputs inputs;
+        inputs.messages = reveal_msgs();
+        inputs.tools    = { special_function_tool, deferred_tool };
+
+        auto params = common_chat_templates_apply(tmpls.get(), inputs);
+        assert_contains(params.prompt.str(), python_tool.description);
+
+        inputs.messages.back().content_parts[0].text = "unknown_tool";
+        expect_throw([&]() { common_chat_templates_apply(tmpls.get(), inputs); }, "unknown tool_reference");
+
+        inputs.messages = reveal_msgs();
+        inputs.tools    = { deferred_special, deferred_tool };
+        expect_throw([&]() { common_chat_templates_apply(tmpls.get(), inputs); }, "all tools deferred on a template without support");
+    }
+
+    // 7. template that handles defer_loading and tool_reference itself (same contract as GLM-5.x templates):
+    //    it gets every tool with the flag set, references are passed through, and deferring every tool is fine
+    {
+        const std::string tmpl_src =
+            "{%- if tools -%}<tools>\n"
+            "{%- for tool in tools -%}{%- if not tool.function.defer_loading -%}"
+            "{{ tool.function.name }}: {{ tool.function.description }}\n"
+            "{%- endif -%}{%- endfor -%}</tools>\n"
+            "{%- endif -%}"
+            "{%- for m in messages -%}"
+            "{%- if m.role == 'tool' -%}<response>"
+            "{%- if m.content is string -%}{{ m.content }}{%- else -%}"
+            "{%- for p in m.content -%}{%- if p.type == 'tool_reference' -%}"
+            "{%- for tool in tools -%}{%- if tool.function.name == p.name -%}"
+            "{{ tool.function.name }}: {{ tool.function.description }}"
+            "{%- endif -%}{%- endfor -%}"
+            "{%- else -%}{{ p.text }}{%- endif -%}{%- endfor -%}"
+            "{%- endif -%}</response>\n"
+            "{%- elif m.role == 'assistant' and m.tool_calls -%}"
+            "{%- for tc in m.tool_calls -%}<tool_call>{\"name\": \"{{ tc.function.name }}\", \"arguments\": {{ tc.function.arguments | tojson }}}</tool_call>{%- endfor -%}\n"
+            "{%- else -%}<{{ m.role }}>{{ m.content }}</{{ m.role }}>\n"
+            "{%- endif -%}"
+            "{%- endfor -%}"
+            "{%- if add_generation_prompt -%}<assistant>{%- endif -%}";
+        auto tmpls = common_chat_templates_ptr(common_chat_templates_init(/* model= */ nullptr, tmpl_src));
+        auto caps  = common_chat_templates_get_caps(tmpls.get());
+        assert_equals(true, caps.at("supports_tool_defer_loading"));
+        assert_equals(true, caps.at("supports_tool_reference"));
+
+        common_chat_templates_inputs inputs;
+        inputs.messages = reveal_msgs();
+        inputs.tools    = { special_function_tool, deferred_tool };
+
+        auto params = common_chat_templates_apply(tmpls.get(), inputs);
+        auto prompt = params.prompt.str();
+        auto tools_end = prompt.find("</tools>");
+        if (prompt.substr(0, tools_end).find(python_tool.name) != std::string::npos) {
+            throw std::runtime_error("deferred tool leaked into the tool list");
+        }
+        if (prompt.find(python_tool.description, tools_end) == std::string::npos) {
+            throw std::runtime_error("template did not expand the tool_reference");
+        }
+        if (params.grammar.find(python_tool.name) == std::string::npos) {
+            throw std::runtime_error("deferred tool missing from the grammar");
+        }
+
+        inputs.tools = { deferred_special, deferred_tool };
+        params = common_chat_templates_apply(tmpls.get(), inputs);
+        if (params.grammar.find(python_tool.name) == std::string::npos) {
+            throw std::runtime_error("all-deferred: tool missing from the grammar");
         }
     }
 }
