@@ -134,6 +134,18 @@ Writing high-performance operators for Hexagon requires following specific guide
 - **Distinction**: `octx->src[N]` pointers *can* be NULL by design and must be checked when optional.
   Examples include attention masks, optional bias or weights in fused kernels, and frequency factors.
 
+### `supports_op` Independence from Buffer and Repack State
+
+- `supports_op` (and op-specific checkers such as `supported_mul_mat()`, `supported_get_rows()`) runs during GGML graph scheduling **before** buffers are allocated and before tensor data is populated.
+- **Never check buffer usage or repacking state in `supports_op`**:
+  - `t->buffer` may be NULL or uninitialized.
+  - `t->data` may be NULL.
+  - `buffer->usage` is unknown at scheduling time.
+  - `is_repacked` or `extra->flags & GGML_HEXAGON_TENSOR_REPACK` is not set yet.
+- Operator support decisions must depend strictly on static tensor properties: operand types (`t->type`), shapes (`t->ne`), strides (`t->nb`), and operation parameters.
+- Repacking (converting weights to tiled layout) is an internal optimization applied during `set_tensor()` or lazy-repack. Non-weight tensors or test harness tensors with the same type remain in flat layout.
+- Therefore, any supported type (such as BF16, F16, quantized types) must be supported both when repacked into tiles and when stored flat in memory.
+
 ### Multiline Macro Formatting
 
 - Keep trailing backslashes in multiline `#define` macros cleanly aligned to a consistent column.

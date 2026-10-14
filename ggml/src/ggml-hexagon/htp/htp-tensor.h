@@ -128,7 +128,8 @@ static inline struct htp_tensor_mdev_range htp_tensor_mdev_partition(uint32_t to
 static inline uint32_t htp_tensor_get_row_size(int type, uint32_t ne00) {
     switch (type) {
         case HTP_TYPE_F32:  return ne00 * 4;
-        case HTP_TYPE_F16:  return ne00 * 2;
+        case HTP_TYPE_F16:
+        case HTP_TYPE_BF16: return ne00 * 2;
         case HTP_TYPE_Q8_0: return (ne00 / 32) * 34;
         case HTP_TYPE_Q4_0: return (ne00 / 32) * 18;
         case HTP_TYPE_Q4_K: return (ne00 / 256) * 144;

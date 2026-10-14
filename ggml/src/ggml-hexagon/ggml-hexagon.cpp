@@ -164,7 +164,8 @@ static int opt_opbatch  = 1280; // max number of ops in a batch
 static int opt_opqueue  = 8;   // max number of pending batches
 static int opt_optrace  = 0;    // trace buffer size per thread (0 means default)
 static int opt_oppoll   = 0;    // polling for batch completions
-static int opt_opfusion = 1;    // enable/disable op fusion
+static int opt_opfusion  = 1;    // enable/disable op fusion
+static int opt_rt_repack = 1;    // runtime repacking: 0 = disabled, 1 = quantized only (default), 2 = always
 
 enum ggml_hexagon_fusion_flags {
     GGML_HEXAGON_FUSE_ALLREDUCE_ADD = (1 << 1), // 2
@@ -326,7 +327,19 @@ static inline bool ggml_hexagon_is_repack_weight_type(enum ggml_type type) {
 }
 
 static inline bool ggml_hexagon_is_repack_weight_tensor(const struct ggml_tensor * t) {
-    return ggml_hexagon_is_repack_weight_type(t->type) && t->ne[1] > 1 && t->ne[0] >= 32;
+    if (ggml_is_view(t)) {
+        return false;
+    }
+    if (!ggml_hexagon_is_repack_weight_type(t->type)) {
+        return false;
+    }
+    if (t->ne[0] < 32 || t->ne[1] <= 1) {
+        return false;
+    }
+    if (!ggml_is_quantized(t->type)) {
+        return (t->ne[0] % 32 == 0) && (t->ne[1] % 32 == 0);
+    }
+    return true;
 }
 
 // Size of one repacked row in the DSP tiled layout. The Q3_K..Q6_K tiles store uncompressed scales/mins,
@@ -351,7 +364,7 @@ static inline size_t ggml_hexagon_tiled_row_size(enum ggml_type type, int64_t ne
 }
 
 static inline bool ggml_hexagon_is_hmx_weight_type(enum ggml_type type) {
-    return ggml_hexagon_is_repack_weight_type(type) && type != GGML_TYPE_BF16;
+    return ggml_hexagon_is_repack_weight_type(type);
 }
 
 struct ggml_hexagon_session;
@@ -528,12 +541,32 @@ static inline bool ggml_hexagon_tensor_is_fuseable(const struct ggml_tensor * t)
     return (extra->flags & GGML_HEXAGON_TENSOR_FUSEABLE) != 0;
 }
 
+static inline bool ggml_hexagon_tensor_is_repacked(const struct ggml_tensor * t) {
+    const auto * extra = (const ggml_hexagon_tensor_extra *) t->extra;
+    if (extra && (extra->flags & GGML_HEXAGON_TENSOR_REPACK)) {
+        return true;
+    }
+    if (opt_rt_repack == 0 || !ggml_hexagon_is_repack_weight_tensor(t)) {
+        return false;
+    }
+    if (opt_rt_repack == 1) {
+        return ggml_is_quantized(t->type);
+    }
+    return true;
+}
+
 static inline bool ggml_hexagon_needs_repack(const struct ggml_tensor * t) {
-    if (t->view_src) {
+    if (ggml_is_view(t)) {
         return false;
     }
     auto extra = (const struct ggml_hexagon_tensor_extra *) t->extra;
     if (extra && (extra->flags & GGML_HEXAGON_TENSOR_REPACK)) {
+        return false;
+    }
+    if (opt_rt_repack == 0) {
+        return false;
+    }
+    if (opt_rt_repack == 1 && !ggml_is_quantized(t->type)) {
         return false;
     }
     return ggml_hexagon_is_repack_weight_tensor(t);
@@ -5846,9 +5879,7 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     }
 
     // Quantized and repacked HMX kernels only handle flat 2D matmul (or matmul_id wrapping flat 2D matmuls).
-    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
-    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
-                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
     if (!is_matmul_id && is_batched && is_repack) {
         return false;
     }
@@ -5888,9 +5919,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     size_t vtcm_budget,
     struct htp_mm_kernel_params * kparams
 ) {
-    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
-    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
-                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
     const int aligned_tile_size = is_repack ? htp_mm_get_weight_aligned_tile_size(wtype) : 0;
     const int n_threads = (int)sess->n_threads;
     const int ne10 = act->ne[0];
@@ -5974,6 +6003,7 @@ static void ggml_hexagon_precompute_hvx_mm_params(
     const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
     int wtype,
+    bool is_repack,
     int ne02,
     int ne03,
     int ne10,
@@ -5996,19 +6026,23 @@ static void ggml_hexagon_precompute_hvx_mm_params(
     GGML_UNUSED(ne02);
     GGML_UNUSED(ne03);
 
-    const bool is_quant = (wtype != GGML_TYPE_F16 && wtype != GGML_TYPE_F32);
     const int src1_nrows = ne11 * ne12 * ne13;
 
-    if (is_quant) {
-        // Quantized HVX
+    if (is_repack) {
+        // Tiled HVX (quantized weights or repacked F16/F32/BF16)
         kparams->tile_size = htp_mm_get_weight_tile_size(wtype);
         kparams->aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
 
         const bool k_align = (ne10 % 32 == 0);
 
         if (is_matmul_id) {
-            kparams->kernel_type   = (src1_nrows < (int) sess->n_threads) ? HTP_MM_KERNEL_HVX_QUANT_BLOCK : HTP_MM_KERNEL_HVX_QUANT_ROW;
-            kparams->act_row_size  = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+            kparams->kernel_type   = (src1_nrows < (int) sess->n_threads && wtype != GGML_TYPE_F16)
+                                   ? HTP_MM_KERNEL_HVX_QUANT_BLOCK : HTP_MM_KERNEL_HVX_QUANT_ROW;
+            kparams->act_row_size  = (wtype == GGML_TYPE_F16)
+                                   ? hex_round_up(ne10 * 2, 128)
+                                   : (htp_mm_weight_has_offset(wtype)
+                                      ? htp_mm_q8_1_tiled_row_size(ne10)
+                                      : htp_mm_q8_0_tiled_row_size(ne10));
 
             struct htp_mm_hvx_vtcm_layout L;
             uint32_t max_prefetch = (src1_nrows > HTP_MM_HMX_MIN_NROWS) ? 2 : 16;
@@ -6033,14 +6067,16 @@ static void ggml_hexagon_precompute_hvx_mm_params(
             kparams->vtcm_act_size  = L.act_bytes;
             kparams->vtcm_bias_size = 0;
             kparams->vtcm_dst_size  = L.dst_bytes;
-            goto done_quant;
+            return;
         } else {
             bool try_tiled = (k_align && opt_mm_select >= 1);
             if (try_tiled) {
-                kparams->act_row_size = htp_mm_weight_has_offset(wtype)
-                                       ? htp_mm_q8_1_tiled_row_size(ne10)
-                                       : htp_mm_q8_0_tiled_row_size(ne10);
-                if (src1_nrows < (int) sess->n_threads) {
+                kparams->act_row_size = (wtype == GGML_TYPE_F16)
+                                      ? hex_round_up(ne10 * 2, 128)
+                                      : (htp_mm_weight_has_offset(wtype)
+                                         ? htp_mm_q8_1_tiled_row_size(ne10)
+                                         : htp_mm_q8_0_tiled_row_size(ne10));
+                if (src1_nrows < (int) sess->n_threads && wtype != GGML_TYPE_F16) {
                     kparams->kernel_type = HTP_MM_KERNEL_HVX_QUANT_BLOCK;
                 } else {
                     kparams->kernel_type = HTP_MM_KERNEL_HVX_QUANT_ROW;
@@ -6072,17 +6108,15 @@ static void ggml_hexagon_precompute_hvx_mm_params(
                     kparams->vtcm_act_size  = L.act_bytes;
                     kparams->vtcm_bias_size = L.bias_bytes;
                     kparams->vtcm_dst_size  = L.dst_bytes;
-                    goto done_quant;
+                    return;
                 }
             }
 
             kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
             return;
         }
-
-    done_quant:;
     } else if (wtype == GGML_TYPE_F16) {
-        // F16 HVX
+        // Flat F16 HVX
         struct htp_mm_hvx_vtcm_layout L;
         uint32_t m_chunk = 0;
         if (htp_mm_hvx_solve_vtcm_params(
@@ -6103,8 +6137,8 @@ static void ggml_hexagon_precompute_hvx_mm_params(
 
         kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
         return;
-    } else {
-        // F32 HVX
+    } else if (wtype == GGML_TYPE_F32) {
+        // Flat F32 HVX
         struct htp_mm_hvx_vtcm_layout L;
         uint32_t m_chunk = 0;
         if (htp_mm_hvx_solve_vtcm_params(
@@ -6123,6 +6157,31 @@ static void ggml_hexagon_precompute_hvx_mm_params(
             return;
         }
 
+        kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
+        return;
+    } else if (wtype == GGML_TYPE_BF16) {
+        // Flat BF16 HVX
+        struct htp_mm_hvx_vtcm_layout L;
+        uint32_t m_chunk = 0;
+        if (htp_mm_hvx_solve_vtcm_params(
+                HTP_MM_KERNEL_HVX_BF16_F32_VTCM, wtype, ne10, src1_nrows, sess->n_threads,
+                dst->nb[1], src0->nb[1], src1->nb[1], src2_row_size, 16, vtcm_budget,
+                &L, &m_chunk)) {
+            kparams->kernel_type = HTP_MM_KERNEL_HVX_BF16_F32_VTCM;
+            kparams->m_chunk = (m_chunk < (uint32_t) src1_nrows) ? m_chunk : 0;
+            kparams->act_row_size = hex_round_up(ne10 * 4, 128);
+            kparams->vtcm_size = L.total_bytes;
+            kparams->vtcm_src0_size = L.src0_bytes;
+            kparams->vtcm_act_size  = L.act_bytes;
+            kparams->vtcm_bias_size = L.bias_bytes;
+            kparams->vtcm_dst_size = L.dst_bytes;
+            kparams->n_prefetch = 16;
+            return;
+        }
+
+        kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
+        return;
+    } else {
         kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
         return;
     }
@@ -6149,9 +6208,7 @@ static void ggml_hexagon_precompute_matmul_params_impl(
     const int ne12 = src1->ne[2];
     const int ne13 = src1->ne[3];
 
-    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
-    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
-                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
     const int wtype = (is_repack && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_repack ? hex_round_up(ne00, 32) : ne00;
     const int ne01_padded = is_repack ? hex_round_up(ne01, 32) : ne01;
@@ -6174,13 +6231,7 @@ static void ggml_hexagon_precompute_matmul_params_impl(
     }
 
     // Fallback to HVX parameter computation
-    if (!is_repack) {
-        ggml_hexagon_precompute_hvx_mm_params(sess, src0, src1, dst, wtype, ne02, ne03, ne10, ne11, ne12, ne13, is_matmul_id, src2_row_size, vtcm_budget, kparams);
-    } else if (wtype != GGML_TYPE_F16 && wtype != GGML_TYPE_F32) {
-        ggml_hexagon_precompute_hvx_mm_params(sess, src0, src1, dst, wtype, ne02, ne03, ne10, ne11, ne12, ne13, is_matmul_id, src2_row_size, vtcm_budget, kparams);
-    } else {
-        kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
-    }
+    ggml_hexagon_precompute_hvx_mm_params(sess, src0, src1, dst, wtype, is_repack, ne02, ne03, ne10, ne11, ne12, ne13, is_matmul_id, src2_row_size, vtcm_budget, kparams);
 
 finalize:
     kparams->div_ne12_ne1 = init_fastdiv_values(ne12 * ne11);
@@ -7316,9 +7367,7 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
     const int ne12 = act->ne[2];
     const int ne13 = act->ne[3];
 
-    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
-    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
-                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
     const int wtype = (is_repack && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_repack ? hex_round_up(ne00, 32) : ne00;
     const int ne01_padded = is_repack ? hex_round_up(ne01, 32) : ne01;
@@ -7977,7 +8026,7 @@ static bool ggml_hexagon_supported_get_rows(const struct ggml_hexagon_session * 
     const struct ggml_tensor * src1 = op->src[1]; // indices
     const struct ggml_tensor * dst  = op;
 
-    if ((src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) && src0->view_src) {
+    if ((src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) && ggml_is_view(src0)) {
         return false;
     }
 
@@ -7997,7 +8046,7 @@ static bool ggml_hexagon_supported_get_rows(const struct ggml_hexagon_session * 
     }
 
     // View offsets use the raw quantized layout and cannot address a tiled allocation.
-    if (src0->view_src && is_repacked) {
+    if (ggml_is_view(src0) && is_repacked) {
         return false;
     }
 
@@ -8846,9 +8895,7 @@ static bool mm_is_hmx_eligible(const ggml_tensor * t) {
     const ggml_tensor * src0 = t->src[0];
     const ggml_tensor * src1 = t->src[1];
 
-    const auto * extra = src0 ? (const ggml_hexagon_tensor_extra *) src0->extra : nullptr;
-    const bool is_repack = extra ? ((extra->flags & GGML_HEXAGON_TENSOR_REPACK) != 0)
-                                 : ggml_hexagon_is_repack_weight_tensor(src0);
+    const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
 
     if (ggml_hexagon_matmul_can_collapse(src0, src1, t)) {
         const ggml_tensor src1_c = ggml_hexagon_tensor_collapse_rows(src1);
@@ -9812,6 +9859,9 @@ static bool ggml_hexagon_supported_roll(const struct ggml_hexagon_session * sess
     return true;
 }
 
+// IMPORTANT: supports_op runs before buffer allocation and before tensor data is populated.
+// Never check buffer usage, buffer properties, or repacking state (is_repacked) here.
+// Support must depend only on static tensor properties (shape, type, strides).
 static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, const struct ggml_tensor * op) {
     auto dev_ctx = static_cast<ggml_backend_hexagon_device_context *>(dev->context);
     auto sess    = dev_ctx->session();
@@ -10405,12 +10455,15 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
                   "please update hexagon_type to match ggml_type");
     static_assert((unsigned int) HTP_TYPE_Q2_K == (unsigned int) GGML_TYPE_Q2_K,
                   "please update hexagon_type to match ggml_type");
+    static_assert((unsigned int) HTP_TYPE_BF16 == (unsigned int) GGML_TYPE_BF16,
+                  "please update hexagon_type to match ggml_type");
 
     const char * str_verbose  = getenv("GGML_HEXAGON_VERBOSE");
     const char * str_opbatch  = getenv("GGML_HEXAGON_OPBATCH");
     const char * str_opqueue  = getenv("GGML_HEXAGON_OPQUEUE");
     const char * str_oppoll   = getenv("GGML_HEXAGON_OPPOLL");
     const char * str_opfusion = getenv("GGML_HEXAGON_OPFUSION");
+    const char * str_rt_repack = getenv("GGML_HEXAGON_RT_REPACK");
     const char * str_opfilter = getenv("GGML_HEXAGON_OPFILTER");
     const char * str_profile  = getenv("GGML_HEXAGON_PROFILE");
     const char * str_etm      = getenv("GGML_HEXAGON_ETM");
@@ -10468,6 +10521,7 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
     opt_optrace   = str_optrace  ? strtoul(str_optrace, NULL, 0)          : (opt_opbatch * 256);
     opt_oppoll    = str_oppoll   ? strtoul(str_oppoll,  NULL, 0)          : opt_oppoll;
     opt_opfusion  = str_opfusion ? atoi(str_opfusion)                     : opt_opfusion;
+    opt_rt_repack = str_rt_repack ? atoi(str_rt_repack)                   : opt_rt_repack;
     opt_profile   = str_profile  ? atoi(str_profile)                      : 0;
     opt_etm       = str_etm      ? atoi(str_etm)                          : 0;
     if (str_power_mode) {

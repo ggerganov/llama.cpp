@@ -348,6 +348,7 @@ int op_get_rows(struct htp_ops_context * octx) {
 
     if (octx->src[0]->type != HTP_TYPE_F32 &&
         octx->src[0]->type != HTP_TYPE_F16 &&
+        octx->src[0]->type != HTP_TYPE_BF16 &&
         octx->src[0]->type != HTP_TYPE_Q4_0 &&
         octx->src[0]->type != HTP_TYPE_Q4_K &&
         octx->src[0]->type != HTP_TYPE_Q5_K &&
@@ -442,6 +443,7 @@ int op_get_rows(struct htp_ops_context * octx) {
         case HTP_GET_ROWS_KERNEL_FLAT:
             switch (octx->src[0]->type) {
                 case HTP_TYPE_F16:  grctx.compute_flat = hvx_dequantize_row_flat_f16_f32;  break;
+                case HTP_TYPE_BF16: grctx.compute_flat = hvx_dequantize_row_flat_bf16_f32; break;
                 case HTP_TYPE_Q8_0: grctx.compute_flat = hvx_dequantize_row_flat_q8_0_f32; break;
                 case HTP_TYPE_Q4_0: grctx.compute_flat = hvx_dequantize_row_flat_q4_0_f32; break;
                 case HTP_TYPE_Q4_K: grctx.compute_flat = hvx_dequantize_row_flat_q4_k_f32; break;

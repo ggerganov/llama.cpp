@@ -329,7 +329,9 @@ struct htp_opformat {
             if (type == HTP_MM_KERNEL_HMX_2D || type == HTP_MM_KERNEL_HMX_F16_BATCHED) {
                 path = (kparams->tile_size > 0) ? "hmx-tiled" : "hmx-flat";
             } else if (type == HTP_MM_KERNEL_HVX_F16_F16_VTCM || type == HTP_MM_KERNEL_HVX_F32_F32_VTCM ||
-                       type == HTP_MM_KERNEL_HVX_QUANT_ROW    || type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
+                       type == HTP_MM_KERNEL_HVX_BF16_F32_VTCM) {
+                path = "hvx-flat";
+            } else if (type == HTP_MM_KERNEL_HVX_QUANT_ROW || type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
                 path = "hvx-tiled";
             }
             snprintf(str, max_size, "%s vtcm %d", path, (int) kparams->vtcm_size);

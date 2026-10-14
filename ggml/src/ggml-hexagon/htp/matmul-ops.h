@@ -79,6 +79,7 @@ enum htp_mm_kernel_type {
     // HVX floating-point paths
     HTP_MM_KERNEL_HVX_F16_F16_VTCM,
     HTP_MM_KERNEL_HVX_F32_F32_VTCM,
+    HTP_MM_KERNEL_HVX_BF16_F32_VTCM,
 
     // HVX quantized paths
     HTP_MM_KERNEL_HVX_QUANT_ROW,      // standard row-wise parallel quantization
@@ -301,6 +302,7 @@ static inline size_t htp_mm_get_tiled_row_stride(int weight_type, uint32_t k) {
         case HTP_TYPE_Q2_K:
         case HTP_TYPE_MXFP4:
             return (size_t) nb * htp_mm_get_weight_tile_size(weight_type);
+        case HTP_TYPE_BF16:
         case HTP_TYPE_F16:
             return (size_t) k * sizeof(__fp16);
         case HTP_TYPE_F32:
@@ -322,7 +324,7 @@ static inline void htp_mm_hmx_get_2d_chunk_costs(
     int wtype, uint32_t k, bool pipeline, uint32_t aligned_tile_size,
     size_t * size_per_n_out, size_t * size_per_m_out, size_t * size_per_mn_out
 ) {
-    const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32);
+    const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32 && wtype != HTP_TYPE_BF16);
     const size_t row_stride = htp_mm_get_tiled_row_stride(wtype, k);
     const size_t vec_dot_size = k * sizeof(uint16_t);
     const uint32_t n_k_tiles = k / HTP_MM_HMX_TILE_N_COLS;
@@ -454,7 +456,7 @@ static inline void htp_mm_hmx_vtcm_layout_build(
         off = off_group_a + hex_smax(group_b_size, group_c_size);
     } else {
         // HTP_MM_KERNEL_HMX_2D
-        const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32);
+        const bool is_quant = (wtype != HTP_TYPE_F16 && wtype != HTP_TYPE_F32 && wtype != HTP_TYPE_BF16);
         const size_t row_stride = htp_mm_get_tiled_row_stride(wtype, k);
         const size_t vec_dot_size = k * sizeof(uint16_t);
         const uint32_t n_k_tiles = k / HTP_MM_HMX_TILE_N_COLS;
@@ -535,7 +537,10 @@ static inline void htp_mm_hvx_vtcm_layout_build(
                             wtype == HTP_TYPE_Q8_0 || wtype == HTP_TYPE_IQ4_NL ||
                             wtype == HTP_TYPE_MXFP4 || wtype == HTP_TYPE_Q6_K ||
                             wtype == HTP_TYPE_Q4_K || wtype == HTP_TYPE_Q5_K ||
-                            wtype == HTP_TYPE_Q3_K || wtype == HTP_TYPE_Q2_K);
+                            wtype == HTP_TYPE_Q3_K || wtype == HTP_TYPE_Q2_K ||
+                            (wtype == HTP_TYPE_F16 &&
+                             (kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW ||
+                              kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK)));
 
     if (is_fused_nx) {
         const size_t src0_row_size_padded = hex_round_up(src0_row_size, 128);
@@ -596,7 +601,8 @@ static inline void htp_mm_hvx_vtcm_layout_build(
                 act_raw_sz = hex_round_up(hex_round_up(ne10 * sizeof(float), 128) * act_nrows, 128);
                 break;
             }
-            case HTP_MM_KERNEL_HVX_F32_F32_VTCM: {
+            case HTP_MM_KERNEL_HVX_F32_F32_VTCM:
+            case HTP_MM_KERNEL_HVX_BF16_F32_VTCM: {
                 size_t f32_act_row_size = htp_mm_round_up(ne10 * 4, 128);
                 act_sz     = htp_mm_round_up(f32_act_row_size * act_nrows, 256);
                 src0_sz    = htp_mm_round_up(n_prefetch * src0_row_size_padded, 256) * n_threads;
@@ -606,7 +612,11 @@ static inline void htp_mm_hvx_vtcm_layout_build(
             }
             case HTP_MM_KERNEL_HVX_QUANT_BLOCK:
             case HTP_MM_KERNEL_HVX_QUANT_ROW: {
-                size_t q_act_row_size = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+                size_t q_act_row_size = (wtype == HTP_TYPE_F16)
+                                      ? htp_mm_round_up(ne10 * 2, 128)
+                                      : (htp_mm_weight_has_offset(wtype)
+                                         ? htp_mm_q8_1_tiled_row_size(ne10)
+                                         : htp_mm_q8_0_tiled_row_size(ne10));
 
                 src0_sz = htp_mm_round_up(n_prefetch * src0_row_size_padded, 256);
                 act_sz  = htp_mm_round_up(q_act_row_size * act_nrows, 256);
@@ -615,7 +625,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
 
                 if (is_repack) {
                     uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
-                    uint32_t n_k_tiles = ne10 / 32;
+                    uint32_t n_k_tiles = (ne10 + 31) / 32;
                     uint32_t tile_row_size = n_k_tiles * aligned_tile_size;
                     size_t repacked_vtcm_size = htp_mm_round_up(n_prefetch * tile_row_size, 256);
                     src0_sz = repacked_vtcm_size * n_threads;
@@ -623,7 +633,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
 
                 size_t dst_slice_per_thread = (dst_nrows > 0 && act_nrows == 1) ? htp_mm_round_up((dst_row_size + n_threads - 1) / n_threads, 128) : 0;
                 dst_sz = dst_slice_per_thread * n_threads;
-                size_t raw_row_size = hex_round_up(ne10 * sizeof(float), QK_Q8_0_TILED * sizeof(float));
+                size_t raw_row_size = hex_round_up(ne10 * sizeof(float), 128);
                 act_raw_sz = hex_round_up(raw_row_size * act_nrows, 128);
                 break;
             }
@@ -691,9 +701,11 @@ static inline bool htp_mm_hvx_solve_vtcm_params(
     const size_t avail_act = vtcm_budget - fixed_bytes;
     size_t row_size = 0;
     if (kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW || kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
-        row_size = htp_mm_weight_has_offset(wtype)
-                 ? htp_mm_q8_1_tiled_row_size(ne10)
-                 : htp_mm_q8_0_tiled_row_size(ne10);
+        row_size = (wtype == HTP_TYPE_F16)
+                 ? hex_round_up(ne10 * 2, 128)
+                 : (htp_mm_weight_has_offset(wtype)
+                    ? htp_mm_q8_1_tiled_row_size(ne10)
+                    : htp_mm_q8_0_tiled_row_size(ne10));
     } else if (kernel_type == HTP_MM_KERNEL_HVX_F16_F16_VTCM) {
         row_size = hex_round_up(ne10 * 2, 128);
     } else {
@@ -705,7 +717,7 @@ static inline bool htp_mm_hvx_solve_vtcm_params(
 
     size_t eff_row_size = row_size;
     if (kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW || kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
-        eff_row_size += hex_round_up(ne10 * sizeof(float), QK_Q8_0_TILED * sizeof(float));
+        eff_row_size += hex_round_up(ne10 * sizeof(float), 128);
     }
 
     uint32_t m_chunk = (uint32_t) (avail_act / eff_row_size);

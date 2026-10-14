@@ -89,6 +89,7 @@ static inline void htp_get_rows_vtcm_layout_build(
     uint32_t src0_row_size = 0;
     switch (type) {
         case HTP_TYPE_F16:
+        case HTP_TYPE_BF16:
             src0_row_size = ne00 * 2;
             break;
         case HTP_TYPE_Q8_0:
