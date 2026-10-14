@@ -17,6 +17,7 @@ void llama_model_maion_coder::load_arch_hparams(llama_model_loader & ml) {
         throw std::runtime_error("maion-coder requires a positive sliding window and a sliding window pattern for each layer");
     }
     ml.get_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.is_swa_impl);
+    hparams.rope_pattern = hparams.is_swa_impl;
     hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
     hparams.rope_freq_base_train_swa  = hparams.rope_freq_base_train;
     hparams.rope_freq_scale_train_swa = hparams.rope_freq_scale_train;
@@ -119,7 +120,7 @@ llama_model_maion_coder::graph::graph(const llama_model & model, const llm_graph
                     NULL, LLM_FFN_SILU, LLM_FFN_PAR, il);
         } else {
             ggml_tensor * router_logits = build_lora_mm(model.layers[il].ffn_gate_inp, cur);
-            ggml_tensor * inp_latent = ggml_mul_mat(ctx0, model.layers[il].ffn_latent_down, cur);
+            ggml_tensor * inp_latent = build_lora_mm(model.layers[il].ffn_latent_down, cur);
             cur = build_moe_ffn(inp_latent,
                     model.layers[il].ffn_gate_inp,
                     model.layers[il].ffn_up_exps,
@@ -130,7 +131,7 @@ llama_model_maion_coder::graph::graph(const llama_model & model, const llm_graph
                     LLM_FFN_SILU, true, 0.0f,
                     LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX,
                     il, router_logits);
-            cur = ggml_mul_mat(ctx0, model.layers[il].ffn_latent_up, cur);
+            cur = build_lora_mm(model.layers[il].ffn_latent_up, cur);
         }
 
         cur = build_norm(cur, model.layers[il].ffn_post_norm, NULL, LLM_NORM_RMS, il);
