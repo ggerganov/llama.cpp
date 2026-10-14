@@ -6149,7 +6149,7 @@ class GGUFValueType(IntEnum):
 
 
 class DecisionType:
-    GLINER  = "gliner"  # classifier on contextual label markers
+    GLINER  = "gliner"   # classifier on contextual label markers
     LAYA    = "laya"     # head blocks + scorer on the hidden state of one marker token per option
     OPENJEV = "openjev"  # logits of one label token per option
     LEV     = "lev"      # same as openjev, noul is read from a rating scale

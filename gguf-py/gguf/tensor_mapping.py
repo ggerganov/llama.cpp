@@ -69,7 +69,7 @@ class TensorNameMap:
 
         # Position embeddings
         MODEL_TENSOR.POS_EMBD: (
-            "encoder.rel_embeddings",  # deberta-v2
+            "encoder.rel_embeddings",          # gliner/deberta-v2
             "transformer.wpe",                 # gpt2
             "embeddings.position_embeddings",  # bert
             "wpe",                             # gpt2
@@ -261,7 +261,7 @@ class TensorNameMap:
 
         # Attention query
         MODEL_TENSOR.ATTN_Q: (
-            "encoder.layer.{bid}.attention.self.query_proj",  # deberta-v2
+            "encoder.layer.{bid}.attention.self.query_proj",             # gliner/deberta-v2
             "model.layers.{bid}.self_attn.q_proj",                       # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.attention.q_proj",                       # bailingmoe3
             "layers.{bid}.self_attn.q_proj",                             # embeddinggemma
@@ -283,7 +283,7 @@ class TensorNameMap:
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
-            "encoder.layer.{bid}.attention.self.key_proj",  # deberta-v2
+            "encoder.layer.{bid}.attention.self.key_proj",             # gliner/deberta-v2
             "model.layers.{bid}.self_attn.k_proj",                     # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.attention.k_proj",                     # bailingmoe3
             "layers.{bid}.self_attn.k_proj",                           # embeddinggemma
@@ -306,7 +306,7 @@ class TensorNameMap:
 
         # Attention value
         MODEL_TENSOR.ATTN_V: (
-            "encoder.layer.{bid}.attention.self.value_proj",  # deberta-v2
+            "encoder.layer.{bid}.attention.self.value_proj",             # gliner/deberta-v2
             "model.layers.{bid}.self_attn.v_proj",                       # llama-hf nemotron olmoe olmo2 phimoe
             "model.layers.{bid}.attention.v_proj",                       # bailingmoe3
             "layers.{bid}.self_attn.v_proj",                             # embeddinggemma
@@ -1560,7 +1560,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.CLS: (
-            "classifier.0",  # gliner
+            "classifier.0",     # gliner
             "classifier",       # jina
             "classifier.dense", # roberta
             "pre_classifier",   # distillbert
@@ -1570,9 +1570,9 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.CLS_OUT: (
-            "classifier.2",  # gliner
+            "classifier.2",        # gliner
             "classifier.out_proj", # roberta
-            "scorer.3",  # laya
+            "scorer.3",            # laya
         ),
 
         MODEL_TENSOR.CLS_NORM: (
