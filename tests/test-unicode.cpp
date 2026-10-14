@@ -38,6 +38,7 @@ int main() {
         { "\xef\xbf\xbf",         { 0xffff } },
         { "\xf0\x90\x80\x80",     { 0x10000 } },
         { "\xf4\x8f\xbf\xbf",     { 0x10ffff } },
+        // Invalid-input cases preserve the existing recovery behavior: one U+FFFD per byte.
         { "\xc0\xa0",             { 0xfffd, 0xfffd } },
         { "\xc1\xbf",             { 0xfffd, 0xfffd } },
         { "\xe0\x80\xa0",         { 0xfffd, 0xfffd, 0xfffd } },
