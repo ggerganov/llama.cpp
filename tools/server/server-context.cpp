@@ -305,17 +305,7 @@ struct server_slot {
 
     server_prompt prompt;
 
-    // the prompt state is missing from the prompt cache and a completion task can restore it from there
-    bool cache_pending = false;
-
-    // saves the prompt state once, only when cache_pending is set
-    bool prompt_save(server_prompt_cache & prompt_cache) {
-        if (!cache_pending) {
-            return false;
-        }
-
-        cache_pending = false;
-
+    bool prompt_save(server_prompt_cache & prompt_cache) const {
         if (prompt.tokens.size() == 0) {
             return false;
         }
@@ -356,8 +346,6 @@ struct server_slot {
         mem.seq_rm(id, -1, -1);
 
         prompt.clear();
-
-        cache_pending = false;
     }
 
     std::vector<common_adapter_lora_info> lora;
@@ -605,11 +593,9 @@ struct server_slot {
 
             state = SLOT_STATE_IDLE;
 
-            // only completion tasks restore from the prompt cache
-            cache_pending = task->type == SERVER_TASK_TYPE_COMPLETION;
-
             // do not keep context of the child slots - the parent's context is enough
-            if (task->is_child()) {
+            // nor of the stateless slots - no task ever reuses it
+            if (task->is_child() || task->is_stateless()) {
                 prompt_clear();
             }
 
@@ -1504,6 +1490,13 @@ private:
             batch.init(ctx_tgt, std::max(n_batch, params_base.n_parallel), n_embd);
         }
 
+        // decision requests rarely repeat a state, the prompt cache is opt-in for decision models
+        if (decision.type != COMMON_DECISION_TYPE_NONE && !params_base.cache_ram_explicit) {
+            SRV_INF("%s", "decision model: prompt cache disabled by default, use `--cache-ram N` to enable it\n");
+            params_base.cache_ram_mib    = 0;
+            params_base.cache_idle_slots = false;
+        }
+
         if (params_base.cache_ram_mib != 0) {
             if (params_base.cache_ram_mib < 0) {
                 SRV_TRC("prompt cache is enabled, size limit: %s\n", "no limit");
@@ -1797,6 +1790,9 @@ private:
         if (ret) {
             update_cache = update_cache && prompt_cache;
 
+            // cache prompts only for the tasks that reuse them
+            update_cache = update_cache && !task.is_stateless();
+
             if (update_cache) {
                 SRV_TRC("%s", "updating prompt cache\n");
 
@@ -1804,8 +1800,7 @@ private:
 
                 ret->prompt_save(*prompt_cache);
 
-                // only completion tasks restore from the prompt cache
-                if (task.type == SERVER_TASK_TYPE_COMPLETION && !ret->prompt_load(*prompt_cache, task.tokens)) {
+                if (!ret->prompt_load(*prompt_cache, task.tokens)) {
                     ret->prompt_clear();
                 }
 
@@ -3013,7 +3008,6 @@ private:
 
                         slot->prompt.clear();
                         slot->prompt.tokens = std::move(restored);
-                        slot->cache_pending = true;
                     } catch (const std::exception & err) {
                         slot->prompt_clear();
                         send_error(task, std::string("Unable to restore slot: ") + err.what(), ERROR_TYPE_INVALID_REQUEST);
@@ -3611,9 +3605,7 @@ private:
                                 return;
                             }
 
-                            const bool is_stateless_task = slot.task->type == SERVER_TASK_TYPE_EMBEDDING || slot.task->type == SERVER_TASK_TYPE_RERANK;
-
-                            if (slot.task->params.cache_prompt && !is_stateless_task) {
+                            if (slot.task->params.cache_prompt && !slot.task->is_stateless()) {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 n_past = slot.prompt.tokens.get_common_prefix(input_tokens);
 
