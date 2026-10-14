@@ -1801,7 +1801,7 @@ bool llama_model_loader::load_all_data(
             }
             if (size_reclaimed > 0) {
                 LLAMA_LOG_INFO("%s: reclaimed %.2f MiB of mmap source pages\n", __func__, size_reclaimed / 1024.0 / 1024.0);
-	    }
+            }
             copied_from_mmap.clear();
             read_from_mmap.clear();
 
