@@ -80,10 +80,14 @@ class LiLiCorrDraftModel(DFlashModel):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         dflash_config = self.hparams["dflash_config"]
-        for name, value in self.lilicorr_geometry.items():
-            self.gguf_writer.add_uint32("lilicorr." + name, int(value))
-        self.gguf_writer.add_float32("lilicorr.vector_eps", float(dflash_config["lilicorr_vector_eps"]))
-        self.gguf_writer.add_float32("lilicorr.logit_scale", float(dflash_config["lilicorr_logit_scale"]))
+        self.gguf_writer.add_lilicorr_hidden_size(int(self.lilicorr_geometry["hidden_size"]))
+        self.gguf_writer.add_lilicorr_candidate_topk(int(self.lilicorr_geometry["candidate_topk"]))
+        self.gguf_writer.add_lilicorr_num_heads(int(self.lilicorr_geometry["num_heads"]))
+        self.gguf_writer.add_lilicorr_num_layers(int(self.lilicorr_geometry["num_layers"]))
+        self.gguf_writer.add_lilicorr_factor_dim(int(self.lilicorr_geometry["factor_dim"]))
+        self.gguf_writer.add_lilicorr_mlp_hidden_size(int(self.lilicorr_geometry["mlp_hidden_size"]))
+        self.gguf_writer.add_lilicorr_vector_eps(float(dflash_config["lilicorr_vector_eps"]))
+        self.gguf_writer.add_lilicorr_logit_scale(float(dflash_config["lilicorr_logit_scale"]))
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         if name.startswith("model.lilicorr."):
