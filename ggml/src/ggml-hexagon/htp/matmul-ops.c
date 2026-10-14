@@ -242,9 +242,9 @@ static const uint8_t __attribute__((aligned(VLEN))) kvalues_mxfp4_lut[] = {
 #include "hvx-mm-kernels-float.h"
 #include "hmx-mm-kernels-tiled.h"
 
-// Specialized repacked matmul macros
-#define MATMUL_2D_REPACKED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                                       \
-static void hvx_mm_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                                 \
+// Specialized tiled matmul macros
+#define MATMUL_2D_TILED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                                          \
+static void hvx_mm_2d_tiled_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                                    \
     htp_matmul_preamble;                                                                                                                   \
                                                                                                                                            \
     const uint32_t src0_nrows = mmctx->src0_row_end - mmctx->src0_row_start;                                                               \
@@ -344,8 +344,8 @@ static void hvx_mm_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void
     }                                                                                                                                      \
 }
 
-#define MATVEC_2D_REPACKED_IMPL(SUFFIX, TILE_SIZE, DOT_2X1)                                                              \
-static void hvx_mv_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                               \
+#define MATVEC_2D_TILED_IMPL(SUFFIX, TILE_SIZE, DOT_2X1)                                                                 \
+static void hvx_mv_2d_tiled_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                  \
     htp_matmul_preamble;                                                                                                 \
                                                                                                                          \
     const uint32_t src0_nrows = mmctx->src0_row_end - mmctx->src0_row_start;                                             \
@@ -440,8 +440,8 @@ static void hvx_mv_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void
     }                                                                                                                    \
 }
 
-#define MATMUL_NX_2D_REPACKED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                           \
-static void hvx_mm_nx_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                     \
+#define MATMUL_NX_2D_TILED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                              \
+static void hvx_mm_nx_2d_tiled_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                        \
     struct htp_mm_context * mmctx = data;                                                                                         \
     struct htp_ops_context * octx = mmctx->octx;                                                                                  \
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;                      \
@@ -541,16 +541,16 @@ static void hvx_mm_nx_2d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, v
     }                                                                                                                             \
 }
 
-MATMUL_2D_REPACKED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
-MATMUL_2D_REPACKED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
-MATMUL_2D_REPACKED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
-MATMUL_2D_REPACKED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x2,  tiled_vec_dot_q6_k_32x1)
-MATMUL_2D_REPACKED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
-MATMUL_2D_REPACKED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
-MATMUL_2D_REPACKED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
-MATMUL_2D_REPACKED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
-MATMUL_2D_REPACKED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
-MATMUL_2D_REPACKED_IMPL(f16,        2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
+MATMUL_2D_TILED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
+MATMUL_2D_TILED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
+MATMUL_2D_TILED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
+MATMUL_2D_TILED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x2,  tiled_vec_dot_q6_k_32x1)
+MATMUL_2D_TILED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
+MATMUL_2D_TILED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
+MATMUL_2D_TILED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
+MATMUL_2D_TILED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
+MATMUL_2D_TILED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
+MATMUL_2D_TILED_IMPL(f16,        2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
 
 static void hvx_mm_transfer_act_dma(
     struct htp_ops_context * octx,
@@ -766,29 +766,30 @@ static inline worker_callback_t htp_mm_act_quant_block_func(int weight_type) {
     return htp_mm_weight_has_offset(weight_type) ? quantize_f32_q8_1_tiled_block : quantize_f32_q8_0_tiled_block;
 }
 
-MATVEC_2D_REPACKED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x1)
-MATVEC_2D_REPACKED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x1)
-MATVEC_2D_REPACKED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x1)
-MATVEC_2D_REPACKED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x1)
-MATVEC_2D_REPACKED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x1)
-MATVEC_2D_REPACKED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x1)
-MATVEC_2D_REPACKED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x1)
-MATVEC_2D_REPACKED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x1)
-MATVEC_2D_REPACKED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x1)
-MATVEC_2D_REPACKED_IMPL(f16,        2048, tiled_vec_dot_f16_32x1)
+MATVEC_2D_TILED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x1)
+MATVEC_2D_TILED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x1)
+MATVEC_2D_TILED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x1)
+MATVEC_2D_TILED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x1)
+MATVEC_2D_TILED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x1)
+MATVEC_2D_TILED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x1)
+MATVEC_2D_TILED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x1)
+MATVEC_2D_TILED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x1)
+MATVEC_2D_TILED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x1)
+MATVEC_2D_TILED_IMPL(f16,        2048, tiled_vec_dot_f16_32x1)
 
-MATMUL_NX_2D_REPACKED_IMPL(q4_0,    576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(q4_1,    640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(q8_0,    1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(iq4nl,   576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(mxfp4,   544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(q5_k,    768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(q3_k,    512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(q2_k,    336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
-MATMUL_NX_2D_REPACKED_IMPL(f16,     2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
+MATMUL_NX_2D_TILED_IMPL(q4_0,    576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
+MATMUL_NX_2D_TILED_IMPL(q4_1,    640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
+MATMUL_NX_2D_TILED_IMPL(q8_0,    1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
+MATMUL_NX_2D_TILED_IMPL(iq4nl,   576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
+MATMUL_NX_2D_TILED_IMPL(mxfp4,   544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
+MATMUL_NX_2D_TILED_IMPL(q5_k,    768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
+MATMUL_NX_2D_TILED_IMPL(q6_k,    896,  tiled_vec_dot_q6_k_32x2,  tiled_vec_dot_q6_k_32x1)
+MATMUL_NX_2D_TILED_IMPL(q3_k,    512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
+MATMUL_NX_2D_TILED_IMPL(q2_k,    336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
+MATMUL_NX_2D_TILED_IMPL(f16,     2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
 
-#define MATMUL_4D_REPACKED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                                                        \
-static void hvx_mm_4d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                                                  \
+#define MATMUL_4D_TILED_IMPL(SUFFIX, TILE_SIZE, DOT_2X2, DOT_2X1)                                                                                           \
+static void hvx_mm_4d_tiled_##SUFFIX(unsigned int nth, unsigned int ith, void * data) {                                                                     \
     htp_matmul_preamble;                                                                                                                                    \
                                                                                                                                                             \
     const uint32_t src0_nrows = mmctx->src0_row_end - mmctx->src0_row_start;                                                                                \
@@ -914,18 +915,18 @@ static void hvx_mm_4d_repacked_##SUFFIX(unsigned int nth, unsigned int ith, void
     }                                                                                                                                                       \
 }
 
-MATMUL_4D_REPACKED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
-MATMUL_4D_REPACKED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
-MATMUL_4D_REPACKED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
-MATMUL_4D_REPACKED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x2,  tiled_vec_dot_q6_k_32x1)
-MATMUL_4D_REPACKED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
-MATMUL_4D_REPACKED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
-MATMUL_4D_REPACKED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
-MATMUL_4D_REPACKED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
-MATMUL_4D_REPACKED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
-MATMUL_4D_REPACKED_IMPL(f16,        2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
+MATMUL_4D_TILED_IMPL(q4_0,       576,  tiled_vec_dot_q4_0_32x2,  tiled_vec_dot_q4_0_32x1)
+MATMUL_4D_TILED_IMPL(q4_1,       640,  tiled_vec_dot_q4_1_32x2,  tiled_vec_dot_q4_1_32x1)
+MATMUL_4D_TILED_IMPL(q8_0,       1088, tiled_vec_dot_q8_0_32x2,  tiled_vec_dot_q8_0_32x1)
+MATMUL_4D_TILED_IMPL(q6_k,       896,  tiled_vec_dot_q6_k_32x2,  tiled_vec_dot_q6_k_32x1)
+MATMUL_4D_TILED_IMPL(q5_k,       768,  tiled_vec_dot_q5_k_32x2,  tiled_vec_dot_q5_k_32x1)
+MATMUL_4D_TILED_IMPL(q3_k,       512,  tiled_vec_dot_q3_k_32x2,  tiled_vec_dot_q3_k_32x1)
+MATMUL_4D_TILED_IMPL(q2_k,       336,  tiled_vec_dot_q2_k_32x2,  tiled_vec_dot_q2_k_32x1)
+MATMUL_4D_TILED_IMPL(iq4nl,      576,  tiled_vec_dot_iq4nl_32x2, tiled_vec_dot_iq4nl_32x1)
+MATMUL_4D_TILED_IMPL(mxfp4,      544,  tiled_vec_dot_mxfp4_32x2, tiled_vec_dot_mxfp4_32x1)
+MATMUL_4D_TILED_IMPL(f16,        2048, tiled_vec_dot_f16_32x2,   tiled_vec_dot_f16_32x1)
 
-static void hvx_mm_2d(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mm_2d_flat(unsigned int nth, unsigned int ith, void * data) {
     htp_matmul_preamble;
 
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;
@@ -1028,7 +1029,7 @@ static void hvx_mm_2d(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static void hvx_mv_2d(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mv_2d_flat(unsigned int nth, unsigned int ith, void * data) {
     htp_matmul_preamble;
 
     const uint32_t src0_nrows = mmctx->src0_row_end - mmctx->src0_row_start;
@@ -1133,7 +1134,7 @@ static void hvx_mv_2d(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static void hvx_mm_4d(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mm_4d_flat(unsigned int nth, unsigned int ith, void * data) {
     htp_matmul_preamble;
 
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;
@@ -1282,7 +1283,7 @@ static void hvx_mm_4d(unsigned int nth, unsigned int ith, void * data) {
 
 #define MMID_MATRIX_ROW(row_id, i1) matrix_rows[(row_id) * mmctx->mapping_stride + (i1)]
 
-static void hvx_mm_id(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mm_id_tiled(unsigned int nth, unsigned int ith, void * data) {
     htp_matmul_preamble;
 
     const struct htp_tensor * restrict ids = octx->src[2];
@@ -1371,7 +1372,7 @@ static void hvx_mm_id(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static void hvx_mv_id(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mv_id_tiled(unsigned int nth, unsigned int ith, void * data) {
     htp_matmul_preamble;
 
     const struct htp_tensor * restrict ids = octx->src[2];
@@ -1449,7 +1450,7 @@ static void hvx_mv_id(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static void hvx_mv_id_nx(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mv_id_nx_tiled(unsigned int nth, unsigned int ith, void * data) {
     struct htp_mm_context * mmctx = (struct htp_mm_context *) data;
     struct htp_ops_context * octx = mmctx->octx;
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;
@@ -1539,7 +1540,7 @@ static void hvx_mv_id_nx(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static void hvx_mm_id_nx(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mm_id_nx_tiled(unsigned int nth, unsigned int ith, void * data) {
     struct htp_mm_context * mmctx = (struct htp_mm_context *) data;
     struct htp_ops_context * octx = mmctx->octx;
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;
@@ -1640,7 +1641,7 @@ static void hvx_mm_id_nx(unsigned int nth, unsigned int ith, void * data) {
     }
 }
 
-static int hvx_mm_init_vec_dot(struct htp_mm_context * mmctx, enum htp_data_type type) {
+static int hvx_mm_init_tiled_vec_dot(struct htp_mm_context * mmctx, enum htp_data_type type) {
     switch (type) {
         case HTP_TYPE_Q4_0:
             mmctx->type         = "q4_0_tiled-f32";
@@ -1723,18 +1724,18 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
     mmctx->src0_row_start = src0_row_start;
     mmctx->src0_row_end   = src0_row_end;
 
-    bool is_repacked = (src0->type == HTP_TYPE_Q4_0 || src0->type == HTP_TYPE_Q4_1 ||
-                        src0->type == HTP_TYPE_Q8_0 || src0->type == HTP_TYPE_IQ4_NL ||
-                        src0->type == HTP_TYPE_MXFP4 || src0->type == HTP_TYPE_Q6_K ||
-                        src0->type == HTP_TYPE_Q4_K || src0->type == HTP_TYPE_Q5_K ||
-                        src0->type == HTP_TYPE_Q3_K || src0->type == HTP_TYPE_Q2_K ||
-                        (src0->type == HTP_TYPE_F16 &&
-                         (kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW ||
-                          kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK)));
+    bool is_tiled = (src0->type == HTP_TYPE_Q4_0 || src0->type == HTP_TYPE_Q4_1 ||
+                     src0->type == HTP_TYPE_Q8_0 || src0->type == HTP_TYPE_IQ4_NL ||
+                     src0->type == HTP_TYPE_MXFP4 || src0->type == HTP_TYPE_Q6_K ||
+                     src0->type == HTP_TYPE_Q4_K || src0->type == HTP_TYPE_Q5_K ||
+                     src0->type == HTP_TYPE_Q3_K || src0->type == HTP_TYPE_Q2_K ||
+                     (src0->type == HTP_TYPE_F16 &&
+                      (kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW ||
+                       kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK)));
 
     // Compute src0_nrows_per_thread
     mmctx->src0_nrows_per_thread  = fastdiv(nrows + octx->n_threads - 1, &octx->n_threads_div);
-    if (is_repacked) {
+    if (is_tiled) {
         mmctx->src0_nrows_per_thread = hex_round_up(mmctx->src0_nrows_per_thread, 32);
     } else {
         mmctx->src0_nrows_per_thread += (mmctx->src0_nrows_per_thread & 1); // round up to even
@@ -1751,61 +1752,61 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
     uint32_t n_quant_tasks = 1;
     const bool is_batched = (ne12 > 1 || ne13 > 1 || ne02 > 1 || ne03 > 1);
     if (is_batched) {
-        if (is_repacked) {
+        if (is_tiled) {
             switch (src0->type) {
-                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_4d_repacked_q4_0;   break;
+                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_4d_tiled_q4_0;   break;
                 case HTP_TYPE_Q4_1:
-                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_4d_repacked_q4_1;   break;
-                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_4d_repacked_q8_0;   break;
-                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mm_4d_repacked_q6_k;   break;
-                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_4d_repacked_q5_k;   break;
-                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_4d_repacked_q3_k;   break;
-                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_4d_repacked_q2_k;   break;
-                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_4d_repacked_iq4nl;  break;
-                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_4d_repacked_mxfp4;  break;
-                case HTP_TYPE_F16:    matmul_job_func = hvx_mm_4d_repacked_f16;    break;
+                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_4d_tiled_q4_1;   break;
+                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_4d_tiled_q8_0;   break;
+                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mm_4d_tiled_q6_k;   break;
+                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_4d_tiled_q5_k;   break;
+                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_4d_tiled_q3_k;   break;
+                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_4d_tiled_q2_k;   break;
+                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_4d_tiled_iq4nl;  break;
+                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_4d_tiled_mxfp4;  break;
+                case HTP_TYPE_F16:    matmul_job_func = hvx_mm_4d_tiled_f16;    break;
                 default:              return HTP_STATUS_NO_SUPPORT;
             }
         } else {
-            matmul_job_func = hvx_mm_4d;
+            matmul_job_func = hvx_mm_4d_flat;
         }
     } else if (act_nrows > 1) {
-        if (is_repacked) {
+        if (is_tiled) {
             switch (src0->type) {
-                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_2d_repacked_q4_0;   break;
+                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_2d_tiled_q4_0;   break;
                 case HTP_TYPE_Q4_1:
-                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_2d_repacked_q4_1;   break;
-                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_2d_repacked_q8_0;   break;
-                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mm_2d_repacked_q6_k;   break;
-                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_2d_repacked_q5_k;   break;
-                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_2d_repacked_q3_k;   break;
-                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_2d_repacked_q2_k;   break;
-                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_2d_repacked_iq4nl;  break;
-                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_2d_repacked_mxfp4;  break;
-                case HTP_TYPE_F16:    matmul_job_func = hvx_mm_2d_repacked_f16;    break;
+                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_2d_tiled_q4_1;   break;
+                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_2d_tiled_q8_0;   break;
+                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mm_2d_tiled_q6_k;   break;
+                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_2d_tiled_q5_k;   break;
+                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_2d_tiled_q3_k;   break;
+                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_2d_tiled_q2_k;   break;
+                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_2d_tiled_iq4nl;  break;
+                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_2d_tiled_mxfp4;  break;
+                case HTP_TYPE_F16:    matmul_job_func = hvx_mm_2d_tiled_f16;    break;
                 default:              return HTP_STATUS_NO_SUPPORT;
             }
         } else {
-            matmul_job_func = hvx_mm_2d;
+            matmul_job_func = hvx_mm_2d_flat;
         }
     } else {
-        if (is_repacked) {
+        if (is_tiled) {
             switch (src0->type) {
-                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mv_2d_repacked_q4_0;   break;
+                case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mv_2d_tiled_q4_0;   break;
                 case HTP_TYPE_Q4_1:
-                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mv_2d_repacked_q4_1;   break;
-                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mv_2d_repacked_q8_0;   break;
-                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mv_2d_repacked_q5_k;   break;
-                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mv_2d_repacked_q6_k;   break;
-                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mv_2d_repacked_q3_k;   break;
-                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mv_2d_repacked_q2_k;   break;
-                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mv_2d_repacked_iq4nl;  break;
-                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mv_2d_repacked_mxfp4;  break;
-                case HTP_TYPE_F16:    matmul_job_func = hvx_mv_2d_repacked_f16;    break;
+                case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mv_2d_tiled_q4_1;   break;
+                case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mv_2d_tiled_q8_0;   break;
+                case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mv_2d_tiled_q5_k;   break;
+                case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mv_2d_tiled_q6_k;   break;
+                case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mv_2d_tiled_q3_k;   break;
+                case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mv_2d_tiled_q2_k;   break;
+                case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mv_2d_tiled_iq4nl;  break;
+                case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mv_2d_tiled_mxfp4;  break;
+                case HTP_TYPE_F16:    matmul_job_func = hvx_mv_2d_tiled_f16;    break;
                 default:              return HTP_STATUS_NO_SUPPORT;
             }
         } else {
-            matmul_job_func = hvx_mv_2d;
+            matmul_job_func = hvx_mv_2d_flat;
         }
     }
 
@@ -1816,9 +1817,9 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
             quant_task_func        = (act->type == HTP_TYPE_F32) ? quantize_f32_f16 : quantize_f16_f16;
             need_quant             = (act->type == HTP_TYPE_F32);
             mmctx->type            = (act->type == HTP_TYPE_F32) ? "f32-f16" : "f16-f16";
-            mmctx->vec_dot_1x1     = vec_dot_f16_f16_aa_1x1;
-            mmctx->vec_dot_2x1     = vec_dot_f16_f16_aa_2x1;
-            mmctx->vec_dot_2x2     = vec_dot_f16_f16_aa_2x2;
+            mmctx->vec_dot_1x1     = flat_vec_dot_f16_f16_aa_1x1;
+            mmctx->vec_dot_2x1     = flat_vec_dot_f16_f16_aa_2x1;
+            mmctx->vec_dot_2x2     = flat_vec_dot_f16_f16_aa_2x2;
             act_row_size           = kparams->act_row_size;
             break;
 
@@ -1826,9 +1827,9 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
             quant_task_func        = NULL;
             need_quant             = false;
             mmctx->type            = "f32-f32";
-            mmctx->vec_dot_1x1     = vec_dot_f32_f32_aa_1x1;
-            mmctx->vec_dot_2x1     = vec_dot_f32_f32_aa_2x1;
-            mmctx->vec_dot_2x2     = vec_dot_f32_f32_aa_2x2;
+            mmctx->vec_dot_1x1     = flat_vec_dot_f32_f32_aa_1x1;
+            mmctx->vec_dot_2x1     = flat_vec_dot_f32_f32_aa_2x1;
+            mmctx->vec_dot_2x2     = flat_vec_dot_f32_f32_aa_2x2;
             act_row_size           = kparams->act_row_size;
             break;
 
@@ -1836,16 +1837,16 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
             quant_task_func        = NULL;
             need_quant             = false;
             mmctx->type            = "bf16-f32";
-            mmctx->vec_dot_1x1     = vec_dot_bf16_f32_aa_1x1;
-            mmctx->vec_dot_2x1     = vec_dot_bf16_f32_aa_2x1;
-            mmctx->vec_dot_2x2     = vec_dot_bf16_f32_aa_2x2;
+            mmctx->vec_dot_1x1     = flat_vec_dot_bf16_f32_aa_1x1;
+            mmctx->vec_dot_2x1     = flat_vec_dot_bf16_f32_aa_2x1;
+            mmctx->vec_dot_2x2     = flat_vec_dot_bf16_f32_aa_2x2;
             act_row_size           = kparams->act_row_size;
             break;
 
         case HTP_MM_KERNEL_HVX_QUANT_BLOCK:
         case HTP_MM_KERNEL_HVX_QUANT_ROW:
         default:
-            if (hvx_mm_init_vec_dot(mmctx, src0->type) != 0) {
+            if (hvx_mm_init_tiled_vec_dot(mmctx, src0->type) != 0) {
                 return HTP_STATUS_NO_SUPPORT;
             }
 
@@ -1990,7 +1991,7 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
     return HTP_STATUS_OK;
 }
 
-static void hvx_mm_nx_2d(unsigned int nth, unsigned int ith, void * data) {
+static void hvx_mm_nx_2d_flat(unsigned int nth, unsigned int ith, void * data) {
     struct htp_mm_context * mmctx = data;
     struct htp_ops_context * octx = mmctx->octx;
     const struct htp_mm_kernel_params * kparams = (const struct htp_mm_kernel_params *) octx->kernel_params;
@@ -2818,7 +2819,7 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
     htp_trace_event_start(tr, HTP_TRACE_EVT_INIT, 0);
 
     const bool is_tiled       = (tile_size > 0);
-    const bool is_repack_f16  = is_tiled && (weight_type == HTP_TYPE_F16);
+    const bool is_tiled_f16  = is_tiled && (weight_type == HTP_TYPE_F16);
 
     if (k % 32 != 0 || (is_tiled && n % 32 != 0)) {
         return -1;
@@ -2880,7 +2881,7 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
         VTCM_LAYOUT_PTR(__fp16, base, L.off_weight[0]),
         VTCM_LAYOUT_PTR_OPTIONAL(__fp16, base, L.off_weight[1], pipeline)
     };
-    if (is_repack_f16) {
+    if (is_tiled_f16) {
         vtcm_weight_raw[0] = VTCM_LAYOUT_PTR(__fp16, base, L.off_scratch[0]);
         if (pipeline) {
             vtcm_weight_raw[1] = VTCM_LAYOUT_PTR(__fp16, base, L.off_scratch[1]);
@@ -2963,7 +2964,7 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
                 void * curr_raw = (void *) dma_queue_pop(weight_dma).dst;
 
                 // 2. dequantize A_i
-                if (!is_repack_f16) {
+                if (!is_tiled_f16) {
                     dequantize_tiled_weight_chunk_to_fp16_tiles(
                         ctx, vtcm_weight_bufs[i % 2], curr_raw,
                         n_cols, k, row_stride, weight_type,
@@ -3048,7 +3049,7 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
                 void * curr_raw = (void *) dma_queue_pop(weight_dma).dst;
 
                 // B: Weight Dequantize (Threaded)
-                if (!is_repack_f16) {
+                if (!is_tiled_f16) {
                     dequantize_tiled_weight_chunk_to_fp16_tiles(
                         ctx, vtcm_scratch0, curr_raw,
                         n_cols, k, row_stride, weight_type,
@@ -3136,7 +3137,7 @@ static int hmx_mm_nx_2d_f32(struct htp_ops_context * octx, const struct htp_mm_k
     const int aligned_tile_size = kparams->aligned_tile_size;
 
     const bool is_tiled       = (tile_size > 0);
-    const bool is_repack_f16  = is_tiled && (weight_type == HTP_TYPE_F16);
+    const bool is_tiled_f16  = is_tiled && (weight_type == HTP_TYPE_F16);
     const size_t vtcm_budget  = ctx->vtcm_size;
 
     const int m_chunk_n_rows  = kparams->m_chunk;
@@ -3164,7 +3165,7 @@ static int hmx_mm_nx_2d_f32(struct htp_ops_context * octx, const struct htp_mm_k
         VTCM_LAYOUT_PTR(__fp16, base, L.off_weight[0]),
         VTCM_LAYOUT_PTR_OPTIONAL(__fp16, base, L.off_weight[1], pipeline)
     };
-    if (is_repack_f16) {
+    if (is_tiled_f16) {
         vtcm_weight_raw[0] = VTCM_LAYOUT_PTR(__fp16, base, L.off_scratch[0]);
         if (pipeline) {
             vtcm_weight_raw[1] = VTCM_LAYOUT_PTR(__fp16, base, L.off_scratch[1]);
@@ -3274,7 +3275,7 @@ static int hmx_mm_nx_2d_f32(struct htp_ops_context * octx, const struct htp_mm_k
 
                     void * curr_raw = (void *) dma_queue_pop(weight_dma).dst;
 
-                    if (!is_repack_f16) {
+                    if (!is_tiled_f16) {
                         dequantize_tiled_weight_chunk_to_fp16_tiles(
                             ctx, vtcm_weight_bufs[i % 2], curr_raw,
                             n_cols, k, row_stride, weight_type,
@@ -3366,7 +3367,7 @@ static int hmx_mm_nx_2d_f32(struct htp_ops_context * octx, const struct htp_mm_k
 
                     void * curr_raw = (void *) dma_queue_pop(weight_dma).dst;
 
-                    if (!is_repack_f16) {
+                    if (!is_tiled_f16) {
                         dequantize_tiled_weight_chunk_to_fp16_tiles(
                             ctx, vtcm_scratch0, curr_raw,
                             n_cols, k, row_stride, weight_type,
@@ -3766,7 +3767,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
     size_t vtcm_used = 0;
 
     const bool is_tiled      = (tile_size > 0);
-    const bool is_repack_f16 = is_tiled && (weight_type == HTP_TYPE_F16);
+    const bool is_tiled_f16 = is_tiled && (weight_type == HTP_TYPE_F16);
 
     const uint32_t dma_dst_stride  = is_tiled ? aligned_tile_size : row_stride;
     const uint32_t dma_src_stride  = is_tiled ? tile_size : weight_stride;
@@ -3796,12 +3797,12 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
     size_t scratch0_size = hex_align_up(n_chunk_n_cols * vec_dot_size, HTP_MM_HMX_TILE_SIZE);
 
     uint8_t *vtcm_ptr      = (uint8_t *) ctx->vtcm_base;
-    __fp16  *vtcm_weight   = (!is_repack_f16 && weight_area_size) ? (__fp16 *) vtcm_seq_alloc(&vtcm_ptr, weight_area_size) : NULL;
+    __fp16  *vtcm_weight   = (!is_tiled_f16 && weight_area_size) ? (__fp16 *) vtcm_seq_alloc(&vtcm_ptr, weight_area_size) : NULL;
     __fp16  *vtcm_f16_act  = (__fp16 *) vtcm_seq_alloc(&vtcm_ptr, act_area_size);
     __fp16  *vtcm_output   = (__fp16 *) vtcm_seq_alloc(&vtcm_ptr, output_area_size);
     void    *vtcm_scratch0 = vtcm_seq_alloc(&vtcm_ptr, scratch0_size);
     __fp16  *vtcm_scales   = (__fp16 *) vtcm_seq_alloc(&vtcm_ptr, 256);
-    if (is_repack_f16) {
+    if (is_tiled_f16) {
         vtcm_weight = (__fp16 *) vtcm_scratch0;
     }
 
@@ -3841,7 +3842,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
             void * curr_raw = (void *) dma_queue_pop(weight_dma).dst;
 
             // B: Weight Dequantize (Threaded)
-            if (!is_repack_f16) {
+            if (!is_tiled_f16) {
                 dequantize_tiled_weight_chunk_to_fp16_tiles(
                     ctx, vtcm_scratch0, curr_raw,
                     n_cols, k, row_stride, weight_type,
@@ -4536,8 +4537,8 @@ int op_matmul_id(struct htp_ops_context * octx) {
         mmctx->src0_nrows_per_thread = fastdiv(nrows + octx->n_threads - 1, &octx->n_threads_div);
         mmctx->src0_nrows_per_thread = hex_round_up(mmctx->src0_nrows_per_thread, 32);
 
-        if (hvx_mm_init_vec_dot(mmctx, src0->type) == 0) {
-            s = hvx_mm_matmul_id(octx, mmctx, act_nrows > 1 ? hvx_mm_id : hvx_mv_id);
+        if (hvx_mm_init_tiled_vec_dot(mmctx, src0->type) == 0) {
+            s = hvx_mm_matmul_id(octx, mmctx, act_nrows > 1 ? hvx_mm_id_tiled : hvx_mv_id_tiled);
         } else {
             s = HTP_STATUS_NO_SUPPORT;
         }
@@ -4636,8 +4637,8 @@ int op_matmul_id_nx(struct htp_ops_context * octx) {
     if (kparams->n_hmx) {
         s = hmx_mm_op_matmul_id_nx(octx, mmctx);
     } else {
-        if (hvx_mm_init_vec_dot(mmctx, src0->type) == 0) {
-            s = hvx_mm_matmul_id_nx(octx, mmctx, act_nrows > 1 ? hvx_mm_id_nx : hvx_mv_id_nx);
+        if (hvx_mm_init_tiled_vec_dot(mmctx, src0->type) == 0) {
+            s = hvx_mm_matmul_id_nx(octx, mmctx, act_nrows > 1 ? hvx_mm_id_nx_tiled : hvx_mv_id_nx_tiled);
         } else {
             s = HTP_STATUS_NO_SUPPORT;
         }
@@ -4669,11 +4670,11 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
     const struct htp_tensor * restrict src0 = octx->src[0]; // first weight
     const struct htp_tensor * restrict act  = octx->src[n_weights]; // activation x
 
-    bool is_repacked = (src0->type == HTP_TYPE_Q4_0 || src0->type == HTP_TYPE_Q4_1 ||
-                        src0->type == HTP_TYPE_Q8_0 || src0->type == HTP_TYPE_IQ4_NL ||
-                        src0->type == HTP_TYPE_MXFP4 || src0->type == HTP_TYPE_Q4_K ||
-                        src0->type == HTP_TYPE_Q5_K || src0->type == HTP_TYPE_Q3_K ||
-                        src0->type == HTP_TYPE_Q2_K);
+    bool is_tiled = (src0->type == HTP_TYPE_Q4_0 || src0->type == HTP_TYPE_Q4_1 ||
+                     src0->type == HTP_TYPE_Q8_0 || src0->type == HTP_TYPE_IQ4_NL ||
+                     src0->type == HTP_TYPE_MXFP4 || src0->type == HTP_TYPE_Q6_K ||
+                     src0->type == HTP_TYPE_Q4_K || src0->type == HTP_TYPE_Q5_K ||
+                     src0->type == HTP_TYPE_Q3_K || src0->type == HTP_TYPE_Q2_K);
 
     struct htp_mm_context mmctx_struct = {0};
     struct htp_mm_context * mmctx = &mmctx_struct;
@@ -4688,7 +4689,7 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
     const size_t src0_row_size = src0->nb[1];
     const size_t src0_row_size_padded = hex_round_up(src0_row_size, 128);
 
-    if (hvx_mm_init_vec_dot(mmctx, src0->type) != 0) {
+    if (hvx_mm_init_tiled_vec_dot(mmctx, src0->type) != 0) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
@@ -4736,7 +4737,7 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
     mmctx->vtcm_dst      = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
     mmctx->vtcm_act_raw  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_act_raw);
 
-    mmctx->vtcm_src0_stride    = is_repacked ? 0 : src0_row_size_padded;
+    mmctx->vtcm_src0_stride    = is_tiled ? 0 : src0_row_size_padded;
     mmctx->vtcm_act_stride     = act_row_size;
     mmctx->vtcm_act_raw_stride = hex_round_up(act->ne[0] * sizeof(float), QK_Q8_0_TILED * sizeof(float));
 
@@ -4747,24 +4748,25 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
     // Run fused matmul
     const uint32_t n_matmul_jobs = octx->n_threads;
     worker_callback_t matmul_job_func;
-    if (is_repacked) {
+    if (is_tiled) {
         switch (src0->type) {
-            case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_nx_2d_repacked_q4_0;   break;
+            case HTP_TYPE_Q4_0:   matmul_job_func = hvx_mm_nx_2d_tiled_q4_0;   break;
             case HTP_TYPE_Q4_1:
-            case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_nx_2d_repacked_q4_1;   break;
-            case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_nx_2d_repacked_q5_k;   break;
-            case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_nx_2d_repacked_q3_k;   break;
-            case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_nx_2d_repacked_q2_k;   break;
-            case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_nx_2d_repacked_q8_0;   break;
-            case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_nx_2d_repacked_iq4nl;  break;
-            case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_nx_2d_repacked_mxfp4;  break;
-            case HTP_TYPE_F16:    matmul_job_func = hvx_mm_nx_2d_repacked_f16;    break;
+            case HTP_TYPE_Q4_K:   matmul_job_func = hvx_mm_nx_2d_tiled_q4_1;   break;
+            case HTP_TYPE_Q5_K:   matmul_job_func = hvx_mm_nx_2d_tiled_q5_k;   break;
+            case HTP_TYPE_Q6_K:   matmul_job_func = hvx_mm_nx_2d_tiled_q6_k;   break;
+            case HTP_TYPE_Q3_K:   matmul_job_func = hvx_mm_nx_2d_tiled_q3_k;   break;
+            case HTP_TYPE_Q2_K:   matmul_job_func = hvx_mm_nx_2d_tiled_q2_k;   break;
+            case HTP_TYPE_Q8_0:   matmul_job_func = hvx_mm_nx_2d_tiled_q8_0;   break;
+            case HTP_TYPE_IQ4_NL: matmul_job_func = hvx_mm_nx_2d_tiled_iq4nl;  break;
+            case HTP_TYPE_MXFP4:  matmul_job_func = hvx_mm_nx_2d_tiled_mxfp4;  break;
+            case HTP_TYPE_F16:    matmul_job_func = hvx_mm_nx_2d_tiled_f16;    break;
             default:
                 htp_trace_event_stop(tr, HTP_TRACE_EVT_INIT, 0);
                 return HTP_STATUS_NO_SUPPORT;
         }
     } else {
-        matmul_job_func = hvx_mm_nx_2d;
+        matmul_job_func = hvx_mm_nx_2d_flat;
     }
 
     htp_trace_event_stop(tr, HTP_TRACE_EVT_INIT, 0);

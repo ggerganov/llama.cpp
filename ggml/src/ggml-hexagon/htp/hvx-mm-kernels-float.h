@@ -76,7 +76,7 @@ static inline void quantize_f16_f16_kernel(
 #define HVX_OP_MUL_F32(a, b) Q6_Vsf_vmpy_VsfVsf(a, b)
 #endif
 
-static inline void vec_dot_f32_f32_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+static inline void flat_vec_dot_f32_f32_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     const HVX_Vector * restrict x = (const HVX_Vector *) vx;
     const HVX_Vector * restrict y = (const HVX_Vector *) vy;
 
@@ -104,7 +104,7 @@ static inline void vec_dot_f32_f32_aa_1x1(const uint32_t n, float * restrict s, 
     *s = hvx_vec_get_f32(hvx_vec_reduce_sum_f32(rsum));
 }
 
-static inline void vec_dot_f32_f32_aa_2x1(const uint32_t n, float * restrict s0,
+static inline void flat_vec_dot_f32_f32_aa_2x1(const uint32_t n, float * restrict s0,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
@@ -143,7 +143,7 @@ static inline void vec_dot_f32_f32_aa_2x1(const uint32_t n, float * restrict s0,
     hvx_vec_store_u(s0, 8, rsum);
 }
 
-static inline void vec_dot_f32_f32_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
+static inline void flat_vec_dot_f32_f32_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0, const void * restrict vy1) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
@@ -196,7 +196,7 @@ static inline void vec_dot_f32_f32_aa_2x2(const uint32_t n, float * restrict s0,
     hvx_vec_store_u(s1, 8, r0_r1_c1_sum);
 }
 
-static inline void vec_dot_bf16_f32_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+static inline void flat_vec_dot_bf16_f32_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     const HVX_Vector * restrict x = (const HVX_Vector *) vx;
     const HVX_Vector * restrict y = (const HVX_Vector *) vy;
 
@@ -243,7 +243,7 @@ static inline void vec_dot_bf16_f32_aa_1x1(const uint32_t n, float * restrict s,
     *s = hvx_vec_get_f32(hvx_vec_reduce_sum_f32(rsum));
 }
 
-static inline void vec_dot_bf16_f32_aa_2x1(const uint32_t n, float * restrict s0,
+static inline void flat_vec_dot_bf16_f32_aa_2x1(const uint32_t n, float * restrict s0,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
@@ -305,7 +305,7 @@ static inline void vec_dot_bf16_f32_aa_2x1(const uint32_t n, float * restrict s0
     hvx_vec_store_u(s0, 8, rsum);
 }
 
-static inline void vec_dot_bf16_f32_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
+static inline void flat_vec_dot_bf16_f32_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0, const void * restrict vy1) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
@@ -392,7 +392,7 @@ static inline void vec_dot_bf16_f32_aa_2x2(const uint32_t n, float * restrict s0
 #undef HVX_OP_ADD_F32
 #undef HVX_OP_MUL_F32
 
-static inline void vec_dot_f16_f16_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+static inline void flat_vec_dot_f16_f16_aa_1x1(const uint32_t n, float * restrict s, const void * restrict vx, const void * restrict vy) {
     const HVX_Vector * restrict x = (const HVX_Vector *) vx;
     const HVX_Vector * restrict y = (const HVX_Vector *) vy;
 
@@ -419,7 +419,7 @@ static inline void vec_dot_f16_f16_aa_1x1(const uint32_t n, float * restrict s, 
     hvx_vec_store_u(s, 4, hvx_vec_reduce_sum_f32(rsum));
 }
 
-static inline void vec_dot_f16_f16_aa_2x1(const uint32_t n, float * restrict s0,
+static inline void flat_vec_dot_f16_f16_aa_2x1(const uint32_t n, float * restrict s0,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
@@ -456,7 +456,7 @@ static inline void vec_dot_f16_f16_aa_2x1(const uint32_t n, float * restrict s0,
     hvx_vec_store_u(s0, 8, rsum);
 }
 
-static inline void vec_dot_f16_f16_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
+static inline void flat_vec_dot_f16_f16_aa_2x2(const uint32_t n, float * restrict s0, float * restrict s1,
                                 const void * restrict vx0, const void * restrict vx1,
                                 const void * restrict vy0, const void * restrict vy1) {
     const HVX_Vector * restrict x0 = (const HVX_Vector *) vx0;
