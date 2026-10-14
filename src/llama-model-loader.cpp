@@ -1786,7 +1786,7 @@ bool llama_model_loader::load_all_data(
         if (use_mmap) {
             // drop the source pages of tensors copied out of the mmap (e.g. by weight repacking) from RSS
             // only for --load-mode auto/mmap; the pages stay in the page cache, ref: https://github.com/ggml-org/llama.cpp/issues/16761
-	    size_t size_reclaimed = 0;
+            size_t size_reclaimed = 0;
             for (const auto & copied : copied_from_mmap) {
                 const llama_tensor_weight * w = copied.first;
                 // a duplicated tensor (e.g. tied token_embd/output) may still read the same range in place
@@ -1797,10 +1797,10 @@ bool llama_model_loader::load_all_data(
                 if (!mappings.at(w->idx)->discard_fragment(w->offs, w->offs + copied.second)) {
                     break;
                 }
-		size_reclaimed += copied.second;
+                size_reclaimed += copied.second;
             }
-	    if (size_reclaimed > 0) {
-		    LLAMA_LOG_INFO("%s: reclaimed %.2f MiB of mmap source pages\n", __func__, size_reclaimed / 1024.0 / 1024.0);
+            if (size_reclaimed > 0) {
+                LLAMA_LOG_INFO("%s: reclaimed %.2f MiB of mmap source pages\n", __func__, size_reclaimed / 1024.0 / 1024.0);
 	    }
             copied_from_mmap.clear();
             read_from_mmap.clear();
