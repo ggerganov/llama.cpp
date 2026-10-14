@@ -176,4 +176,5 @@ llama_model_gliner2::graph::graph(const llama_model_gliner2 & model, const llm_g
             LLM_FFN_RELU, LLM_FFN_SEQ, -1);
     cb(cur, "decision_scores", -1);
     res->t_embd = cur;
+    ggml_build_forward_expand(gf, cur);
 }
