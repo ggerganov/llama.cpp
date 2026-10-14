@@ -71,6 +71,7 @@ struct clip_hparams {
     std::vector<clip_image_size> image_res_candidates;
     int32_t preproc_min_tiles = 0;
     int32_t preproc_max_tiles = 0;
+    int32_t max_slice_nums = 9; // llava-uhd slice cap; per-model, carried in the GGUF
     int32_t preproc_tile_size = 0; // local tile size (deepseek-ocr)
     resize_algo image_resize_algo_rf = RESIZE_ALGO_BICUBIC;
     resize_algo image_resize_algo_ov = RESIZE_ALGO_BICUBIC;
@@ -210,8 +211,11 @@ struct clip_hparams {
     void set_warmup_n_tokens(int n_tokens) {
         int n_tok_per_side = static_cast<int>(std::sqrt(n_tokens));
         GGML_ASSERT(n_tok_per_side * n_tok_per_side == n_tokens && "n_tokens must be n*n");
+        // do not warmup with more tokens than the max allowed
+        if (custom_image_max_tokens > 0 && n_tokens > custom_image_max_tokens) {
+            n_tok_per_side = std::max(1, static_cast<int>(std::sqrt(custom_image_max_tokens)));
+        }
         warmup_image_size = n_tok_per_side * patch_size * n_merge;
-        // TODO: support warmup size for custom token numbers
     }
     // sam vit deepseek-ocr
     std::vector<int32_t> global_attn_indices() const {
@@ -611,6 +615,7 @@ struct clip_model {
 
     ggml_tensor * image_newline = nullptr;
     ggml_tensor * view_seperator = nullptr;
+    ggml_tensor * tok_embd_sep = nullptr; // [n_embd_text, n_sep] rows of the text model tok_embd (MiniCPM-V 4.7)
 
 
     // Yi type models with mlp+normalization projection
@@ -620,6 +625,10 @@ struct clip_model {
     ggml_tensor * mm_3_b = nullptr;
     ggml_tensor * mm_4_w = nullptr;
     ggml_tensor * mm_4_b = nullptr;
+    ggml_tensor * mm_5_w = nullptr;
+    ggml_tensor * mm_5_b = nullptr;
+    ggml_tensor * mm_6_w = nullptr;
+    ggml_tensor * mm_6_b = nullptr;
 
     // GLMV-Edge projection
     ggml_tensor * mm_model_adapter_conv_w = nullptr;
