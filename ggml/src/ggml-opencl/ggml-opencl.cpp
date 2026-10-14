@@ -759,6 +759,7 @@ struct ggml_backend_opencl_context {
 
     // prealloc buffers for MoE router table preprocess
     bool toggle_reorder = false;
+    ggml_cl_buffer prealloc_router_ids;   // aligned copy of a router table at an unaligned offset
     ggml_cl_buffer prealloc_post_router;
     ggml_cl_buffer prealloc_emap;
     ggml_cl_buffer prealloc_hist;
@@ -25921,7 +25922,17 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
     cl_buffer_region region;
     region.origin = offset;
     region.size = nb21 * ne21;
-    cl_mem original_router_buf = clCreateSubBuffer(extra->data_device, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err);
+    cl_mem src_buf = extra->data_device;
+    if (offset % backend_ctx->alignment != 0) {
+        // A sub-buffer origin must be aligned to CL_DEVICE_MEM_BASE_ADDR_ALIGN; a router
+        // table viewed at another offset is copied to an aligned buffer first.
+        backend_ctx->prealloc_router_ids.allocate(backend_ctx->context, region.size);
+        CL_CHECK(clEnqueueCopyBuffer(backend_ctx->queue, extra->data_device, backend_ctx->prealloc_router_ids.buffer,
+                                     offset, 0, region.size, 0, NULL, NULL));
+        src_buf = backend_ctx->prealloc_router_ids.buffer;
+        region.origin = 0;
+    }
+    cl_mem original_router_buf = clCreateSubBuffer(src_buf, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err);
     CL_CHECK(err);
 
     backend_ctx->prealloc_post_router.allocate(backend_ctx->context, sizeof(int) * max_post_router_tile * n_tile_size);
