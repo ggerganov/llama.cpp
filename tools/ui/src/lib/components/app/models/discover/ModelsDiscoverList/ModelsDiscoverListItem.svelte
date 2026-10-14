@@ -7,8 +7,7 @@
 	import { ActionIcon } from '$lib/components/app';
 	import { HF_MMPROJ_FILENAME_TOKEN, HF_MODALITY_PIPELINE_TAGS } from '$lib/constants';
 	import { ModelDraftSidecar, ModelRowDownloadState } from '$lib/enums';
-	import { HuggingFaceService } from '$lib/services';
-	import { ModelsService } from '$lib/services';
+	import { HuggingFaceService, ModelsService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore } from '$lib/stores';
 	import type { ModelsDiscoverSizeRange } from '$lib/stores/models-discover/index.svelte';
 	import type { HfModelInfo } from '$lib/types/huggingface';

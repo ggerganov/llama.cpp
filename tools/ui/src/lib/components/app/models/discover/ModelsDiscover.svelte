@@ -9,12 +9,13 @@
 		ModelsDiscoverListSearch
 	} from '$lib/components/app/models/discover';
 	import { Button } from '$lib/components/ui/button';
-	import { MODEL_ID } from '$lib/constants';
 	import { ModelDownloadConfirmAction } from '$lib/enums';
 	import { HuggingFaceService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore, uiStore } from '$lib/stores';
 	import type { HfModelInfo } from '$lib/types';
 	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
+	import { repoOf } from '$lib/utils';
+	import { untrack } from 'svelte';
 
 	let selectedId = $state<string | null>(null);
 	let searchQuery = $state('');
@@ -72,11 +73,6 @@
 	});
 	let isSearching = $derived(searchQuery.trim().length > 0);
 
-	/** Repo id of a download tag, e.g. `org/repo:Q8_0-mtp` reports `org/repo`. */
-	function repoOf(repoWithTag: string): string {
-		return repoWithTag.split(MODEL_ID.QUANTIZATION_SEPARATOR)[0] ?? repoWithTag;
-	}
-
 	/** Hub record for a repo the list does not carry, so its row still renders. */
 	function hubRecord(id: string): HfModelInfo {
 		return {
@@ -131,9 +127,13 @@
 
 	// Detail pane state, reloaded when the selection changes.
 	// Load the sidebar list on mount (the component is mounted when the dialog opens).
+	// untrack: fetch() toggles its loading flag synchronously, and tracking it would
+	// re-run the effect on every toggle - an endless retry while a repo stays failed.
 	$effect(() => {
-		void modelsDiscoverStore.fetch();
-		void modelsDiscoverStore.search('');
+		untrack(() => {
+			void modelsDiscoverStore.fetch();
+			void modelsDiscoverStore.search('');
+		});
 	});
 
 	// Auto-select the first model.
