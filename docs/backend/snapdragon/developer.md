@@ -37,9 +37,10 @@ In llama.cpp/GGML, each Hexagon session is mapped to a single GGML backend devic
 `GGML_HEXAGON_DEVICES`, or `HTP0`, `HTP1` in legacy mode).
 
 To support running models larger than 3.5GB on a single device, the Hexagon backend dynamically maps and unmaps buffers:
-- Buffers are allocated in shared DDR (RPCMEM) via file descriptors (`fastrpc_mmap` using `FASTRPC_MAP_FD_DELAYED`).
+- Buffers are allocated in shared DDR (RPCMEM) and mapped through FastRPC file descriptors. Non-pinned buffers use delayed
+  mappings (`FASTRPC_MAP_FD_DELAYED` or `FASTRPC_MAP_FD_DELAYED_EXTENDED`).
 - Pinned buffers (such as KV cache and active compute buffers) remain mapped throughout execution.
-- Inactive weight buffers are dynamically mapped into the NPU session via `HAP_mmap()` during batch buffer preparation
+- Inactive weight buffers are dynamically mapped into the NPU session during batch buffer preparation
   (`prep_op_bufs()` in `htp/main.c`) and unmapped via `htp_iface_munmap()` when no longer needed by the active batch.
 - This dynamic sliding window allows a single NPU session to execute models that exceed the 3.5GB window.
 
@@ -55,6 +56,9 @@ Writing high-performance operators for Hexagon requires following specific guide
 
 - Strongly prefer the `DDR -> DMA -> VTCM -> compute (HVX/HMX) -> VTCM -> DMA -> DDR` data flow.
 - Direct HVX reads/writes from/to DDR are less efficient and should only be used as a fallback.
+- Use `dma_addr_t` only for DMA base and final addresses. Form a final address by adding a 32-bit byte offset to a
+  `dma_addr_t` tensor base address. This permits a 64-bit mapped base address on newer platforms while retaining 32-bit
+  relative addressing.
 - The DMA queue is a strict FIFO where operations must be pushed and popped in strict order.
 - Follow the pipelined multi-buffering sequence properly (typically 2x to 16x buffering) so every push has a corresponding pop:
 
@@ -66,7 +70,7 @@ Writing high-performance operators for Hexagon requires following specific guide
 - Because every push must be matched by a pop, `dma_queue_flush()` is not required when the pipeline sequence is followed
   properly. Flushing is only used in rare exceptions where a batch of operations is pushed without individual pops.
 - Use the DMA queue interface from [`dma-queue.h`](../../../ggml/src/ggml-hexagon/htp/dma-queue.h)
-  (`dma_queue_push_ddr_to_vtcm`, `dma_queue_pop`, `dma_queue_push_vtcm_to_ddr`).
+  (`dma_queue_push()`, `dma_queue_pop()`, and `dma_queue_flush()`).
   See [`cumsum-ops.c`](../../../ggml/src/ggml-hexagon/htp/cumsum-ops.c) and
   [`act-ops.c`](../../../ggml/src/ggml-hexagon/htp/act-ops.c) for reference implementations.
 
@@ -125,7 +129,6 @@ Writing high-performance operators for Hexagon requires following specific guide
 - Do not add defensive NULL checks or assertions for internal framework pointers or required graph operands and outputs.
   Internal pointers include `ctx`, `octx`, local context structs like `*ctx`, `kparams`, and worker callback `data`.
 - These pointers are architectural invariants during kernel execution and host-side graph preparation.
-  Graph compute receives allocated nodes with valid required `node->src[N]` and `node->data` pointers.
 - Do not turn an invariant violation into an unsupported operation or missed fusion.
   Checks such as `if (!octx || !octx->ctx)` clutter the code, obscure intent, and hide upstream errors.
 - **Distinction**: `octx->src[N]` pointers *can* be NULL by design and must be checked when optional.
@@ -146,6 +149,28 @@ Writing high-performance operators for Hexagon requires following specific guide
   python3 scripts/snapdragon/ggml-hexagon-align-macros.py --fix ggml/src/ggml-hexagon/htp/
   ```
 
+### Binary Inspection and Spill Analysis
+
+Use [`scripts/snapdragon/ggml-hexagon-inspect.py`](../../../scripts/snapdragon/ggml-hexagon-inspect.py) to audit Hexagon binaries for register
+spills, unexpected float promotions, or disassembly:
+
+- Always verify that compute kernels have zero in-loop vector spills (`--spills --strict`) and no float promotions (`--promotions`).
+- Avoid excessive loop unrolling (`#pragma unroll`), which increases register pressure and causes spills.
+
+```bash
+# Check for vector and scalar register spills
+python3 scripts/snapdragon/ggml-hexagon-inspect.py --spills --strict --func "^compute_"
+
+# Check for float promotions
+python3 scripts/snapdragon/ggml-hexagon-inspect.py --promotions --func "^compute_"
+
+# Disassemble with annotated loops and spill markers
+python3 scripts/snapdragon/ggml-hexagon-inspect.py --disasm compute_same_shape_div_f32
+
+# Resolve crash addresses to function symbols and lines
+python3 scripts/snapdragon/ggml-hexagon-inspect.py --addr2line 0x51a30 0x5ba54
+```
+
 ## Multi-Device Partitioning (mdev)
 
 Multi-device (mdev) mode enables row-level tensor parallel execution across multiple physical NPU cores or virtual NPU
@@ -155,26 +180,28 @@ sessions.
 
 - Shared tensor buffers reside in DDR (RPCMEM) with a 128-byte cache line granularity
   (`HEX_L2_LINE_SIZE` = 128 bytes, `HTP_TENSOR_MDEV_LINE_SIZE`).
-- **Rule**: Multi-device work partitions must align destination write regions to 128-byte cache line boundaries so distinct
-  devices never share or overwrite the same cache line.
+- **Rule**: Multi-device work partitions that write directly to DDR through HVX/L2 must align destination write regions to
+  128-byte cache line boundaries so distinct devices never share or overwrite the same cache line.
+- DMA writes to DDR are not subject to this cache-line ownership rule. They may use smaller non-overlapping destination
+  ranges when the operator only writes through DMA.
 
 ### Partitioning Helpers in `htp-tensor.h`
 
 Common partitioning logic is factored into reusable inline helpers in
 [`htp-tensor.h`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h):
 
-1. [`htp_tensor_mdev_rows_per_chunk`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L67):
+1. [`htp_tensor_mdev_rows_per_chunk`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L71):
    Determines the minimum number of rows per chunk so that the chunk byte size is a multiple of 128 bytes:
 
    ```
    rows_per_chunk = 128 / hex_gcd_u32(row_size, 128)
    ```
 
-   If row stride `nb[1]` is already a multiple of 128 bytes, `rows_per_chunk = 1`.
+   If the active row and outer strides are already multiples of 128 bytes, `rows_per_chunk = 1`.
    Returns `false` if the tensor cannot be safely row-partitioned (such as unaligned base pointer, permuted layout,
    or non-128-byte aligned outer strides).
 
-2. [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L94):
+2. [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L98):
    Calculates the per-device work range `struct htp_tensor_mdev_range { uint32_t start; uint32_t count; }` given
    `total_units`, `units_per_chunk`, `mdev_idx`, `mdev_count`, and the precomputed `mdev_count_div`.
    Handles chunk distribution across devices, assigns remainder units to the last device, and automatically triggers
@@ -182,11 +209,10 @@ Common partitioning logic is factored into reusable inline helpers in
 
 ### Row-Partitioned Operators
 
-For row-wise operators
+For row-wise operators that write directly to DDR
 (such as activations in [`act-ops.c`](../../../ggml/src/ggml-hexagon/htp/act-ops.c),
 binary ops in [`binary-ops.c`](../../../ggml/src/ggml-hexagon/htp/binary-ops.c),
-unary ops in [`unary-ops.c`](../../../ggml/src/ggml-hexagon/htp/unary-ops.c), and
-sameshape copies in [`cpy-ops.c`](../../../ggml/src/ggml-hexagon/htp/cpy-ops.c)):
+and unary ops in [`unary-ops.c`](../../../ggml/src/ggml-hexagon/htp/unary-ops.c)):
 
 ```c
 const uint32_t total_rows   = ne01 * ne02 * ne03;
@@ -211,20 +237,19 @@ if (nrows == 0) {
 
 ### Element-Partitioned Operators
 
-For flat element-wise operations (such as reshape copies in
-[`cpy-ops.c`](../../../ggml/src/ggml-hexagon/htp/cpy-ops.c)):
+For flat element-wise operations that write directly to DDR:
 - Partition total linear elements N = ne0 * ne1 * ne2 * ne3 in 128-byte cache line chunks (`elems_per_line = (elem_size == 4) ? 32 : 64`).
 - Requires strict 1D contiguity:
-  [`htp_tensor_is_contiguous(dst, elem_size)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L28)
+  [`htp_tensor_is_contiguous(dst, elem_size)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L32)
   and 128-byte aligned destination pointer
-  [`htp_tensor_mdev_data_aligned(dst)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L47).
+  [`htp_tensor_mdev_data_aligned(dst)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L51).
 - If contiguous and aligned, pass `elems_per_line` to
-  [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L94);
+  [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L98);
   otherwise pass 0 to trigger Device 0 fallback.
 
 ### Single-Device Fallback (Device 0)
 
-- Fallback to Device 0 (`mdev.idx == 0`) when partitioning would cause cache line tearing or when work cannot be evenly distributed.
+- Fallback to Device 0 (`mdev.idx == 0`) when partitioning would cause cache line tearing or there are too few aligned chunks.
 - Triggers:
   1. Destination tensor cannot be safely partitioned (`rows_per_chunk == 0` or non-contiguous/unaligned buffer).
   2. Total aligned chunks < `mdev_count`.
@@ -281,7 +306,7 @@ Multi-device execution synchronizes worker sessions through atomic fence slots a
   (Input Prep)                                 (Input Prep)
        |                                            |
   Pre-Op Barrier ----------------------------- Pre-Op Barrier
-  (mdev_sync_fence)                            (mdev_sync_fence)
+  (htp_mdev_group_barrier)                     (htp_mdev_group_barrier)
        |                                            |
   Kernel Execution                             Kernel Execution
   (Output Slice 0)                             (Output Slice 1)
@@ -304,10 +329,10 @@ Multi-device execution synchronizes worker sessions through atomic fence slots a
   atomic_uint * my_fence = htp_mdev_fence_slot(fence_base, mdev_idx);
   ```
 
-- **Writing to fence ([`htp_fence_write`](../../../ggml/src/ggml-hexagon/htp/htp-fence.h#L18))**:
+- **Writing to fence ([`htp_fence_write`](../../../ggml/src/ggml-hexagon/htp/htp-fence.h#L17))**:
   Stores `seq` and `status`, issues a `syncht` thread synchronization barrier, and flushes/invalidates the line
   using `Q6_dccleaninva_A(fence)`.
-- **Reading from peer fence ([`htp_fence_read`](../../../ggml/src/ggml-hexagon/htp/htp-fence.h#L26))**:
+- **Reading from peer fence ([`htp_fence_read`](../../../ggml/src/ggml-hexagon/htp/htp-fence.h#L25))**:
   Executes `Q6_dccleaninva_A(fence)` and `syncht` before reading atomic values to ensure fresh data from DDR.
 
 ### Deterministic Monotonic Sequence Numbers
@@ -326,7 +351,7 @@ Multi-device execution synchronizes worker sessions through atomic fence slots a
 
 - In the kernel, ensure all pushed DMA operations have been popped in strict FIFO order to drain the queue.
 - Use [`htp_tensor_flush_all()`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h) to flush specific dirty tensors back to DDR:
-  - [`htp_tensor_flush_all()`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h) flushes only modified tensor address ranges,
-    ensuring peer devices and the host CPU observe consistent data in DDR.
+  - [`htp_tensor_flush_all()`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h) flushes modified tensor address ranges, or the
+    full D-cache when their total size exceeds the flush threshold, ensuring peer devices and the host CPU observe consistent
+    data in DDR.
 - Never signal completion before all DMA transfers are drained and dirty tensor flushes have completed.
-

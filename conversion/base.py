@@ -170,6 +170,9 @@ class ModelBase:
         self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
         self._is_nvfp4 = False
         self._is_mxfp4 = False
+        self._nvfp4_global_algo: str | None = None # checkpoint-wide NVFP4 quant_algo
+        self._nvfp4_layer_algo: dict[str, str | None] = {} # per-layer quant_algo, keyed by HF module path
+        self._prec_a4: dict[str, bool] = {} # gguf tensor name -> can use 4-bit (A4) activations
         self._fp8_as_q8 = fp8_as_q8
         self._fp8_dequantized: set[str] = set()
 
@@ -231,7 +234,7 @@ class ModelBase:
 
         prefix = "model" if not self.is_mistral_format else "consolidated"
         part_names: list[str] = ModelBase.get_model_part_names(self.dir_model, prefix, ".safetensors")
-        is_safetensors: bool = len(part_names) > 0
+        is_safetensors: bool = len(part_names) > 0 or (not self.is_mistral_format and (self.dir_model / "model.safetensors.index.json").is_file())
         if not is_safetensors:
             part_names = ModelBase.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
 
@@ -436,6 +439,25 @@ class ModelBase:
 
                 return (unpacked * scale.unsqueeze(-1).float()).reshape(shape)
 
+            def dequant_fp8() -> None:
+                for name in self.model_tensors.keys():
+                    if name.endswith(".weight_scale"):
+                        weight_name = name.removesuffix("_scale")
+                        if weight_name not in self.model_tensors:
+                            tensors_to_remove.append(name)
+                            continue
+                        w = self.model_tensors[weight_name]
+                        s = self.model_tensors[name]
+                        is_fp8_weight = False
+                        if self._fp8_as_q8:
+                            is_fp8_weight = w().dtype in (torch.float8_e4m3fn, torch.float8_e5m2)
+                        self.model_tensors[weight_name] = lambda w=w, s=s: dequant_simple(w(), s(), None)
+                        tensors_to_remove.append(name)
+                        if is_fp8_weight:
+                            self._fp8_dequantized.add(weight_name)
+                    if name.endswith((".input_scale", ".k_scale", ".v_scale")):
+                        tensors_to_remove.append(name)
+
             if quant_method == "bitnet":
                 for name in self.model_tensors.keys():
                     if name.endswith(".weight_scale"):
@@ -495,18 +517,14 @@ class ModelBase:
             elif quant_method == "compressed-tensors":
                 quant_format = quant_config["format"]
                 groups = quant_config["config_groups"]
-                nvfp4_compressed_tensors = (
-                    quant_format == "nvfp4-pack-quantized"
-                    or quant_format == "mixed-precision"
-                    and bool(groups)
-                    and all(g.get("format") == "nvfp4-pack-quantized" for g in groups.values() if isinstance(g, dict))
-                )
+                nvfp4_compressed_tensors = self._is_nvfp4_compressed_tensors(quant_method, quant_format, groups)
 
-                if len(groups) > 1 and not nvfp4_compressed_tensors:
+                if nvfp4_compressed_tensors:
+                    dequant_fp8()
+                elif len(groups) > 1:
                     raise NotImplementedError("Can't handle multiple config groups for compressed-tensors yet")
-                weight_config = tuple(groups.values())[0]["weights"]
-
-                if quant_format == "float-quantized" or quant_format == "int-quantized" or quant_format == "naive-quantized":
+                elif quant_format == "float-quantized" or quant_format == "int-quantized" or quant_format == "naive-quantized":
+                    weight_config = tuple(groups.values())[0]["weights"]
                     block_size = weight_config.get("block_structure", None)
                     strategy = weight_config.get("strategy")
                     assert strategy == "channel" or strategy == "block"
@@ -526,6 +544,7 @@ class ModelBase:
                             if self._fp8_as_q8 and is_fp8:
                                 self._fp8_dequantized.add(weight_name)
                 elif quant_format == "pack-quantized":
+                    weight_config = tuple(groups.values())[0]["weights"]
                     assert weight_config.get("strategy") == "group"
                     assert weight_config.get("type", "int") == "int"
                     num_bits = weight_config.get("num_bits")
@@ -547,32 +566,10 @@ class ModelBase:
                             tensors_to_remove += [base_name + n for n in ("_packed", "_shape", "_scale")]
                             if (base_name + "_zero_point") in self.model_tensors:
                                 tensors_to_remove.append(base_name + "_zero_point")
-                elif nvfp4_compressed_tensors:
-                    # Don't error from compressed-tensors, we'll handle them in _generate_nvfp4_tensors
-                    pass
                 else:
                     raise NotImplementedError(f"Quant format {quant_format!r} for method {quant_method!r} is not yet supported")
             elif quant_method == "modelopt":
-                # Mixed-precision ModelOpt models: NVFP4 tensors are handled by
-                # _generate_nvfp4_tensors; FP8 tensors have 1D weight_scale and
-                # are dequantized here. k/v scale tensors are unused.
-                for name in self.model_tensors.keys():
-                    if name.endswith(".weight_scale"):
-                        weight_name = name.removesuffix("_scale")
-                        if weight_name not in self.model_tensors:
-                            tensors_to_remove.append(name)
-                            continue
-                        w = self.model_tensors[weight_name]
-                        s = self.model_tensors[name]
-                        is_fp8_weight = False
-                        if self._fp8_as_q8:
-                            is_fp8_weight = w().dtype in (torch.float8_e4m3fn, torch.float8_e5m2)
-                        self.model_tensors[weight_name] = lambda w=w, s=s: dequant_simple(w(), s(), None)
-                        tensors_to_remove.append(name)
-                        if is_fp8_weight:
-                            self._fp8_dequantized.add(weight_name)
-                    if name.endswith((".input_scale", ".k_scale", ".v_scale")):
-                        tensors_to_remove.append(name)
+                dequant_fp8()
             elif quant_method is not None:
                 raise NotImplementedError(f"Quant method is not yet supported: {quant_method!r}")
 
@@ -663,6 +660,183 @@ class ModelBase:
                 self._fusable_qkv_weight_layers.add(bid)
                 if bias_types:
                     self._fusable_qkv_bias_layers.add(bid)
+
+    def _tag_prec_a4(self, hf_name: str, gguf_name: str) -> None:
+        # W4A16_NVFP4 should not use 4-bit activations
+        name = hf_name.removesuffix(".weight").removesuffix(".bias")
+        algo = self._nvfp4_global_algo
+        while name:
+            if name in self._nvfp4_layer_algo:
+                algo = self._nvfp4_layer_algo[name]
+                break
+            name = name.rpartition(".")[0]
+        if algo == "W4A16_NVFP4":
+            self._prec_a4[gguf_name] = False
+
+    def hadamard_folded_names(self) -> set[str]:
+        """Source-tensor names folded under a Hadamard manifest, or empty."""
+        cached = getattr(self, "_hadamard_folded_names", None)
+        if cached is not None:
+            return cached
+        names: set[str] = set()
+        manifest_path = self.dir_model / "hadamard_packing.json"
+        if manifest_path.is_file():
+            with manifest_path.open("r", encoding="utf-8") as f:
+                for record in json.load(f).get("tensors", []):
+                    if isinstance(record, dict) and isinstance(record.get("name"), str):
+                        names.add(record["name"])
+        self._hadamard_folded_names = names
+        return names
+
+    def add_hadamard_metadata(self) -> None:
+        """Transfer a packed-checkpoint transform contract into GGUF metadata."""
+        manifest_path = self.dir_model / "hadamard_packing.json"
+        if not manifest_path.is_file():
+            return
+
+        with manifest_path.open("r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        schema_version = manifest.get("schema_version")
+        if schema_version not in (1, 2, 3) or manifest.get("kind") != "hadamard-weight-fold":
+            raise ValueError(f"Unsupported Hadamard manifest: {manifest_path}")
+        if manifest.get("status") != "requires-matching-runtime":
+            raise ValueError(f"Unexpected Hadamard manifest status: {manifest.get('status')!r}")
+
+        transform = manifest.get("transform")
+        if not isinstance(transform, dict):
+            raise ValueError("Hadamard manifest is missing transform metadata")
+        block_size = transform.get("block_size")
+        if not isinstance(block_size, int) or block_size <= 0 or block_size & (block_size - 1):
+            raise ValueError(f"Invalid Hadamard block size: {block_size!r}")
+        if transform.get("name") != "normalized-signed-sylvester-walsh-hadamard":
+            raise ValueError(f"Unsupported Hadamard transform: {transform.get('name')!r}")
+        sign_mode = transform.get("sign_mode")
+        if sign_mode not in ("identity", "explicit"):
+            raise ValueError(f"Unsupported Hadamard sign mode: {sign_mode!r}")
+        sign_widths: list[int] = []
+        sign_values: list[int] = []
+        if sign_mode == "explicit":
+            signs = manifest.get("signs")
+            if not isinstance(signs, dict) or not signs:
+                raise ValueError("explicit sign mode requires a signs table")
+            for width_str, vec in sorted(signs.items(), key=lambda kv: int(kv[0])):
+                width = int(width_str)
+                # same width rule as the runtime, so a manifest that converts also loads
+                if width <= 0 or width % block_size != 0:
+                    raise ValueError(
+                        f"sign width {width} must be positive and a multiple of block size {block_size}"
+                    )
+                if len(vec) != width or any(v not in (-1, 1) for v in vec):
+                    raise ValueError(f"invalid sign vector for width {width}")
+                sign_widths.append(width)
+                sign_values.extend(int(v) for v in vec)
+
+        tensor_records = manifest.get("tensors")
+        if not isinstance(tensor_records, list) or not tensor_records:
+            raise ValueError("Hadamard manifest has no folded tensors")
+
+        # only build_lora_mm/build_lora_mm_id apply the transform: refuse archs and tensor kinds that can skip them
+        _HADAMARD_ARCHS = {
+            gguf.MODEL_ARCH.LLAMA,
+            gguf.MODEL_ARCH.QWEN3,
+            gguf.MODEL_ARCH.QWEN3MOE,
+            gguf.MODEL_ARCH.QWEN35,
+            gguf.MODEL_ARCH.QWEN35MOE,
+            gguf.MODEL_ARCH.QWEN3NEXT,
+        }
+        if self.model_arch not in _HADAMARD_ARCHS:
+            raise ValueError(
+                f"Hadamard folding is not verified for arch {self.model_arch.name}; "
+                "the runtime would load the GGUF without applying the activation transform"
+            )
+        _HADAMARD_KINDS = re.compile(
+            r"output\.weight|"
+            r"blk\.\d+\.("
+            r"attn_q|attn_k|attn_v|attn_qkv|attn_gate|attn_output"
+            r"|ffn_gate|ffn_up|ffn_down"
+            r"|ffn_gate_exps|ffn_up_exps|ffn_down_exps|ffn_gate_up_exps"
+            r"|ffn_gate_shexp|ffn_up_shexp|ffn_down_shexp"
+            r"|ssm_out"
+            r")\.weight"
+        )
+        weight_names: list[str] = []
+        inverse_weight_names: list[str] = []
+        for record in tensor_records:
+            if not isinstance(record, dict) or not isinstance(record.get("name"), str):
+                raise ValueError("Hadamard manifest has an invalid tensor record")
+            if record.get("axis") != -1:
+                raise ValueError(f"Unsupported Hadamard tensor axis for {record['name']!r}")
+            role = record.get("role", "fold-before-matmul")
+            if role not in ("fold-before-matmul", "inverse-after-lookup"):
+                raise ValueError(f"Unsupported Hadamard tensor role for {record['name']!r}: {role!r}")
+            filtered = self.filter_tensors((record["name"], lambda: torch.empty(0)))
+            if filtered is None:
+                raise ValueError(f"Hadamard tensor is filtered out: {record['name']!r}")
+            mapped = self.map_tensor_name(filtered[0])
+            if role == "inverse-after-lookup":
+                # the runtime applies the inverse only after the token-embedding lookup, other latent tables stay rotated
+                if mapped != "token_embd.weight":
+                    raise ValueError(
+                        f"Hadamard tensor {record['name']!r} maps to {mapped!r}, which is not a "
+                        "verified inverse-after-lookup table"
+                    )
+                inverse_weight_names.append(mapped)
+            else:
+                if not _HADAMARD_KINDS.fullmatch(mapped):
+                    raise ValueError(
+                        f"Hadamard tensor {record['name']!r} maps to {mapped!r}, which is not on a "
+                        "verified Hadamard-aware matmul path"
+                    )
+                weight_names.append(mapped)
+
+        # --fuse-qkv writes one attn_qkv per layer, so Q, K and V must all be folded and get one name
+        for bid in sorted(self._fusable_qkv_weight_layers):
+            qkv = [
+                self.format_tensor_name(t, bid)
+                for t in (gguf.MODEL_TENSOR.ATTN_Q, gguf.MODEL_TENSOR.ATTN_K, gguf.MODEL_TENSOR.ATTN_V)
+            ]
+            n_folded = sum(name in weight_names for name in qkv)
+            if n_folded == 0:
+                continue
+            if n_folded != len(qkv):
+                raise ValueError(f"--fuse-qkv needs all of Q, K and V folded in layer {bid}, or none of them")
+            weight_names = [name for name in weight_names if name not in qkv]
+            weight_names.append(self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_QKV, bid))
+
+        tied_output = manifest.get("tied_output", False)
+        if not isinstance(tied_output, bool) or (schema_version == 3) != tied_output:
+            raise ValueError("Hadamard schema 3 requires tied_output=true; older schemas forbid it")
+        if tied_output:
+            if inverse_weight_names != ["token_embd.weight"]:
+                raise ValueError("Tied Hadamard output requires one latent token embedding")
+            if not self.hparams.get("tie_word_embeddings", False):
+                raise ValueError("Tied Hadamard output requires tie_word_embeddings=true")
+            if "output.weight" in weight_names or any(
+                self.tensor_map.get_name(name, try_suffixes=(".weight", ".bias")) == "output.weight"
+                for name in self.model_tensors
+            ):
+                raise ValueError("Tied Hadamard output must not carry a separate output head")
+            self.gguf_writer.add_prism_hadamard_tied_output(True)
+        elif "token_embd.weight" in inverse_weight_names and self.hparams.get("tie_word_embeddings", False):
+            raise ValueError("A tied latent embedding requires Hadamard schema 3 and tied_output=true")
+
+        self.gguf_writer.add_prism_hadamard_version(2 if tied_output else 1)
+        self.gguf_writer.add_prism_hadamard_block_size(block_size)
+        self.gguf_writer.add_prism_hadamard_transform("normalized-sylvester-walsh-hadamard")
+        self.gguf_writer.add_prism_hadamard_axis("input-last-dimension")
+        self.gguf_writer.add_prism_hadamard_sign_mode(sign_mode)
+        self.gguf_writer.add_prism_hadamard_weight_names(weight_names)
+        if sign_mode == "explicit":
+            self.gguf_writer.add_prism_hadamard_sign_widths(sign_widths)
+            self.gguf_writer.add_prism_hadamard_sign_values(sign_values)
+        if inverse_weight_names:
+            self.gguf_writer.add_prism_hadamard_inverse_weight_names(inverse_weight_names)
+        if getattr(self, "_hadamard_gdn_v_grouped", False):
+            self.gguf_writer.add_prism_hadamard_gdn_v_grouped(True)
+            logger.info("GGUF Hadamard: linear-attention out_proj kept in grouped V order")
+        logger.info("GGUF Hadamard contract: H%d, sign_mode=%s, %d folded weight(s), %d inverse-lookup",
+                    block_size, sign_mode, len(weight_names), len(inverse_weight_names))
 
     def set_gguf_parameters(self):
         raise NotImplementedError("set_gguf_parameters() must be implemented in subclasses")
@@ -776,6 +950,48 @@ class ModelBase:
         raw = torch.cat((s.unsqueeze(-1), qs.to(torch.uint8)), dim=-1)
         return raw.reshape(rows, n_blocks * 17).cpu().numpy()
 
+    def _mxfp4_expert_tensor(self, loaders: list[tuple[Callable[[], Tensor], Callable[[], Tensor]]]):
+        """
+        One stacked [n_expert, rows, cols] MXFP4 tensor, built lazily.
+
+        gguf_writer holds every added tensor until the final write, so building
+        this eagerly (like the DeepSeek-V4 path does) keeps every expert in
+        memory at once. lazy means only the tensor being written is resident.
+        """
+        # meta shapes, so this does not read any weights
+        rows, packed_cols = loaders[0][0]().shape
+        n_blocks = (packed_cols * 2) // 32
+        byte_shape = (len(loaders), rows, n_blocks * 17)
+
+        def load(fns: list[tuple[Callable[[], Tensor], Callable[[], Tensor]]]) -> np.ndarray:
+            out = np.empty(byte_shape, dtype=np.uint8)
+            for eid, (packed_fn, scale_fn) in enumerate(fns):
+                out[eid] = self.repack_mxfp4_blocks(
+                    LazyTorchTensor.to_eager(packed_fn()),
+                    LazyTorchTensor.to_eager(scale_fn()),
+                )
+            return out
+
+        # loaders goes through args, not the closure, so that `func` matches
+        # LazyBase's single-argument shape
+        return gguf.LazyNumpyTensor(
+            meta=gguf.LazyNumpyTensor.meta_with_dtype_and_shape(np.uint8, byte_shape),
+            args=(loaders,),
+            func=load,
+        )
+
+    @staticmethod
+    def _is_nvfp4_compressed_tensors(quant_method, quant_format, groups) -> bool:
+        # Some models use per-tensor quant_algo (e.g. "MIXED_PRECISION" with
+        # per-layer NVFP4/FP8) instead of a single global "NVFP4" value.
+        if quant_method != "compressed-tensors":
+            return False
+        if quant_format == "nvfp4-pack-quantized":
+            return True
+        if quant_format != "mixed-precision" or not groups:
+            return False
+        return any(g.get("format") == "nvfp4-pack-quantized" for g in groups.values() if isinstance(g, dict))
+
     @staticmethod
     def _nvfp4_pack(weight: Tensor, scale: Tensor) -> tuple[np.ndarray, list[int]]:
         """Repack NVFP4 ModelOpt tensors into ggml super-block layout.
@@ -807,6 +1023,7 @@ class ModelBase:
         raw, shape = self._nvfp4_pack(weight, scale)
         logger.info(f"Repacked {new_name} with shape {shape} and quantization NVFP4")
         self.gguf_writer.add_tensor(new_name, raw, raw_dtype=gguf.GGMLQuantizationType.NVFP4)
+        self._tag_prec_a4(name, new_name)
 
         self._write_scale_tensor(new_name.replace(".weight", ".scale"), scale2)
         self._write_scale_tensor(new_name.replace(".weight", ".input_scale"), input_scale)
@@ -832,8 +1049,8 @@ class ModelBase:
             weight = LazyTorchTensor.to_eager(self.model_tensors[name]())
             scale = LazyTorchTensor.to_eager(self.model_tensors[scale_name]())
 
-            # Skip non-NVFP4 tensors (e.g. FP8 with per-channel 1D scales)
-            if scale.ndim < 2:
+            # Skip non-NVFP4 tensors(e.g. 1D scale, or float8 weight)
+            if scale.ndim < 2 or weight.dtype in (torch.float8_e4m3fn, torch.float8_e5m2):
                 continue
 
             scale2 = LazyTorchTensor.to_eager(self.model_tensors.get(scale2_name, lambda: torch.tensor(1.0))())
@@ -899,6 +1116,7 @@ class ModelBase:
         new_name = self.map_tensor_name(merged_name)
         logger.info(f"Repacked {new_name} with shape [{len(experts)}, {shape[0]}, {shape[1]}] and quantization NVFP4")
         self.gguf_writer.add_tensor(new_name, merged, raw_dtype=gguf.GGMLQuantizationType.NVFP4)
+        self._tag_prec_a4(merged_name, new_name)
 
         scales.sort(key=lambda x: x[0])
         self._write_scales_tensor(new_name.replace(".weight", ".scale"), [s[1] for s in scales])
@@ -933,14 +1151,10 @@ class ModelBase:
                 quant_groups = quant_config.get("config_groups", quant_groups) or {}
                 quant_layers = quant_config.get("quantized_layers", quant_layers) or {}
 
-        # Some models use per-tensor quant_algo (e.g. "MIXED_PRECISION" with
-        # per-layer NVFP4/FP8) instead of a single global "NVFP4" value.
-        nvfp4_compressed_tensors = quant_method == "compressed-tensors" and (
-            quant_format == "nvfp4-pack-quantized"
-            or quant_format == "mixed-precision"
-            and bool(quant_groups)
-            and all(g.get("format") == "nvfp4-pack-quantized" for g in quant_groups.values() if isinstance(g, dict))
-        )
+        nvfp4_compressed_tensors = self._is_nvfp4_compressed_tensors(quant_method, quant_format, quant_groups)
+
+        self._nvfp4_global_algo = quant_algo
+
         if quant_algo != "NVFP4":
             if nvfp4_compressed_tensors:
                 quant_algo = "NVFP4"
@@ -949,6 +1163,22 @@ class ModelBase:
 
         self._is_nvfp4 = quant_algo in ("NVFP4", "W4A16_NVFP4")
         self._is_mxfp4 = quant_method == "mxfp4"
+
+        # Per-tensor NVFP4 precision.
+        self._nvfp4_layer_algo = {}
+        if quant_layers:
+            # store all possible module paths and assert if a quantized layer is not in the model
+            modules: set[str] = set()
+            for name in self.model_tensors:
+                while name := name.rpartition(".")[0]:
+                    modules.add(name)
+
+            for layer_name, entry in quant_layers.items():
+                if not isinstance(entry, dict):
+                    continue
+                if titem := self.filter_tensors((layer_name, lambda: torch.empty(0))):
+                    assert titem[0] in modules, f"quantized_layers entry {layer_name!r} is not in the model tensors"
+                    self._nvfp4_layer_algo[titem[0]] = entry.get("quant_algo")
 
         # NVFP4 weights are repacked and written directly to gguf_writer.
         # This must run before dequant_model so NVFP4 tensors are removed
@@ -1155,6 +1385,14 @@ class ModelBase:
         logger.info("Set model quantization version")
         self.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
+        self.add_hadamard_metadata()
+
+        if self._prec_a4:
+            names = sorted(self._prec_a4.keys())
+            values = [self._prec_a4[n] for n in names]
+            logger.info(f"Set prec_a4 metadata for {len(names)} tensor(s)")
+            self.gguf_writer.add_tensor_extra_prec_a4(names, values)
+
     def write_vocab(self):
         raise NotImplementedError("write_vocab() must be implemented in subclasses")
 
@@ -1196,10 +1434,16 @@ class ModelBase:
         return inner
 
     @staticmethod
-    def load_hparams(dir_model: Path, is_mistral_format: bool):
+    def load_hparams(dir_model: Path, is_mistral_format: bool, guess: bool = True):
         if is_mistral_format:
             with open(dir_model / "params.json", "r", encoding="utf-8") as f:
                 config = json.load(f)
+            return config
+
+        # checkpoints with a non-HF layout are matched by their own loader
+        # models with a HF layout can also register a hparams loader to switch to a custom class
+        config = ModelBase.load_hparams_guess(dir_model) if guess and dir_model.is_dir() else None
+        if config is not None:
             return config
 
         try:
@@ -1208,10 +1452,6 @@ class ModelBase:
             config = AutoConfig.from_pretrained(dir_model, trust_remote_code=False).to_dict()
         except Exception as e:
             logger.warning(f"Failed to load model config from {dir_model}: {e}")
-            if not (dir_model / "config.json").is_file():
-                config = ModelBase.load_hparams_guess(dir_model)
-                if config is not None:
-                    return config
             logger.warning("Trying to load config.json instead")
             with open(dir_model / "config.json", "r", encoding="utf-8") as f:
                 config = json.load(f)
@@ -1316,14 +1556,17 @@ class TextModel(ModelBase):
         name, gen = item
 
         # Skip multimodal tensors
-        if name.startswith(("mlp", "vit.", "vpm.", "siglip2.", "conformer.", "merger.", "resampler.", "sound_encoder.", "sound_projection.", "speech_embeddings.")) \
+        # strip the "model." wrapper so the prefixes below match (name is not returned)
+        if name.startswith("model."):
+            name = name[len("model."):]
+        if name.startswith(("mlp", "vit.", "vpm.", "siglip2.", "conformer.", "connector.", "merger.", "resampler.", "sound_encoder.", "sound_projection.", "speech_embeddings.")) \
                 or "visual." in name or "vision." in name or "audio." in name or "talker." in name \
                 or "vision_" in name or "audio_" in name \
                 or "token2wav." in name or "code2wav." in name \
                 or "projector." in name or "pre_mm_projector_norm" in name \
                 or "image_newline" in name or "view_seperator" in name \
                 or "patch_embed" in name or "patch_embedding" in name \
-                or "patch_merger." in name or "patch_merge_mlp." in name or "model.connector." in name:
+                or "patch_merger." in name or "patch_merge_mlp." in name:
             return None
 
         return super().filter_tensors(item)
@@ -1400,6 +1643,8 @@ class TextModel(ModelBase):
                 self.gguf_writer.add_rope_scaling_type(rope_gguf_type)
                 self.gguf_writer.add_rope_scaling_factor(rope_factor)
                 self.gguf_writer.add_rope_scaling_orig_ctx_len(rope_params["original_max_position_embeddings"])
+                if (truncate := rope_params.get("truncate")) is not None:
+                    self.gguf_writer.add_rope_scaling_yarn_truncate(truncate)
                 if (yarn_ext_factor := rope_params.get("extrapolation_factor")) is not None:
                     self.gguf_writer.add_rope_scaling_yarn_ext_factor(yarn_ext_factor)
                 if (yarn_attn_factor := rope_params.get("attention_factor", rope_params.get("attn_factor"))) is not None:
@@ -1455,7 +1700,7 @@ class TextModel(ModelBase):
             self.gguf_writer.add_expert_group_used_count(n_group_used)
             logger.info(f"gguf: expert groups used count = {n_group_used}")
 
-        if (score_func := self.find_hparam(["score_function", "scoring_func", "score_func", "moe_router_activation", "moe_router_activation_func", "expert_selection_fn"], optional=True)) is not None:
+        if (score_func := self.find_hparam(["score_function", "scoring_func", "score_func", "moe_router_activation", "moe_router_activation_func", "expert_selection_fn", "router_score_func"], optional=True)) is not None:
             if score_func == "sigmoid":
                 self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SIGMOID)
             elif score_func == "softmax":
@@ -1639,6 +1884,9 @@ class TextModel(ModelBase):
         if chkhsh == "0a766d034107bc736a3f2dc4968fd62e54a3570f1454443e0c5a4cc6bd7941ed":
             # ref: https://huggingface.co/XHToken/Spark-X2.5-1.7B
             res = "spark2_5"
+        if chkhsh == "1f9825a388f700a6b591722f17d470cbbcf10973ece35d2fd14239a14110ae1a":
+            # ref: https://huggingface.co/IFM/K2-Horizon-0.9B
+            res = "k2-horizon"
         if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
             # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
             res = "llama-bpe"
@@ -1861,6 +2109,15 @@ class TextModel(ModelBase):
         if chkhsh == "972da7b59cec44d1f0a490a86c96df53859e486e481563e5dddac155013d87ac":
             # ref: https://huggingface.co/poolside/Laguna-XS.2
             res = "laguna"
+        if chkhsh == "653660222fb704f61cbf2b618a8ae6502b7f8b20c980f9a5de07ed78e13319cd":
+            # ref: https://huggingface.co/ufakai/ufakzeka-1
+            res = "ufakzeka"
+        if chkhsh == "4b05e02dad1c5ae07d266fd3342ddb644c6f6be058d728bc0a33af31a1d6ee66":
+            # ref: https://huggingface.co/jhu-clsp/mmBERT-base
+            res = "mmbert"
+        if chkhsh == "a9af07a84191f55098b248ae6f3dfe9e32d3190bebe8eafd91c1ddec9bc3449f":
+            # ref: https://huggingface.co/IFM/K2-Horizon-36B
+            res = "k2-horizon"
 
         if res is None:
             logger.warning("\n")
@@ -2250,6 +2507,26 @@ class TextModel(ModelBase):
             else:
                 raise NotImplementedError("Only MEAN, CLS, and LAST pooling types supported")
             self.gguf_writer.add_pooling_type(pooling_type)
+        else:
+            embedding_config_path = self.dir_model / "embedding_config.json"
+            if embedding_config_path.is_file():
+                with open(embedding_config_path, encoding="utf-8") as f:
+                    embedding_config = json.load(f)
+                pooling = embedding_config.get("pooling")
+                if pooling == "last_token":
+                    self.gguf_writer.add_pooling_type(gguf.PoolingType.LAST)
+                elif pooling is not None:
+                    raise NotImplementedError(f"unsupported embedding_config.json pooling {pooling!r}")
+
+        # pooling before a classification head (e.g. ModernBertForSequenceClassification)
+        if (classifier_pooling := self.hparams.get("classifier_pooling")) is not None:
+            if classifier_pooling not in ("cls", "mean"):
+                raise NotImplementedError(f"Unsupported classifier_pooling: {classifier_pooling}")
+            self.gguf_writer.add_classifier_pooling_type(mode_mapping[classifier_pooling])
+        if (classifier_activation := self.hparams.get("classifier_activation")) is not None:
+            if classifier_activation not in ("gelu", "silu", "tanh"):
+                raise NotImplementedError(f"Unsupported classifier_activation: {classifier_activation}")
+            self.gguf_writer.add_classifier_activation(classifier_activation)
 
     def _set_vocab_glmedge(self):
         from transformers import AutoTokenizer
@@ -2407,7 +2684,11 @@ class TextModel(ModelBase):
         if template is not None:
             self.gguf_writer.add_chat_template(template)
 
-    def _set_vocab_plamo(self):
+    def _set_vocab_plamo(
+        self,
+        eot_token: str,
+        normal_tokens: Iterable[str] = (),
+    ):
         # PLaMo models use a custom tokenizer with a .jsonl file
         tokenizer_jsonl_path = self.dir_model / "tokenizer.jsonl"
         tokenizer_config_path = self.dir_model / "tokenizer_config.json"
@@ -2419,31 +2700,42 @@ class TextModel(ModelBase):
         with open(tokenizer_config_path, "r", encoding="utf-8") as f:
             tokenizer_config = json.load(f)
 
+        tokenizer_class = tokenizer_config.get("tokenizer_class")
+        if tokenizer_class == "Plamo2Tokenizer":
+            tokenizer_model = "plamo2"
+        elif tokenizer_class == "Plamo3Tokenizer":
+            tokenizer_model = "plamo3"
+        else:
+            raise ValueError(f"Unsupported PLaMo tokenizer class: {tokenizer_class}")
+
         # Load tokens from JSONL file (actually a list format)
         tokens = []
         scores = []
         toktypes = []
+        normal_tokens = set(normal_tokens)
 
         with open(tokenizer_jsonl_path, "r", encoding="utf-8") as f:
             for line_num, line in enumerate(f):
                 if line.strip():
                     token_data = json.loads(line)
                     # Format: [token, score, type, ?, ?, ?, ?]
-                    token = token_data[0].encode("utf-8")
+                    token_str = token_data[0]
+                    token = token_str.encode("utf-8")
                     score = float(token_data[1])
                     token_type_str = token_data[2] if len(token_data) > 2 else "NORMAL"
 
                     tokens.append(token)
                     scores.append(score)
 
-                    if token_type_str == "UNKNOWN":
+                    if token_str in normal_tokens:
+                        toktypes.append(gguf.TokenType.NORMAL)
+                    elif token_type_str == "UNKNOWN":
                         toktypes.append(gguf.TokenType.UNKNOWN)
                     elif token_type_str == "CONTROL":
                         toktypes.append(gguf.TokenType.CONTROL)
                     elif token_type_str == "BYTE":
                         toktypes.append(gguf.TokenType.BYTE)
                     else:
-                        token_str = token_data[0]
                         if token_str.startswith("<|plamo:") and token_str.endswith("|>"):
                             toktypes.append(gguf.TokenType.CONTROL)
                         else:
@@ -2458,7 +2750,7 @@ class TextModel(ModelBase):
                 scores.append(-1000.0)
                 toktypes.append(gguf.TokenType.UNUSED)
 
-        self.gguf_writer.add_tokenizer_model("plamo2")
+        self.gguf_writer.add_tokenizer_model(tokenizer_model)
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -2480,10 +2772,14 @@ class TextModel(ModelBase):
             token_id = tokens.index(tokenizer_config["unk_token"].encode("utf-8"))
             self.gguf_writer.add_unk_token_id(token_id)
 
-        # Add <|plamo:op|> as EOT to ensure appropriate end of generation
-        self.gguf_writer.add_eot_token_id(4)
+        self.gguf_writer.add_eot_token_id(tokens.index(eot_token.encode("utf-8")))
 
         self.gguf_writer.add_add_space_prefix(False)
+
+        if (add_bos := tokenizer_config.get("add_bos_token")) is not None:
+            self.gguf_writer.add_add_bos_token(add_bos)
+        if (add_eos := tokenizer_config.get("add_eos_token")) is not None:
+            self.gguf_writer.add_add_eos_token(add_eos)
 
 
 class MmprojModel(ModelBase):
@@ -2792,6 +3088,11 @@ else:
     # Older torch builds do not expose F8_E8M0. Keep the raw bytes so callers
     # that know the format can decode them explicitly.
     LazyTorchTensor._dtype_str_map["F8_E8M0"] = torch.uint8
+
+
+def jinja_str_or_json(name: str) -> str:
+    # jinja expression that renders a variable as-is if it is a string, as JSON otherwise
+    return "{{ " + name + " if " + name + " is string else " + name + " | tojson }}"
 
 
 def get_model_architecture(hparams: dict[str, Any], model_type: ModelType) -> str:

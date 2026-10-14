@@ -8,13 +8,7 @@ void llama_model_mellum::load_arch_hparams(llama_model_loader & ml) {
     if (hparams.n_swa > 0) {
         hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
 
-        uint32_t swa_period = 4;
-        const auto res = ml.get_key_or_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, swa_period, false);
-        if (res) {
-            hparams.set_swa_pattern(swa_period);
-        } else {
-            ml.get_key_or_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.is_swa_impl, hparams.n_layer());
-        }
+        load_swa_pattern(ml, 4);
 
         hparams.rope_freq_base_train_swa  = hparams.rope_freq_base_train;
         hparams.rope_freq_scale_train_swa = hparams.rope_freq_scale_train;
@@ -217,8 +211,6 @@ llama_model_mellum::graph<iswa>::graph(const llama_model & model, const llm_grap
 
     cb(cur, "result_output", -1);
     res->t_logits = cur;
-
-    ggml_build_forward_expand(gf, cur);
 }
 
 template struct llama_model_mellum::graph<false>;
