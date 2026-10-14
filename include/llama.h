@@ -1600,9 +1600,6 @@ extern "C" {
                                float   decay,
                             uint32_t   seed);
 
-    // Finite, nonzero biases first center logits by subtracting their maximum.
-    // This changes the input scale for later samplers such as repetition penalties.
-    // Empty, zero-only, and infinite-mask-only biases keep the original scale.
     LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
                              int32_t   n_vocab,
                              int32_t   n_logit_bias,
