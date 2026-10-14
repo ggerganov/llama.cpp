@@ -120,7 +120,7 @@
 			<Button
 				aria-label="Back to models"
 				class="absolute top-1/2 left-1 h-7 w-7 -translate-y-1/2 transition-[opacity,visibility] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] {view ===
-				'manage'
+				ModelsDialogView.MANAGE
 					? 'invisible opacity-0'
 					: 'visible opacity-100'}"
 				onclick={() => (view = ModelsDialogView.MANAGE)}
@@ -132,7 +132,7 @@
 
 			<Dialog.Title
 				class="flex min-h-7 items-center gap-2 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] {view ===
-				'manage'
+				ModelsDialogView.MANAGE
 					? 'translate-x-0'
 					: 'translate-x-8'}"
 			>
@@ -140,7 +140,7 @@
 				<span class="grid h-5 w-5 shrink-0 place-items-center">
 					<MODEL_ICON
 						class="col-start-1 row-start-1 h-5 w-5 transition-opacity duration-150 {view ===
-						'manage'
+						ModelsDialogView.MANAGE
 							? 'opacity-100'
 							: 'opacity-0'}"
 					/>
