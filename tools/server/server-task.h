@@ -675,11 +675,7 @@ struct server_prompt_cache {
 
     server_prompt_cache_state * alloc(const server_prompt & prompt, size_t state_size_main, size_t state_size_drft);
 
-    // remove from the cache the state that is a better match for tokens_new than the given prompt, if any
-    std::list<server_prompt_cache_state> take_better(const server_prompt & prompt, const server_tokens & tokens_new);
-
-    // restore the state returned by take_better()
-    bool load(server_prompt & prompt, std::list<server_prompt_cache_state> & states_better, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot);
+    bool load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot);
 
     void update();
 };

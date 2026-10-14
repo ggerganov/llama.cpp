@@ -724,29 +724,3 @@ def test_completion_prompt_cache_shared_prefix(n_batch: int, is_restored: bool):
     res = server.make_request("POST", "/completion", data={"prompt": prompt_a})
     assert res.status_code == 200
     assert res.body["timings"]["prompt_n"] == (1 if is_restored else n_prompt_a - n_prefix)
-
-
-# validate that saving the current prompt does not evict the cached prompt
-# that the same request restores
-def test_completion_prompt_cache_keeps_restored_entry():
-    global server
-    server.n_slots = 1
-    server.n_ctx = 2048
-    server.n_predict = 4
-    server.cache_ram = 1 # MiB, fits one of the prompts below, but not both
-    server.start()
-
-    prompt_a = "agent A received this set of instructions, " * 44
-    prompt_b = "a different set of instructions is for agent B, " * 40
-
-    res = server.make_request("POST", "/completion", data={"prompt": prompt_a})
-    assert res.status_code == 200
-    assert res.body["timings"]["prompt_n"] > 1000
-
-    res = server.make_request("POST", "/completion", data={"prompt": prompt_b})
-    assert res.status_code == 200
-    assert res.body["timings"]["prompt_n"] > 1000
-
-    res = server.make_request("POST", "/completion", data={"prompt": prompt_a})
-    assert res.status_code == 200
-    assert res.body["timings"]["prompt_n"] == 1

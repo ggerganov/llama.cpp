@@ -1793,7 +1793,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
     return &states.back();
 }
 
-std::list<server_prompt_cache_state> server_prompt_cache::take_better(const server_prompt & prompt, const server_tokens & tokens_new) {
+bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot) {
     const int lcp_best = prompt.tokens.get_common_prefix(tokens_new);
 
     float f_keep_best = prompt.tokens.size() > 0 ? float(lcp_best) / prompt.tokens.size() : -1.0f; // empty slot: any cache entry wins
@@ -1825,20 +1825,8 @@ std::list<server_prompt_cache_state> server_prompt_cache::take_better(const serv
         }
     }
 
-    std::list<server_prompt_cache_state> res;
-
     if (it_best != states.end()) {
         SRV_TRC(" - found better prompt with f_keep = %.3f, f_sim = %.3f\n", f_keep_best, f_sim_best);
-
-        res.splice(res.end(), states, it_best);
-    }
-
-    return res;
-}
-
-bool server_prompt_cache::load(server_prompt & prompt, std::list<server_prompt_cache_state> & states_better, llama_context * ctx_tgt, llama_context * ctx_dft, int32_t id_slot) {
-    if (!states_better.empty()) {
-        auto it_best = states_better.begin();
 
         {
             auto & data = it_best->data.main;
@@ -1876,7 +1864,7 @@ bool server_prompt_cache::load(server_prompt & prompt, std::list<server_prompt_c
 
         prompt = std::move(it_best->prompt);
 
-        states_better.clear();
+        states.erase(it_best);
     }
 
     return true;

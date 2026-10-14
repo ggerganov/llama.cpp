@@ -331,8 +331,8 @@ struct server_slot {
         return true;
     }
 
-    bool prompt_load(server_prompt_cache & prompt_cache, std::list<server_prompt_cache_state> & states_better) {
-        bool res = prompt_cache.load(prompt, states_better, ctx_tgt, ctx_dft, id);
+    bool prompt_load(server_prompt_cache & prompt_cache, const server_tokens & tokens) {
+        bool res = prompt_cache.load(prompt, tokens, ctx_tgt, ctx_dft, id);
         if (!res) {
             SLT_WRN(*this, "%s", "failed to load prompt from cache\n");
         }
@@ -1786,12 +1786,9 @@ private:
 
                 const int64_t t_start = ggml_time_us();
 
-                // take the state to restore first, so that saving the current state does not evict it
-                auto states_better = prompt_cache->take_better(ret->prompt, task.tokens);
-
                 ret->prompt_save(*prompt_cache);
 
-                if (!ret->prompt_load(*prompt_cache, states_better)) {
+                if (!ret->prompt_load(*prompt_cache, task.tokens)) {
                     ret->prompt_clear();
                 }
 
