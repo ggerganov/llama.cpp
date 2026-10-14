@@ -2946,7 +2946,9 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
             ggml_metal_encoder_dispatch_threadgroups(enc, N_MM_NPART_AMAX, 1, 1, 256, 1, 1);
         }
 
-        ggml_metal_op_mul_mat_id_map0(ctx, op, bid_tpe, bid_ids);
+        {
+            ggml_metal_op_mul_mat_id_map0(ctx, op, bid_tpe, bid_ids);
+        }
 
         ggml_metal_op_concurrency_reset(ctx);
 
@@ -3004,7 +3006,9 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
         }
     } else if (kernel == GGML_METAL_MUL_MAT_ID_KERNEL_MMA &&
                ne02 <= ggml_metal_pipeline_max_theads_per_threadgroup(ggml_metal_library_get_pipeline_mul_mm_id_map0(lib, ne02, ne20))) {
-        ggml_metal_op_mul_mat_id_map0(ctx, op, bid_tpe, bid_ids);
+        {
+            ggml_metal_op_mul_mat_id_map0(ctx, op, bid_tpe, bid_ids);
+        }
 
         ggml_metal_op_concurrency_reset(ctx);
 
@@ -3031,7 +3035,11 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
         ggml_metal_encoder_set_buffer  (enc, bid_tpe,  4);
         ggml_metal_encoder_set_buffer  (enc, bid_ids,  5);
 
-        ggml_metal_encoder_set_threadgroup_memory_size(enc, pipeline.smem, 0);
+        const size_t smem = pipeline.smem;
+
+        GGML_ASSERT(smem <= props_dev->max_theadgroup_memory_size);
+
+        ggml_metal_encoder_set_threadgroup_memory_size(enc, smem, 0);
 
         // z goes over the entry tiles that map0 emits, at most max_tiles of them; the threadgroups past them return
         const int max_tiles = (int) ggml_metal_op_mul_mat_id_max_tiles(op);

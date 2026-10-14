@@ -156,10 +156,19 @@ bool ggml_metal_op_mul_mat_use_mma(const struct ggml_tensor * op) {
         src1->nb[0] == sizeof(float) && src1->nb[1] % 16 == 0 && src1->nb[2] % 16 == 0 && src1->nb[3] % 16 == 0;
 }
 
+// [TAG_METAL_MUL_MM_ID_NE20]
 // the expert counts per token that kernel_mul_mm_id_map0 is instantiated for
 static bool ggml_metal_mul_mm_id_map0_supported(int64_t ne20) {
     switch (ne20) {
-        case 1: case 2: case 4: case 5: case 6: case 8: case 10: case 16: case 22:
+        case 1:
+        case 2:
+        case 4:
+        case 5:
+        case 6:
+        case 8:
+        case 10:
+        case 16:
+        case 22:
             return true;
         default:
             return false;
