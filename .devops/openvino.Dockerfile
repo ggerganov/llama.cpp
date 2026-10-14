@@ -90,6 +90,7 @@ RUN bash -c "source ${OpenVINO_DIR}/setupvars.sh && \
     cmake -B build/ReleaseOV -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_OPENSSL=ON \
         -DGGML_NATIVE=OFF \
         -DGGML_BACKEND_DL=ON \
         -DGGML_CPU_ALL_VARIANTS=ON \
