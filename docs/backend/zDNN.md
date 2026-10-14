@@ -88,7 +88,7 @@ cmake -S . -G Ninja -B build \
 cmake --build build --config Release -j$(nproc)
 ```
 
-## 3. Run llama.cpp
+## 3. Run a model
 
 ```sh
 build/bin/llama-server -hf taronaeo/Granite-3.3-2B-Instruct-BE-GGUF:Q4_K_M -fa on
