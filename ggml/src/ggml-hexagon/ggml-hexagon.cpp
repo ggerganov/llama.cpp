@@ -333,13 +333,13 @@ static inline bool ggml_hexagon_is_repack_weight_tensor(const struct ggml_tensor
     if (!ggml_hexagon_is_repack_weight_type(t->type)) {
         return false;
     }
-    if (t->ne[0] < 32 || t->ne[1] <= 1) {
+    if (t->ne[0] < 32) {
         return false;
     }
     if (!ggml_is_quantized(t->type)) {
-        return (t->ne[0] % 32 == 0) && (t->ne[1] % 32 == 0);
+        return (t->ne[0] % 32 == 0) && (t->ne[1] % 32 == 0) && (t->ne[2] == 1) && (t->ne[3] == 1);
     }
-    return true;
+    return t->ne[3] == 1;
 }
 
 // Size of one repacked row in the DSP tiled layout. The Q3_K..Q6_K tiles store uncompressed scales/mins,
@@ -5880,6 +5880,9 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
 
     // Quantized and repacked HMX kernels only handle flat 2D matmul (or matmul_id wrapping flat 2D matmuls).
     const bool is_repack = ggml_hexagon_tensor_is_repacked(src0);
+    if (ggml_is_quantized((ggml_type) wtype) && !is_repack) {
+        return false;
+    }
     if (!is_matmul_id && is_batched && is_repack) {
         return false;
     }
@@ -5990,7 +5993,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     kparams->vtcm_dst_size     = 0;
 
     if (is_batched && !is_matmul_id) {
-        kparams->kernel_type = HTP_MM_KERNEL_HMX_F16_BATCHED;
+        kparams->kernel_type = HTP_MM_KERNEL_HMX_BATCHED;
     } else {
         kparams->kernel_type = HTP_MM_KERNEL_HMX_2D;
     }
@@ -6115,6 +6118,9 @@ static void ggml_hexagon_precompute_hvx_mm_params(
             kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
             return;
         }
+    } else if (is_matmul_id) {
+        kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
+        return;
     } else if (wtype == GGML_TYPE_F16) {
         // Flat F16 HVX
         struct htp_mm_hvx_vtcm_layout L;
@@ -7491,7 +7497,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q2_K:
-            if (!ggml_is_contiguous(src0) || ggml_is_permuted(src0)) {
+            if (!ggml_is_contiguous(src0) || ggml_is_permuted(src0) || ggml_is_view(src0)) {
                 return false;
             }
 
@@ -7586,7 +7592,7 @@ static bool ggml_hexagon_supported_mul_mat_id(const struct ggml_hexagon_session 
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q2_K:
-            if (!ggml_is_contiguous(src0) || ggml_is_permuted(src0)) {
+            if (!ggml_is_contiguous(src0) || ggml_is_permuted(src0) || ggml_is_view(src0)) {
                 return false;
             }
 

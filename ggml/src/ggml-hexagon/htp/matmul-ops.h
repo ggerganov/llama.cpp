@@ -74,7 +74,7 @@ enum htp_mm_kernel_type {
 
     // HMX paths
     HTP_MM_KERNEL_HMX_2D,
-    HTP_MM_KERNEL_HMX_F16_BATCHED,
+    HTP_MM_KERNEL_HMX_BATCHED,
 
     // HVX floating-point paths
     HTP_MM_KERNEL_HVX_F16_F16_VTCM,
@@ -410,7 +410,7 @@ static inline void htp_mm_hmx_vtcm_layout_build(
 ) {
     size_t off = 0;
 
-    if (kernel_type == HTP_MM_KERNEL_HMX_F16_BATCHED) {
+    if (kernel_type == HTP_MM_KERNEL_HMX_BATCHED) {
         const size_t vec_dot_size     = k * sizeof(uint16_t);
         const size_t act_head_stride   = mc * k;
         const size_t weight_area_size  = hex_align_up(nc * vec_dot_size, HTP_MM_HMX_TILE_SIZE);
@@ -633,7 +633,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
 
                 size_t dst_slice_per_thread = (dst_nrows > 0 && act_nrows == 1) ? htp_mm_round_up((dst_row_size + n_threads - 1) / n_threads, 128) : 0;
                 dst_sz = dst_slice_per_thread * n_threads;
-                size_t raw_row_size = hex_round_up(ne10 * sizeof(float), 128);
+                size_t raw_row_size = hex_round_up(ne10 * sizeof(float), QK_Q8_0_TILED * sizeof(float));
                 act_raw_sz = hex_round_up(raw_row_size * act_nrows, 128);
                 break;
             }
@@ -717,7 +717,7 @@ static inline bool htp_mm_hvx_solve_vtcm_params(
 
     size_t eff_row_size = row_size;
     if (kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW || kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
-        eff_row_size += hex_round_up(ne10 * sizeof(float), 128);
+        eff_row_size += hex_round_up(ne10 * sizeof(float), QK_Q8_0_TILED * sizeof(float));
     }
 
     uint32_t m_chunk = (uint32_t) (avail_act / eff_row_size);
@@ -765,7 +765,7 @@ static inline size_t htp_mm_hmx_get_batched_vtcm_size(
     int wtype, uint32_t k, size_t mc, size_t nc, uint32_t group_size, bool pipeline, uint32_t act_threads, size_t bias_size) {
     (void)pipeline;
     struct htp_mm_hmx_vtcm_layout L;
-    htp_mm_hmx_vtcm_layout_build(&L, HTP_MM_KERNEL_HMX_F16_BATCHED, wtype, k, mc, nc, group_size, false, act_threads, 0, bias_size);
+    htp_mm_hmx_vtcm_layout_build(&L, HTP_MM_KERNEL_HMX_BATCHED, wtype, k, mc, nc, group_size, false, act_threads, 0, bias_size);
     return L.total_bytes;
 }
 
