@@ -468,9 +468,13 @@ struct gguf_split_info {
     int count;
 };
 
+// the tag is the last `-` or `.` segment of the name; a name that has none, or
+// carries a stray `.gguf` before its split suffix (`Model.Q2_K.gguf-00001-of-00009`),
+// falls back to a quant recognized by its shape after a `_` (`model_q4_k_m`)
 static gguf_split_info get_gguf_split_info(const std::string & path) {
     static const std::regex re_split("^(.+)-([0-9]{5})-of-([0-9]{5})$", std::regex::icase);
     static const std::regex re_tag("[-.]([A-Z0-9_]+)$", std::regex::icase);
+    static const std::regex re_quant("(?:^|_)((?:I?Q|TQ)[0-9][A-Z0-9_]*|BF16|F16|F32|[MN]VFP4[A-Z0-9_]*)$", std::regex::icase);
     std::smatch m;
 
     std::string prefix = path;
@@ -487,8 +491,11 @@ static gguf_split_info get_gguf_split_info(const std::string & path) {
         prefix = m[1].str();
     }
 
+    std::string name = prefix;
+    string_remove_suffix(name, ".gguf");
+
     std::string tag;
-    if (std::regex_search(prefix, m, re_tag)) {
+    if (std::regex_search(name, m, re_tag) || std::regex_search(name, m, re_quant)) {
         tag = m[1].str();
         for (char & c : tag) {
             c = std::toupper((unsigned char)c);
@@ -528,15 +535,136 @@ static hf_cache::hf_files get_split_files(const hf_cache::hf_files & files,
     return result;
 }
 
-// pick the best sibling GGUF whose filename contains `keyword` (e.g. "mmproj" / "mtp"),
-// preferring deeper shared directory prefix with the model, then exact `tag` match,
-// then closest quantization to the tag when given, or to the model otherwise
+// sidecar tokens: the kind of file each one names, whether it also labels full
+// model weights (`Model-Imatrix.gguf` was quantized with an imatrix,
+// `granite-vision-3.3-2b.gguf` is a vision model), and whether it only counts in
+// lowercase: `mtp` names a draft head while `MTP` labels weights with embedded
+// heads (`Model-Q8D-MTP.gguf`)
+struct sidecar_token {
+    const char * token;
+    const char * kind;
+    bool         labels_weights;
+    bool         lowercase;
+};
+
+static const sidecar_token sidecar_tokens[] = {
+    { "mmproj",  "mmproj",  false, false },
+    { "vision",  "mmproj",  true,  false },
+    { "imatrix", "imatrix", true,  false },
+    { "mtp",     "mtp",     false, true  },
+    { "eagle3",  "eagle3",  false, false },
+    { "dflash",  "dflash",  false, false },
+    { "dspark",  "dspark",  false, false },
+};
+
+// the file name without directory and `.gguf`, in its original case
+static std::string file_stem(const std::string & path) {
+    std::string name = path.substr(path.rfind('/') + 1);
+    string_remove_suffix(name, ".gguf");
+    return name;
+}
+
+// lowercase alphanumerics only, so `Step3.7-flash` and `Step-3.7-Flash` compare equal
+static std::string alnum_of(const std::string & s) {
+    std::string out;
+    for (char c : s) {
+        if (std::isalnum((unsigned char) c)) {
+            out += (char) std::tolower((unsigned char) c);
+        }
+    }
+    return out;
+}
+
+// the leftmost sidecar token of a stem as a whole segment, in any case unless the
+// token is lowercase only, bounded by the stem ends or by `-`, `_` or `.`, so
+// `dspark-Model-Vision-Exp` is a dspark head of a vision model; `tok` is nullptr
+// when there is none
+struct token_match {
+    const sidecar_token * tok = nullptr;
+    size_t pos = std::string::npos;
+};
+
+static token_match find_token(const std::string & stem) {
+    auto is_sep = [](char c) { return c == '-' || c == '_' || c == '.'; };
+    std::string lower = stem;
+    for (char & c : lower) {
+        c = (char) std::tolower((unsigned char) c);
+    }
+    token_match best;
+    for (const auto & t : sidecar_tokens) {
+        const std::string & hay = t.lowercase ? stem : lower;
+        const size_t len = strlen(t.token);
+        for (size_t pos = hay.find(t.token); pos != std::string::npos && pos < best.pos; pos = hay.find(t.token, pos + 1)) {
+            const size_t end = pos + len;
+            if ((pos == 0 || is_sep(stem[pos - 1])) && (end == stem.size() || is_sep(stem[end]))) {
+                best = { &t, pos };
+                break;
+            }
+        }
+    }
+    return best;
+}
+
+// the sidecar kind of a GGUF file in its repo listing, empty for model weights;
+// a file carrying a token is a sidecar when the token leads the name, cannot label
+// weights, or leaves a name without any digit (weights carry a size or a quant),
+// or else when the listing holds token-free weights of the same family, found
+// anywhere in their name to cover vendor prefixes (`deepseek-ai.DeepSeek-V3.1`)
+static std::string sidecar_kind(const hf_cache::hf_files & files, const hf_cache::hf_file & file) {
+    const std::string stem = file_stem(file.path);
+    const auto m = find_token(stem);
+    if (!m.tok) {
+        return {};
+    }
+
+    std::string rest = stem;
+    rest.erase(m.pos, strlen(m.tok->token));
+    if (m.pos == 0 || !m.tok->labels_weights || rest.find_first_of("0123456789") == std::string::npos) {
+        return m.tok->kind;
+    }
+
+    auto split = get_gguf_split_info(rest + ".gguf");
+    std::string family = split.prefix;
+    if (!split.tag.empty() && family.size() > split.tag.size()) {
+        family.resize(family.size() - split.tag.size() - 1);
+    }
+    family = alnum_of(family);
+    if (family.empty()) {
+        return {};
+    }
+
+    for (const auto & f : files) {
+        if (f.repo_id != file.repo_id || !string_ends_with(f.path, ".gguf")) {
+            continue;
+        }
+        const std::string other = file_stem(f.path);
+        if (!find_token(other).tok && alnum_of(other).find(family) != std::string::npos) {
+            return m.tok->kind;
+        }
+    }
+    return {};
+}
+
+static bool gguf_file_is_model(const hf_cache::hf_files & files, const hf_cache::hf_file & file) {
+    return string_ends_with(file.path, ".gguf") && sidecar_kind(files, file).empty();
+}
+
+// a draft repo holds draft heads and no model weights: its heads are its models
+static bool gguf_file_is_draft(const hf_cache::hf_files & files, const hf_cache::hf_file & file) {
+    const std::string kind = string_ends_with(file.path, ".gguf") ? sidecar_kind(files, file) : "";
+    return kind == "mtp" || kind == "eagle3" || kind == "dflash" || kind == "dspark";
+}
+
+// pick the best sidecar of `kind` for `model`: sidecars in the model directory or
+// an ancestor first, deeper first, then anywhere else in the repo (`MTP/` next to
+// `BF16/`); then exact `tag` match, then closest quantization to the tag when
+// given, or to the model otherwise
 static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
                                            const std::string        & model,
-                                           const std::string        & keyword,
+                                           const std::string        & kind,
                                            const std::string        & tag = "") {
     hf_cache::hf_file best;
-    size_t best_depth = 0;
+    int best_depth = 0;
     int best_diff = 0;
     bool best_exact = false;
     bool found = false;
@@ -557,8 +685,7 @@ static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
     auto model_dir = model_parts.end() - 1;
 
     for (const auto & f : files) {
-        if (!string_ends_with(f.path, ".gguf") ||
-            f.path.find(keyword) == std::string::npos) {
+        if (!string_ends_with(f.path, ".gguf") || sidecar_kind(files, f) != kind) {
             continue;
         }
 
@@ -567,11 +694,8 @@ static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
 
         auto [_, dir] = std::mismatch(model_parts.begin(), model_dir,
                                       sib_parts.begin(), sib_dir);
-        if (dir != sib_dir) {
-            continue;
-        }
+        const int depth = dir == sib_dir ? (int) (dir - sib_parts.begin()) : -1;
 
-        size_t depth = dir - sib_parts.begin();
         auto bits = extract_quant_bits(f.path);
         auto diff = std::abs(bits - model_bits);
 
@@ -594,55 +718,21 @@ static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
     return best;
 }
 
-static hf_cache::hf_file find_best_mmproj(const hf_cache::hf_files & files,
-                                          const std::string        & model) {
-    return find_best_sibling(files, model, "mmproj");
-}
-
-static hf_cache::hf_file find_best_mtp(const hf_cache::hf_files & files,
-                                       const std::string        & model,
-                                       const std::string        & tag = "") {
-    return find_best_sibling(files, model, "mtp-", tag);
-}
-
-static hf_cache::hf_file find_best_eagle3(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "eagle3-", tag);
-}
-
-static hf_cache::hf_file find_best_dflash(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dflash-", tag);
-}
-
-static hf_cache::hf_file find_best_dspark(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dspark-", tag);
-}
-
-static bool gguf_filename_is_model(const std::string & filepath) {
-    if (!string_ends_with(filepath, ".gguf")) {
-        return false;
-    }
-
-    std::string filename = filepath;
-    if (auto pos = filename.rfind('/'); pos != std::string::npos) {
-        filename = filename.substr(pos + 1);
-    }
-
-    return filename.find("mmproj")  == std::string::npos &&
-           filename.find("imatrix") == std::string::npos &&
-           filename.find("mtp-")    == std::string::npos &&
-           filename.find("eagle3-") == std::string::npos &&
-           filename.find("dflash-") == std::string::npos &&
-           filename.find("dspark-") == std::string::npos;
-}
-
+// the model matching `tag`, or with no tag the default quants then the first model;
+// in a draft repo the draft heads stand for the models
 static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
                                          const std::string        & tag) {
+    bool draft_repo = true;
+    for (const auto & f : files) {
+        if (gguf_file_is_model(files, f)) {
+            draft_repo = false;
+            break;
+        }
+    }
+    auto is_candidate = [&](const hf_cache::hf_file & f) {
+        return draft_repo ? gguf_file_is_draft(files, f) : gguf_file_is_model(files, f);
+    };
+
     std::vector<std::string> tags;
 
     if (!tag.empty()) {
@@ -654,8 +744,7 @@ static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
     for (const auto & t : tags) {
         std::regex pattern(t + "[.-]", std::regex::icase);
         for (const auto & f : files) {
-            if (gguf_filename_is_model(f.path) &&
-                std::regex_search(f.path, pattern)) {
+            if (is_candidate(f) && std::regex_search(f.path, pattern)) {
                 auto split = get_gguf_split_info(f.path);
                 if (split.count > 1 && split.index != 1) {
                     continue;
@@ -668,7 +757,7 @@ static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
     // fallback to first available model only if tag is empty
     if (tag.empty()) {
         for (const auto & f : files) {
-            if (gguf_filename_is_model(f.path)) {
+            if (is_candidate(f)) {
                 auto split = get_gguf_split_info(f.path);
                 if (split.count > 1 && split.index != 1) {
                     continue;
@@ -743,20 +832,25 @@ common_download_hf_plan common_download_get_hf_plan(const common_params_model & 
         plan.model_files = get_split_files(all, primary);
     }
 
+    // a draft head as the primary comes from a draft repo, it takes no sidecars
+    if (!primary.path.empty() && !gguf_file_is_model(all, primary)) {
+        return plan;
+    }
+
     if (opts.download_mmproj && !primary.path.empty()) {
-        plan.mmproj = find_best_mmproj(all, primary.path);
+        plan.mmproj = find_best_sibling(all, primary.path, "mmproj");
     }
     if (opts.download_mtp) {
-        plan.mtp = find_best_mtp(all, primary.path, tag);
+        plan.mtp = find_best_sibling(all, primary.path, "mtp", tag);
     }
     if (opts.download_dflash) {
-        plan.dflash = find_best_dflash(all, primary.path, tag);
+        plan.dflash = find_best_sibling(all, primary.path, "dflash", tag);
     }
     if (opts.download_eagle3) {
-        plan.eagle3 = find_best_eagle3(all, primary.path, tag);
+        plan.eagle3 = find_best_sibling(all, primary.path, "eagle3", tag);
     }
     if (opts.download_dspark) {
-        plan.dspark = find_best_dspark(all, primary.path, tag);
+        plan.dspark = find_best_sibling(all, primary.path, "dspark", tag);
     }
 
     if (primary.path.empty() &&
@@ -932,14 +1026,10 @@ std::vector<common_cached_model_info> common_list_cached_models() {
 
     auto files = hf_cache::get_cached_files();
 
+    // only model weights are listed, sidecars and draft heads never load as a model
     for (const auto & f : files) {
         auto split = get_gguf_split_info(f.path);
-        if (split.index != 1 || split.tag.empty() ||
-            split.prefix.find("mmproj")  != std::string::npos ||
-            split.prefix.find("mtp-")    != std::string::npos ||
-            split.prefix.find("eagle3-") != std::string::npos ||
-            split.prefix.find("dflash-") != std::string::npos ||
-            split.prefix.find("dspark-") != std::string::npos) {
+        if (split.index != 1 || split.tag.empty() || !gguf_file_is_model(files, f)) {
             continue;
         }
         if (seen.insert(f.repo_id + ":" + split.tag).second) {
