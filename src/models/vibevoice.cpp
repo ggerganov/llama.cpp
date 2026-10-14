@@ -23,6 +23,11 @@ static uint32_t vv_get_stages(llama_model_loader & ml, llm_kv kid_ratios, llm_kv
     if (d.empty() || d.size() > LLAMA_MAX_VV_STAGES || r.size() + 1 != d.size()) {
         throw std::runtime_error(format("vibevoice: invalid tokenizer layout, %zu ratios and %zu depths", r.size(), d.size()));
     }
+    for (uint32_t depth : d) {
+        if (depth == 0 || depth > LLAMA_MAX_LAYERS) {
+            throw std::runtime_error(format("vibevoice: invalid tokenizer stage depth %u", depth));
+        }
+    }
 
     ratios.fill(0);
     depths.fill(0);
@@ -55,6 +60,9 @@ void llama_model_vibevoice::load_arch_hparams(llama_model_loader & ml) {
     vv.semantic.n_dec_stages = 0;
 
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_BLOCK_COUNT,      vv.diff_n_layer);
+    if (vv.diff_n_layer == 0 || vv.diff_n_layer > LLAMA_MAX_LAYERS) {
+        throw std::runtime_error(format("vibevoice: invalid diffusion block count %u", vv.diff_n_layer));
+    }
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_FEED_FORWARD_LEN, vv.diff_n_ff);
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_LATENT_SIZE,      vv.diff_latent_size);
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_LAYERNORM_EPS,    vv.diff_f_norm_rms_eps);
@@ -104,6 +112,9 @@ void llama_model_vibevoice::load_tok_part(llama_model_loader & ml, tok_part & pa
         stage.conv   = create_tensor_from_file(ml, tn(ids.conv, "weight", s));
         stage.conv_b = create_tensor_from_file(ml, tn(ids.conv, "bias",   s));
 
+        if (depths[s] == 0 || depths[s] > LLAMA_MAX_LAYERS) {
+            throw std::runtime_error(format("vibevoice: invalid tokenizer stage depth %u", depths[s]));
+        }
         stage.blocks.resize(depths[s]);
 
         for (uint32_t b = 0; b < depths[s]; ++b) {
