@@ -83,6 +83,17 @@ struct mtmd_image_preprocessor_llava_uhd : mtmd_image_preprocessor {
     slice_output slice_image(const clip_image_u8 & img, const slice_instructions & inst) const;
 
 protected:
+    // align slices to a multiple of the merger factor (integer merger tokens per slice)
+    virtual int get_slice_align() const {
+        const int merge = hparams.n_merge > 0 ? hparams.n_merge : 1;
+        return hparams.patch_size * merge;
+    }
+
+    // rounding for snapping a length to a multiple of the align size
+    virtual int align_round(double v) const {
+        return static_cast<int>(std::round(v));
+    }
+
     clip_image_size get_best_resize(const clip_image_size & original_size, int scale_resolution, int patch_size, bool allow_upscale = false) const;
 
     /**
@@ -155,6 +166,26 @@ private:
 struct mtmd_image_preprocessor_minicpmv : mtmd_image_preprocessor_llava_uhd {
     using mtmd_image_preprocessor_llava_uhd::mtmd_image_preprocessor_llava_uhd;
     slice_instructions get_slice_instructions(const clip_image_size & original_size) const override;
+
+protected:
+    // always patch_size * 4, even in 4x mode (the 2x2 vit_merger slot stays)
+    int get_slice_align() const override {
+        return hparams.patch_size * 4;
+    }
+
+    // Python's round() breaks ties to even, unlike std::round
+    int align_round(double v) const override {
+        const double fl = std::floor(v);
+        const double diff = v - fl;
+        if (diff > 0.5) {
+            return static_cast<int>(fl) + 1;
+        }
+        if (diff < 0.5) {
+            return static_cast<int>(fl);
+        }
+        const int lo = static_cast<int>(fl);
+        return (lo % 2 == 0) ? lo : lo + 1;
+    }
 };
 
 // custom llava-uhd slicing logic for LFM2
@@ -189,6 +220,14 @@ struct mtmd_image_preprocessor_idefics3 : mtmd_image_preprocessor_llava_uhd {
 struct mtmd_image_preprocessor_internvl : mtmd_image_preprocessor_llava_uhd {
     mtmd_image_preprocessor_internvl(const clip_ctx * ctx) : mtmd_image_preprocessor_llava_uhd(ctx) {}
     mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
+};
+
+// stretch the image to a grid of tiles, add a thumbnail if there is more than 1 tile
+// ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/cohere2_vision/image_processing_cohere2_vision.py
+struct mtmd_image_preprocessor_cohere2v : mtmd_image_preprocessor_llava_uhd {
+    mtmd_image_preprocessor_cohere2v(const clip_ctx * ctx) : mtmd_image_preprocessor_llava_uhd(ctx) {}
+    mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
+    slice_instructions get_slice_instructions(const clip_image_size & original_size) const override;
 };
 
 // DeepSeek-OCR (v1/v2) global view + optional local tile grid
