@@ -7744,7 +7744,8 @@ static void ggml_vk_mul_mat_vec_id_q_f16(ggml_backend_vk_context * ctx, vk_conte
     const bool y_non_contig = !ggml_vk_dim01_contiguous(src1);
 
     const bool f16_f32_kernel = src1->type == GGML_TYPE_F32;
-    bool quantize_y = ctx->device->integer_dot_product && src1->type == GGML_TYPE_F32 && ggml_is_contiguous(src1) && !y_non_contig && (ne11 * ne10) % 4 == 0 && ggml_vk_should_use_mmvq(ctx->device, ne01, ne12, ne10, src0->type);
+    bool quantize_y = ctx->device->integer_dot_product && src1->type == GGML_TYPE_F32 && ggml_is_contiguous(src1) && !y_non_contig && (ne11 * ne10) % 4 == 0 && ggml_vk_should_use_mmvq(ctx->device, ne01, ne12, ne10, src0->type) &&
+                      ggml_get_op_params_i32(dst, 3) != GGML_PREC_F32; // q8_1 sums overflow for large src1
 
     vk_pipeline to_fp16_vk_0 = nullptr;
     vk_pipeline to_fp16_vk_1 = nullptr;
@@ -15472,7 +15473,7 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                         // If there's not enough shared memory for row_ids and the result tile, fallback to CPU
                         return false;
                     }
-                    if (ggml_get_op_params_i32(op, 3) == GGML_PREC_F32) {
+                    if (ggml_get_op_params_i32(op, 3) == GGML_PREC_F32 && !ggml_vk_use_mul_mat_vec_id(op)) {
                         return false;
                     }
                 }
