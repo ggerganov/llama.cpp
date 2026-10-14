@@ -576,18 +576,37 @@ static std::string to_lower(std::string s) {
 
 // the sidecar token a filename carries, in any case, and whether the name
 // alone decides it:
-// - certain: `mmproj` / `imatrix` anywhere (`mmproj_f16.gguf`), or the token
-//   as the leading segment (`mtp-Model-Q4_0.gguf`, `imatrix.gguf`)
+// - certain: `mmproj` / `imatrix` as a whole word anywhere (`mmproj_f16.gguf`,
+//   `Model.imatrix.gguf`), or the token as the leading segment
+//   (`mtp-Model-Q4_0.gguf`, `imatrix.gguf`)
 // - ambiguous: the token as an infix or trailing segment (`Model-MTP-BF16.gguf`,
 //   `Model-BF16-mtp.gguf`), which also names full models with embedded draft
 //   heads (`Model-Q8D-MTP.gguf`); sidecar_token_of settles it on the listing
-// the token must be a whole segment, so `smtp-Model.gguf` is a plain model
+// the token must be a whole segment, so `smtp-Model.gguf` and
+// `Phi-2-OmniMatrix.i1-Q4_K_M.gguf` are plain models; only a `.gguf` file is
+// ever a sidecar, so `quantization-mmproj-Q8_0.json` is none
 struct sidecar_name {
     std::string token;
     bool        certain = false;
 };
 
+// `word` in `base` bounded by the name ends or by a `-`, `_` or `.` separator
+static bool has_word(const std::string & base, const std::string & word) {
+    auto is_sep = [](char c) { return c == '-' || c == '_' || c == '.'; };
+    for (size_t pos = base.find(word); pos != std::string::npos; pos = base.find(word, pos + 1)) {
+        size_t end = pos + word.size();
+        if ((pos == 0 || is_sep(base[pos - 1])) && (end == base.size() || is_sep(base[end]))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static sidecar_name sidecar_name_of(const std::string & path) {
+    if (!string_ends_with(path, ".gguf")) {
+        return {};
+    }
+
     const std::string base = to_lower(stem_of(path));
 
     if (base.empty()) {
@@ -598,7 +617,7 @@ static sidecar_name sidecar_name_of(const std::string & path) {
         if (base == t || base.rfind(t + "-", 0) == 0 || base.rfind(t + "_", 0) == 0) {
             return { t, true };
         }
-        if ((t == "mmproj" || t == "imatrix") && base.find(t) != std::string::npos) {
+        if ((t == "mmproj" || t == "imatrix") && has_word(base, t)) {
             return { t, true };
         }
         if (base.find("-" + t + "-") != std::string::npos ||

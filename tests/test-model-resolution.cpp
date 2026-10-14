@@ -226,6 +226,21 @@ static const std::vector<std::string> dotted = {
     "model-Q6_K.gguf",
 };
 
+// a non-GGUF file named like a sidecar next to the real one, in the style of
+// JetBrains/Qwen3.8-3.6-27B-blend-GGUF (quantization-mmproj-Q8_0.json)
+static const std::vector<std::string> manifests = {
+    "Model-IQ3_S.gguf",
+    "mmproj-Model-Q8_0.gguf",
+    "quantization-mmproj-Q8_0.json",
+};
+
+// a sidecar word inside a longer word of a model name, in the style of
+// mradermacher/Phi-2-OmniMatrix-i1-GGUF
+static const std::vector<std::string> omnimatrix = {
+    "Phi-2-OmniMatrix.i1-Q4_K_M.gguf",
+    "Phi-2-OmniMatrix.i1-Q6_K.gguf",
+};
+
 // dspark outranks dflash in the type auto-selection
 static const std::vector<std::string> dspark_dflash = {
     "model-Q8_0.gguf",
@@ -397,6 +412,16 @@ static const plan_case plan_cases[] = {
     // an imatrix with a dot separator is never the fallback model
     {"dotted imatrix", dotted, "test/repo", "", false, false,
      "model-Q6_K.gguf", {"model-Q6_K.gguf"},
+     "", "", "", "", ""},
+
+    // only a `.gguf` file is ever a sidecar
+    {"manifest beside mmproj", manifests, "test/repo:IQ3_S", "", true, false,
+     "Model-IQ3_S.gguf", {"Model-IQ3_S.gguf"},
+     "mmproj-Model-Q8_0.gguf", "", "", "", ""},
+
+    // `imatrix` inside `OmniMatrix` is no sidecar word
+    {"sidecar word inside a name", omnimatrix, "test/repo:Q4_K_M", "", false, false,
+     "Phi-2-OmniMatrix.i1-Q4_K_M.gguf", {"Phi-2-OmniMatrix.i1-Q4_K_M.gguf"},
      "", "", "", "", ""},
 };
 
