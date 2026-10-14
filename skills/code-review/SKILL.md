@@ -124,7 +124,7 @@ The dominant review theme in this area is placement: most accepted nits are abou
 
 ### Constants and enums - decision rules
 
-Default: a literal that appears in code is either named or enumerated. Before adding, grep `$lib/constants` / `$lib/enums` - reuse beats a new near-duplicate. What becomes what:
+Trigger: a literal that is reused, domain-significant, or crosses a boundary (wire/persisted format, selector, key, shared UI text). One-off component-local values stay inline (see the boundary at the end of this section) - flagging those is noise. Before adding, grep `$lib/constants` / `$lib/enums` - reuse beats a new near-duplicate. What becomes what:
 
 - **String enum** (`$lib/enums`, `enum X { KEY = 'value' }`): a closed set of categorical values the code branches on, compares, or stores as a type discriminator - roles, statuses, kinds, types, actions, sort fields. Anything written as `x.type === 'some-string'` or a closed string union in a `.d.ts` is an enum. Keys are SCREAMING_SNAKE with a domain prefix (`ModelDownloadStopRequest.CANCEL`); values are lowercase by default and are the persisted/wire representation, so they may intentionally differ from the key (`TOOL_USE = 'tools'`, `MTP = 'mtp'`) or mirror an external API exactly - say so in the enum's JSDoc when they do (see `HfModelSort`). No numeric-valued enums.
 - **Constant object keyed by enum** (constants): a lookup/mapping - icon per file type, label per capability, HTTP code to message (`FILE_TYPE_ICONS`, `HTTP_CODE_TO_STRING`, `Record<Enum, string>`). The enum enumerates, the object maps.
@@ -141,7 +141,7 @@ Placement and composition:
 
 - Shared across features -> `$lib/constants/<topic>.constants.ts` / `$lib/enums/<topic>.enums.ts`; feature-dedicated values may live in the feature folder, but only what is truly dedicated to it.
 - Compose, don't duplicate: constants may derive from other constants/enums (`SANDBOX_TOOL_NAME = BuiltInTool.BROWSER_RUN_JAVASCRIPT`, storage keys built from the `STORAGE_APP_NAME` prefix).
-- Tests and Storybook stories use the same constants/enums - they don't re-declare the literals they assert against.
+- Tests and Storybook stories use the same constants/enums for structural assertions - they don't re-declare the literals they assert against. Exception: persisted/wire-contract assertions keep independent literals - there the literal value itself is the contract, and reusing the production constant would make the test tautological (change the constant, the expectation changes with it, the regression still passes).
 
 What stays inline: one-off user-facing copy inside a single component, console/log messages, and import specifiers. When inline copy gains a second consumer, it graduates into a grouped constant object.
 
@@ -149,11 +149,11 @@ Adjacent data-shape rule: empty string is not a valid "unset" initial state - us
 
 ### Placement and layering
 
-- Components render; they don't own business logic. Data derivation, naming/parsing logic, and multi-store orchestration belong in a store method, a `$lib/utils` function, or a `$lib/hooks` hook. A component should call `store.doSomething()` rather than reimplement it.
+- Components render; they don't own business logic. Simple presentation-local derivation stays in the component as `$derived` from props and store values - what leaves is shared business logic, multi-store orchestration, and naming/parsing logic that a store method, `$lib/utils` function, or `$lib/hooks` hook should own. A component should call `store.doSomething()` rather than reimplement it.
 - Keep the layers deliberate: stores (`*.svelte.ts`, stateful), services (stateless clients), utils (pure functions), hooks (`*.svelte.ts`, reusable reactivity), `$lib/types` (types), `$lib/constants` (constants). If a new file blurs these, flag it and name the layer it belongs in.
 - A stateful "service" is misnamed - it's a store or belongs in the scope that uses it. Conversely, a one-off `.svelte.ts` module (which is effectively a store) for logic only one component uses is overkill; keep it in that component or a context.
 - Before introducing a new abstraction (store/service/hook/context), ask whether it will ever have a second consumer; if not, keep the logic in the existing scope. KISS first, iterate later.
-- Barrel files (`index.ts`) export from the correct scope with a short JSDoc per export; constants and types are not re-exported from store barrels.
+- Barrel files (`index.ts`) match the existing barrel style - file-level JSDoc plus per-export group comments for stores, plain re-export lists for constants/enums - and add JSDoc only where an export isn't self-explanatory; constants and types are not re-exported from store barrels.
 
 ### DRY and dead code
 
@@ -172,7 +172,7 @@ Adjacent data-shape rule: empty string is not a valid "unset" initial state - us
 
 ### Comments
 
-- Same bar as the General checklist, enforced harder here: no comments that restate the code, no verbose JSDoc on obvious functions, no commented-out code. Edge cases and tricky behavior are documented by unit tests, not prose - move the example into a Vitest test and delete the comment.
+- Same bar as the General checklist, enforced harder here: no comments that restate the code, no verbose JSDoc on obvious functions, no commented-out code. Examples and edge-case enumerations live in unit tests, not prose; non-obvious why/rationale comments stay, because a test cannot carry that context at the code location.
 
 ### Types, naming, and style
 
@@ -182,7 +182,7 @@ Adjacent data-shape rule: empty string is not a valid "unset" initial state - us
 ### Performance (streaming UI)
 
 - Anything running per streamed chunk must be cheap: throttle before computing, not after; apply block-level regex passes globally and scan lines backwards with early exit; don't re-parse the whole message per update.
-- Smooth height/expand transitions consistent with the rest of the UI (see the CSS `calc-size()` technique for animating auto-height).
+- Smooth height/expand transitions consistent with the rest of the UI - animate auto-height via `interpolate-size: allow-keywords` with a `grid-template-rows: 0fr/1fr` fallback for browsers without it (see `CollapsibleRegion.svelte`).
 
 ### Security (frontend side)
 
@@ -193,7 +193,7 @@ Adjacent data-shape rule: empty string is not a valid "unset" initial state - us
 
 - Build artifacts are not committed - the UI is built by CI (`.github/workflows/ui-build.yml`) and downloaded/bundled at release time. `npm run build` must still succeed locally; a red UI build job is blocking.
 - `npm run lint && npm run check` (and `npm run format`) must pass; a failing Storybook test is blocking.
-- PRs need a short video demo in the description showing the change working (screenshots are acceptable for pure-visual tweaks).
+- PRs with user-facing interactive or visual changes need a short video demo in the description showing the change working (screenshots are acceptable for pure-visual tweaks). Test-only, refactor, docs, and config PRs don't need a demo.
 - Scope discipline: changes that belong to another stacked PR don't ride along in this one - call them out and move them there. Flag unrelated edits to deprecated/legacy files and ask whether they're intentional.
 - New nontrivial utils and parsing logic get Vitest unit tests; reusable UI components get Storybook stories/tests when practical.
 
