@@ -891,7 +891,7 @@ void llama_prefetch(llama_memory_ranges mr) {
     std::vector<WIN32_MEMORY_RANGE_ENTRY> entries;
     entries.reserve(mr.size());
     for (const auto & range : mr) {
-        entries.push_back({ (PVOID) range.addr, (SIZE_T) range.size });
+        entries.push_back({ const_cast<PVOID>(range.addr), (SIZE_T) range.size });
     }
     if (!entries.empty() && !pPrefetchVirtualMemory(GetCurrentProcess(), (ULONG_PTR) entries.size(), entries.data(), 0)) {
         LLAMA_LOG_WARN("llama_prefetch: PrefetchVirtualMemory failed: %s\n",
@@ -900,7 +900,7 @@ void llama_prefetch(llama_memory_ranges mr) {
 #else
     for (const auto & range : mr) {
         // TODO: in a follow-up, use posix_madvise(.., POSIX_MADV_WILLNEED) to match the rest of this file
-        if (madvise((void *) range.addr, range.size, MADV_WILLNEED) != 0) {
+        if (madvise(const_cast<void *>(range.addr), range.size, MADV_WILLNEED) != 0) {
             LLAMA_LOG_WARN("llama_prefetch: madvise(MADV_WILLNEED) failed: %s\n", strerror(errno));
             return;
         }
