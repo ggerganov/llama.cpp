@@ -118,7 +118,9 @@
 							? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
 							: null}
 						quant={parsed.quantization}
-						state={draft.isPaused ? 'paused' : 'downloading'}
+						state={draft.isPaused
+							? ModelRowDownloadState.PAUSED
+							: ModelRowDownloadState.DOWNLOADING}
 					/>
 				{/each}
 
@@ -127,7 +129,7 @@
 						connectorClass="ml-8"
 						kind={badge.kind}
 						quant={badge.quant}
-						state="downloaded"
+						state={ModelRowDownloadState.DOWNLOADED}
 					/>
 				{/each}
 			</div>

@@ -1,10 +1,16 @@
 <script lang="ts">
-	import { ArrowLeft, Compass } from '@lucide/svelte';
+	import { ArrowLeft } from '@lucide/svelte';
 	import ModelsDiscover from '$lib/components/app/models/discover/ModelsDiscover.svelte';
 	import ModelsManager from '$lib/components/app/models/ModelsManager/ModelsManager.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { MODEL_ICON, SETTINGS_KEYS } from '$lib/constants';
+	import {
+		DISCOVER_ICON,
+		MODEL_ICON,
+		MODELS_DIALOG_VIEW_FADE_MS,
+		SETTINGS_KEYS
+	} from '$lib/constants';
+	import { ModelsDialogView } from '$lib/enums';
 	import { modelsStore, settingsStore, uiStore } from '$lib/stores';
 	import { untrack } from 'svelte';
 
@@ -15,15 +21,10 @@
 
 	let { onOpenChange, open = $bindable(false) }: Props = $props();
 
-	type View = 'discover' | 'manage';
-
-	/** How long a view takes to fade out before the next one fades in. */
-	const VIEW_FADE_MS = 150;
-
 	// what the user asked for, and what is actually rendered: a view change fades the
 	// current one out, swaps, then fades the next one in
-	let view = $state<View>('manage');
-	let shownView = $state<View>('manage');
+	let view = $state<ModelsDialogView>(ModelsDialogView.MANAGE);
+	let shownView = $state<ModelsDialogView>(ModelsDialogView.MANAGE);
 	let isSwapping = $state(false);
 	/** Set while an entry opens the dialog on an explicit view, so the open reset keeps hands off. */
 	let viewRequested = false;
@@ -52,12 +53,12 @@
 				shownView = next;
 				isSwapping = false;
 			});
-		}, VIEW_FADE_MS);
+		}, MODELS_DIALOG_VIEW_FADE_MS);
 
 		return () => clearTimeout(timer);
 	});
 
-	let title = $derived(view === 'discover' ? 'Discover' : 'Models');
+	let title = $derived(view === ModelsDialogView.DISCOVER ? 'Discover' : 'Models');
 
 	// the sidebar's Discover entry opens this dialog on its Discover view
 	$effect(() => {
@@ -65,7 +66,7 @@
 
 		untrack(() => {
 			uiStore.discoverModelsOpen = false;
-			view = discoverEnabled ? 'discover' : 'manage';
+			view = discoverEnabled ? ModelsDialogView.DISCOVER : ModelsDialogView.MANAGE;
 
 			// the dialog may already be open, so no open transition will follow
 			if (open) return;
@@ -83,7 +84,7 @@
 			if (viewRequested) {
 				viewRequested = false;
 			} else {
-				view = 'manage';
+				view = ModelsDialogView.MANAGE;
 			}
 
 			// sync point: the table opens on cached state and corrects itself when
@@ -94,8 +95,8 @@
 
 	// the discover view disappears with its setting; fall back to the manager
 	$effect(() => {
-		if (!discoverEnabled && view === 'discover') {
-			untrack(() => (view = 'manage'));
+		if (!discoverEnabled && view === ModelsDialogView.DISCOVER) {
+			untrack(() => (view = ModelsDialogView.MANAGE));
 		}
 	});
 
@@ -122,7 +123,7 @@
 				'manage'
 					? 'invisible opacity-0'
 					: 'visible opacity-100'}"
-				onclick={() => (view = 'manage')}
+				onclick={() => (view = ModelsDialogView.MANAGE)}
 				size="icon"
 				variant="ghost"
 			>
@@ -144,9 +145,9 @@
 							: 'opacity-0'}"
 					/>
 
-					<Compass
+					<DISCOVER_ICON
 						class="col-start-1 row-start-1 h-5 w-5 transition-opacity duration-150 {view ===
-						'discover'
+						ModelsDialogView.DISCOVER
 							? 'opacity-100'
 							: 'opacity-0'}"
 					/>
@@ -161,24 +162,24 @@
 		</Dialog.Header>
 
 		<div class="dialog-view min-h-0 flex-1" data-visible={!isSwapping}>
-			{#if shownView === 'manage'}
+			{#if shownView === ModelsDialogView.MANAGE}
 				<ModelsManager class="h-full">
 					{#snippet toolbarEnd()}
 						{#if discoverEnabled}
 							<Button
 								class="gap-1.5"
-								onclick={() => (view = 'discover')}
+								onclick={() => (view = ModelsDialogView.DISCOVER)}
 								size="sm"
 								variant="tertiary"
 							>
-								<Compass class="h-3.5 w-3.5" />
+								<DISCOVER_ICON class="h-3.5 w-3.5" />
 
 								Discover Models
 							</Button>
 						{/if}
 					{/snippet}
 				</ModelsManager>
-			{:else if shownView === 'discover'}
+			{:else if shownView === ModelsDialogView.DISCOVER}
 				<div class="grid h-full overflow-hidden" style="grid-template-columns: auto 1fr;">
 					<ModelsDiscover />
 				</div>

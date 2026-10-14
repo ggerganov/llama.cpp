@@ -5,6 +5,7 @@
 	import { Loader2, Pause, Play, X } from '@lucide/svelte';
 	import { ActionIcon, ModelId } from '$lib/components/app';
 	import { DISCOVER_ICON } from '$lib/constants';
+	import { ModelRowDownloadState } from '$lib/enums';
 	import { HuggingFaceService, ModelsService } from '$lib/services';
 	import { modelsStore, uiStore } from '$lib/stores';
 	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
@@ -146,7 +147,7 @@
 					? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
 					: null}
 				quant={parsedDraft.quantization}
-				state={draft.isPaused ? 'paused' : 'downloading'}
+				state={draft.isPaused ? ModelRowDownloadState.PAUSED : ModelRowDownloadState.DOWNLOADING}
 			/>
 		{/each}
 
@@ -155,7 +156,7 @@
 				connectorClass="ml-4"
 				kind={badge.kind}
 				quant={badge.quant}
-				state="downloaded"
+				state={ModelRowDownloadState.DOWNLOADED}
 			/>
 		{/each}
 	</div>

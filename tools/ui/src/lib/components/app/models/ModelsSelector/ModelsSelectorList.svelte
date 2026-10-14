@@ -18,7 +18,7 @@
 		SELECTOR_GROUP_STICKY_OFFSET,
 		SETTINGS_KEYS
 	} from '$lib/constants';
-	import { ModelDownloadConfirmAction, ServerModelStatus } from '$lib/enums';
+	import { ModelDownloadConfirmAction, ModelRowDownloadState, ServerModelStatus } from '$lib/enums';
 	import { ModelsService } from '$lib/services';
 	import { modelsStore, settingsStore } from '$lib/stores';
 	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
@@ -285,7 +285,9 @@
 								? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
 								: null}
 							quant={parsedDraft.quantization}
-							state={draft.isPaused ? 'paused' : 'downloading'}
+							state={draft.isPaused
+								? ModelRowDownloadState.PAUSED
+								: ModelRowDownloadState.DOWNLOADING}
 						/>
 					{/each}
 
@@ -294,7 +296,7 @@
 							connectorClass="ml-4"
 							kind={badge.kind}
 							quant={badge.quant}
-							state="downloaded"
+							state={ModelRowDownloadState.DOWNLOADED}
 						/>
 					{/each}
 				</div>

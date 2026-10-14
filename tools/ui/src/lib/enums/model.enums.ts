@@ -83,6 +83,7 @@ export enum ModelsTableGroupKind {
 
 /** Download state a manager row reports in place of its load state. */
 export enum ModelRowDownloadState {
+	DOWNLOADED = 'downloaded',
 	DOWNLOADING = 'downloading',
 	PAUSED = 'paused'
 }

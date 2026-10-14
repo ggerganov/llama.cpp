@@ -6,7 +6,7 @@
 	import { Pause, Play, X } from '@lucide/svelte';
 	import { ActionIcon } from '$lib/components/app';
 	import { HF_MMPROJ_FILENAME_TOKEN, HF_MODALITY_PIPELINE_TAGS } from '$lib/constants';
-	import { ModelDraftSidecar } from '$lib/enums';
+	import { ModelDraftSidecar, ModelRowDownloadState } from '$lib/enums';
 	import { HuggingFaceService } from '$lib/services';
 	import { ModelsService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore } from '$lib/stores';
@@ -213,7 +213,7 @@
 					? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
 					: null}
 				quant={parsed.quantization}
-				state={draft.isPaused ? 'paused' : 'downloading'}
+				state={draft.isPaused ? ModelRowDownloadState.PAUSED : ModelRowDownloadState.DOWNLOADING}
 			/>
 		{/each}
 
@@ -222,7 +222,7 @@
 				connectorClass="ml-8"
 				kind={badge.kind}
 				quant={badge.quant}
-				state="downloaded"
+				state={ModelRowDownloadState.DOWNLOADED}
 			/>
 		{/each}
 	</div>
