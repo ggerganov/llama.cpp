@@ -690,7 +690,6 @@ def test_completion_prompt_cache():
         assert "predicted_n" in timings and timings["predicted_n"] == n_predict
         assert "tokens" in res.body and isinstance(res.body["tokens"], list)
 
-
 # validate that saving the current prompt does not evict the cached prompt
 # that the same request restores just a moment later
 def test_completion_prompt_cache_keeps_restored_entry():
