@@ -6,6 +6,7 @@ from utils import *
 server = ServerPreset.stories15m_moe()
 
 MODEL_DRAFT_FILE_URL = "https://huggingface.co/ggml-org/tiny-llamas/resolve/main/stories15M-q4_0.gguf"
+MODEL_HYBRID_FILE_URL = "https://huggingface.co/LiquidAI/LFM2-350M-GGUF/resolve/main/LFM2-350M-Q4_K_M.gguf"
 
 def create_server():
     global server
@@ -203,3 +204,25 @@ def test_multi_requests_parallel(n_slots: int, n_requests: int):
     for res in results:
         assert res.status_code == 200
         assert match_regex("(wise|kind|owl|answer)+", res.body["content"])
+
+
+# the draft model is hybrid (LFM2), so the context checkpoints must include the draft state
+def test_hybrid_draft_restores_context_checkpoint():
+    global server
+    server.model_hf_repo = None
+    server.model_hf_file = None
+    server.model_file = download_file(MODEL_HYBRID_FILE_URL)
+    server.model_draft = server.model_file
+    server.n_ctx = 2048
+    server.n_slots = 1
+    server.start()
+    prompt = "Describe the history of the steam engine in detail. " * 40
+    for suffix in ["", " Continue with railways."]:
+        res = server.make_request("POST", "/completion", data={
+            "prompt": prompt + suffix,
+            "temperature": 0.0,
+            "n_predict": 16,
+        })
+        assert res.status_code == 200
+        assert res.body["timings"]["draft_n"] > 0
+    assert res.body["timings"]["cache_n"] > 0
