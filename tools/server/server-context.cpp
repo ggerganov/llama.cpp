@@ -305,7 +305,17 @@ struct server_slot {
 
     server_prompt prompt;
 
-    bool prompt_save(server_prompt_cache & prompt_cache) const {
+    // the prompt state is missing from the prompt cache and a completion task can restore it from there
+    bool cache_pending = false;
+
+    // saves the prompt state once, only when cache_pending is set
+    bool prompt_save(server_prompt_cache & prompt_cache) {
+        if (!cache_pending) {
+            return false;
+        }
+
+        cache_pending = false;
+
         if (prompt.tokens.size() == 0) {
             return false;
         }
@@ -346,6 +356,8 @@ struct server_slot {
         mem.seq_rm(id, -1, -1);
 
         prompt.clear();
+
+        cache_pending = false;
     }
 
     std::vector<common_adapter_lora_info> lora;
@@ -592,6 +604,9 @@ struct server_slot {
             t_last_used = ggml_time_us();
 
             state = SLOT_STATE_IDLE;
+
+            // only completion tasks restore from the prompt cache
+            cache_pending = task->type == SERVER_TASK_TYPE_COMPLETION;
 
             // do not keep context of the child slots - the parent's context is enough
             if (task->is_child()) {
@@ -1782,9 +1797,6 @@ private:
         if (ret) {
             update_cache = update_cache && prompt_cache;
 
-            // cache prompts only for completion tasks
-            update_cache = update_cache && task.type == SERVER_TASK_TYPE_COMPLETION;
-
             if (update_cache) {
                 SRV_TRC("%s", "updating prompt cache\n");
 
@@ -1792,7 +1804,8 @@ private:
 
                 ret->prompt_save(*prompt_cache);
 
-                if (!ret->prompt_load(*prompt_cache, task.tokens)) {
+                // only completion tasks restore from the prompt cache
+                if (task.type == SERVER_TASK_TYPE_COMPLETION && !ret->prompt_load(*prompt_cache, task.tokens)) {
                     ret->prompt_clear();
                 }
 
@@ -3000,6 +3013,7 @@ private:
 
                         slot->prompt.clear();
                         slot->prompt.tokens = std::move(restored);
+                        slot->cache_pending = true;
                     } catch (const std::exception & err) {
                         slot->prompt_clear();
                         send_error(task, std::string("Unable to restore slot: ") + err.what(), ERROR_TYPE_INVALID_REQUEST);
