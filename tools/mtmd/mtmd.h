@@ -211,7 +211,7 @@ typedef int(* mtmd_bitmap_lazy_callback)(
     mtmd_bitmap ** out_bitmap,
     char ** out_text);
 
-MTMD_API mtmd_bitmap * mtmd_bitmap_init_lazy(mtmd_context * ctx,
+MTMD_API mtmd_bitmap * mtmd_bitmap_init_lazy(const mtmd_context * ctx,
                                              const char * id, // usually set to file hash
                                              void * user_data,
                                              mtmd_bitmap_lazy_callback callback);
@@ -299,10 +299,10 @@ MTMD_API struct mtmd_decoder_pos mtmd_image_tokens_get_decoder_pos(const mtmd_im
 //   0 on success
 //   1 on number of bitmaps not matching the number of markers
 //   2 on media preprocessing error
-MTMD_API int32_t mtmd_tokenize(mtmd_context * ctx,
+MTMD_API int32_t mtmd_tokenize(const mtmd_context * ctx,
                                mtmd_input_chunks * output,
                                const mtmd_input_text * text,
-                               const mtmd_bitmap ** bitmaps,
+                               const mtmd_bitmap * const * bitmaps,
                                size_t n_bitmaps);
 
 // same as mtmd_tokenize(), but takes an array of mtmd_input_part
@@ -311,9 +311,9 @@ MTMD_API int32_t mtmd_tokenize(mtmd_context * ctx,
 // - when you want to control parse_special for each text part
 // note: per-part add_special will be ignored
 // return 1 if a part has both text and bitmap set (or neither)
-MTMD_API int32_t mtmd_tokenize_from_parts(mtmd_context * ctx,
+MTMD_API int32_t mtmd_tokenize_from_parts(const mtmd_context * ctx,
                                           mtmd_input_chunks * output,
-                                          const mtmd_input_part ** parts,
+                                          const mtmd_input_part * const * parts,
                                           size_t n_parts,
                                           bool add_special);
 
@@ -449,7 +449,13 @@ MTMD_API mtmd_input_chunks * mtmd_test_create_input_chunks(void);
 // Get memory usage of the current model in bytes, per backend device
 // Note: this is an unstable API, used internally by fit_params; it WILL be removed or changed without deprecation
 #ifdef __cplusplus
-MTMD_API std::map<ggml_backend_dev_t, size_t> mtmd_get_memory_usage(
+struct mtmd_memory_usage {
+    std::map<ggml_backend_dev_t, size_t> backend_mem_usage;
+    // for models that use non-causal attention, max_tokens must not exceed n_ubatch of llama_context
+    int image_max_tokens;
+    bool use_non_causal;
+};
+MTMD_API struct mtmd_memory_usage mtmd_get_memory_usage(
     const char * mmproj_fname,
     struct mtmd_context_params ctx_params);
 #endif

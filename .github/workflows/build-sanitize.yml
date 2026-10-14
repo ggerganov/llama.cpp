@@ -21,6 +21,10 @@ on:
       '.github/workflows/build-sanitize.yml'
     ]
 
+cache-mode: none
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
   cancel-in-progress: true
@@ -101,8 +105,6 @@ jobs:
 
       - name: Test
         id: cmake_test
-        # skip run in Debug - very slow
-        if: ${{ matrix.sanitizer != 'UNDEFINED' }}
         run: |
           cd build
           ctest -L main -E tokenizer --verbose --timeout 900

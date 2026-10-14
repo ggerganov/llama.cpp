@@ -78,7 +78,7 @@ struct ggml_compute_params {
 #if defined(__ARM_NEON)
 
 // ref: https://github.com/ggml-org/llama.cpp/pull/5404
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #define ggml_vld1q_u32(w,x,y,z) { ((w) + ((uint64_t)(x) << 32)), ((y) + ((uint64_t)(z) << 32)) }
 #else
 #define ggml_vld1q_u32(w,x,y,z) { (w), (x), (y), (z) }
@@ -390,16 +390,15 @@ typedef unsigned char uchar8x16_t __attribute__((vector_size(16)));
 typedef int8_t  int8x16_t __attribute__((vector_size(16)));
 typedef int16_t int16x8_t __attribute__((vector_size(16)));
 typedef int32_t int32x4_t __attribute__((vector_size(16)));
+typedef int64_t int64x2_t __attribute__((vector_size(16)));
 
 typedef uint8_t  uint8x16_t __attribute__((vector_size(16)));
 typedef uint16_t uint16x8_t __attribute__((vector_size(16)));
 typedef uint32_t uint32x4_t __attribute__((vector_size(16)));
+typedef uint64_t uint64x2_t __attribute__((vector_size(16)));
 
 typedef float  float32x4_t  __attribute__((vector_size(16)));
 typedef double double64x2_t __attribute__((vector_size(16)));
-
-typedef signed   long long long64x2_t  __attribute__((vector_size(16)));
-typedef unsigned long long ulong64x2_t __attribute__((vector_size(16)));
 
 typedef struct ggml_uint8x16x2_t {
     uint8x16_t val[2];
