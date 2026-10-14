@@ -6,6 +6,7 @@
 #include <vector>
 
 int main() {
+    bool success = true;
     const std::vector<std::pair<std::vector<uint32_t>, std::vector<uint32_t>>> normalization = {
         {{}, {}},
         {{0x65, 0x301}, {0xE9}},
@@ -23,7 +24,8 @@ int main() {
     for (const auto & test : normalization) {
         if (unicode_cpts_normalize_nfc(test.first) != test.second || unicode_cpts_normalize_nfc(test.second) != test.second) {
             fprintf(stderr, "unexpected NFC normalization\n");
-            return 1;
+            success = false;
+            break;
         }
     }
 
@@ -51,7 +53,6 @@ int main() {
         { "\xe2\x80",             { 0xfffd, 0xfffd } },
     };
 
-    bool success = true;
     for (const auto & test : utf8_tests) {
         auto expected = test.expected;
         expected.insert(expected.begin(), 'a');
