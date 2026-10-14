@@ -13,15 +13,9 @@
 		file: HfModelSibling;
 		/** Download state of the file, from the parent's status feed. */
 		entry: ModelDownloadEntryState;
-		/**
-		 * Draft sidecar that rides along when this main quant downloads; only
-		 * main chips carry one. Evaluated by the parent at click time.
-		 */
+		/** The draft sidecar that rides along when this main quant downloads; main chips only. */
 		companion?: ModelSelectableFile & { state: ModelDownloadEntryState };
-		/**
-		 * Ask the parent to confirm deleting a downloaded model. The chip owns no
-		 * dialog; the parent renders the single confirmation and acts on confirm.
-		 */
+		/** Ask the parent to confirm deleting a downloaded model; the chip owns no dialog. */
 		onRequestDelete?: (repoWithTag: string) => void;
 		/** Ask the parent to confirm cancelling an in-flight download. */
 		onRequestCancel?: (repoWithTag: string) => void;
@@ -29,8 +23,7 @@
 
 	let { companion, entry, file, onRequestCancel, onRequestDelete }: Props = $props();
 
-	// Sidecar kind (mtp, mmproj, ...) tag shown on every chip state; one source so
-	// the idle, in-flight and downloaded variants stay identical.
+	// one source, so the idle, in-flight and downloaded chip states stay identical
 	const SIDECAR_BADGE_CLASS =
 		'rounded-md bg-primary px-1 py-0.5 text-[10px] font-semibold tracking-wide text-primary-foreground uppercase';
 
@@ -41,9 +34,7 @@
 
 			await modelsStore.status.downloadModel(entry.repoWithTag);
 
-			// the quant-matched draft rides along: speculative decoding is a free
-			// speedup once the main lands, and the manual draft chips stay available
-			// for the flavours the auto-pick skips
+			// the quant-matched draft rides along; the manual draft chips stay available
 			if (
 				companion &&
 				!companion.state.isDownloaded &&

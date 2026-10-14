@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Check, Copy, X } from '@lucide/svelte';
+	import { SyntaxHighlightedCode } from '$lib/components/app';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { COPY_FEEDBACK_RESET_MS } from '$lib/constants';
 	import { copyToClipboard } from '$lib/utils';
 
 	interface Props {
@@ -21,7 +23,7 @@
 	async function copy() {
 		await copyToClipboard(chatTemplate);
 		copied = true;
-		setTimeout(() => (copied = false), 1500);
+		setTimeout(() => (copied = false), COPY_FEEDBACK_RESET_MS);
 	}
 </script>
 
@@ -61,7 +63,11 @@
 			</Dialog.Close>
 		</Dialog.Header>
 
-		<pre
-			class="flex-1 overflow-auto p-4 font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground">{chatTemplate}</pre>
+		<SyntaxHighlightedCode
+			class="h-full rounded-none border-0 shadow-none"
+			code={chatTemplate}
+			language="jinja"
+			maxHeight="100%"
+		/>
 	</Dialog.Content>
 </Dialog.Root>

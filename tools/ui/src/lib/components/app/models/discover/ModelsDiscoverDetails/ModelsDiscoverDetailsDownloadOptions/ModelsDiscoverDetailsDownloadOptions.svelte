@@ -31,16 +31,11 @@
 
 	let { bitDepthRows, getDownloadState, modelId }: Props = $props();
 
-	// The terminal command stays collapsed until asked for; it re-collapses when
-	// another model opens, since this panel remounts per model.
+	// collapsed until asked for; the panel remounts per model
 	let commandOpen = $state(false);
 
-	// Destructive chip actions (delete a downloaded model, cancel a download) are
-	// confirmed here rather than inside each chip: a single shared dialog owned by
-	// the options panel, keyed by the repo+tag the user acted on, so one dialog is
-	// mounted for the whole panel instead of one per chip.
-	// The acted-on target is kept after closing so the copy stays rendered through
-	// the dialog's close transition.
+	// one shared dialog confirms the panel's destructive chip actions; the target
+	// is kept after closing so its copy stays rendered through the close transition
 	let pending: { action: ModelDownloadConfirmAction; repoWithTag: string } = $state({
 		action: ModelDownloadConfirmAction.CANCEL,
 		repoWithTag: ''
@@ -112,12 +107,7 @@
 		return files;
 	});
 
-	/**
-	 * The draft sidecar that rides along with a main quant download: the
-	 * quant-matched draft of the most preferred kind the repo ships, skipped
-	 * when it is already on disk or already tracked. Undefined for main files
-	 * with no fitting draft.
-	 */
+	/** The quant-matched draft that rides along with a main quant download, or undefined. */
 	function companionDraftFor(
 		file: ModelSelectableFile
 	): (ModelSelectableFile & { state: ModelDownloadEntryState }) | undefined {
@@ -169,10 +159,7 @@
 		selectableFiles.filter((f) => f.kind === ModelSelectableFileKind.MAIN).map(optionFor)
 	);
 
-	/**
-	 * Draft options for the command's draft select, with their sidecar type
-	 * (MTP, DFLASH...) since a repo can ship more than one draft flavour.
-	 */
+	/** Draft options for the command's draft select; a repo can ship several flavours. */
 	let draftOptions = $derived(
 		selectableFiles
 			.filter((f) => f.kind === ModelSelectableFileKind.DRAFT)
