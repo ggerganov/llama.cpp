@@ -23,6 +23,7 @@
 
 struct get_rows_context;
 
+typedef uint32_t (*get_rows_read_index_fn_t)(const void * src1, uint32_t idx, int idx_type);
 typedef void (*get_rows_flat_compute_fn_t)(float * dst_spad, const void * src_spad, uint32_t cur_elems);
 typedef void (*get_rows_tiled_compute_fn_t)(float * dst_spad, const uint8_t * src_spad, uint32_t n_k_tiles, uint32_t tile_stride, uint32_t row);
 
@@ -31,7 +32,8 @@ struct get_rows_context {
     const struct htp_get_rows_kernel_params * kparams;
     struct htp_get_rows_vtcm_layout vtcm_layout;
     uint8_t    * vtcm_base;
-    const void * vtcm_src1;
+    const void * src1_data;
+    get_rows_read_index_fn_t    read_index;
     get_rows_flat_compute_fn_t  compute_flat;
     get_rows_tiled_compute_fn_t compute_tiled;
     uint32_t task_start;
@@ -74,14 +76,24 @@ struct get_rows_context {
                                                \
     const uint32_t nr = ne10 * ne11 * ne12;
 
-static __attribute__((noinline)) uint32_t get_rows_read_index_vtcm(
-    const void * vtcm_src1,
+static uint32_t get_rows_read_index_ddr(
+    const void * src1,
     uint32_t idx,
     int idx_type
 ) {
     const uint32_t off = idx * ((idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t));
-    const HVX_Vector v = hvx_vmemu((const uint8_t *) vtcm_src1 + off);
-    return (uint32_t) hvx_vec_get_i32(v);
+    return *(const uint32_t *) ((const uint8_t *) src1 + off);
+}
+
+static __attribute__((noinline)) uint32_t get_rows_read_index_vtcm(
+    const void * src1,
+    uint32_t idx,
+    int idx_type
+) {
+    const uint32_t off = idx * ((idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t));
+    const HVX_Vector v = hvx_vmem((const uint8_t *) src1 + off); // off & ~127u in HW
+    // vextract is normally slow, but here it avoids an HVX->L2 store and L1D miss
+    return (uint32_t) Q6_R_vextract_VR(v, off);
 }
 
 static void get_rows_thread_sametype(unsigned int nth, unsigned int ith, void * data) {
@@ -105,7 +117,7 @@ static void get_rows_thread_sametype(unsigned int nth, unsigned int ith, void * 
         const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
         const uint32_t i10 = rem - i11 * ne10;
 
-        const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, i, grctx->idx_type);
+        const uint32_t i01 = grctx->read_index(grctx->src1_data, i, grctx->idx_type);
         assert(i01 < ne01);
 
         const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
@@ -136,7 +148,8 @@ struct get_rows_flat_task {
 static inline struct get_rows_flat_task get_rows_flat_calc_task(
     const struct htp_ops_context * octx,
     const struct get_rows_context * grctx,
-    uint32_t i
+    uint32_t i,
+    bool need_src0
 ) {
     const struct htp_get_rows_kernel_params * kparams = grctx->kparams;
     get_rows_preamble;
@@ -151,26 +164,33 @@ static inline struct get_rows_flat_task get_rows_flat_calc_task(
     const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
     const uint32_t i10 = rem - i11 * ne10;
 
-    const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, row_idx, grctx->idx_type);
-    assert(i01 < ne01);
-
-    const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
-    const uint32_t i02 = i11 - q02 * ne02;
-    const uint32_t q03 = fastdiv(i12, &kparams->div_ne03);
-    const uint32_t i03 = i12 - q03 * ne03;
-
     const uint32_t offset = chunk_idx * chunk_size;
     const uint32_t cur_elems = (offset < ne00) ? MIN(chunk_size, ne00 - offset) : 0;
-    const uint32_t cur_src0_bytes = (chunks_per_row == 1) ? grctx->src0_row_size : htp_tensor_get_row_size(octx->src[0]->type, cur_elems);
-    const uint32_t cur_dst_bytes  = (chunks_per_row == 1) ? grctx->dst_row_size  : cur_elems * sizeof(float);
-    const uint32_t src0_offset_bytes = (offset == 0) ? 0 : htp_tensor_get_row_size(octx->src[0]->type, offset);
+    const uint32_t cur_dst_bytes = (chunks_per_row == 1) ? grctx->dst_row_size : cur_elems * sizeof(float);
 
     struct get_rows_flat_task task;
-    task.src0_data       = octx->src[0]->data + i01*nb01 + i02*nb02 + i03*nb03 + src0_offset_bytes;
-    task.dst_data        = octx->dst->data + i10*nb1 + i11*nb2 + i12*nb3 + offset * sizeof(float);
-    task.cur_elems       = cur_elems;
-    task.cur_src0_bytes  = cur_src0_bytes;
-    task.cur_dst_bytes   = cur_dst_bytes;
+    task.src0_data      = 0;
+    task.dst_data       = octx->dst->data + i10*nb1 + i11*nb2 + i12*nb3 + offset * sizeof(float);
+    task.cur_elems      = cur_elems;
+    task.cur_src0_bytes = 0;
+    task.cur_dst_bytes  = cur_dst_bytes;
+
+    if (need_src0) {
+        const uint32_t i01 = grctx->read_index(grctx->src1_data, row_idx, grctx->idx_type);
+        assert(i01 < ne01);
+
+        const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
+        const uint32_t i02 = i11 - q02 * ne02;
+        const uint32_t q03 = fastdiv(i12, &kparams->div_ne03);
+        const uint32_t i03 = i12 - q03 * ne03;
+
+        const uint32_t cur_src0_bytes = (chunks_per_row == 1) ? grctx->src0_row_size : htp_tensor_get_row_size(octx->src[0]->type, cur_elems);
+        const uint32_t src0_offset_bytes = (offset == 0) ? 0 : htp_tensor_get_row_size(octx->src[0]->type, offset);
+
+        task.src0_data      = octx->src[0]->data + i01*nb01 + i02*nb02 + i03*nb03 + src0_offset_bytes;
+        task.cur_src0_bytes = cur_src0_bytes;
+    }
+
     return task;
 }
 
@@ -195,7 +215,7 @@ static void get_rows_thread_flat(unsigned int nth, unsigned int ith, void * data
 
     for (uint32_t step = 0, spad_idx = 0; step < ir1 - ir0 && spad_idx < 2; ++step, spad_idx++) {
         const uint32_t i = ir0 + step;
-        struct get_rows_flat_task task = get_rows_flat_calc_task(octx, grctx, i);
+        struct get_rows_flat_task task = get_rows_flat_calc_task(octx, grctx, i, true);
 
         dma_queue_push(dma_q,
                        dma_make_data(octx->dst->data,
@@ -211,7 +231,7 @@ static void get_rows_thread_flat(unsigned int nth, unsigned int ith, void * data
         void * dst_spad = (void *) dma_queue_pop(dma_q).src;
         void * src_spad = (void *) dma_queue_pop(dma_q).dst;
 
-        struct get_rows_flat_task task = get_rows_flat_calc_task(octx, grctx, i);
+        struct get_rows_flat_task task = get_rows_flat_calc_task(octx, grctx, i, false);
 
         htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) i);
         compute((float *) dst_spad, src_spad, task.cur_elems);
@@ -224,7 +244,7 @@ static void get_rows_thread_flat(unsigned int nth, unsigned int ith, void * data
         const uint32_t next_step = step + 2;
         if (next_step < ir1 - ir0) {
             const uint32_t pi = ir0 + next_step;
-            struct get_rows_flat_task next_task = get_rows_flat_calc_task(octx, grctx, pi);
+            struct get_rows_flat_task next_task = get_rows_flat_calc_task(octx, grctx, pi, true);
             dma_queue_push(dma_q,
                            dma_make_data(src_spad, next_task.src0_data),
                            vtcm_layout->src0_spad_half_size, next_task.cur_src0_bytes, next_task.cur_src0_bytes, 1);
@@ -256,7 +276,7 @@ static inline struct get_rows_tiled_task get_rows_tiled_calc_task(
     const uint32_t rem = i - i12 * ne11 * ne10;
     const uint32_t i11 = fastdiv(rem, &kparams->div_ne10);
     const uint32_t i10 = rem - i11 * ne10;
-    const uint32_t i01 = get_rows_read_index_vtcm(grctx->vtcm_src1, i, grctx->idx_type);
+    const uint32_t i01 = grctx->read_index(grctx->src1_data, i, grctx->idx_type);
     assert(i01 < ne01);
 
     const uint32_t q02 = fastdiv(i11, &kparams->div_ne02);
@@ -421,8 +441,6 @@ int op_get_rows(struct htp_ops_context * octx) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
-    grctx.vtcm_src1 = grctx.vtcm_base + grctx.vtcm_layout.off_src1;
-
     work_queue_func_t q_func = NULL;
     switch (kparams->kernel_type) {
         case HTP_GET_ROWS_KERNEL_SAMETYPE:
@@ -457,29 +475,41 @@ int op_get_rows(struct htp_ops_context * octx) {
             return HTP_STATUS_NO_SUPPORT;
     }
 
-    // DMA fetch src1 into VTCM
-    const uint32_t ne10 = octx->src[1]->ne[0];
-    const uint32_t ne11 = octx->src[1]->ne[1];
-    const uint32_t ne12 = octx->src[1]->ne[2];
-    const uint32_t ne13 = octx->src[1]->ne[3];
-    const uint32_t nb11 = octx->src[1]->nb[1];
-    const uint32_t nb12 = octx->src[1]->nb[2];
-    const uint32_t nb13 = octx->src[1]->nb[3];
     const uint32_t elem_size = (grctx.idx_type == HTP_TYPE_I64) ? sizeof(int64_t) : sizeof(int32_t);
+    const size_t src1_bytes  = (size_t) total_tasks * elem_size;
 
-    dma_queue * dma_q = octx->ctx->dma[0];
-    uint8_t * cur_dst = (uint8_t *) grctx.vtcm_src1;
-    for (uint32_t i13 = 0; i13 < ne13; ++i13) {
-        for (uint32_t i12 = 0; i12 < ne12; ++i12) {
-            const dma_addr_t src_plane = octx->src[1]->data + i12 * nb12 + i13 * nb13;
-            while (!dma_queue_push(dma_q, dma_make_data(cur_dst, src_plane),
-                                   ne10 * elem_size, nb11, ne10 * elem_size, ne11)) {
-                dma_queue_pop(dma_q);
+    if (!htp_tensor_is_extended(octx->src[1]) && src1_bytes <= 128 &&
+        htp_tensor_is_contiguous(octx->src[1], elem_size)) {
+        grctx.src1_data  = htp_tensor_data(octx->src[1]);
+        grctx.read_index = get_rows_read_index_ddr;
+    } else {
+        // DMA fetch src1 into VTCM
+        const uint32_t ne10 = octx->src[1]->ne[0];
+        const uint32_t ne11 = octx->src[1]->ne[1];
+        const uint32_t ne12 = octx->src[1]->ne[2];
+        const uint32_t ne13 = octx->src[1]->ne[3];
+        const uint32_t nb11 = octx->src[1]->nb[1];
+        const uint32_t nb12 = octx->src[1]->nb[2];
+        const uint32_t nb13 = octx->src[1]->nb[3];
+
+        dma_queue * dma_q = octx->ctx->dma[0];
+        uint8_t * vtcm_src1 = grctx.vtcm_base + grctx.vtcm_layout.off_src1;
+        uint8_t * cur_dst   = vtcm_src1;
+        for (uint32_t i13 = 0; i13 < ne13; ++i13) {
+            for (uint32_t i12 = 0; i12 < ne12; ++i12) {
+                const dma_addr_t src_plane = octx->src[1]->data + i12 * nb12 + i13 * nb13;
+                while (!dma_queue_push(dma_q, dma_make_data(cur_dst, src_plane),
+                                       ne10 * elem_size, nb11, ne10 * elem_size, ne11)) {
+                    dma_queue_pop(dma_q);
+                }
+                cur_dst += ne10 * ne11 * elem_size;
             }
-            cur_dst += ne10 * ne11 * elem_size;
         }
+        dma_queue_flush(dma_q);
+
+        grctx.src1_data  = vtcm_src1;
+        grctx.read_index = get_rows_read_index_vtcm;
     }
-    dma_queue_flush(dma_q);
 
     FARF(HIGH, "get-rows: (%ux%ux%ux%u) x (%ux%ux%ux%u) -> (%ux%ux%ux%u) : src0-vtcm-size %zu dst-vtcm-size %zu kernel-type %d n-threads %d\n",
          octx->src[0]->ne[0], octx->src[0]->ne[1], octx->src[0]->ne[2], octx->src[0]->ne[3],
