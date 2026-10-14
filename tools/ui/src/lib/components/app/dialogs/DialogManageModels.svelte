@@ -31,7 +31,7 @@
 
 	// the discover view exists only while its setting is on
 	let discoverEnabled = $derived(
-		settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS) !== false
+		Boolean(settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS))
 	);
 
 	$effect(() => {

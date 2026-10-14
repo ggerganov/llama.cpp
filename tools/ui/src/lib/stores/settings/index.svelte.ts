@@ -419,7 +419,7 @@ class SettingsStore {
 	 */
 	private enforceDiscoverCoupling(): void {
 		if (
-			this.config[SETTINGS_KEYS.ENABLE_DISCOVER_MODELS] !== false &&
+			this.config[SETTINGS_KEYS.ENABLE_DISCOVER_MODELS] &&
 			!this.config[SETTINGS_KEYS.USE_HUGGING_FACE_HUB]
 		) {
 			setConfigValue(this.config, SETTINGS_KEYS.USE_HUGGING_FACE_HUB, true);
