@@ -493,7 +493,7 @@ int main(int argc, char ** argv) {
         common_chat_templates_inputs inputs;
         inputs.messages              = messages;
         inputs.add_generation_prompt = true;
-        return common_chat_templates_apply(chat_templates.get(), inputs).prompt;
+        return common_chat_templates_apply(chat_templates.get(), inputs).prompt.str();
     };
 
     // Run one turn, print the reply, then (entropy-bound only) a timing summary just before the next prompt.
