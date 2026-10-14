@@ -1793,11 +1793,18 @@ bool llama_model_loader::load_all_data(
                 if (read_from_mmap.count(w)) {
                     continue;
                 }
+		// range outside the surviving mapping are unmapped below anyway, so skip the madvise and don't count them
+		const auto & used = mmaps_used[w->idx];
+		const size_t begin = std::max(w->offs, used.first);
+		const size_t end   = std::max(w->offs + copied.second, used.second);
+		if (end <= begin) {
+			continue;
+		}
                 // on failure (e.g. seccomp) the same error would repeat for every tensor
                 if (!mappings.at(w->idx)->discard_fragment(w->offs, w->offs + copied.second)) {
                     break;
                 }
-                size_reclaimed += copied.second;
+                size_reclaimed += end - begin; 
             }
             if (size_reclaimed > 0) {
                 LLAMA_LOG_INFO("%s: reclaimed %.2f MiB of mmap source pages\n", __func__, size_reclaimed / 1024.0 / 1024.0);
