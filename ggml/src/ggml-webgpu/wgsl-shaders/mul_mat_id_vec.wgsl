@@ -59,65 +59,27 @@ fn main(
 
     let thread_id = local_id.x;
 
-    for (var i = thread_id;i < params.n_expert;i += WG_SIZE) {
-        gathered_count_ids[i] = 0;
-    }
-
-    workgroupBarrier();
-
-    // gather the selected experts for the target token.
-    for (var col = thread_id;col < params.n_expert_used;col += WG_SIZE) {
-        let expert = i32(ids[params.offset_ids + col]);
-        if (expert == -1) { // skipped slot, owned by no expert
-            continue;
-        }
-        gathered_count_ids[u32(expert)] = 1;
-        gathered_expert_used[u32(expert)] = col;
-    }
-
-    workgroupBarrier();
-
-    let output_groups:u32 = (params.m + OUTPUTS_PER_WG - 1u) / OUTPUTS_PER_WG;
+    let output_groups: u32 = (params.m + OUTPUTS_PER_WG - 1u) / OUTPUTS_PER_WG;
     let wg_linear = wg_id.y * num_wg.x + wg_id.x;
 
-    // the matmul below only writes the rows an expert owns, zero the skipped rows
-    if (wg_linear == 0u) {
-        for (var col = 0u;col < params.n_expert_used;col++) {
-            if (i32(ids[params.offset_ids + col]) != -1) {
-                continue;
-            }
-            for (var row = thread_id;row < params.m;row += WG_SIZE) {
-                dst[params.offset_dst + col * params.m + row] = 0.0f;
-            }
-        }
+    if (wg_linear >= output_groups * params.n_expert_used) {
+        return;
     }
 
-    var own_expert:u32 = 0;
-    var wg_in_batch:u32 = 0;
-    var wg_sum:u32 = 0;
-    var found = false;
+    let slot       = wg_linear / output_groups;
+    let own_expert = ids[params.offset_ids + slot];
+    let row_base   = (wg_linear % output_groups) * OUTPUTS_PER_WG;
 
-    for (var i = 0u;i < params.n_expert;i += 1) {
-        let wg_vec_count = gathered_count_ids[i]; // 1 or 0
-        let wg_per_matrix = output_groups * wg_vec_count;
-        if (wg_sum <= wg_linear && wg_linear < wg_sum + wg_per_matrix) {
-            own_expert = i;
-            wg_in_batch = wg_linear - wg_sum;
-            found = true;
-            break;
-        }
-        wg_sum += wg_per_matrix;
-    }
+    // a skipped slot (id -1) keeps the zero accumulator, so the reduction below writes zeros
+    // no early return: the barriers below must stay in uniform control flow
+    let skipped = i32(own_expert) == -1;
 
-    let row_base = (wg_linear % output_groups) * OUTPUTS_PER_WG;
-    let dst1_stride = params.m;
-
-    let src0_batch_offset = params.offset_src0 + own_expert * params.stride_02;
-    let src1_idx_base = params.offset_src1 + (gathered_expert_used[own_expert] % params.b_ne1) * params.stride_11;
-    let dst_idx_base = params.offset_dst + gathered_expert_used[own_expert] * dst1_stride + row_base;
+    let src0_batch_offset = params.offset_src0 + select(own_expert, 0u, skipped) * params.stride_02;
+    let src1_idx_base     = params.offset_src1 + (slot % params.b_ne1) * params.stride_11;
+    let dst_idx_base      = params.offset_dst + slot * params.m + row_base;
 
     var acc: array<array<f32, OUTPUTS_PER_WG>, NUM_COLS>;
-    if (found) {
+    if (!skipped) {
         acc = accumulate_vec_dot(thread_id, row_base, src0_batch_offset, src1_idx_base);
     }
 
@@ -138,7 +100,7 @@ fn main(
             row_acc += partial_sums[partial_index(row, k)];
         }
         let row_total = subgroupAdd(row_acc);
-        if (found && subgroup_invocation_id == 0) {
+        if (subgroup_invocation_id == 0) {
             dst[dst_idx_base + row] = row_total;
         }
     }
@@ -164,7 +126,7 @@ fn main(
         stride = stride / 2;
     }
 
-    if (found && thread_id < OUTPUTS_PER_WG) {
+    if (thread_id < OUTPUTS_PER_WG) {
         let output_row = row_base + thread_id;
         if (output_row < params.m) {
             dst[dst_idx_base + thread_id] = partial_sums[partial_index(thread_id, 0)];

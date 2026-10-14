@@ -1179,6 +1179,9 @@ class GGUFWriter:
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
 
+    def add_rope_scaling_yarn_truncate(self, value: bool) -> None:
+        self.add_bool(Keys.Rope.SCALING_YARN_TRUNCATE.format(arch=self.arch), value)
+
     def add_rope_scaling_yarn_log_mul(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_YARN_LOG_MUL.format(arch=self.arch), value)
 
@@ -1325,6 +1328,9 @@ class GGUFWriter:
 
     def add_suppress_tokens(self, tokens: Sequence[int]) -> None:
         self.add_array(Keys.Tokenizer.SUPPRESS_TOKENS, tokens)
+
+    def add_normalizer_nfc(self, value: bool) -> None:
+        self.add_bool(Keys.Tokenizer.NORMALIZER_NFC, value)
 
     def add_normalizer_lowercase(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.NORMALIZER_LOWERCASE, value)
