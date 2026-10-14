@@ -376,6 +376,7 @@ class SpecialVocab:
             self._set_special_token(typ, token_id)
         return True
 
+
 @runtime_checkable
 class BaseVocab(Protocol):
     tokenizer_model: ClassVar[str]
