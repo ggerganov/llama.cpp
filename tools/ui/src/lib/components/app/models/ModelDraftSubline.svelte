@@ -23,40 +23,25 @@
 </script>
 
 <!-- the compact draft line lives inside its main item, under the id line; the
-     main model's controls pause, resume and cancel the whole cluster, so the
-     line only reports its state -->
-{#if state === ModelRowDownloadState.DOWNLOADED}
-	<div class="flex items-center gap-2 py-1 pr-2 text-sm">
-		<span
-			aria-hidden="true"
-			class="h-2.5 w-3.5 shrink-0 self-center rounded-bl-sm border-b border-l border-border/70 {connectorClass}"
-		></span>
+     main model's controls pause, resume and cancel its quant-matched drafts, so
+     the line only reports its state -->
+<div class="flex items-center gap-2 py-1 pr-2 text-sm">
+	<span
+		aria-hidden="true"
+		class="h-2.5 w-3.5 shrink-0 self-center rounded-bl-sm border-b border-l border-border/70 {connectorClass}"
+	></span>
 
-		<span class="shrink-0 text-xs text-muted-foreground">Draft model</span>
+	<span class="shrink-0 text-xs text-muted-foreground">Draft model</span>
 
-		<span class={MODEL_VARIANT_BADGE_CLASS}>{kind}</span>
+	<span class={MODEL_VARIANT_BADGE_CLASS}>{kind}</span>
 
-		{#if quant}
-			<span class={MODEL_BADGE_CLASS}>{quant}</span>
-		{/if}
+	{#if quant}
+		<span class={MODEL_BADGE_CLASS}>{quant}</span>
+	{/if}
 
+	{#if state === ModelRowDownloadState.DOWNLOADED}
 		<Check class="ml-auto h-4 w-4 shrink-0 text-green-500" />
-	</div>
-{:else}
-	<div class="flex items-center gap-2 py-1 pr-2 text-sm">
-		<span
-			aria-hidden="true"
-			class="h-2.5 w-3.5 shrink-0 self-center rounded-bl-sm border-b border-l border-border/70 {connectorClass}"
-		></span>
-
-		<span class="shrink-0 text-xs text-muted-foreground">Draft model</span>
-
-		<span class={MODEL_VARIANT_BADGE_CLASS}>{kind}</span>
-
-		{#if quant}
-			<span class={MODEL_BADGE_CLASS}>{quant}</span>
-		{/if}
-
+	{:else}
 		<span class="ml-auto flex shrink-0 items-center">
 			{#if percent !== null}
 				<span class="font-mono text-xs tabular-nums text-muted-foreground">{percent}%</span>
@@ -64,5 +49,5 @@
 				<span class="text-xs text-muted-foreground">Paused</span>
 			{/if}
 		</span>
-	</div>
-{/if}
+	{/if}
+</div>
