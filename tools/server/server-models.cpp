@@ -2221,8 +2221,8 @@ void server_models_routes::init_routes() {
             {"output_modalities", json::array({"text"})},
         };
 
-        // a download that never finished has no instance: report it as still
-        // downloading so the UI can offer to resume it, without starting anything
+        // a download that never finished has no instance: report it as incomplete so
+        // the UI can offer to resume it, without starting anything
         for (const auto & tag : models.get_unfinished_downloads()) {
             if (models.has_model(tag)) {
                 continue; // complete, or downloading right now
@@ -2234,7 +2234,7 @@ void server_models_routes::init_routes() {
                 {"object",       "model"},
                 {"owned_by",     "llamacpp"},
                 {"created",      t},
-                {"status",       json { {"value", "downloading"}, {"args", json::array()} }},
+                {"status",       json { {"value", server_model_status_to_string(SERVER_MODEL_STATUS_INCOMPLETE)}, {"args", json::array()} }},
                 {"architecture", architecture_default},
                 {"source",       server_model_source_to_string(SERVER_MODEL_SOURCE_CACHE)},
                 {"can_remove",   true},

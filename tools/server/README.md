@@ -2102,6 +2102,17 @@ Note: for "downloading" state, there can be multiple files be downloading in par
 }
 ```
 
+A download that never finished (stopped or interrupted) is listed under a separate
+"incomplete" status, without an instance: re-posting the model to `/models/download`
+resumes it from the files already on disk, and `/models/remove` drops its partial files.
+
+```json
+"status": {
+  "value": "incomplete",
+  "args": []
+}
+```
+
 ### POST `/models/load`: Load a model
 
 Load a model

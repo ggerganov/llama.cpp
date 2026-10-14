@@ -31,6 +31,7 @@
 enum server_model_status {
     // TODO: also add downloading state when the logic is added
     SERVER_MODEL_STATUS_DOWNLOADING,
+    SERVER_MODEL_STATUS_INCOMPLETE, // a download that never finished, listed without an instance
     SERVER_MODEL_STATUS_DOWNLOADED,
     SERVER_MODEL_STATUS_UNLOADED,
     SERVER_MODEL_STATUS_LOADING,
@@ -52,6 +53,7 @@ enum server_child_mode {
 static std::string server_model_status_to_string(server_model_status status) {
     switch (status) {
         case SERVER_MODEL_STATUS_DOWNLOADING: return "downloading";
+        case SERVER_MODEL_STATUS_INCOMPLETE:  return "incomplete";
         case SERVER_MODEL_STATUS_DOWNLOADED:  return "downloaded";
         case SERVER_MODEL_STATUS_UNLOADED:    return "unloaded";
         case SERVER_MODEL_STATUS_LOADING:     return "loading";
