@@ -15,6 +15,8 @@ import {
 	HF_BASE_URL,
 	HF_CACHE_DIR_SEPARATOR,
 	HF_CACHE_PATH_REGEX,
+	HF_DECISION_MODEL_TAG,
+	HF_DECISION_PIPELINE_TAG,
 	HF_DEFAULT_LIMIT,
 	HF_FIRST_SHARD,
 	HF_FRONTMATTER_REGEX,
@@ -97,9 +99,6 @@ export class HuggingFaceService {
 		string,
 		Promise<{ org: string; name: string } | null>
 	>();
-
-	/** Hub tag marking decision models, e.g. Kev and Laya. */
-	private static readonly DECISION_MODEL_TAG = 'decision-model';
 
 	// Model details fetched this session, keyed by repo id: the Hub rate limits
 	// aggressively, so each repo costs at most one request per load. Failures stay
@@ -656,8 +655,7 @@ export class HuggingFaceService {
 	 */
 	static isDecisionModel(model: Pick<HfModelInfo, 'pipeline_tag' | 'tags'>): boolean {
 		return (
-			model.tags.includes(HuggingFaceService.DECISION_MODEL_TAG) ||
-			model.pipeline_tag === 'text-classification'
+			model.tags.includes(HF_DECISION_MODEL_TAG) || model.pipeline_tag === HF_DECISION_PIPELINE_TAG
 		);
 	}
 

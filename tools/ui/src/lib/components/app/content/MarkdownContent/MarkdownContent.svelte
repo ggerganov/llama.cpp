@@ -136,6 +136,8 @@
 
 	// Per-instance transform cache, avoids re-transforming stable blocks during streaming
 	// Garbage collected when component is destroyed (on conversation change)
+	const CACHE_KEY_PLAIN = 'plain';
+	const CACHE_KEY_ALLOW_HTML = 'allow-html';
 	const transformCache = new SvelteMap<string, string>();
 	let previousContent = '';
 
@@ -200,7 +202,7 @@
 		const hash = getMdastNodeHash(node, index);
 		// the rendered HTML also depends on allowHtml (sanitized raw vs escaped),
 		// so the cache is keyed per mode
-		const cacheKey = `${allowHtml ? 'a' : 'p'}:${hash}`;
+		const cacheKey = `${allowHtml ? CACHE_KEY_ALLOW_HTML : CACHE_KEY_PLAIN}:${hash}`;
 		const cached = transformCache.get(cacheKey);
 
 		if (cached) {
