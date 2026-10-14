@@ -5983,7 +5983,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     kparams->n_act_threads = act_threads_selected;
     kparams->tile_size = is_tiled ? htp_mm_get_weight_tile_size(wtype) : 0;
     kparams->aligned_tile_size = aligned_tile_size;
-    kparams->act_row_size = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+    kparams->act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
     kparams->vtcm_size = vtcm_size;
     kparams->vtcm_src0_size = 0;
     kparams->div_n_act_threads = init_fastdiv_values(act_threads_selected);
@@ -6039,13 +6039,9 @@ static void ggml_hexagon_precompute_hvx_mm_params(
         const bool k_align = (ne10 % 32 == 0);
 
         if (is_matmul_id) {
-            kparams->kernel_type   = (src1_nrows < (int) sess->n_threads && wtype != GGML_TYPE_F16)
-                                   ? HTP_MM_KERNEL_HVX_QUANT_BLOCK : HTP_MM_KERNEL_HVX_QUANT_ROW;
-            kparams->act_row_size  = (wtype == GGML_TYPE_F16)
-                                   ? hex_round_up(ne10 * 2, 128)
-                                   : (htp_mm_weight_has_offset(wtype)
-                                      ? htp_mm_q8_1_tiled_row_size(ne10)
-                                      : htp_mm_q8_0_tiled_row_size(ne10));
+            kparams->kernel_type  = (src1_nrows < (int) sess->n_threads)
+                                  ? HTP_MM_KERNEL_HVX_QUANT_BLOCK : HTP_MM_KERNEL_HVX_QUANT_ROW;
+            kparams->act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
 
             struct htp_mm_hvx_vtcm_layout L;
             uint32_t max_prefetch = (src1_nrows > HTP_MM_HMX_MIN_NROWS) ? 2 : 16;
@@ -6074,12 +6070,8 @@ static void ggml_hexagon_precompute_hvx_mm_params(
         } else {
             bool try_tiled = (k_align && opt_mm_select >= 1);
             if (try_tiled) {
-                kparams->act_row_size = (wtype == GGML_TYPE_F16)
-                                      ? hex_round_up(ne10 * 2, 128)
-                                      : (htp_mm_weight_has_offset(wtype)
-                                         ? htp_mm_q8_1_tiled_row_size(ne10)
-                                         : htp_mm_q8_0_tiled_row_size(ne10));
-                if (src1_nrows < (int) sess->n_threads && wtype != GGML_TYPE_F16) {
+                kparams->act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
+                if (src1_nrows < (int) sess->n_threads) {
                     kparams->kernel_type = HTP_MM_KERNEL_HVX_QUANT_BLOCK;
                 } else {
                     kparams->kernel_type = HTP_MM_KERNEL_HVX_QUANT_ROW;
@@ -7398,7 +7390,7 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
 
     {
         const int act_nrows = ne11 * ne12 * ne13;
-        const size_t act_row_size = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+        const size_t act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
         const size_t src0_row_size = src0->nb[1];
 
         uint32_t best_n_prefetch = 16;

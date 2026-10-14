@@ -654,12 +654,14 @@ static void name(unsigned int nth, unsigned int ith, void * data) {             
     htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_A_QUANT, ir_first);                                         \
 }
 
-QUANTIZE_IMPL(quantize_f32_q8_0_tiled, "quantize-f32-q8_0_tiled", quantize_f32_q8_0_tiled_kernel, htp_mm_q8_0_tiled_row_size(ne0))
-QUANTIZE_IMPL(quantize_f32_q8_1_tiled, "quantize-f32-q8_1_tiled", quantize_f32_q8_1_tiled_kernel, htp_mm_q8_1_tiled_row_size(ne0))
+QUANTIZE_IMPL(quantize_f32_q8_0_tiled,     "quantize-f32-q8_0_tiled",     quantize_f32_q8_0_tiled_kernel,     htp_mm_q8_0_tiled_row_size(ne0))
+QUANTIZE_IMPL(quantize_f32_q8_1_tiled,     "quantize-f32-q8_1_tiled",     quantize_f32_q8_1_tiled_kernel,     htp_mm_q8_1_tiled_row_size(ne0))
 QUANTIZE_IMPL(quantize_f32_q8_1_s16_tiled, "quantize-f32-q8_1_s16_tiled", quantize_f32_q8_1_s16_tiled_kernel, htp_mm_q8_1_tiled_row_size(ne0))
-QUANTIZE_IMPL(quantize_f32_f32,        "quantize-f32-f32",        quantize_f32_f32_kernel,        mmctx->vtcm_act_stride)
-QUANTIZE_IMPL(quantize_f32_f16,        "quantize-f32-f16",        quantize_f32_f16_kernel,        mmctx->vtcm_act_stride)
-QUANTIZE_IMPL(quantize_f16_f16,        "quantize-f16-f16",        quantize_f16_f16_kernel,        mmctx->vtcm_act_stride)
+QUANTIZE_IMPL(quantize_f32_f16_tiled,      "quantize-f32-f16_tiled",      quantize_f32_f16_tiled_kernel,      htp_mm_f16_tiled_row_size(ne0))
+QUANTIZE_IMPL(quantize_f16_f16_tiled,      "quantize-f16-f16_tiled",      quantize_f16_f16_tiled_kernel,      htp_mm_f16_tiled_row_size(ne0))
+QUANTIZE_IMPL(quantize_f32_f32,            "quantize-f32-f32",            quantize_f32_f32_kernel,            mmctx->vtcm_act_stride)
+QUANTIZE_IMPL(quantize_f32_f16,            "quantize-f32-f16",            quantize_f32_f16_kernel,            mmctx->vtcm_act_stride)
+QUANTIZE_IMPL(quantize_f16_f16,            "quantize-f16-f16",            quantize_f16_f16_kernel,            mmctx->vtcm_act_stride)
 
 static void quantize_f32_q8_0_tiled_block(unsigned int nth, unsigned int ith, void * data) {
     (void) nth;
@@ -745,10 +747,66 @@ static void quantize_f32_q8_1_s16_tiled_block(unsigned int nth, unsigned int ith
     htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_A_QUANT, mmctx->quant_ib_first[ith]);
 }
 
-// q8_1 for weight types with offsets (q8_1_s16 for Q2_K), otherwise q8_0
-static inline worker_callback_t htp_mm_act_quant_row_func(int weight_type) {
+static void quantize_f32_f16_tiled_block(unsigned int nth, unsigned int ith, void * data) {
+    (void) nth;
+    struct htp_mm_context * mmctx = data;
+    if (mmctx->quant_ib_first[ith] >= mmctx->quant_ib_last[ith]) {
+        return;
+    }
+    struct htp_ops_context * octx = mmctx->octx;
+    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_A_QUANT, mmctx->quant_ib_first[ith]);
+
+    const struct htp_tensor * src = mmctx->act;
+
+    quantize_f32_f16_tiled_block_kernel(
+        (const float *) mmctx->vtcm_act_raw,
+        mmctx->vtcm_act,
+        NULL,
+        src->ne[0],
+        mmctx->quant_ib_first[ith],
+        mmctx->quant_ib_last[ith],
+        mmctx->vtcm_act_raw_stride,
+        htp_mm_f16_tiled_row_size(src->ne[0]),
+        mmctx->quant_r[ith],
+        mmctx->quant_c[ith]
+    );
+
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_A_QUANT, mmctx->quant_ib_first[ith]);
+}
+
+static void quantize_f16_f16_tiled_block(unsigned int nth, unsigned int ith, void * data) {
+    (void) nth;
+    struct htp_mm_context * mmctx = data;
+    if (mmctx->quant_ib_first[ith] >= mmctx->quant_ib_last[ith]) {
+        return;
+    }
+    struct htp_ops_context * octx = mmctx->octx;
+    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_A_QUANT, mmctx->quant_ib_first[ith]);
+
+    const struct htp_tensor * src = mmctx->act;
+
+    quantize_f16_f16_tiled_block_kernel(
+        (const __fp16 *) mmctx->vtcm_act_raw,
+        mmctx->vtcm_act,
+        NULL,
+        src->ne[0],
+        mmctx->quant_ib_first[ith],
+        mmctx->quant_ib_last[ith],
+        mmctx->vtcm_act_raw_stride,
+        htp_mm_f16_tiled_row_size(src->ne[0]),
+        mmctx->quant_r[ith],
+        mmctx->quant_c[ith]
+    );
+
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_A_QUANT, mmctx->quant_ib_first[ith]);
+}
+
+// q8_1 for weight types with offsets (q8_1_s16 for Q2_K), f16_tiled for F16, otherwise q8_0
+static inline worker_callback_t htp_mm_act_quant_row_func(int weight_type, int act_type) {
     if (weight_type == HTP_TYPE_F16) {
-        return quantize_f32_f16;
+        return (act_type == HTP_TYPE_F16) ? quantize_f16_f16_tiled : quantize_f32_f16_tiled;
     }
     if (weight_type == HTP_TYPE_Q2_K) {
         return quantize_f32_q8_1_s16_tiled;
@@ -756,9 +814,9 @@ static inline worker_callback_t htp_mm_act_quant_row_func(int weight_type) {
     return htp_mm_weight_has_offset(weight_type) ? quantize_f32_q8_1_tiled : quantize_f32_q8_0_tiled;
 }
 
-static inline worker_callback_t htp_mm_act_quant_block_func(int weight_type) {
+static inline worker_callback_t htp_mm_act_quant_block_func(int weight_type, int act_type) {
     if (weight_type == HTP_TYPE_F16) {
-        return quantize_f32_f16;
+        return (act_type == HTP_TYPE_F16) ? quantize_f16_f16_tiled_block : quantize_f32_f16_tiled_block;
     }
     if (weight_type == HTP_TYPE_Q2_K) {
         return quantize_f32_q8_1_s16_tiled_block;
@@ -1845,38 +1903,33 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
 
         case HTP_MM_KERNEL_HVX_QUANT_BLOCK:
         case HTP_MM_KERNEL_HVX_QUANT_ROW:
-        default:
+        default: {
             if (hvx_mm_init_tiled_vec_dot(mmctx, src0->type) != 0) {
                 return HTP_STATUS_NO_SUPPORT;
             }
 
-            if (src0->type == HTP_TYPE_F16) {
-                quant_task_func = (act->type == HTP_TYPE_F32) ? quantize_f32_f16 : quantize_f16_f16;
-                need_quant      = (act->type == HTP_TYPE_F32);
-                n_quant_tasks   = MIN(act_nrows, octx->n_threads);
-            } else {
-                const uint32_t qk = QK_Q8_0_TILED;
-                const uint32_t nb = (ne10 + qk - 1) / qk;
-                const uint32_t total_nb = act_nrows * nb;
+            const uint32_t qk = QK_Q8_0_TILED;
+            const uint32_t nb = (ne10 + qk - 1) / qk;
+            const uint32_t total_nb = act_nrows * nb;
 
-                if (act_nrows < octx->n_threads && !is_batched) {
-                    n_quant_tasks = MIN(total_nb, octx->n_threads);
-                    quant_task_func = htp_mm_act_quant_block_func(src0->type);
-                    for (uint32_t ith = 0; ith < n_quant_tasks; ++ith) {
-                        uint32_t ib_first = (total_nb * ith) / n_quant_tasks;
-                        uint32_t ib_last  = (total_nb * (ith + 1)) / n_quant_tasks;
-                        mmctx->quant_ib_first[ith] = ib_first;
-                        mmctx->quant_ib_last[ith]  = ib_last;
-                        mmctx->quant_r[ith]        = ib_first / nb;
-                        mmctx->quant_c[ith]        = ib_first % nb;
-                    }
-                } else {
-                    n_quant_tasks = MIN(act_nrows, octx->n_threads);
-                    quant_task_func = htp_mm_act_quant_row_func(src0->type);
+            if (act_nrows < octx->n_threads && !is_batched) {
+                n_quant_tasks = MIN(total_nb, octx->n_threads);
+                quant_task_func = htp_mm_act_quant_block_func(src0->type, act->type);
+                for (uint32_t ith = 0; ith < n_quant_tasks; ++ith) {
+                    uint32_t ib_first = (total_nb * ith) / n_quant_tasks;
+                    uint32_t ib_last  = (total_nb * (ith + 1)) / n_quant_tasks;
+                    mmctx->quant_ib_first[ith] = ib_first;
+                    mmctx->quant_ib_last[ith]  = ib_last;
+                    mmctx->quant_r[ith]        = ib_first / nb;
+                    mmctx->quant_c[ith]        = ib_first % nb;
                 }
+            } else {
+                n_quant_tasks = MIN(act_nrows, octx->n_threads);
+                quant_task_func = htp_mm_act_quant_row_func(src0->type, act->type);
             }
             act_row_size = kparams->act_row_size;
             break;
+        }
     }
 
     const uint32_t m_chunk = (kparams->m_chunk > 0 && (uint32_t) kparams->m_chunk < act_nrows)
@@ -1950,7 +2003,7 @@ static int hvx_mm_matmul(struct htp_ops_context * octx) {
                 work_queue_func_t q_func;
                 if (cur_m_rows < octx->n_threads && (kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK || kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW)) {
                     quant_tasks = MIN(total_nb, octx->n_threads);
-                    q_func = htp_mm_act_quant_block_func(src0->type);
+                    q_func = htp_mm_act_quant_block_func(src0->type, act->type);
                     for (uint32_t ith = 0; ith < quant_tasks; ++ith) {
                         uint32_t ib_first = (total_nb * ith) / quant_tasks;
                         uint32_t ib_last  = (total_nb * (ith + 1)) / quant_tasks;
@@ -4032,7 +4085,7 @@ static int hvx_mm_matmul_id(
     uint32_t n_quant_tasks = 1;
     if (act_nrows < octx->n_threads) {
         n_quant_tasks = MIN(total_nb, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_block_func(src0->type);
+        quant_task_func = htp_mm_act_quant_block_func(src0->type, act->type);
         for (uint32_t ith = 0; ith < n_quant_tasks; ++ith) {
             uint32_t ib_first = (total_nb * ith) / n_quant_tasks;
             uint32_t ib_last  = (total_nb * (ith + 1)) / n_quant_tasks;
@@ -4043,9 +4096,9 @@ static int hvx_mm_matmul_id(
         }
     } else {
         n_quant_tasks = MIN(act_nrows, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_row_func(src0->type);
+        quant_task_func = htp_mm_act_quant_row_func(src0->type, act->type);
     }
-    size_t act_row_size   = htp_mm_weight_has_offset(src0->type) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+    size_t act_row_size = htp_mm_tiled_act_row_size(src0->type, ne10);
 
     struct htp_mm_hvx_vtcm_layout L;
     htp_mm_hvx_vtcm_layout_build(&L, kparams->kernel_type, src0->type, ne10, act_nrows, octx->n_threads,
@@ -4199,7 +4252,7 @@ static int hvx_mm_matmul_id_nx(
     uint32_t n_quant_tasks = 1;
     if (act_nrows < octx->n_threads) {
         n_quant_tasks = MIN(total_nb, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_block_func(src0->type);
+        quant_task_func = htp_mm_act_quant_block_func(src0->type, act->type);
         for (uint32_t ith = 0; ith < n_quant_tasks; ++ith) {
             uint32_t ib_first = (total_nb * ith) / n_quant_tasks;
             uint32_t ib_last  = (total_nb * (ith + 1)) / n_quant_tasks;
@@ -4210,9 +4263,9 @@ static int hvx_mm_matmul_id_nx(
         }
     } else {
         n_quant_tasks = MIN(act_nrows, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_row_func(src0->type);
+        quant_task_func = htp_mm_act_quant_row_func(src0->type, act->type);
     }
-    size_t act_row_size  = htp_mm_weight_has_offset(src0->type) ? htp_mm_q8_1_tiled_row_size(act->ne[0]) : htp_mm_q8_0_tiled_row_size(act->ne[0]);
+    size_t act_row_size = htp_mm_tiled_act_row_size(src0->type, act->ne[0]);
 
     struct htp_mm_hvx_vtcm_layout L;
     htp_mm_hvx_vtcm_layout_build(&L, kparams->kernel_type, src0->type, act->ne[0], act_nrows, octx->n_threads,
@@ -4592,7 +4645,7 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
     uint32_t n_quant_tasks = 1;
     if (act_nrows < octx->n_threads) {
         n_quant_tasks = MIN(total_nb, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_block_func(src0->type);
+        quant_task_func = htp_mm_act_quant_block_func(src0->type, act->type);
         for (uint32_t ith = 0; ith < n_quant_tasks; ++ith) {
             uint32_t ib_first = (total_nb * ith) / n_quant_tasks;
             uint32_t ib_last  = (total_nb * (ith + 1)) / n_quant_tasks;
@@ -4603,12 +4656,10 @@ static int op_matmul_nx_impl(struct htp_ops_context * octx) {
         }
     } else {
         n_quant_tasks = MIN(act_nrows, octx->n_threads);
-        quant_task_func = htp_mm_act_quant_row_func(src0->type);
+        quant_task_func = htp_mm_act_quant_row_func(src0->type, act->type);
     }
 
-    const size_t act_row_size = htp_mm_weight_has_offset(src0->type)
-                               ? htp_mm_q8_1_tiled_row_size(act->ne[0])
-                               : htp_mm_q8_0_tiled_row_size(act->ne[0]);
+    const size_t act_row_size = htp_mm_tiled_act_row_size(src0->type, act->ne[0]);
 
     struct htp_mm_hvx_vtcm_layout L;
     htp_mm_hvx_vtcm_layout_build(&L, kparams->kernel_type, src0->type, act->ne[0], act_nrows, octx->n_threads,

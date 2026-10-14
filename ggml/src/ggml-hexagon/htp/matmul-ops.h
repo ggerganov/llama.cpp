@@ -58,6 +58,7 @@ extern "C" {
 // --- Activation Tiled Block Sizes (including padding) ---
 #define HTP_MM_ACT_TILE_SIZE_Q8_0      1152
 #define HTP_MM_ACT_TILE_SIZE_Q8_1      1280
+#define HTP_MM_ACT_TILE_SIZE_F16       2048
 
 #define HTP_MM_MAX_PREFETCH 16
 
@@ -286,6 +287,19 @@ static inline size_t htp_mm_q8_1_tiled_row_size(uint32_t ne) {
     const uint32_t ne_padded = ((ne + 127) / 128) * 128;
     const uint32_t nb_32 = ne_padded / 32;
     return nb_32 * HTP_MM_ACT_TILE_SIZE_Q8_1;
+}
+
+static inline size_t htp_mm_f16_tiled_row_size(uint32_t ne) {
+    const uint32_t ne_padded = ((ne + 127) / 128) * 128;
+    const uint32_t nb_32 = ne_padded / 32;
+    return nb_32 * HTP_MM_ACT_TILE_SIZE_F16;
+}
+
+static inline size_t htp_mm_tiled_act_row_size(int weight_type, uint32_t ne) {
+    if (weight_type == HTP_TYPE_F16) {
+        return htp_mm_f16_tiled_row_size(ne);
+    }
+    return htp_mm_weight_has_offset(weight_type) ? htp_mm_q8_1_tiled_row_size(ne) : htp_mm_q8_0_tiled_row_size(ne);
 }
 
 static inline size_t htp_mm_get_tiled_row_stride(int weight_type, uint32_t k) {
@@ -557,7 +571,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
             weight_sz_per_thread = hex_round_up(n_prefetch * src0_row_size_padded, 128);
         }
 
-        size_t tiled_act_row_size = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10) : htp_mm_q8_0_tiled_row_size(ne10);
+        size_t tiled_act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
         size_t q_act_sz = hex_round_up(tiled_act_row_size * act_nrows, 128);
         size_t raw_row_size = hex_round_up(ne10 * sizeof(float), QK_Q8_0_TILED * sizeof(float));
 
@@ -568,8 +582,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
         act_raw_sz = hex_round_up(raw_row_size * act_nrows, 128);
     } else if (is_matmul_id) {
         const size_t src0_row_size_padded = htp_mm_round_up(src0_row_size, 128);
-        const size_t act_row_size_tiled = htp_mm_weight_has_offset(wtype) ? htp_mm_q8_1_tiled_row_size(ne10)
-                                                                          : htp_mm_q8_0_tiled_row_size(ne10);
+        const size_t act_row_size_tiled = htp_mm_tiled_act_row_size(wtype, ne10);
 
         size_t src0_sz_per_thread = htp_mm_round_up(n_prefetch * src0_row_size_padded, 256);
         act_sz                    = htp_mm_round_up(act_row_size_tiled * act_nrows, 256);
@@ -612,11 +625,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
             }
             case HTP_MM_KERNEL_HVX_QUANT_BLOCK:
             case HTP_MM_KERNEL_HVX_QUANT_ROW: {
-                size_t q_act_row_size = (wtype == HTP_TYPE_F16)
-                                      ? htp_mm_round_up(ne10 * 2, 128)
-                                      : (htp_mm_weight_has_offset(wtype)
-                                         ? htp_mm_q8_1_tiled_row_size(ne10)
-                                         : htp_mm_q8_0_tiled_row_size(ne10));
+                size_t q_act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
 
                 src0_sz = htp_mm_round_up(n_prefetch * src0_row_size_padded, 256);
                 act_sz  = htp_mm_round_up(q_act_row_size * act_nrows, 256);
@@ -701,11 +710,7 @@ static inline bool htp_mm_hvx_solve_vtcm_params(
     const size_t avail_act = vtcm_budget - fixed_bytes;
     size_t row_size = 0;
     if (kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW || kernel_type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
-        row_size = (wtype == HTP_TYPE_F16)
-                 ? hex_round_up(ne10 * 2, 128)
-                 : (htp_mm_weight_has_offset(wtype)
-                    ? htp_mm_q8_1_tiled_row_size(ne10)
-                    : htp_mm_q8_0_tiled_row_size(ne10));
+        row_size = htp_mm_tiled_act_row_size(wtype, ne10);
     } else if (kernel_type == HTP_MM_KERNEL_HVX_F16_F16_VTCM) {
         row_size = hex_round_up(ne10 * 2, 128);
     } else {
