@@ -708,6 +708,17 @@ static bool set_reuse_addr(sockfd_t sockfd) {
     return ret == 0;
 }
 
+void socket_t::interrupt() {
+    if (!is_valid_fd(pimpl->fd)) {
+        return;
+    }
+#ifdef _WIN32
+    ::shutdown(pimpl->fd, SD_BOTH);
+#else
+    ::shutdown(pimpl->fd, SHUT_RDWR);
+#endif
+}
+
 socket_ptr socket_t::accept() {
     auto client_socket_fd = ::accept(pimpl->fd, NULL, NULL);
     if (!is_valid_fd(client_socket_fd)) {
@@ -742,7 +753,9 @@ socket_ptr socket_t::create_server(const char * host, int port) {
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         return nullptr;
     }
-    if (listen(sockfd, 1) < 0) {
+    // a backlog of one silently drops connection attempts while the server is busy with the
+    // previous client, the kernel refuses the SYN and the client hangs until its timeout
+    if (listen(sockfd, 16) < 0) {
         return nullptr;
     }
     LOG_DBG("[%s] listening on %s:%d\n", __func__, host, port);

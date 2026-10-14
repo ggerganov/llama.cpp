@@ -21,6 +21,9 @@ struct socket_t {
     bool flush();
 
     socket_ptr accept();
+    // shut down both directions of the connection, unblocks a pending accept() or recv_data()
+    // the descriptor stays owned by this object
+    void interrupt();
 
     void get_caps(uint8_t * local_caps);
     void update_caps(const uint8_t * remote_caps);

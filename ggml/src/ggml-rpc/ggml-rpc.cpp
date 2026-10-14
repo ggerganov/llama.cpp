@@ -2759,12 +2759,47 @@ static void rpc_serve_client(const std::vector<ggml_backend_t> & backends, const
     }
 }
 
+// the stop request and the sockets a stop must interrupt
+// the listening socket is tracked so that a stop can break a pending accept()
+// the current client socket is tracked so that a stop can break a pending recv_data(),
+// otherwise the server thread parks in a blocking read on an idle client and never returns
+static std::atomic<bool> g_rpc_stop_requested{false};
+static std::mutex        g_rpc_sockets_mutex;
+static socket_ptr        g_rpc_listen_socket;
+static socket_ptr        g_rpc_client_socket;
+
+struct rpc_server_socket_guard {
+    rpc_server_socket_guard(socket_ptr & slot, const socket_ptr & s) : slot(slot) {
+        std::lock_guard<std::mutex> lock(g_rpc_sockets_mutex);
+        slot = s;
+    }
+
+    ~rpc_server_socket_guard() {
+        std::lock_guard<std::mutex> lock(g_rpc_sockets_mutex);
+        slot.reset();
+    }
+
+    socket_ptr & slot;
+};
+
+void ggml_backend_rpc_request_stop(void) {
+    g_rpc_stop_requested.store(true);
+    std::lock_guard<std::mutex> lock(g_rpc_sockets_mutex);
+    if (g_rpc_listen_socket) {
+        g_rpc_listen_socket->interrupt();
+    }
+    if (g_rpc_client_socket) {
+        g_rpc_client_socket->interrupt();
+    }
+}
+
 void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir,
                                    size_t n_threads, size_t n_devices, ggml_backend_dev_t * devices) {
     if (n_devices == 0 || devices == nullptr) {
         LOG_ERROR("Invalid arguments to ggml_backend_rpc_start_server\n");
         return;
     }
+    g_rpc_stop_requested.store(false);
     std::vector<ggml_backend_t> backends;
     LOG_INFO("Starting RPC server v%d.%d.%d\n",
         RPC_PROTO_MAJOR_VERSION,
@@ -2814,16 +2849,24 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
         LOG_ERROR("Failed to create server socket\n");
         return;
     }
-    while (true) {
+    rpc_server_socket_guard listen_guard(g_rpc_listen_socket, server_socket);
+    while (!g_rpc_stop_requested.load()) {
         auto client_socket = server_socket->accept();
+        if (g_rpc_stop_requested.load()) {
+            break;
+        }
         if (client_socket == nullptr) {
             LOG_ERROR("Failed to accept client connection\n");
             return;
         }
         LOG_INFO("Accepted client connection\n");
-        rpc_serve_client(backends, cache_dir, client_socket);
+        {
+            rpc_server_socket_guard client_guard(g_rpc_client_socket, client_socket);
+            rpc_serve_client(backends, cache_dir, client_socket);
+        }
         LOG_INFO("Client connection closed\n");
     }
+    LOG_INFO("RPC server stopped\n");
     rpc_transport_shutdown();
     for (auto backend : backends) {
         ggml_backend_free(backend);
