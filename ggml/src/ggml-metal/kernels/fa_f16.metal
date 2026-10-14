@@ -85,6 +85,8 @@ constant bool FC_flash_attn_ext_tensor_has_scap  [[function_constant(FC_FLASH_AT
 
 // ref: https://arxiv.org/pdf/2307.08691.pdf
 template<
+    typename T,                                 // Q, K, V and P types
+    typename T4,
     short DK,                                   // K head size
     short DV,                                   // V head size
     short Q   = OP_FLASH_ATTN_EXT_TENSOR_NQPSG, // queries per threadgroup
@@ -118,9 +120,9 @@ kernel void kernel_flash_attn_ext_tensor(
 
     const short tiitg = sgitg*NW + tiisg;
 
-    threadgroup half  * sq = (threadgroup half  *) shmem;       // [Q, DK] queries
+    threadgroup T     * sq = (threadgroup T     *) shmem;       // [Q, DK] queries
     threadgroup float * ss = (threadgroup float *) (sq + Q*DK); // [Q, C]  scores
-    threadgroup half  * sp = (threadgroup half  *) (ss + Q*C);  // [Q, C]  probabilities
+    threadgroup T     * sp = (threadgroup T     *) (ss + Q*C);  // [Q, C]  probabilities
     threadgroup float * sr = (threadgroup float *) (sp + Q*C);  // [Q]     per-row scale of O
     threadgroup int   * sf = (threadgroup int   *) (sr + Q);    // [1]     last iteration (ic0 + 1) that rescaled O
 
@@ -146,7 +148,7 @@ kernel void kernel_flash_attn_ext_tensor(
             q4 = ((device const float4 *) (q + j*args.nb01))[i%(DK/4)];
         }
 
-        ((threadgroup half4 *) sq)[i] = (half4) (q4*qscale);
+        ((threadgroup T4 *) sq)[i] = (T4) (q4*qscale);
     }
 
     device const half * pm[NQ];
@@ -199,7 +201,7 @@ kernel void kernel_flash_attn_ext_tensor(
         mpp::tensor_ops::matmul2d_descriptor(Q, DV, C, false, false, false, mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate),
         execution_simdgroups<NSG>> mm_pv;
 
-    auto tv0 = tensor((device half *) v, dextents<int32_t, 2>(DV, C), array<int, 2>({1, sv}));
+    auto tv0 = tensor((device T *) v, dextents<int32_t, 2>(DV, C), array<int, 2>({1, sv}));
 
     // the O matrix from the paper
     auto co = mm_pv.template get_destination_cooperative_tensor<decltype(tp), decltype(tv0), float>();
@@ -230,7 +232,7 @@ kernel void kernel_flash_attn_ext_tensor(
 
         // Q*K^T
         {
-            auto tk = tensor((device half *) (k + (uint64_t) ic*args.nb11), dextents<int32_t, 2>(DK, C), array<int, 2>({1, sk}));
+            auto tk = tensor((device T *) (k + (uint64_t) ic*args.nb11), dextents<int32_t, 2>(DK, C), array<int, 2>({1, sk}));
 
             mm_qk.run(tq, tk, ts);
         }
@@ -283,7 +285,7 @@ kernel void kernel_flash_attn_ext_tensor(
 
             FOR_UNROLL (short ii = 0; ii < NC; ++ii) {
                 // the sum uses the same rounded values as P*V
-                const half p = (half) exp(s[ii] - M[jj]);
+                const T p = (T) exp(s[ii] - M[jj]);
 
                 sp[j*C + ii*NW + tiisg] = p;
 
@@ -309,7 +311,7 @@ kernel void kernel_flash_attn_ext_tensor(
         }
 
         {
-            auto tv = tensor((device half *) (v + (uint64_t) ic*args.nb21), dextents<int32_t, 2>(DV, C), array<int, 2>({1, sv}));
+            auto tv = tensor((device T *) (v + (uint64_t) ic*args.nb21), dextents<int32_t, 2>(DV, C), array<int, 2>({1, sv}));
 
             mm_pv.run(tp, tv, co);
         }
@@ -353,13 +355,22 @@ kernel void kernel_flash_attn_ext_tensor(
     co.store(td);
 }
 
-typedef decltype(kernel_flash_attn_ext_tensor<64, 64>) flash_attn_ext_tensor_t;
+typedef decltype(kernel_flash_attn_ext_tensor<half, half4, 64, 64>) flash_attn_ext_tensor_t;
 
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk64_dv64"  )]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<64,  64>;
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk128_dv128")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<128, 128>;
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk192_dv128")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<192, 128>;
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk256_dv256")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<256, 256>;
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk512_dv512")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<512, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
-template [[host_name("kernel_flash_attn_ext_tensor_f16_dk576_dv512")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<576, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk64_dv64"  )]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 64,  64>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk128_dv128")]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 128, 128>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk192_dv128")]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 192, 128>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk256_dv256")]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 256, 256>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk512_dv512")]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 512, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
+template [[host_name("kernel_flash_attn_ext_tensor_f16_dk576_dv512")]]  kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<half, half4, 576, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
+
+#if defined(GGML_METAL_HAS_BF16)
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk64_dv64"  )]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 64,  64>;
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk128_dv128")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 128, 128>;
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk192_dv128")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 192, 128>;
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk256_dv256")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 256, 256>;
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk512_dv512")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 512, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
+template [[host_name("kernel_flash_attn_ext_tensor_bf16_dk576_dv512")]] kernel flash_attn_ext_tensor_t kernel_flash_attn_ext_tensor<bfloat, bfloat4, 576, 512, OP_FLASH_ATTN_EXT_TENSOR_NQPSG_LARGE>;
+#endif
 
 #endif // GGML_METAL_HAS_TENSOR
