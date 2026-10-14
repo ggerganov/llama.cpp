@@ -3056,11 +3056,14 @@ ggml_tensor * llm_graph_context::build_attn(
     ggml_tensor * k = k_cur;
     ggml_tensor * v = v_cur;
 
-    // the KV values are padded with zeros up to the KV dimension of the mask
+    // the KV values and the KQ bias are padded with zeros up to the KV dimension of the mask
     const int64_t n_kv_pad = kq_mask->ne[0] - k->ne[2];
-    if (n_kv_pad > 0) {
-        k = ggml_pad(ctx0, k, 0, 0, n_kv_pad, 0);
-        v = ggml_pad(ctx0, v, 0, 0, n_kv_pad, 0);
+
+    k = ggml_pad(ctx0, k, 0, 0, n_kv_pad, 0);
+    v = ggml_pad(ctx0, v, 0, 0, n_kv_pad, 0);
+
+    if (kq_b) {
+        kq_b = ggml_pad(ctx0, kq_b, n_kv_pad, 0, 0, 0);
     }
 
     ggml_tensor * cur = build_attn_mha(q, k, v, kq_b, kq_mask, sinks, v_mla, 0, kq_scale, il);
@@ -4062,6 +4065,18 @@ void llm_graph_context::build_pooling(
     res->t_embd_pooled = cur;
 
     ggml_build_forward_expand(gf, cur);
+}
+
+void llm_graph_context::build_logits() const {
+    // a pooled embeddings context outputs one vector per sequence, so its graph skips the LM head
+    if (cparams.embeddings && pooling_type != LLAMA_POOLING_TYPE_NONE) {
+        res->t_logits = nullptr;
+    }
+
+    // the models declare t_logits without expanding it, so the LM head is computed only when it is expanded here
+    if (res->t_logits != nullptr) {
+        ggml_build_forward_expand(gf, res->t_logits);
+    }
 }
 
 void llm_graph_context::build_sampling() const {
