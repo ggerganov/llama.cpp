@@ -131,10 +131,10 @@ Trigger: a literal that is reused, domain-significant, or crosses a boundary (wi
 - **Declarative config array/object** (constants): a set of related items consumed by more than one renderer (e.g. dropdown + sheet) - menu items whose `action`/`id`/`enabledWhen` fields are enum values, not strings (`ATTACHMENT_FILE_ITEMS`). If two surfaces render the same menu, both must render from this one config.
 - **Grouped `as const` object** (constants): related literals that belong to one feature - error-message taxonomy (`ERROR_MESSAGES` with `HTTP`/`NETWORK` groups), UI copy shared across surfaces (`ATTACHMENT_MENU_TEXT`), a feature's prompt + fallback + patterns (`TITLE_GENERATION`). Prefer one grouped object over scattering same-feature constants.
 - **Scalar constants**:
-	- strings: CSS class strings, selectors, `data-*` attribute names, header names, storage keys, API routes/paths, file extensions.
-	- numbers: any threshold, timeout, size, limit, or count - suffixed with unit or context (`_MS`, `_PX`, `_BYTES`, `_CHARS`, `_MAX_LENGTH`).
-	- regexes: any non-trivial literal regex, `_REGEX` suffix, grouped in the feature's constants file.
-	- characters/separators: named by meaning in their domain, not by character - `PATH_SEPARATOR`, `ORG_SEPARATOR`, `SSE_RECORD_SEPARATOR`, `ISO_DATE_TIME_SEPARATOR`, `NEWLINE`. No universal `SLASH` constant.
+  - strings: CSS class strings, selectors, `data-*` attribute names, header names, storage keys, API routes/paths, file extensions.
+  - numbers: any threshold, timeout, size, limit, or count - suffixed with unit or context (`_MS`, `_PX`, `_BYTES`, `_CHARS`, `_MAX_LENGTH`).
+  - regexes: any non-trivial literal regex, `_REGEX` suffix, grouped in the feature's constants file.
+  - characters/separators: named by meaning in their domain, not by character - `PATH_SEPARATOR`, `ORG_SEPARATOR`, `SSE_RECORD_SEPARATOR`, `ISO_DATE_TIME_SEPARATOR`, `NEWLINE`. No universal `SLASH` constant.
 - **Key-name constants**: strings used as keys into another object or persisted config get an object constant mirroring the property names (`SETTINGS_KEYS.CUSTOM_CSS = 'customCss'`), so a rename breaks the build instead of silently missing.
 
 Placement and composition:
