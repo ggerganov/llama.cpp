@@ -122,12 +122,30 @@ These apply only to changes under `tools/ui/` (formerly `tools/server/webui/`) -
 
 The dominant review theme in this area is placement: most accepted nits are about putting a value, function, or piece of logic in the layer where it belongs.
 
-### Constants, enums, and magic values
+### Constants and enums - decision rules
 
-- No inline magic strings, numbers, or regexes anywhere - including seemingly trivial ones like `/`, newlines, `'[DONE]'`, file extensions, CSS class strings, and `data-` attribute names. Move them to `$lib/constants` (single values, config objects) or `$lib/enums` (closed sets of values such as roles, types, statuses, kinds).
-- Grep `$lib/constants` before adding a new one - use the existing constant instead of re-declaring a near-duplicate. Regexes are constants too (`*_REGEX` naming).
-- Repeated styling tokens (icon size classes, colors per modality/capability) come from a constant config object, not per-component inline literals.
-- Prefer enums over bare string unions when the value set is closed; enum values are lowercase, enum/type names carry a domain prefix (e.g. `Model...`).
+Default: a literal that appears in code is either named or enumerated. Before adding, grep `$lib/constants` / `$lib/enums` - reuse beats a new near-duplicate. What becomes what:
+
+- **String enum** (`$lib/enums`, `enum X { KEY = 'value' }`): a closed set of categorical values the code branches on, compares, or stores as a type discriminator - roles, statuses, kinds, types, actions, sort fields. Anything written as `x.type === 'some-string'` or a closed string union in a `.d.ts` is an enum. Keys are SCREAMING_SNAKE with a domain prefix (`ModelDownloadStopRequest.CANCEL`); values are lowercase by default and are the persisted/wire representation, so they may intentionally differ from the key (`TOOL_USE = 'tools'`, `MTP = 'mtp'`) or mirror an external API exactly - say so in the enum's JSDoc when they do (see `HfModelSort`). No numeric-valued enums.
+- **Constant object keyed by enum** (constants): a lookup/mapping - icon per file type, label per capability, HTTP code to message (`FILE_TYPE_ICONS`, `HTTP_CODE_TO_STRING`, `Record<Enum, string>`). The enum enumerates, the object maps.
+- **Declarative config array/object** (constants): a set of related items consumed by more than one renderer (e.g. dropdown + sheet) - menu items whose `action`/`id`/`enabledWhen` fields are enum values, not strings (`ATTACHMENT_FILE_ITEMS`). If two surfaces render the same menu, both must render from this one config.
+- **Grouped `as const` object** (constants): related literals that belong to one feature - error-message taxonomy (`ERROR_MESSAGES` with `HTTP`/`NETWORK` groups), UI copy shared across surfaces (`ATTACHMENT_MENU_TEXT`), a feature's prompt + fallback + patterns (`TITLE_GENERATION`). Prefer one grouped object over scattering same-feature constants.
+- **Scalar constants**:
+	- strings: CSS class strings, selectors, `data-*` attribute names, header names, storage keys, API routes/paths, file extensions.
+	- numbers: any threshold, timeout, size, limit, or count - suffixed with unit or context (`_MS`, `_PX`, `_BYTES`, `_CHARS`, `_MAX_LENGTH`).
+	- regexes: any non-trivial literal regex, `_REGEX` suffix, grouped in the feature's constants file.
+	- characters/separators: named by meaning in their domain, not by character - `PATH_SEPARATOR`, `ORG_SEPARATOR`, `SSE_RECORD_SEPARATOR`, `ISO_DATE_TIME_SEPARATOR`, `NEWLINE`. No universal `SLASH` constant.
+- **Key-name constants**: strings used as keys into another object or persisted config get an object constant mirroring the property names (`SETTINGS_KEYS.CUSTOM_CSS = 'customCss'`), so a rename breaks the build instead of silently missing.
+
+Placement and composition:
+
+- Shared across features -> `$lib/constants/<topic>.constants.ts` / `$lib/enums/<topic>.enums.ts`; feature-dedicated values may live in the feature folder, but only what is truly dedicated to it.
+- Compose, don't duplicate: constants may derive from other constants/enums (`SANDBOX_TOOL_NAME = BuiltInTool.BROWSER_RUN_JAVASCRIPT`, storage keys built from the `STORAGE_APP_NAME` prefix).
+- Tests and Storybook stories use the same constants/enums - they don't re-declare the literals they assert against.
+
+What stays inline: one-off user-facing copy inside a single component, console/log messages, and import specifiers. When inline copy gains a second consumer, it graduates into a grouped constant object.
+
+Adjacent data-shape rule: empty string is not a valid "unset" initial state - use `undefined`.
 
 ### Placement and layering
 
