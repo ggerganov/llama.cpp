@@ -323,8 +323,11 @@ struct llama_file::impl {
         off_t offset_from_alignment = offset - aligned_offset;
         size_t bytes_to_read = (offset_from_alignment + size + alignment - 1) & ~(alignment - 1);
 
+        // stage through a bounded buffer, so that a large tensor is not held in memory twice while it loads
+        const size_t buffer_size = std::min<size_t>(bytes_to_read, LLAMA_DIRECT_IO_BUFFER_SIZE);
+
         void * raw_buffer = nullptr;
-        int ret = posix_memalign(&raw_buffer, alignment, bytes_to_read);
+        int ret = posix_memalign(&raw_buffer, alignment, buffer_size);
         if (ret != 0) {
             throw std::runtime_error(format("posix_memalign failed with error %d", ret));
         }
@@ -335,10 +338,20 @@ struct llama_file::impl {
         std::unique_ptr<void, aligned_buffer_deleter> buffer(raw_buffer);
 
         seek(aligned_offset, SEEK_SET);
-        read_raw_unsafe(buffer.get(), bytes_to_read);
 
-        uintptr_t actual_data = reinterpret_cast<uintptr_t>(buffer.get()) + offset_from_alignment;
-        memcpy(dest, reinterpret_cast<void *>(actual_data), size);
+        size_t skip   = offset_from_alignment;
+        size_t copied = 0;
+        for (size_t done = 0; done < bytes_to_read; ) {
+            const size_t n = std::min(buffer_size, bytes_to_read - done);
+            read_raw_unsafe(buffer.get(), n);
+
+            const size_t count = std::min(n - skip, size - copied);
+            memcpy(reinterpret_cast<char *>(dest) + copied, reinterpret_cast<char *>(buffer.get()) + skip, count);
+
+            copied += count;
+            skip    = 0;
+            done   += n;
+        }
     }
 
     void read_raw(void * ptr, size_t len) {
@@ -822,7 +835,7 @@ const bool llama_mlock::SUPPORTED = false;
 #endif
 
 void llama_prefetch(llama_memory_ranges mr) {
-#if defined(__linux__) || (defined(_WIN32) && _WIN32_WINNT >= 0x602)
+#if defined(__linux__) || defined(__APPLE__) || (defined(_WIN32) && _WIN32_WINNT >= 0x602)
     if (mr.empty()) {
         return;
     }
@@ -861,6 +874,7 @@ void llama_prefetch(llama_memory_ranges mr) {
     };
 #else
     auto prefetch = [&]() {
+        // TODO: in a follow-up, use posix_madvise(.., POSIX_MADV_WILLNEED) to match the rest of this file
         if (madvise((void *) begin, end - begin, MADV_WILLNEED) != 0) {
             LLAMA_LOG_WARN("llama_prefetch: madvise(MADV_WILLNEED) failed: %s\n", strerror(errno));
             return false;
