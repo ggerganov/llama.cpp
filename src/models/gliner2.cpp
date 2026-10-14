@@ -42,7 +42,7 @@ public:
     const int64_t heads;
 };
 
-void llama_model_deberta_v2::load_arch_hparams(llama_model_loader & ml) {
+void llama_model_gliner2::load_arch_hparams(llama_model_loader & ml) {
     ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
     ml.get_key(LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, n_buckets);
     ml.get_key(LLM_KV_ATTENTION_RELATIVE_MAX_DISTANCE, max_distance);
@@ -54,7 +54,7 @@ void llama_model_deberta_v2::load_arch_hparams(llama_model_loader & ml) {
     hparams.n_embd_out_impl = 1;
 }
 
-void llama_model_deberta_v2::load_arch_tensors(llama_model_loader &) {
+void llama_model_gliner2::load_arch_tensors(llama_model_loader &) {
     LLAMA_LOAD_LOCALS;
     tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
     tok_norm = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight", 0), {n_embd}, 0);
@@ -84,11 +84,11 @@ void llama_model_deberta_v2::load_arch_tensors(llama_model_loader &) {
     }
 }
 
-std::unique_ptr<llm_graph_context> llama_model_deberta_v2::build_arch_graph(const llm_graph_params & params) const {
+std::unique_ptr<llm_graph_context> llama_model_gliner2::build_arch_graph(const llm_graph_params & params) const {
     return std::make_unique<graph>(*this, params);
 }
 
-llama_model_deberta_v2::graph::graph(const llama_model_deberta_v2 & model, const llm_graph_params & params) : llm_graph_context(params) {
+llama_model_gliner2::graph::graph(const llama_model_gliner2 & model, const llm_graph_params & params) : llm_graph_context(params) {
     const int64_t dim = hparams.n_embd_head_k();
     const int64_t n_relative = 2 * model.n_buckets;
     if (n_tokens > std::numeric_limits<int32_t>::max() / (n_relative * n_head)) {
@@ -110,36 +110,70 @@ llama_model_deberta_v2::graph::graph(const llama_model_deberta_v2 & model, const
     ggml_tensor * relative = model.pos_embd;
 
     auto split_heads = [&](ggml_tensor * x) {
-        return ggml_cont(ctx0, ggml_permute(ctx0, ggml_reshape_3d(ctx0, x, dim, n_head, x->ne[1]), 0, 2, 1, 3));
+        x = ggml_reshape_3d(ctx0, x, dim, n_head, x->ne[1]);
+        x = ggml_permute(ctx0, x, 0, 2, 1, 3);
+        return ggml_cont(ctx0, x);
     };
     auto gather = [&](ggml_tensor * x, ggml_tensor * indices) {
         x = ggml_reshape_2d(ctx0, x, 1, ggml_nelements(x));
-        return ggml_reshape_3d(ctx0, ggml_get_rows(ctx0, x, indices), n_tokens, n_tokens, n_head);
+        x = ggml_get_rows(ctx0, x, indices);
+        return ggml_reshape_3d(ctx0, x, n_tokens, n_tokens, n_head);
     };
     const float scale = 1.0f / sqrtf(float(dim * 3));
     for (int il = 0; il < n_layer; ++il) {
         const auto & layer = model.layers[il];
         ggml_tensor * residual = cur;
         auto [q, k, v] = build_qkv(layer, cur, dim, n_head, n_head, il);
-        ggml_tensor * pq = split_heads(ggml_add(ctx0, build_lora_mm(layer.wq, relative), layer.wq_b));
-        ggml_tensor * pk = split_heads(ggml_add(ctx0, build_lora_mm(layer.wk, relative), layer.wk_b));
-        ggml_tensor * c2p = gather(ggml_mul_mat(ctx0, pk, ggml_cont(ctx0, ggml_permute(ctx0, q, 0, 2, 1, 3))), c2p_indices);
-        ggml_tensor * p2c = gather(ggml_mul_mat(ctx0, pq, ggml_cont(ctx0, ggml_permute(ctx0, k, 0, 2, 1, 3))), p2c_indices);
+
+        ggml_tensor * pq = build_lora_mm(layer.wq, relative);
+        pq = ggml_add(ctx0, pq, layer.wq_b);
+        pq = split_heads(pq);
+        cb(pq, "pos_q", il);
+
+        ggml_tensor * pk = build_lora_mm(layer.wk, relative);
+        pk = ggml_add(ctx0, pk, layer.wk_b);
+        pk = split_heads(pk);
+        cb(pk, "pos_k", il);
+
+        ggml_tensor * q_relative = ggml_permute(ctx0, q, 0, 2, 1, 3);
+        q_relative = ggml_cont(ctx0, q_relative);
+        ggml_tensor * c2p = ggml_mul_mat(ctx0, pk, q_relative);
+        c2p = gather(c2p, c2p_indices);
+        cb(c2p, "attn_c2p", il);
+
+        ggml_tensor * k_relative = ggml_permute(ctx0, k, 0, 2, 1, 3);
+        k_relative = ggml_cont(ctx0, k_relative);
+        ggml_tensor * p2c = ggml_mul_mat(ctx0, pq, k_relative);
+        p2c = gather(p2c, p2c_indices);
+        cb(p2c, "attn_p2c", il);
+
         ggml_tensor * bias = ggml_add(ctx0, c2p, p2c);
+        cb(bias, "attn_bias", il);
         cur = build_attn(inp_attn, layer.wo, layer.wo_b, layer.wo_s, q, k, v, bias, nullptr, nullptr, scale, il);
-        cur = build_norm(ggml_add(ctx0, cur, residual), layer.attn_out_norm, layer.attn_out_norm_b, LLM_NORM, il);
+        cur = ggml_add(ctx0, cur, residual);
+        cb(cur, "attn_residual", il);
+        cur = build_norm(cur, layer.attn_out_norm, layer.attn_out_norm_b, LLM_NORM, il);
+
         residual = cur;
-        cur = ggml_gelu_erf(ctx0, ggml_add(ctx0, build_lora_mm(layer.ffn_up, cur), layer.ffn_up_b));
-        cur = ggml_add(ctx0, build_lora_mm(layer.ffn_down, cur), layer.ffn_down_b);
-        cur = build_norm(ggml_add(ctx0, cur, residual), layer.layer_out_norm, layer.layer_out_norm_b, LLM_NORM, il);
+        cur = build_ffn(cur,
+                layer.ffn_up, layer.ffn_up_b, nullptr,
+                nullptr, nullptr, nullptr,
+                layer.ffn_down, layer.ffn_down_b, nullptr, nullptr,
+                LLM_FFN_GELU_ERF, LLM_FFN_SEQ, il);
+        cb(cur, "ffn_out", il);
+        cur = ggml_add(ctx0, cur, residual);
+        cb(cur, "ffn_residual", il);
+        cur = build_norm(cur, layer.layer_out_norm, layer.layer_out_norm_b, LLM_NORM, il);
         cb(cur, "layer_out", il);
     }
     if (inp_out_ids) {
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
     }
-    cur = ggml_relu(ctx0, ggml_add(ctx0, build_lora_mm(model.cls, cur), model.cls_b));
-    cur = ggml_add(ctx0, build_lora_mm(model.cls_out, cur), model.cls_out_b);
+    cur = build_ffn(cur,
+            model.cls, model.cls_b, nullptr,
+            nullptr, nullptr, nullptr,
+            model.cls_out, model.cls_out_b, nullptr, nullptr,
+            LLM_FFN_RELU, LLM_FFN_SEQ, -1);
     cb(cur, "decision_scores", -1);
     res->t_embd = cur;
-    ggml_build_forward_expand(gf, cur);
 }

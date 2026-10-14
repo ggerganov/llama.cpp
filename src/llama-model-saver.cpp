@@ -20,7 +20,7 @@ bool llama_model_saver_supports_arch(llm_arch arch) {
         case LLM_ARCH_T5:
         case LLM_ARCH_APERTUS:
         case LLM_ARCH_STEP35:
-        case LLM_ARCH_DEBERTA_V2: // relative attention metadata is not saved
+        case LLM_ARCH_GLINER2: // relative attention metadata is not saved
         case LLM_ARCH_CLEF: // the head tensors are not saved
         case LLM_ARCH_VLLM_DECISION2:
             return false;

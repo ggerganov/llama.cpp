@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from .base import LazyTorchTensor, ModelBase, SentencePieceTokenTypes, TextModel, gguf, jinja_str_or_json
 
 
-def _is_gliner_checkpoint(dir_model: Path) -> bool:
+def _is_gliner2_checkpoint(dir_model: Path) -> bool:
     if not (dir_model / "encoder_config" / "config.json").is_file() or not (dir_model / "config.json").is_file():
         return False
     with open(dir_model / "config.json", encoding="utf-8") as f:
@@ -20,8 +20,8 @@ def _is_gliner_checkpoint(dir_model: Path) -> bool:
     return config.get("model_type") == "extractor" and config.get("architecture") == "span"
 
 
-@ModelBase.register_hparams_loader(_is_gliner_checkpoint)
-def _load_gliner_hparams(dir_model: Path) -> dict[str, Any]:
+@ModelBase.register_hparams_loader(_is_gliner2_checkpoint)
+def _load_gliner2_hparams(dir_model: Path) -> dict[str, Any]:
     with open(dir_model / "config.json", encoding="utf-8") as f:
         config = json.load(f)
     hparams = ModelBase.load_hparams(dir_model / "encoder_config", False, guess=False)
@@ -34,15 +34,15 @@ def _load_gliner_hparams(dir_model: Path) -> dict[str, Any]:
 @ModelBase.register("GLiNERDecideModel")
 @ModelBase.example("fastino/GLiNER2.5-Decide")
 class GLiNERDecideModel(TextModel):
-    model_arch = gguf.MODEL_ARCH.DEBERTA_V2
+    model_arch = gguf.MODEL_ARCH.GLINER2
 
     def set_gguf_parameters(self):
         h = self.hparams
-        if (h.get("model_type") != "deberta-v2" or not h.get("relative_attention") or
-                not h.get("share_att_key") or set(h.get("pos_att_type", [])) != {"c2p", "p2c"} or
-                h.get("position_biased_input") or h.get("type_vocab_size", 0) or h.get("conv_kernel_size", 0) or
-                h.get("norm_rel_ebd") != "layer_norm" or h.get("hidden_act") != "gelu" or
-                h.get("embedding_size", h["hidden_size"]) != h["hidden_size"]):
+        if (h.get("model_type") != "deberta-v2" or not h.get("relative_attention")
+                or not h.get("share_att_key") or set(h.get("pos_att_type", [])) != {"c2p", "p2c"}
+                or h.get("position_biased_input") or h.get("type_vocab_size", 0) or h.get("conv_kernel_size", 0)
+                or h.get("norm_rel_ebd") != "layer_norm" or h.get("hidden_act") != "gelu"
+                or h.get("embedding_size", h["hidden_size"]) != h["hidden_size"]):
             raise ValueError("Unsupported DeBERTa-v2 encoder configuration")
         super().set_gguf_parameters()
         self.gguf_writer.add_causal_attention(False)
@@ -131,8 +131,7 @@ class GLiNERDecideModel(TextModel):
     @classmethod
     def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
         name, gen = item
-        if name.startswith("encoder."):
-            return name.removeprefix("encoder."), gen
-        if name.startswith("classifier."):
-            return item
-        return None
+        if not name.startswith(("encoder.", "classifier.")):
+            return None
+        name = name.removeprefix("encoder.")
+        return super().filter_tensors((name, gen))

@@ -540,7 +540,7 @@ class MODEL_ARCH(IntEnum):
     MPT              = auto()
     STARCODER        = auto()
     REFACT           = auto()
-    DEBERTA_V2       = auto()
+    GLINER2          = auto()
     BERT             = auto()
     MODERN_BERT      = auto()
     NOMIC_BERT       = auto()
@@ -1331,7 +1331,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MPT:              "mpt",
     MODEL_ARCH.STARCODER:        "starcoder",
     MODEL_ARCH.REFACT:           "refact",
-    MODEL_ARCH.DEBERTA_V2:        "deberta-v2",
+    MODEL_ARCH.GLINER2:          "gliner2",
     MODEL_ARCH.BERT:             "bert",
     MODEL_ARCH.MODERN_BERT:      "modern-bert",
     MODEL_ARCH.NOMIC_BERT:       "nomic-bert",
@@ -2553,7 +2553,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
-    MODEL_ARCH.DEBERTA_V2: [
+    MODEL_ARCH.GLINER2: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.POS_EMBD,

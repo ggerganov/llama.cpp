@@ -19,7 +19,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_BAICHUAN,         "baichuan"         },
     { LLM_ARCH_STARCODER,        "starcoder"        },
     { LLM_ARCH_REFACT,           "refact"           },
-    { LLM_ARCH_DEBERTA_V2,       "deberta-v2"       },
+    { LLM_ARCH_GLINER2,          "gliner2"          },
     { LLM_ARCH_BERT,             "bert"             },
     { LLM_ARCH_MODERN_BERT,      "modern-bert"      },
     { LLM_ARCH_NOMIC_BERT,       "nomic-bert"       },
