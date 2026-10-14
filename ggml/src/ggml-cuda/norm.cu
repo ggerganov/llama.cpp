@@ -170,7 +170,10 @@ static __global__ void rms_norm_f32(const float * x,
                         float4 r = make_float4(scale*xs[k].x, scale*xs[k].y, scale*xs[k].z, scale*xs[k].w);
                         if constexpr (do_multiply) {
                             const float4 m = mul4[i];
-                            r.x *= m.x; r.y *= m.y; r.z *= m.z; r.w *= m.w;
+                            r.x *= m.x;
+                            r.y *= m.y;
+                            r.z *= m.z;
+                            r.w *= m.w;
                         }
                         if constexpr (do_add) {
                             const float4 a = add4[i];
@@ -412,8 +415,8 @@ static void rms_norm_f32_dispatch(
     const float * x = (const float *) x_t->data;
 
     // dst is written at row * ncols, i.e. always at a multiple of ncols, so only its base needs checking here
-    bool vec = ncols % 4 == 0 && ncols > 0 && ((uintptr_t) dst & 15) == 0
-        && ggml_cuda_is_aligned(x_t, 16);
+    bool vec = ncols % 4 == 0 && ncols > 0 && ((uintptr_t) dst & 15) == 0;
+    vec = vec && ggml_cuda_is_aligned(x_t, 16);
     if constexpr (do_multiply) {
         vec = vec && mul_ncols_packed.z == (uint32_t) ncols
             && rms_norm_f32_vec_aligned(mul, mul_stride_row, mul_stride_channel, mul_stride_sample,
