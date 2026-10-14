@@ -764,7 +764,7 @@ static bool arch_supported(const llm_arch arch) {
         return false;
     }
     if (arch == LLM_ARCH_VIBEVOICE) {
-        return false; // TODO speech tensors
+        return false; // TODO: speech tensor shapes come from the GGUF file
     }
     // FIXME: these hit scheduler/view-backed-output issues with WebGPU on CI.
 #ifdef GGML_USE_WEBGPU

@@ -767,10 +767,84 @@ struct llama_model_gpt2 : public llama_model_base {
 };
 
 
-// backbone is plain qwen2, the speech parts are not supported yet
+// backbone is plain qwen2, the speech tensors are loaded but have no graph yet
 struct llama_model_vibevoice : public llama_model_qwen2 {
     llama_model_vibevoice(const struct llama_model_params & params) : llama_model_qwen2(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
     void load_arch_tensors(llama_model_loader & ml) override;
+
+    // projects acoustic/semantic latents into the LM embedding space
+    struct connector {
+        ggml_tensor * fc1   = nullptr;
+        ggml_tensor * fc1_b = nullptr;
+        ggml_tensor * norm  = nullptr;
+        ggml_tensor * fc2   = nullptr;
+        ggml_tensor * fc2_b = nullptr;
+    };
+
+    struct diff_layer {
+        ggml_tensor * norm     = nullptr;
+        ggml_tensor * adaln    = nullptr;
+        ggml_tensor * ffn_gate = nullptr;
+        ggml_tensor * ffn_up   = nullptr;
+        ggml_tensor * ffn_down = nullptr;
+    };
+
+    struct diff_head {
+        ggml_tensor * noisy_proj  = nullptr;
+        ggml_tensor * cond_proj   = nullptr;
+        ggml_tensor * t_embd_fc1  = nullptr;
+        ggml_tensor * t_embd_fc2  = nullptr;
+        ggml_tensor * final_adaln = nullptr;
+        ggml_tensor * final_proj  = nullptr;
+
+        std::vector<diff_layer> layers;
+    };
+
+    struct tok_block {
+        ggml_tensor * norm       = nullptr;
+        ggml_tensor * dwconv     = nullptr;
+        ggml_tensor * dwconv_b   = nullptr;
+        ggml_tensor * gamma      = nullptr;
+        ggml_tensor * ffn_norm   = nullptr;
+        ggml_tensor * ffn_up     = nullptr;
+        ggml_tensor * ffn_up_b   = nullptr;
+        ggml_tensor * ffn_down   = nullptr;
+        ggml_tensor * ffn_down_b = nullptr;
+        ggml_tensor * ffn_gamma  = nullptr;
+    };
+
+    struct tok_stage {
+        // stem or resample conv, runs before the blocks
+        ggml_tensor * conv   = nullptr;
+        ggml_tensor * conv_b = nullptr;
+
+        std::vector<tok_block> blocks;
+    };
+
+    // encoder or decoder of a tokenizer
+    struct tok_part {
+        ggml_tensor * head   = nullptr;
+        ggml_tensor * head_b = nullptr;
+
+        std::vector<tok_stage> stages;
+    };
+
+    connector acoustic_conn;
+    connector semantic_conn;
+
+    diff_head diff;
+
+    tok_part acoustic_enc;
+    tok_part acoustic_dec;
+    tok_part semantic_enc;
+
+private:
+    struct tok_tensors;
+
+    ggml_tensor * create_tensor_from_file(llama_model_loader & ml, const LLM_TN_IMPL & tn);
+    void load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2);
+    void load_tok_part(llama_model_loader & ml, tok_part & part, const tok_tensors & ids, uint32_t n_stages, const std::array<uint32_t, LLAMA_MAX_VV_STAGES> & depths);
 };
 
 
