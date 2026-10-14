@@ -77,7 +77,7 @@ int main() {
             fprintf(stderr, " [%s]", piece.c_str());
         }
         fprintf(stderr, "\n");
-        return 1;
+        success = false;
     }
 
     return success ? 0 : 1;
