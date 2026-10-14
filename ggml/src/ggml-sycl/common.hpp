@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -527,6 +528,7 @@ struct ggml_backend_sycl_context {
     std::unordered_map<const void *, std::unique_ptr<ggml_sycl_graph>> sycl_graphs;
 
     int64_t last_graph_eviction_sweep = 0;
+    std::optional<bool> graph_compatible;
 
     ggml_sycl_graph * sycl_graph(const void * first_node_ptr) {
         const int64_t time_now = ggml_time_us();

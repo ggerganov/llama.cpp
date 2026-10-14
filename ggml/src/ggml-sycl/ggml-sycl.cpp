@@ -607,10 +607,19 @@ static void ggml_check_sycl() try {
         fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
 #endif
 */
+#ifdef GGML_SYCL_GRAPH
+        if (g_ggml_sycl_enable_graph) {
+            for (unsigned int i = 0; i < dpct::dev_mgr::instance().device_count(); ++i) {
+                if (!dpct::dev_mgr::instance().get_device(i).has(sycl::aspect::ext_oneapi_limited_graph)) {
+                    GGML_LOG_WARN("SYCL device %u does not support SYCL graphs\n", i);
+                }
+            }
+        }
+
         // Async USM allocation/free is also useful outside the graph path: it avoids the host waits in the reorder
         // staging path while preserving queue ordering semantics. Graph support still depends on the extension being
         // available, but it no longer needs to control the non-graph fast path.
-#if defined(GGML_SYCL_GRAPH) && SYCL_EXT_ONEAPI_ASYNC_MEMORY_ALLOC
+#if SYCL_EXT_ONEAPI_ASYNC_MEMORY_ALLOC
         g_ggml_sycl_use_async_mem_op = g_ggml_sycl_use_async_mem_op_requested || g_ggml_sycl_enable_graph;
         if (g_ggml_sycl_use_async_mem_op) {
             for (unsigned int i = 0; i < dpct::dev_mgr::instance().device_count(); ++i) {
@@ -620,6 +629,7 @@ static void ggml_check_sycl() try {
                 }
             }
         }
+#endif
 #endif
         if (CHECK_TRY_ERROR(g_all_sycl_device_count =
                             dpct::dev_mgr::instance().device_count()) != 0) {
@@ -6236,7 +6246,6 @@ catch (sycl::exception const &exc) {
 
 static void ggml_backend_sycl_synchronize(ggml_backend_t backend) try {
     GGML_SYCL_DEBUG("[SYCL] call %s\n", __func__);
-
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
     const queue_ptr stream = sycl_ctx->stream(sycl_ctx->device, 0);
     SYCL_CHECK(CHECK_TRY_ERROR((stream)->wait()));
@@ -6549,7 +6558,7 @@ static bool check_graph_compatibility(ggml_backend_sycl_context * ctx, ggml_cgra
         ggml_tensor * node = cgraph->nodes[i];
 
         // skip the nodes that ggml_backend_sycl_graph_compute_impl() does not run
-        if (ggml_sycl_is_view_or_noop(node) || (node->flags & GGML_TENSOR_FLAG_COMPUTE) == 0) {
+        if ((node->flags & GGML_TENSOR_FLAG_COMPUTE) == 0 || ggml_sycl_is_view_or_noop(node)) {
             continue;
         }
 
@@ -6621,7 +6630,12 @@ static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_
 
     if (g_ggml_sycl_enable_graph) {
         if (!ggml_sycl_info().devices[sycl_ctx->device].graph_support) {
-            GGML_SYCL_DEBUG("[SYCL-GRAPH] can not use graphs on device:%d\n", sycl_ctx->device);
+            // the device does not change, so report this once
+            if (sycl_ctx->graph_compatible != false) {
+                GGML_LOG_DEBUG("%s: disabling SYCL graphs due to unsupported graph feature on device\n", __func__);
+                GGML_LOG_INFO("%s: disabling SYCL graphs\n", __func__);
+                sycl_ctx->graph_compatible = false;
+            }
         } else {
             graph = sycl_ctx->sycl_graph(ggml_sycl_graph_get_key(cgraph));
 
@@ -6630,6 +6644,15 @@ static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_
             if (cgraph->uid == 0 || cgraph->uid != graph->compatible_uid) {
                 graph->compatible_uid = cgraph->uid;
                 graph->compatible     = check_graph_compatibility(sycl_ctx, cgraph);
+
+                if (sycl_ctx->graph_compatible != graph->compatible) {
+                    if (graph->compatible) {
+                        GGML_LOG_INFO("%s: enabling SYCL graphs\n", __func__);
+                    } else {
+                        GGML_LOG_INFO("%s: disabling SYCL graphs\n", __func__);
+                    }
+                    sycl_ctx->graph_compatible = graph->compatible;
+                }
             }
 
             use_sycl_graph = graph->compatible;
