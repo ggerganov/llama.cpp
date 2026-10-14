@@ -1340,11 +1340,6 @@ struct mtmd_tokenizer {
                     return 1;
                 }
                 auto bmps = merged_bitmaps[i_bm++];
-                // For nemotron-omni, we duplicate the frame if only one is available
-                if (ctx->proj_type_v() == PROJECTOR_TYPE_NEMOTRON_OMNI && n_merge_frames == 2
-                        && bmps.size() == 1 && bmps[0]->mergeable && !bmps[0]->is_audio) {
-                    bmps.push_back(bmps[0]);
-                }
                 int32_t res = add_media(bmps);
                 if (res != 0) {
                     return res;
@@ -1625,6 +1620,7 @@ struct mtmd_tokenizer {
 
                 clip_image_f32_batch batch_f32;
                 batch_f32.is_audio = false;
+                batch_f32.is_video = bitmaps[0]->mergeable;
                 batch_f32.entries = std::move(preproc_out.entries);
                 // do NOT use preproc_out from this point on, it's moved
 

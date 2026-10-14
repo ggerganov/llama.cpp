@@ -906,11 +906,13 @@ static void clip_log_internal(enum ggml_log_level level, const char * format, ..
 struct clip_image_f32_batch {
     std::vector<clip_image_f32> entries;
     bool is_audio = false;
+    bool is_video = false;
 
     clip_image_f32_batch clone() const {
         clip_image_f32_batch new_batch{
             /* entries  */ {},
             /* is_audio */ is_audio,
+            /* is_video */ is_video,
         };
         new_batch.entries.reserve(entries.size());
         for (const auto & entry : entries) {
