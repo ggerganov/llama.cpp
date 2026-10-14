@@ -45,7 +45,7 @@ common_chat_params common_chat_params_init_inkling(const common_chat_template & 
             data.generation_prompt += END_MESSAGE + TEXT + msg.render_content();
         }
 
-        data.prompt += data.generation_prompt;
+        data.prompt.append(data.generation_prompt);
     }
 
     data.parser = build_chat_peg_parser([&](common_chat_peg_builder & p) {
