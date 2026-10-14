@@ -168,6 +168,7 @@ enum llm_arch {
     LLM_ARCH_MINIMAX_01,
     LLM_ARCH_HRM_TEXT,
     LLM_ARCH_K2_HORIZON,
+    LLM_ARCH_BERRYLM,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -366,6 +367,7 @@ enum llm_kv {
     LLM_KV_KDA_HEAD_DIM,
     LLM_KV_KDA_SAFE_GATE,
     LLM_KV_KDA_GATE_LOWER_BOUND,
+    LLM_KV_KDA_GATE_RANK,
 
     LLM_KV_WKV_HEAD_SIZE,
 
@@ -572,6 +574,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_ROUTED_DOWN,     // kimi-k3: latent MoE down
     LLM_TENSOR_FFN_ROUTED_UP,       // kimi-k3: latent MoE up
     LLM_TENSOR_FFN_ROUTED_NORM,     // kimi-k3: latent MoE norm
+    LLM_TENSOR_ATTN_RES_GATE,       // berrylm: tanh(gate) of the gated block AttnRes
     LLM_TENSOR_TIME_MIX_W0,
     LLM_TENSOR_TIME_MIX_W1,
     LLM_TENSOR_TIME_MIX_W2,
