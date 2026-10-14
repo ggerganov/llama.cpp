@@ -539,15 +539,6 @@ class NemotronHModel(GraniteHybridModel):
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
 
-        # The tokenizer _does_ add a BOS token (via post_processor type
-        # TemplateProcessing) but does not set add_bos_token to true in the
-        # config, so we need to explicitly override it here.
-        # Not all Nemotron models use a template post_processor, some newer
-        # models use a byte level processor which does not add a BOS token so
-        # the check below tries to cater to both cases.
-        add_bos = gguf.SpecialVocab.tokenizer_adds_bos_via_template(self.dir_model)
-        self.gguf_writer.add_add_bos_token(add_bos)
-
     _MTP_SPECIAL_RENAMES = {
         "mtp.layers.0.enorm.weight":           "model.layers.{bid}.enorm.weight",
         "mtp.layers.0.hnorm.weight":           "model.layers.{bid}.hnorm.weight",

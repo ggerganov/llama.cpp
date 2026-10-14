@@ -376,19 +376,6 @@ class SpecialVocab:
             self._set_special_token(typ, token_id)
         return True
 
-    @staticmethod
-    def tokenizer_adds_bos_via_template(path: Path) -> bool:
-        tokenizer_file = path / "tokenizer.json"
-        if not tokenizer_file.is_file():
-            return False
-        with open(tokenizer_file, encoding="utf-8") as f:
-            pp = json.load(f).get("post_processor", {})
-        for proc in pp.get("processors", [pp]):
-            if proc.get("type") == "TemplateProcessing":
-                return True
-        return False
-
-
 @runtime_checkable
 class BaseVocab(Protocol):
     tokenizer_model: ClassVar[str]
