@@ -405,7 +405,7 @@ extern "C" {
         void *              abort_callback_data;
 
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
-        bool embeddings;  // if true, extract embeddings (together with logits)
+        bool embeddings;  // if true, extract embeddings (together with logits, except for a pooling type other than NONE)
         bool offload_kqv; // offload the KQV ops (including the KV cache) to GPU
         bool no_perf;     // measure performance timings
         bool op_offload;  // offload host tensor operations to device
@@ -1686,6 +1686,8 @@ extern "C" {
         int32_t n_p_eval;   // number of prompt tokens
         int32_t n_eval;     // number of generated tokens
         int32_t n_reused;   // number of times a ggml compute graph had been reused
+        int32_t n_reallocs_same; // number of graph reallocations during inference with an unchanged graph size
+        int32_t n_reallocs_diff; // number of graph reallocations during inference with a changed graph size
     };
 
     struct llama_perf_sampler_data {

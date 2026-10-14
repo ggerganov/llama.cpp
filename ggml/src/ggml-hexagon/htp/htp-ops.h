@@ -118,6 +118,7 @@ enum htp_op_code {
     HTP_OP_POOL_2D,
     HTP_OP_POOL_1D,
     HTP_OP_UNARY_GELU_QUICK,
+    HTP_OP_IM2COL_3D,
 
     HTP_OP_INVALID
 };
@@ -194,6 +195,20 @@ enum htp_profiler_mode {
     HTP_PROF_BASIC    = 1,
     HTP_PROF_PMU      = 2,
     HTP_PROF_TRACE    = 3,
+};
+
+// DCVS/HMX power profile requested for the session.
+enum htp_power_mode {
+    HTP_POWER_MODE_LOW_POWER_SAVER            = 0,
+    HTP_POWER_MODE_POWER_SAVER                = 1,
+    HTP_POWER_MODE_HIGH_POWER_SAVER           = 2,
+    HTP_POWER_MODE_LOW_BALANCED               = 3,
+    HTP_POWER_MODE_BALANCED                   = 4,
+    HTP_POWER_MODE_HIGH_PERFORMANCE           = 5,
+    HTP_POWER_MODE_SUSTAINED_HIGH_PERFORMANCE = 6,
+    HTP_POWER_MODE_BURST                      = 7,
+
+    HTP_POWER_MODE_COUNT
 };
 
 enum htp_trace_event_id {
