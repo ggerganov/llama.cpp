@@ -377,16 +377,6 @@ static void group_norm_f32_cuda(
     }
 }
 
-// The vec path reads 16B per lane, so the base pointer and every row offset have to be 16B aligned.
-static bool rms_norm_f32_vec_aligned(
-        const void * ptr, const int64_t stride_row, const int64_t stride_channel, const int64_t stride_sample,
-        const int64_t nrows, const int64_t nchannels, const int64_t nsamples) {
-    return ((uintptr_t) ptr & 15) == 0
-        && (nrows     <= 1 || stride_row     % 4 == 0)
-        && (nchannels <= 1 || stride_channel % 4 == 0)
-        && (nsamples  <= 1 || stride_sample  % 4 == 0);
-}
-
 #define RMS_NORM_LAUNCH(BLOCK_SIZE, VPT, VEC) \
     do { \
         const dim3 block_dims(BLOCK_SIZE, 1, 1); \
@@ -404,28 +394,28 @@ static void rms_norm_f32_dispatch(
         const dim3     blocks_num,
         const ggml_tensor * x_t,   float * dst,   const int ncols, const int nchannels, const int nsamples,
         const int64_t  stride_row, const int64_t stride_channel, const int64_t stride_sample, const float eps,
-        const float *  mul, const int64_t mul_stride_row, const int64_t mul_stride_channel, const int64_t mul_stride_sample,
+        const ggml_tensor * mul_t, const int64_t mul_stride_row, const int64_t mul_stride_channel, const int64_t mul_stride_sample,
         const uint3    mul_ncols_packed, const uint3 mul_nrows_packed, const uint3 mul_nchannels_packed, const uint3 mul_nsamples_packed,
-        const float *  add, const int64_t add_stride_row, const int64_t add_stride_channel, const int64_t add_stride_sample,
+        const ggml_tensor * add_t, const int64_t add_stride_row, const int64_t add_stride_channel, const int64_t add_stride_sample,
         const uint3    add_ncols_packed, const uint3 add_nrows_packed, const uint3 add_nchannels_packed, const uint3 add_nsamples_packed,
         cudaStream_t   stream, const float scale_out = 1.0f) {
     static_assert(!do_add || do_multiply, "fusing add is not supported without multiplying");
     static_assert(!do_scale || !do_multiply, "fusing scale is not supported with multiplying");
 
-    const float * x = (const float *) x_t->data;
+    const float * x   = (const float *) x_t->data;
+    const float * mul = mul_t ? (const float *) mul_t->data : nullptr;
+    const float * add = add_t ? (const float *) add_t->data : nullptr;
 
     // dst is written at row * ncols, i.e. always at a multiple of ncols, so only its base needs checking here
     bool vec = ncols % 4 == 0 && ncols > 0 && ((uintptr_t) dst & 15) == 0;
     vec = vec && ggml_cuda_is_aligned(x_t, 16);
     if constexpr (do_multiply) {
         vec = vec && mul_ncols_packed.z == (uint32_t) ncols
-            && rms_norm_f32_vec_aligned(mul, mul_stride_row, mul_stride_channel, mul_stride_sample,
-                                        mul_nrows_packed.z, mul_nchannels_packed.z, mul_nsamples_packed.z);
+            && ggml_cuda_is_aligned(mul_t, 16);
     }
     if constexpr (do_add) {
         vec = vec && add_ncols_packed.z == (uint32_t) ncols
-            && rms_norm_f32_vec_aligned(add, add_stride_row, add_stride_channel, add_stride_sample,
-                                        add_nrows_packed.z, add_nchannels_packed.z, add_nsamples_packed.z);
+            && ggml_cuda_is_aligned(add_t, 16);
     }
 
     const int n4 = ncols / 4;
@@ -467,9 +457,9 @@ static void rms_norm_f32_cuda(
 }
 
 static void rms_norm_mul_f32_cuda(const ggml_tensor * x_t,
-                                  const float *  mul,
-                                  const float *  add,
-                                  float *        dst,
+                                  const ggml_tensor * mul_t,
+                                  const ggml_tensor * add_t,
+                                  float *             dst,
                                   const int      ncols,
                                   const int      nrows,
                                   const int      nchannels,
@@ -494,7 +484,7 @@ static void rms_norm_mul_f32_cuda(const ggml_tensor * x_t,
                                   const float    eps,
                                   cudaStream_t   stream) {
     const dim3 blocks_num(nrows, MIN(nchannels, UINT16_MAX), MIN(nsamples, UINT16_MAX));
-    if (mul == nullptr) {
+    if (mul_t == nullptr) {
         rms_norm_f32_cuda(x_t, dst, ncols, nrows, nchannels, nsamples, stride_row, stride_channel, stride_sample, eps, stream);
         return;
     }
@@ -504,10 +494,10 @@ static void rms_norm_mul_f32_cuda(const ggml_tensor * x_t,
     const uint3 mul_nsamples_packed  = init_fastdiv_values(mul_nsamples);
     const uint3 zero_packed          = make_uint3(0, 0, 0);
 
-    if (add == nullptr) {
+    if (add_t == nullptr) {
         rms_norm_f32_dispatch</*do_multiply*/true, /*do_add*/false, /*do_scale*/false>(
             blocks_num, x_t, dst, ncols, nchannels, nsamples, stride_row, stride_channel, stride_sample, eps,
-            mul, mul_stride_row, mul_stride_channel, mul_stride_sample,
+            mul_t, mul_stride_row, mul_stride_channel, mul_stride_sample,
             mul_ncols_packed, mul_nrows_packed, mul_nchannels_packed, mul_nsamples_packed,
             nullptr, 0, 0, 0, zero_packed, zero_packed, zero_packed, zero_packed, stream);
     } else {
@@ -517,9 +507,9 @@ static void rms_norm_mul_f32_cuda(const ggml_tensor * x_t,
         const uint3 add_nsamples_packed  = init_fastdiv_values(add_nsamples);
         rms_norm_f32_dispatch</*do_multiply*/true, /*do_add*/true, /*do_scale*/false>(
             blocks_num, x_t, dst, ncols, nchannels, nsamples, stride_row, stride_channel, stride_sample, eps,
-            mul, mul_stride_row, mul_stride_channel, mul_stride_sample,
+            mul_t, mul_stride_row, mul_stride_channel, mul_stride_sample,
             mul_ncols_packed, mul_nrows_packed, mul_nchannels_packed, mul_nsamples_packed,
-            add, add_stride_row, add_stride_channel, add_stride_sample,
+            add_t, add_stride_row, add_stride_channel, add_stride_sample,
             add_ncols_packed, add_nrows_packed, add_nchannels_packed, add_nsamples_packed, stream);
     }
 }
@@ -647,14 +637,11 @@ void ggml_cuda_op_rms_norm_fused(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     memcpy(&eps, dst->op_params, sizeof(float));
 
-    const float * mul_d = nullptr;
     const ggml_tensor * mul_src = nullptr;
 
     if (mul_tensor->src[0] == dst) {
-        mul_d = (float *) mul_tensor->src[1]->data;
         mul_src = mul_tensor->src[1];
     } else if(mul_tensor->src[1] == dst) {
-        mul_d = (float *) mul_tensor->src[0]->data;
         mul_src = mul_tensor->src[0];
     } else {
         GGML_ASSERT(false);
@@ -690,7 +677,7 @@ void ggml_cuda_op_rms_norm_fused(ggml_backend_cuda_context & ctx, ggml_tensor * 
     const int mul_nchannels = mul_src->ne[2];
     const int mul_nsamples  = mul_src->ne[3];
 
-    rms_norm_mul_f32_cuda(rms_norm_src, mul_d, nullptr, dst_d,
+    rms_norm_mul_f32_cuda(rms_norm_src, mul_src, nullptr, dst_d,
                           ne00, ne01, ne02, ne03,
                           /*s00*/ s01, s02, s03,
                           /*mul_s00*/ mul_s01, mul_s02, mul_s03,
@@ -709,27 +696,21 @@ void ggml_cuda_op_rms_norm_fused_add(ggml_backend_cuda_context & ctx,
 
     memcpy(&eps, dst->op_params, sizeof(float));
 
-    const float *       mul_d   = nullptr;
     const ggml_tensor * mul_src = nullptr;
 
     if (mul_tensor->src[0] == dst) {
-        mul_d   = (float *) mul_tensor->src[1]->data;
         mul_src = mul_tensor->src[1];
     } else if (mul_tensor->src[1] == dst) {
-        mul_d   = (float *) mul_tensor->src[0]->data;
         mul_src = mul_tensor->src[0];
     } else {
         GGML_ASSERT(false);
     }
 
-    const float *       add_d   = nullptr;
     const ggml_tensor * add_src = nullptr;
 
     if (add_tensor->src[0] == mul_tensor) {
-        add_d   = (float *) add_tensor->src[1]->data;
         add_src = add_tensor->src[1];
     } else if (add_tensor->src[1] == mul_tensor) {
-        add_d   = (float *) add_tensor->src[0]->data;
         add_src = add_tensor->src[0];
     } else {
         GGML_ASSERT(false);
@@ -777,7 +758,7 @@ void ggml_cuda_op_rms_norm_fused_add(ggml_backend_cuda_context & ctx,
     const int add_nchannels = add_src->ne[2];
     const int add_nsamples  = add_src->ne[3];
 
-    rms_norm_mul_f32_cuda(rms_norm_src, mul_d,add_d,dst_d,
+    rms_norm_mul_f32_cuda(rms_norm_src, mul_src,add_src,dst_d,
                           ne00,ne01, ne02, ne03,
                           /*s00*/ s01, s02, s03,
                           /*mul_s00*/ mul_s01, mul_s02, mul_s03,
