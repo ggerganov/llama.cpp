@@ -1,6 +1,23 @@
 // Sanitization rules for raw HTML in model cards (MarkdownContent's
 // allowHtml mode). Kept as its own module so the adversarial test in
 // tests/client can import the exact shipped configuration.
+import DOMPurify from 'dompurify';
+
+// style is allowed for the KaTeX output, which lays its spans out with inline
+// styles; a third party card can use the same attribute to draw a fixed
+// overlay over the app, so positioned values are scrubbed
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+	if (typeof (node as Element).getAttribute !== 'function') return;
+
+	const style = (node as Element).getAttribute('style');
+
+	if (!style || !/position\s*:\s*(fixed|absolute)/i.test(style)) return;
+
+	(node as Element).setAttribute(
+		'style',
+		style.replace(/position\s*:\s*(fixed|absolute)\s*;?/gi, '')
+	);
+});
 
 /**
  * Explicit DOMPurify allow list: the tags and attributes model cards may use

@@ -78,6 +78,17 @@ describe('SAFE_HTML_CONFIG adversarial battery', () => {
 		expect(failures).toEqual([]);
 	});
 
+	it('scrubs positioned styles that can draw an overlay, keeps KaTeX styles', () => {
+		const clean = DOMPurify.sanitize(
+			'<div style="position:fixed;inset:0;z-index:9999;background:red">x</div><span style="height:0.83em;vertical-align:-0.2em">y</span>',
+			SAFE_HTML_CONFIG
+		) as string;
+
+		expect(clean).not.toMatch(/position\s*:\s*fixed/i);
+		expect(clean).toContain('height:0.83em');
+		expect(clean).toContain('background:red');
+	});
+
 	it('keeps benign model-card markup intact', () => {
 		const clean = DOMPurify.sanitize(
 			'<h2 id="title">Title</h2><p>Text with <a href="https://example.com" target="_blank" rel="noopener">a link</a>, <img src="https://example.com/i.png" alt="i" width="100">, <code>code</code>, <table><tr><td colspan="2">cell</td></tr></table>, <math><semantics><annotation encoding="application/x-tex">x^2</annotation></semantics></math></p>',
