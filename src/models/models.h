@@ -767,6 +767,13 @@ struct llama_model_gpt2 : public llama_model_base {
 };
 
 
+// backbone is plain qwen2, the speech parts are not supported yet
+struct llama_model_vibevoice : public llama_model_qwen2 {
+    llama_model_vibevoice(const struct llama_model_params & params) : llama_model_qwen2(params) {}
+    void load_arch_tensors(llama_model_loader & ml) override;
+};
+
+
 struct llama_model_pockettts : public llama_model_base {
     llama_model_pockettts(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
