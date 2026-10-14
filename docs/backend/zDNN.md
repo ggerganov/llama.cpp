@@ -48,6 +48,8 @@ The IBM zDNN backend has the following CMake options that control the behaviour 
 
 ## 1. Install zDNN Library
 
+Note: A minimum of libzdnn 1.1.2 is required for the IBM zDNN backend to link correctly.
+
 ### Install using apt
 
 ```sh
