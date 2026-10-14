@@ -9318,6 +9318,12 @@ static bool ggml_opencl_supports_op(ggml_backend_dev_t dev, const struct ggml_te
             }
             return false;
         case GGML_OP_MUL_MAT_ID:
+#ifdef GGML_OPENCL_USE_ADRENO_KERNELS
+            if (ggml_get_op_params_i32(op, 3) == GGML_PREC_F32 &&
+                use_adreno_moe_kernels(backend_ctx, op->src[0])) {
+                return false;
+            }
+#endif
             if (op->src[0]->type == GGML_TYPE_Q4_0 ||
                 op->src[0]->type == GGML_TYPE_Q8_0 ||
                 op->src[0]->type == GGML_TYPE_MXFP4) {
@@ -25919,10 +25925,6 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
     const int max_post_router_tile = (ne20 * ne21 / n_tile_size) + ne02;
 
     cl_buffer_region region;
-    region.origin = offset;
-    region.size = nb21 * ne21;
-    cl_mem original_router_buf = clCreateSubBuffer(extra->data_device, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err);
-    CL_CHECK(err);
 
     backend_ctx->prealloc_post_router.allocate(backend_ctx->context, sizeof(int) * max_post_router_tile * n_tile_size);
     region.origin = 0;
@@ -25962,11 +25964,12 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
 
     // Histogram
     cl_kernel kernel = backend_ctx->kernel_moe_histogram;
-    CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &original_router_buf));
+    CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &extra->data_device));
     CL_CHECK(clSetKernelArg(kernel, 1, sizeof(cl_mem), &hist_buf));
     CL_CHECK(clSetKernelArg(kernel, 2, sizeof(int), &ne21));
     CL_CHECK(clSetKernelArg(kernel, 3, sizeof(int), &ne20));
     CL_CHECK(clSetKernelArg(kernel, 4, sizeof(int), &ne02));
+    CL_CHECK(clSetKernelArg(kernel, 5, sizeof(cl_ulong), &offset));
 
     size_t histogram_global_size[] = {(size_t)(((ne21 + 63) / 64) * 64), static_cast<size_t>(ne20), 1};
     size_t histogram_local_size[] = {64, 1, 1};
@@ -26006,13 +26009,14 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
 
     if (stable_scatter) {
         kernel = backend_ctx->kernel_moe_scatter_stable;
-        CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &original_router_buf));
+        CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &extra->data_device));
         CL_CHECK(clSetKernelArg(kernel, 1, sizeof(cl_mem), &post_router_buf));
         CL_CHECK(clSetKernelArg(kernel, 2, sizeof(cl_mem), &emap_buf));
         CL_CHECK(clSetKernelArg(kernel, 3, sizeof(cl_mem), &tile_offset_buf));
         CL_CHECK(clSetKernelArg(kernel, 4, sizeof(int), &ne21));
         CL_CHECK(clSetKernelArg(kernel, 5, sizeof(int), &ne20));
         CL_CHECK(clSetKernelArg(kernel, 6, sizeof(int), &ne02));
+        CL_CHECK(clSetKernelArg(kernel, 7, sizeof(cl_ulong), &offset));
 
         // one workgroup (one wave) per expert; each ranks its own tokens
         size_t scatter_global_size[] = {64, (size_t)ne02};
@@ -26020,7 +26024,7 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
         backend_ctx->enqueue_ndrange_kernel(kernel, 2, scatter_global_size, scatter_local_size, src);
     } else {
         kernel = backend_ctx->kernel_moe_scatter;
-        CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &original_router_buf));
+        CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &extra->data_device));
         CL_CHECK(clSetKernelArg(kernel, 1, sizeof(cl_mem), &post_router_buf));
         CL_CHECK(clSetKernelArg(kernel, 2, sizeof(cl_mem), &emap_buf));
         CL_CHECK(clSetKernelArg(kernel, 3, sizeof(cl_mem), &tile_offset_buf));
@@ -26028,6 +26032,7 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
         CL_CHECK(clSetKernelArg(kernel, 5, sizeof(int), &ne21));
         CL_CHECK(clSetKernelArg(kernel, 6, sizeof(int), &ne20));
         CL_CHECK(clSetKernelArg(kernel, 7, sizeof(int), &ne02));
+        CL_CHECK(clSetKernelArg(kernel, 8, sizeof(cl_ulong), &offset));
 
         backend_ctx->enqueue_ndrange_kernel(kernel, 3, histogram_global_size, histogram_local_size, src);
     }
@@ -26049,7 +26054,6 @@ static void moe_router_reoerder(ggml_backend_t backend, const ggml_tensor * src,
         fflush(stderr);
     }
 
-    CL_CHECK(clReleaseMemObject(original_router_buf));
     CL_CHECK(clReleaseMemObject(hist_buf));
     CL_CHECK(clReleaseMemObject(tile_offset_buf));
     CL_CHECK(clReleaseMemObject(total_tiles_buf));
