@@ -25,11 +25,6 @@ class UiStore {
 	/** Model the information dialog shows; a phone opens it instead of the manager. */
 	modelInformation = $state<ModelOption | null>(null);
 
-	openDiscoverModels(): void {
-		this.discoverModelFocus = null;
-		this.discoverModelsOpen = true;
-	}
-
 	/** Open the model information dialog, a phone's stand-in for the manager pane. */
 	openModelInformation(option: ModelOption): void {
 		this.modelInformation = option;

@@ -6,11 +6,9 @@
 	interface Props {
 		/** Full HuggingFace model id, e.g. `ggml-org/gemma-3-4b-it-GGUF`. */
 		modelId: string;
-		/** Close the pane, for hosts that show the details in their own side panel. */
-		onClose?: () => void;
 	}
 
-	let { modelId, onClose }: Props = $props();
+	let { modelId }: Props = $props();
 
 	let details = $state<HfModelDetailInfo | null>(null);
 	let files = $state<HfModelSibling[]>([]);
@@ -65,4 +63,4 @@
 	});
 </script>
 
-<ModelsDiscoverDetails {details} {error} {files} {loading} {modelId} {onClose} {readme} />
+<ModelsDiscoverDetails {details} {error} {files} {loading} {modelId} {readme} />

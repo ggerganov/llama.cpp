@@ -23,11 +23,9 @@
 		loading?: boolean;
 		/** Error message when loading failed. */
 		error?: string | null;
-		/** Close the pane, for hosts that show the details in their own side panel. */
-		onClose?: () => void;
 	}
 
-	let { details, error = null, files, loading = false, modelId, onClose, readme }: Props = $props();
+	let { details, error = null, files, loading = false, modelId, readme }: Props = $props();
 
 	let gguf = $derived(details?.gguf);
 	let baseModels = $derived(HuggingFaceService.getBaseModels(details));
@@ -89,7 +87,6 @@
 			{hasVision}
 			{licenseTag}
 			{modelId}
-			{onClose}
 		/>
 
 		<ModelsDiscoverDetailsDownloadOptions {bitDepthRows} {modelId} />

@@ -2,6 +2,7 @@
 	import { Check, Copy, Plus, X } from '@lucide/svelte';
 	import * as Select from '$lib/components/ui/select';
 	import {
+		COPY_FEEDBACK_RESET_MS,
 		DEFAULT_BASE_BIT_DEPTH,
 		MODEL_ID,
 		type ModelSidecar,
@@ -123,17 +124,9 @@
 	async function copy() {
 		await copyToClipboard(command);
 		copied = true;
-		setTimeout(() => (copied = false), 1500);
+		setTimeout(() => (copied = false), COPY_FEEDBACK_RESET_MS);
 	}
 </script>
-
-<!-- <div aria-hidden="true" class="flex items-center gap-3 mt-2 mb-4">
-	<span class="h-px flex-1 bg-border/50"></span>
-
-	<span class="text-xs whitespace-nowrap text-muted-foreground"> or run in your terminal </span>
-
-	<span class="h-px flex-1 bg-border/50"></span>
-</div> -->
 
 <div
 	class="relative flex items-center gap-2 overflow-hidden rounded-lg border border-border/40 bg-background py-2.5 pl-4 pr-10 shadow-xs dark:border-border/35 dark:bg-background/50"

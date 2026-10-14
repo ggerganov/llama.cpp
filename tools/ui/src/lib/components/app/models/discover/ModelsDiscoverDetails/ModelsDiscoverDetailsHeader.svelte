@@ -3,7 +3,7 @@
 	import ModelOrgAvatar from '../../ModelOrgAvatar.svelte';
 	import ModelsDiscoverDetailsHfHubStats from './ModelsDiscoverDetailsHfHubStats.svelte';
 	import ModelsDiscoverDetailsMetadata from './ModelsDiscoverDetailsMetadata.svelte';
-	import { ExternalLink, X } from '@lucide/svelte';
+	import { ExternalLink } from '@lucide/svelte';
 	import { base } from '$app/paths';
 	import { ICON_CLASS_SM } from '$lib/constants';
 	import { HuggingFaceService } from '$lib/services';
@@ -19,21 +19,10 @@
 		hasVision: boolean;
 		hasTools: boolean;
 		hasReasoning: boolean;
-		/** Close the pane, for hosts that show the details in their own side panel. */
-		onClose?: () => void;
 	}
 
-	let {
-		baseModels,
-		details,
-		gguf,
-		hasReasoning,
-		hasTools,
-		hasVision,
-		licenseTag,
-		modelId,
-		onClose
-	}: Props = $props();
+	let { baseModels, details, gguf, hasReasoning, hasTools, hasVision, licenseTag, modelId }: Props =
+		$props();
 
 	// Avatar shows the base model's org (e.g. the Qwen logo for a ggml-org GGUF)
 	// with the quant org as a corner badge when they differ.
@@ -85,31 +74,18 @@
 			</div>
 		</div>
 
-		<div class="flex shrink-0 items-center gap-1.5">
-			{#if onClose}
-				<button
-					aria-label="Close"
-					class="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border/30 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground dark:border-border/20"
-					onclick={onClose}
-					type="button"
-				>
-					<X class="h-4 w-4" />
-				</button>
-			{/if}
+		<a
+			class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/30 px-2.5 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-muted dark:border-border/20"
+			href={HuggingFaceService.getModelUrl(modelId)}
+			rel="noopener noreferrer"
+			target="_blank"
+		>
+			<img alt="" class="h-3.5 w-3.5" src="{base}/recommended-mcp/huggingface.ico" />
 
-			<a
-				class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/30 px-2.5 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-muted dark:border-border/20"
-				href={HuggingFaceService.getModelUrl(modelId)}
-				rel="noopener noreferrer"
-				target="_blank"
-			>
-				<img alt="" class="h-3.5 w-3.5" src="{base}/recommended-mcp/huggingface.ico" />
+			View on Hugging Face
 
-				View on Hugging Face
-
-				<ExternalLink class={ICON_CLASS_SM} />
-			</a>
-		</div>
+			<ExternalLink class={ICON_CLASS_SM} />
+		</a>
 	</div>
 
 	<ModelsDiscoverDetailsHfHubStats {details} />

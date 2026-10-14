@@ -108,7 +108,7 @@ class ModelsDiscoverStore {
 					this.catalogSizeRanges.set(build.repo, this.sizeRangeFor(build, tree));
 
 					// the catalog repo id, not the HF response `id`, drives selection
-					this.defaultModels.push({ ...info, id: build.repo, modelId: build.repo } as HfModelInfo);
+					this.defaultModels.push({ ...info, id: build.repo, modelId: build.repo });
 				}
 
 				// show what has landed, unless a search owns the list right now
