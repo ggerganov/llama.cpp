@@ -191,7 +191,7 @@ Adjacent data-shape rule: empty string is not a valid "unset" initial state - us
 
 ### PR hygiene specific to `tools/ui`
 
-- The static build output must be rebuilt and committed (`npm run build`, then the generated bundle/output files) or covered by the CI build - stale output is a merge blocker.
+- Build artifacts are not committed - the UI is built by CI (`.github/workflows/ui-build.yml`) and downloaded/bundled at release time. `npm run build` must still succeed locally; a red UI build job is blocking.
 - `npm run lint && npm run check` (and `npm run format`) must pass; a failing Storybook test is blocking.
 - PRs need a short video demo in the description showing the change working (screenshots are acceptable for pure-visual tweaks).
 - Scope discipline: changes that belong to another stacked PR don't ride along in this one - call them out and move them there. Flag unrelated edits to deprecated/legacy files and ask whether they're intentional.
