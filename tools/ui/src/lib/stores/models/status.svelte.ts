@@ -25,18 +25,17 @@ import type {
 	ModelDownloadEntry,
 	ModelDownloadProgress
 } from '$lib/types';
-import type { ModelSidecarBadge } from '$lib/types/models';
-import { repoOf } from '$lib/utils/model-names';
-import { isAuxSidecar } from '$lib/utils/sidecars';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { toast } from 'svelte-sonner';
-
 /** One repo's tracked downloads: the main weights first, its draft sidecars after. */
 export interface ModelDownloadCluster {
 	drafts: ModelDownloadEntry[];
 	mains: ModelDownloadEntry[];
 	repo: string;
 }
+import type { ModelSidecarBadge } from '$lib/types/models';
+import { repoOf } from '$lib/utils/model-names';
+import { isAuxSidecar } from '$lib/utils/sidecars';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { toast } from 'svelte-sonner';
 
 /**
  * The slice of modelsStore the manager drives. Kept narrow on purpose so it
@@ -238,12 +237,12 @@ export class ModelStatusManager {
 	}
 
 	/**
-	 * Cancel a download together with its quant-matched draft sidecars,
-	 * confirmed once.
+	 * Cancel a download together with the draft sidecars downloading alongside
+	 * it, confirmed once for the whole cluster.
 	 */
 	async cancelDownloadWithDrafts(repoWithTag: string): Promise<boolean> {
 		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const tags = [repoWithTag, ...this.quantMatchedDrafts(repoWithTag, cluster?.drafts ?? [])];
+		const tags = [repoWithTag, ...(cluster?.drafts ?? []).map((draft) => draft.repoWithTag)];
 
 		let ok = true;
 
@@ -573,10 +572,9 @@ export class ModelStatusManager {
 	async toggleDownloadWithDrafts(repoWithTag: string): Promise<void> {
 		const resume = this.isDownloadPaused(repoWithTag);
 		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const drafts = this.quantMatchedDrafts(
-			repoWithTag,
-			(cluster?.drafts ?? []).filter((draft) => (resume ? draft.isPaused : !draft.isPaused))
-		);
+		const drafts = (cluster?.drafts ?? [])
+			.filter((draft) => (resume ? draft.isPaused : !draft.isPaused))
+			.map((draft) => draft.repoWithTag);
 
 		for (const tag of [repoWithTag, ...drafts]) {
 			if (resume) await this.downloadModel(tag);
@@ -797,18 +795,6 @@ export class ModelStatusManager {
 
 	private deletePausedDownload(repoWithTag: string): boolean {
 		return this.pausedDownloads.delete(repoWithTag);
-	}
-
-	/**
-	 * Draft tags of the repo's cluster that share the main's quant, so every
-	 * cascade acts on exactly what a delete would take with it.
-	 */
-	private quantMatchedDrafts(repoWithTag: string, drafts: ModelDownloadEntry[]): string[] {
-		const quant = ModelsService.parseModelId(repoWithTag).quantization;
-
-		return drafts
-			.filter((draft) => ModelsService.parseModelId(draft.repoWithTag).quantization === quant)
-			.map((draft) => draft.repoWithTag);
 	}
 
 	private rejectStatus(modelId: string, error: Error): void {

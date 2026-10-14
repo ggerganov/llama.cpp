@@ -306,8 +306,8 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 			const response = await ModelsService.list();
 
 			this.routerModels = response.data;
-			// a download an earlier run left unfinished shows up here as still
-			// downloading, and is offered as paused until it is resumed
+			// a download an earlier run left unfinished is listed as incomplete, and
+			// is offered as paused until it is resumed
 			this._status.syncPausedDownloads();
 			// keep the selector options in sync: a downloaded / deleted model shows
 			// up here too, not only in the router model rows
@@ -588,9 +588,13 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 				// the router also lists projector files by filename, which carry the
 				// sidecar token inside the id rather than after a colon
 				.filter(({ item, parsed }) => !parsed.sidecar && !ModelsService.isSidecarEntry(item.id))
-				// in-flight downloads are not usable models yet; the selector tracks
-				// them in its "Download in progress" section instead
-				.filter(({ item }) => item.status?.value !== ServerModelStatus.DOWNLOADING)
+				// in-flight and unfinished downloads are not usable models yet; the
+				// selector tracks them in its "Download in progress" section instead
+				.filter(
+					({ item }) =>
+						item.status?.value !== ServerModelStatus.DOWNLOADING &&
+						item.status?.value !== ServerModelStatus.INCOMPLETE
+				)
 				.map(({ details, item }) => {
 					const rawCapabilities = Array.isArray(details?.capabilities) ? details?.capabilities : [];
 					const displayNameSource =
