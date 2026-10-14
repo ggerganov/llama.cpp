@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { classify, DRAFT_PREFERENCE_ORDER, labelFor } from './download-options.utils';
+	import {
+		classify,
+		DRAFT_PREFERENCE_ORDER,
+		draftBadgeOf,
+		labelFor
+	} from './download-options.utils';
 	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
 	import ModelsDiscoverDetailsDownloadOptionsRow from './ModelsDiscoverDetailsDownloadOptionsRow.svelte';
 	import { ChevronDown, Terminal } from '@lucide/svelte';
@@ -165,7 +170,7 @@
 			.filter((f) => f.kind === ModelSelectableFileKind.DRAFT)
 			.map((f) => ({
 				...optionFor(f),
-				badge: HuggingFaceService.extractQuantMeta(f.path)?.sidecar ?? null
+				badge: draftBadgeOf(f)
 			}))
 	);
 </script>

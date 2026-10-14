@@ -5,11 +5,11 @@
 		COPY_FEEDBACK_RESET_MS,
 		DEFAULT_BASE_BIT_DEPTH,
 		MODEL_ID,
-		type ModelSidecar,
 		OTHER_BIT_DEPTH,
 		SERVE_COMMAND,
 		SPEC_TYPE
 	} from '$lib/constants';
+	import type { ModelDraftSidecar } from '$lib/enums';
 	import { HuggingFaceService } from '$lib/services';
 	import type { ModelQuantOption } from '$lib/types';
 	import { copyToClipboard } from '$lib/utils';
@@ -19,7 +19,7 @@
 		/** Non-draft quants of the repo, in bit-depth row order. */
 		mainOptions: ModelQuantOption[];
 		/** Draft sidecar files with their sidecar badge; empty when the repo ships none. */
-		draftOptions: (ModelQuantOption & { badge: ModelSidecar | null })[];
+		draftOptions: (ModelQuantOption & { badge: ModelDraftSidecar | null })[];
 	}
 
 	let { draftOptions, mainOptions, modelId }: Props = $props();
@@ -27,7 +27,7 @@
 	// Command picks, owned here: nothing two-way binds them to the quant chips.
 	let basePick = $state<string | null>(null);
 	let draftPick = $state<string | null>(null);
-	let draftTypePick = $state<ModelSidecar | null>(null);
+	let draftTypePick = $state<ModelDraftSidecar | null>(null);
 	let withDraft = $state(false);
 
 	function bitDepthOf(path: string): number {
@@ -61,7 +61,7 @@
 	let specTypes = $derived(
 		draftOptions
 			.map((option) => option.badge)
-			.filter((badge): badge is ModelSidecar => badge !== null)
+			.filter((badge): badge is ModelDraftSidecar => badge !== null)
 			.filter((badge, index, all) => all.indexOf(badge) === index)
 	);
 
@@ -219,7 +219,7 @@
 					<!-- the select only earns its chrome when there is a real choice to make -->
 					{#if specTypes.length > 1}
 						<Select.Root
-							onValueChange={(v) => v && (draftTypePick = v as ModelSidecar)}
+							onValueChange={(v) => v && (draftTypePick = v as ModelDraftSidecar)}
 							type="single"
 							value={draftType}
 						>

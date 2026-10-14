@@ -7,16 +7,12 @@
  * of the discover domain constants.
  */
 
-import type { ModelSidecar } from '$lib/constants';
-import { ModelAuxSidecar, ModelDraftSidecar } from '$lib/enums';
+import { ModelDraftSidecar } from '$lib/enums';
 
 /**
- * `--spec-type` value for each draft sidecar; aux sidecars (mmproj, imatrix)
- * carry none and stay empty.
+ * `--spec-type` value for each draft sidecar.
  */
-export const SPEC_TYPE: Record<ModelSidecar, string> = {
-	[ModelAuxSidecar.IMATRIX]: '',
-	[ModelAuxSidecar.MMPROJ]: '',
+export const SPEC_TYPE: Record<ModelDraftSidecar, string> = {
 	[ModelDraftSidecar.DFLASH]: 'draft-dflash',
 	[ModelDraftSidecar.DSPARK]: 'draft-dspark',
 	[ModelDraftSidecar.EAGLE3]: 'draft-eagle3',

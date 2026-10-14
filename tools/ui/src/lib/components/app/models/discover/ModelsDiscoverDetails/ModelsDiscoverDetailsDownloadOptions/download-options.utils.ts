@@ -1,6 +1,7 @@
 import { DRAFT_FILE_LABEL, MODEL_ID, PATH_SEPARATOR } from '$lib/constants';
 import { ModelDraftSidecar, ModelSelectableFileKind } from '$lib/enums';
 import { HuggingFaceService } from '$lib/services';
+import type { ModelSelectableFile } from '$lib/types';
 import { isAuxSidecar, isDraftSidecar } from '$lib/utils';
 
 /**
@@ -13,6 +14,13 @@ export const DRAFT_PREFERENCE_ORDER: readonly ModelDraftSidecar[] = [
 	ModelDraftSidecar.DFLASH,
 	ModelDraftSidecar.MTP
 ];
+
+/** Draft sidecar of a file, typed for files already known to be drafts; null when it carries none. */
+export function draftBadgeOf(file: Pick<ModelSelectableFile, 'path'>): ModelDraftSidecar | null {
+	const sidecar = HuggingFaceService.extractQuantMeta(file.path)?.sidecar;
+
+	return sidecar && isDraftSidecar(sidecar) ? sidecar : null;
+}
 
 /** Kind of a file path: the main weights, a draft sidecar, or an aux sidecar (mmproj). */
 export function classify(path: string): ModelSelectableFileKind {
