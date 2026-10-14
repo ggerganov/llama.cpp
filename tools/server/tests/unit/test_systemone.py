@@ -158,6 +158,30 @@ def test_systemone_shared_prompt():
     assert abs(res.body["answers"]["angry"]["noul"] - res_single.body["answers"]["angry"]["noul"]) < 0.01
 
 
+@pytest.mark.parametrize("kv_unified", [False, True])
+def test_systemone_skips_prompt_cache(kv_unified, tmp_path):
+    global server
+    server.cache_ram = 100
+    server.kv_unified = kv_unified
+    server.debug = True
+    server.log_path = str(tmp_path / "server.log")
+    server.start()
+
+    for i in range(4):
+        res = server.make_request("POST", "/v1/systemone", data={
+            "state": f"Ticket {i}: " + TEST_STATE * (i + 1),
+            "questions": TEST_QUESTIONS,
+        })
+        assert res.status_code == 200
+
+    server.stop()
+
+    with open(server.log_path) as f:
+        log = f.read()
+    assert "__TEST_TAG_CACHE_IDLE_SLOTS_ENABLED__" in log
+    assert "__TEST_TAG_CACHE_IDLE_SLOT__" not in log
+
+
 def test_systemone_images():
     global server
     server = ServerPreset.tinyopenjev()
