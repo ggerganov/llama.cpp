@@ -475,11 +475,11 @@ void llama_model_saver::add_kv_from_model() {
         add_kv(LLM_KV_VIBEVOICE_DIFFUSION_LAYERNORM_EPS, vv.diff_f_norm_rms_eps);
         add_kv(LLM_KV_VIBEVOICE_DIFFUSION_TRAIN_STEPS, vv.diff_train_steps);
         add_kv(LLM_KV_VIBEVOICE_DIFFUSION_INFERENCE_STEPS, vv.diff_inference_steps);
-        add_kv(LLM_KV_VIBEVOICE_ACOUSTIC_ENCODER_RATIOS, std::vector<uint32_t>(vv.acoustic.enc_ratios.begin(), vv.acoustic.enc_ratios.begin() + vv.acoustic.n_enc_stages - 1));
+        gguf_set_arr_data(gguf_ctx, llm_kv(LLM_KV_VIBEVOICE_ACOUSTIC_ENCODER_RATIOS).c_str(), GGUF_TYPE_UINT32, vv.acoustic.enc_ratios.data(), vv.acoustic.n_enc_stages - 1);
         add_kv(LLM_KV_VIBEVOICE_ACOUSTIC_ENCODER_DEPTHS, std::vector<uint32_t>(vv.acoustic.enc_depths.begin(), vv.acoustic.enc_depths.begin() + vv.acoustic.n_enc_stages));
-        add_kv(LLM_KV_VIBEVOICE_ACOUSTIC_DECODER_RATIOS, std::vector<uint32_t>(vv.acoustic.dec_ratios.begin(), vv.acoustic.dec_ratios.begin() + vv.acoustic.n_dec_stages - 1));
+        gguf_set_arr_data(gguf_ctx, llm_kv(LLM_KV_VIBEVOICE_ACOUSTIC_DECODER_RATIOS).c_str(), GGUF_TYPE_UINT32, vv.acoustic.dec_ratios.data(), vv.acoustic.n_dec_stages - 1);
         add_kv(LLM_KV_VIBEVOICE_ACOUSTIC_DECODER_DEPTHS, std::vector<uint32_t>(vv.acoustic.dec_depths.begin(), vv.acoustic.dec_depths.begin() + vv.acoustic.n_dec_stages));
-        add_kv(LLM_KV_VIBEVOICE_SEMANTIC_ENCODER_RATIOS, std::vector<uint32_t>(vv.semantic.enc_ratios.begin(), vv.semantic.enc_ratios.begin() + vv.semantic.n_enc_stages - 1));
+        gguf_set_arr_data(gguf_ctx, llm_kv(LLM_KV_VIBEVOICE_SEMANTIC_ENCODER_RATIOS).c_str(), GGUF_TYPE_UINT32, vv.semantic.enc_ratios.data(), vv.semantic.n_enc_stages - 1);
         add_kv(LLM_KV_VIBEVOICE_SEMANTIC_ENCODER_DEPTHS, std::vector<uint32_t>(vv.semantic.enc_depths.begin(), vv.semantic.enc_depths.begin() + vv.semantic.n_enc_stages));
         add_kv(LLM_KV_VIBEVOICE_DIFFUSION_TYPE, "ddpm");
         add_kv(LLM_KV_VIBEVOICE_DIFFUSION_PREDICTION_TYPE, "v_prediction");

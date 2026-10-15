@@ -769,7 +769,8 @@ struct llama_model_gpt2 : public llama_model_base {
 
 // backbone is plain qwen2, only the acoustic decoder and the diffusion head have a graph so far
 struct llama_model_vibevoice : public llama_model_qwen2 {
-    llama_model_vibevoice(const struct llama_model_params & params) : llama_model_qwen2(params) {}
+    llama_model_vibevoice(const struct llama_model_params & params);
+    ~llama_model_vibevoice() override;
     void load_arch_hparams(llama_model_loader & ml) override;
     void load_arch_tensors(llama_model_loader & ml) override;
 
@@ -935,6 +936,14 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     struct stream_io;
 
 private:
+    struct graph_cache;
+
+    // Each cache serializes compute and owns its graph buffers until rebuild or model destruction.
+    mutable std::unique_ptr<graph_cache> diffusion_graph;
+    mutable std::unique_ptr<graph_cache> acoustic_dec_graph;
+    mutable std::unique_ptr<graph_cache> semantic_enc_graph;
+    mutable std::unique_ptr<graph_cache> feedback_graph;
+
     struct tok_tensors;
 
     // with st the causal convs read their left context from cache inputs and output the updated caches

@@ -2,6 +2,7 @@
 
 #include "ggml-alloc.h"
 
+#include <mutex>
 #include <random>
 
 struct llama_model_vibevoice::tok_tensors {
@@ -212,6 +213,112 @@ struct llama_model_vibevoice::stream_io {
     std::vector<ggml_tensor *> inp;
     std::vector<ggml_tensor *> out;
 };
+
+struct llama_model_vibevoice::graph_cache {
+    std::mutex mutex;
+    ggml_context_ptr ctx;
+    ggml_gallocr_ptr galloc;
+    ggml_cgraph * gf = nullptr;
+    ggml_tensor * out = nullptr;
+    std::vector<ggml_tensor *> inputs;
+    stream_io st;
+    ggml_backend_t backend = nullptr;
+    ggml_backend_buffer_type_t buft = nullptr;
+    int64_t n = 0;
+    int64_t hop = 0;
+    size_t n_nodes = 0;
+    bool allocated = false;
+
+    bool matches(ggml_backend_t backend_new, int64_t n_new, int64_t hop_new = 0) const {
+        return allocated && backend == backend_new && buft == ggml_backend_get_default_buffer_type(backend_new) && n == n_new && hop == hop_new;
+    }
+
+    void init(ggml_backend_t backend_new, int64_t n_new, int64_t hop_new, size_t nodes) {
+        allocated = false;
+        galloc.reset();
+        ctx.reset();
+        gf = nullptr;
+        out = nullptr;
+        inputs.clear();
+        st = {};
+        backend = backend_new;
+        buft = ggml_backend_get_default_buffer_type(backend);
+        n = n_new;
+        hop = hop_new;
+        n_nodes = nodes;
+
+        ggml_init_params params = {
+            /*.mem_size   =*/ ggml_tensor_overhead() * n_nodes + ggml_graph_overhead_custom(n_nodes, false),
+            /*.mem_buffer =*/ nullptr,
+            /*.no_alloc   =*/ true,
+        };
+        ctx.reset(ggml_init(params));
+        if (!ctx) {
+            throw std::runtime_error("vibevoice: failed to create the speech graph context");
+        }
+    }
+
+    void alloc(ggml_tensor * output) {
+        out = output;
+        ggml_set_output(out);
+        gf = ggml_new_graph_custom(ctx.get(), n_nodes, false);
+        ggml_build_forward_expand(gf, out);
+        for (ggml_tensor * t : st.out) {
+            ggml_build_forward_expand(gf, t);
+        }
+
+        galloc.reset(ggml_gallocr_new(buft));
+        if (!ggml_gallocr_alloc_graph(galloc.get(), gf)) {
+            throw std::runtime_error("vibevoice: failed to allocate the speech graph");
+        }
+        allocated = true;
+    }
+
+    std::vector<float> run_stream(tok_stream_cache & cache, const std::vector<const float *> & data) const {
+        if (cache.convs.empty()) {
+            cache.convs.resize(st.inp.size());
+            for (size_t i = 0; i < st.inp.size(); ++i) {
+                cache.convs[i].assign(ggml_nelements(st.inp[i]), 0.0f);
+            }
+        }
+        if (cache.convs.size() != st.inp.size()) {
+            throw std::runtime_error("vibevoice: stream cache does not match the graph");
+        }
+        for (size_t i = 0; i < st.inp.size(); ++i) {
+            if (cache.convs[i].size() != (size_t) ggml_nelements(st.inp[i])) {
+                throw std::runtime_error("vibevoice: stream cache does not match the graph");
+            }
+        }
+
+        // The allocator can reuse input buffers. Set all inputs before each compute.
+        for (size_t i = 0; i < st.inp.size(); ++i) {
+            ggml_backend_tensor_set(st.inp[i], cache.convs[i].data(), 0, ggml_nbytes(st.inp[i]));
+        }
+        GGML_ASSERT(data.size() == inputs.size());
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            ggml_backend_tensor_set(inputs[i], data[i], 0, ggml_nbytes(inputs[i]));
+        }
+        if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
+            throw std::runtime_error("vibevoice: failed to compute the streaming graph");
+        }
+        for (size_t i = 0; i < st.out.size(); ++i) {
+            ggml_backend_tensor_get(st.out[i], cache.convs[i].data(), 0, ggml_nbytes(st.out[i]));
+        }
+
+        std::vector<float> res(ggml_nelements(out));
+        ggml_backend_tensor_get(out, res.data(), 0, ggml_nbytes(out));
+        return res;
+    }
+};
+
+llama_model_vibevoice::llama_model_vibevoice(const llama_model_params & params) :
+    llama_model_qwen2(params),
+    diffusion_graph(new graph_cache),
+    acoustic_dec_graph(new graph_cache),
+    semantic_enc_graph(new graph_cache),
+    feedback_graph(new graph_cache) {}
+
+llama_model_vibevoice::~llama_model_vibevoice() = default;
 
 // x: [T, C] -> [n_ctx + T, C], the left context is the stream cache, or zeros without a stream
 // the updated cache is the last n_ctx rows of the result
@@ -559,42 +666,32 @@ std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t b
     const size_t  n      = (size_t) vv.diff_latent_size * n_frames;
     const size_t  n_embd = (size_t) hparams.n_embd * n_frames;
 
-    ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
-        /*.mem_buffer =*/ nullptr,
-        /*.no_alloc   =*/ true,
-    };
-    ggml_context * ctx = ggml_init(params);
+    auto & graph = *diffusion_graph;
+    std::lock_guard<std::mutex> lock(graph.mutex);
+    if (!graph.matches(backend, n_cond)) {
+        graph.init(backend, n_cond, 0, GGML_DEFAULT_GRAPH_SIZE);
+        ggml_context * ctx = graph.ctx.get();
 
-    ggml_tensor * noisy = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, vv.diff_latent_size, n_cond);
-    ggml_set_input(noisy);
-    ggml_tensor * c = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.n_embd, n_cond);
-    ggml_set_input(c);
-    ggml_tensor * t = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
-    ggml_set_input(t);
-
-    ggml_tensor * out = build_diffusion_head(ctx, noisy, c, t);
-    ggml_set_output(out);
-
-    ggml_cgraph * gf = ggml_new_graph(ctx);
-    ggml_build_forward_expand(gf, out);
-
-    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
-        ggml_gallocr_free(galloc);
-        ggml_free(ctx);
-        throw std::runtime_error("vibevoice: failed to allocate the diffusion head graph");
+        ggml_tensor * noisy = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, vv.diff_latent_size, n_cond);
+        ggml_set_input(noisy);
+        ggml_tensor * c = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.n_embd, n_cond);
+        ggml_set_input(c);
+        ggml_tensor * t = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
+        ggml_set_input(t);
+        graph.inputs = { noisy, c, t };
+        graph.alloc(build_diffusion_head(ctx, noisy, c, t));
     }
+    ggml_tensor * noisy = graph.inputs[0];
+    ggml_tensor * c     = graph.inputs[1];
+    ggml_tensor * t     = graph.inputs[2];
+    ggml_tensor * out   = graph.out;
 
     std::vector<float> x(noise, noise + n);
     std::vector<float> noisy_data(n * (uncond ? 2 : 1));
     std::vector<float> v(n * (uncond ? 2 : 1));
     std::vector<float> guided(uncond ? n : 0);
 
-    // final.proj rows can disagree with metadata diff_latent_size (create_tensor_from_file trusts the file)
     if (ggml_nbytes(out) != v.size() * sizeof(float)) {
-        ggml_gallocr_free(galloc);
-        ggml_free(ctx);
         throw std::runtime_error(format(
                 "vibevoice: diffusion output size %zu does not match latent buffer %zu (diff_latent_size %u)",
                 (size_t) ggml_nelements(out), v.size(), vv.diff_latent_size));
@@ -616,9 +713,7 @@ std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t b
         }
         ggml_backend_tensor_set(t, &timestep, 0, sizeof(float));
 
-        if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-            ggml_gallocr_free(galloc);
-            ggml_free(ctx);
+        if (ggml_backend_graph_compute(backend, graph.gf) != GGML_STATUS_SUCCESS) {
             throw std::runtime_error("vibevoice: failed to compute the diffusion head graph");
         }
         ggml_backend_tensor_get(out, v.data(), 0, ggml_nbytes(out));
@@ -630,9 +725,6 @@ std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t b
             sampler.step(v.data(), x.data(), n);
         }
     }
-
-    ggml_gallocr_free(galloc);
-    ggml_free(ctx);
 
     return x;
 }
@@ -683,97 +775,20 @@ ggml_tensor * llama_model_vibevoice::build_speech_feedback(ggml_context * ctx, g
 // streaming tokenizer: chunk by chunk decode/encode with causal conv caches
 //
 
-static ggml_context * vv_stream_ctx_init() {
-    const size_t n_nodes = 4 * GGML_DEFAULT_GRAPH_SIZE;
-
-    ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * n_nodes + ggml_graph_overhead_custom(n_nodes, false),
-        /*.mem_buffer =*/ nullptr,
-        /*.no_alloc   =*/ true,
-    };
-    return ggml_init(params);
-}
-
-// computes a streaming graph: sets the caches (zeros on a cold start) and the inputs, keeps the updated caches
-// frees ctx, returns out
-static std::vector<float> vv_run_stream(
-        ggml_backend_t backend,
-        ggml_context * ctx,
-        ggml_tensor * out,
-        const llama_model_vibevoice::stream_io & st,
-        llama_model_vibevoice::tok_stream_cache & cache,
-        const std::vector<std::pair<ggml_tensor *, const float *>> & inputs) {
-    const auto fail = [&](const char * msg) {
-        ggml_free(ctx);
-        throw std::runtime_error(format("vibevoice: %s", msg));
-    };
-
-    if (cache.convs.empty()) {
-        cache.convs.resize(st.inp.size());
-        for (size_t i = 0; i < st.inp.size(); ++i) {
-            cache.convs[i].assign(ggml_nelements(st.inp[i]), 0.0f);
-        }
-    }
-    if (cache.convs.size() != st.inp.size()) {
-        fail("stream cache does not match the graph");
-    }
-    for (size_t i = 0; i < st.inp.size(); ++i) {
-        if (cache.convs[i].size() != (size_t) ggml_nelements(st.inp[i])) {
-            fail("stream cache does not match the graph");
-        }
-    }
-
-    ggml_set_output(out);
-
-    ggml_cgraph * gf = ggml_new_graph_custom(ctx, 4 * GGML_DEFAULT_GRAPH_SIZE, false);
-    ggml_build_forward_expand(gf, out);
-    for (ggml_tensor * t : st.out) {
-        ggml_build_forward_expand(gf, t);
-    }
-
-    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
-        ggml_gallocr_free(galloc);
-        fail("failed to allocate the streaming graph");
-    }
-
-    for (size_t i = 0; i < st.inp.size(); ++i) {
-        ggml_backend_tensor_set(st.inp[i], cache.convs[i].data(), 0, ggml_nbytes(st.inp[i]));
-    }
-    for (const auto & [t, data] : inputs) {
-        ggml_backend_tensor_set(t, data, 0, ggml_nbytes(t));
-    }
-
-    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-        ggml_gallocr_free(galloc);
-        fail("failed to compute the streaming graph");
-    }
-
-    for (size_t i = 0; i < st.out.size(); ++i) {
-        ggml_backend_tensor_get(st.out[i], cache.convs[i].data(), 0, ggml_nbytes(st.out[i]));
-    }
-
-    std::vector<float> res(ggml_nelements(out));
-    ggml_backend_tensor_get(out, res.data(), 0, ggml_nbytes(out));
-
-    ggml_gallocr_free(galloc);
-    ggml_free(ctx);
-
-    return res;
-}
-
 std::vector<float> llama_model_vibevoice::acoustic_dec_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * latents, int64_t n_new) const {
     GGML_ASSERT(n_new > 0);
 
-    ggml_context * ctx = vv_stream_ctx_init();
-
-    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.acoustic.vae_dim, n_new);
-    ggml_set_input(inp);
-
-    stream_io st;
-    ggml_tensor * out = build_acoustic_dec(ctx, inp, &st);
-
-    return vv_run_stream(backend, ctx, out, st, cache, { { inp, latents } });
+    auto & graph = *acoustic_dec_graph;
+    std::lock_guard<std::mutex> lock(graph.mutex);
+    if (!graph.matches(backend, n_new)) {
+        graph.init(backend, n_new, 0, 4 * GGML_DEFAULT_GRAPH_SIZE);
+        ggml_context * ctx = graph.ctx.get();
+        ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.acoustic.vae_dim, n_new);
+        ggml_set_input(inp);
+        graph.inputs = { inp };
+        graph.alloc(build_acoustic_dec(ctx, inp, &graph.st));
+    }
+    return graph.run_stream(cache, { latents });
 }
 
 // the strided convs only see whole strides when the chunk is a multiple of the encoder hop
@@ -805,15 +820,18 @@ static int64_t vv_dec_hop(const llama_hparams_vv_tokenizer & hp) {
 std::vector<float> llama_model_vibevoice::semantic_enc_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * wav, int64_t n_samples) const {
     GGML_ASSERT(n_samples > 0 && n_samples % vv_enc_hop(hparams.vibevoice.semantic) == 0);
 
-    ggml_context * ctx = vv_stream_ctx_init();
-
-    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_samples, 1);
-    ggml_set_input(inp);
-
-    stream_io st;
-    ggml_tensor * out = build_semantic_enc(ctx, inp, &st);
-
-    return vv_run_stream(backend, ctx, out, st, cache, { { inp, wav } });
+    const int64_t hop = vv_enc_hop(hparams.vibevoice.semantic);
+    auto & graph = *semantic_enc_graph;
+    std::lock_guard<std::mutex> lock(graph.mutex);
+    if (!graph.matches(backend, n_samples, hop)) {
+        graph.init(backend, n_samples, hop, 4 * GGML_DEFAULT_GRAPH_SIZE);
+        ggml_context * ctx = graph.ctx.get();
+        ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_samples, 1);
+        ggml_set_input(inp);
+        graph.inputs = { inp };
+        graph.alloc(build_semantic_enc(ctx, inp, &graph.st));
+    }
+    return graph.run_stream(cache, { wav });
 }
 
 std::vector<float> llama_model_vibevoice::speech_feedback_stream(ggml_backend_t backend, tok_stream_cache & semantic_cache,
@@ -829,15 +847,17 @@ std::vector<float> llama_model_vibevoice::speech_feedback_stream(ggml_backend_t 
                 (size_t) hop, (size_t) ac_hop));
     }
 
-    ggml_context * ctx = vv_stream_ctx_init();
-
-    ggml_tensor * lat = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.diff_latent_size, n_new);
-    ggml_set_input(lat);
-    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_new * hop, 1);
-    ggml_set_input(inp);
-
-    stream_io st;
-    ggml_tensor * out = build_speech_feedback(ctx, lat, inp, &st);
-
-    return vv_run_stream(backend, ctx, out, st, semantic_cache, { { lat, scaled_latents }, { inp, wav } });
+    auto & graph = *feedback_graph;
+    std::lock_guard<std::mutex> lock(graph.mutex);
+    if (!graph.matches(backend, n_new, hop)) {
+        graph.init(backend, n_new, hop, 4 * GGML_DEFAULT_GRAPH_SIZE);
+        ggml_context * ctx = graph.ctx.get();
+        ggml_tensor * lat = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.diff_latent_size, n_new);
+        ggml_set_input(lat);
+        ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_new * hop, 1);
+        ggml_set_input(inp);
+        graph.inputs = { lat, inp };
+        graph.alloc(build_speech_feedback(ctx, lat, inp, &graph.st));
+    }
+    return graph.run_stream(semantic_cache, { scaled_latents, wav });
 }

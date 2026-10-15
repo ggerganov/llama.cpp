@@ -228,6 +228,22 @@ int main(int argc, char ** argv) {
         ok = false;
     }
 
+    // Compare changed inputs on a reused graph with the same inputs after a rebuild.
+    {
+        std::vector<float> noise_alt = noise;
+        for (float & x : noise_alt) {
+            x = -x;
+        }
+        const auto reused = model->sample_speech_latents(backend, noise_alt.data(), uncond.data(), cond.data(), n_frames, 1.3f);
+        model->sample_speech_latents(backend, noise.data(), cond.data(), nullptr, n_frames, 1.0f);
+        const auto rebuilt = model->sample_speech_latents(backend, noise_alt.data(), uncond.data(), cond.data(), n_frames, 1.3f);
+        const auto repeated = model->sample_speech_latents(backend, noise.data(), cond.data(), uncond.data(), n_frames, 3.0f);
+        ok &= check("latents reused graph", reused, n_lat * n_frames);
+        const bool same = reused == rebuilt && repeated == lat_cfg3;
+        printf("diffusion graph reuse/rebuild: %s\n", same ? "ok" : "FAIL");
+        ok &= same;
+    }
+
     // speech feedback on synthetic scaled latents + wav (always finite on tiny)
     {
         std::vector<float> syn_lat(n_lat * n_frames);
