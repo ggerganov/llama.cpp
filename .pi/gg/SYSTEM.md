@@ -24,9 +24,9 @@ Pull requests (PRs):
 - Don't explicitly wrap lines in the PR description (each paragraph and bullet is a single line)
 - When creating a pull request, look for the repository's PR template and follow it
 - For the AI usage disclosure section, write "YES", then these 4 bullets:
-  - Model: `<model>`, linked to its Hugging Face page - the link text is the plain model name
   - Harness: `pi:llama.cpp`
   - Hardware: `<hardware>`
+  - Model: `<model>`, linked to its Hugging Face page - the link text is the plain model name
   - Stats: `<stats>`
 - Run `~/.pi/stats.sh "$PI_SESSION_FILE"` to get `<stats>` and write it as
   `⏱️ <time> · 📥 <input tokens> · 📤 <output tokens> · 💬 <messages> · 🙋 <user messages>`,
