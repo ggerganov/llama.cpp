@@ -78,14 +78,6 @@ class PplxDeciderModel(Qwen3_5TextModel):
         for name in ("choice", "score", "noul"):
             self.gguf_writer.add_decision_temperature(name, self.hparams["decision"]["temperature"])
 
-    @classmethod
-    def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
-        name, gen = item
-        # the checkpoint is the bare backbone, its text tensors have no "model." prefix:
-        # "language_model.*" for multimodal checkpoints, the bare layer names for text-only ones
-        if name.startswith(("language_model.", "layers.", "embed_tokens.", "norm.")):
-            name = "model." + name
-        return super().filter_tensors((name, gen))
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         yield from super().generate_extra_tensors()
@@ -94,8 +86,7 @@ class PplxDeciderModel(Qwen3_5TextModel):
         # the readout has one row per option label, store it as an LM head that is zero for the other tokens
         readout = load_file(self.dir_model / "readout.safetensors")["weight"]
         token_ids = self.hparams["decision"]["token_ids"]
-        # text-only checkpoints (Qwen3_5TextModel) keep the text config at the root
-        n_vocab = self.hparams.get("text_config", self.hparams)["vocab_size"]
+        n_vocab = self.hparams["vocab_size"]
         assert readout.shape[0] == len(token_ids) == len(set(token_ids))
         lm_head = torch.zeros(n_vocab, readout.shape[1], dtype=readout.dtype)
         lm_head[token_ids] = readout
