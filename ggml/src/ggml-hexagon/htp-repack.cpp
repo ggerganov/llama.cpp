@@ -773,7 +773,7 @@ static inline void pack_k4_scales_mins(uint8_t * scales, ggml_half * d, ggml_hal
 }
 
 static void repack_q4_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q4_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
+    repack_kquant_to_tiled_grid<block_q4_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_K,
         [](uint8_t * tile_dst, const block_q4_K * b, int row, int kt_local) {
             const float d    = GGML_FP16_TO_FP32(b->d);
             const float dmin = GGML_FP16_TO_FP32(b->dmin);
@@ -797,7 +797,7 @@ static void repack_q4_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q4_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q4_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
+    unpack_kquant_from_tiled_grid<block_q4_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q4_K,
         [](block_q4_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             float sub_scales[8];
             float sub_mins[8];

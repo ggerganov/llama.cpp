@@ -43,7 +43,7 @@ static inline size_t htp_tiled_row_size(enum ggml_type type, int64_t ne0) {
         return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q6_K / 32);
     }
     if (type == GGML_TYPE_Q4_K) {
-        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q4_1 / 32);
+        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q4_K / 32);
     }
     if (type == GGML_TYPE_Q5_K) {
         return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q5_K / 32);
