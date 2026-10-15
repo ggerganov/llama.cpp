@@ -147,30 +147,46 @@ static inline void hvx_dequantize_row_flat_q8_0_f16(__fp16 * restrict dst_ptr, c
 }
 
 static inline void hvx_dequantize_row_flat_f16_f32(float * restrict dst_ptr, const void * restrict src_ptr, uint32_t n) {
-    const int nb = n / 32;
+    const uint32_t nvec = n / VLEN_FP32;
+    const uint32_t nloe = n % VLEN_FP32;
     const _Float16 * src = (const _Float16 *) src_ptr;
 
-    for (int i = 0; i < nb; i++) {
-        HVX_Vector v_f16 = *(const HVX_UVector *) (src + i * 32);
+    for (uint32_t i = 0; i < nvec; i++) {
+        HVX_Vector v_f16 = *(const HVX_UVector *) (src + i * VLEN_FP32);
         HVX_VectorPair vp_f32 = hvx_vec_f16_to_f32(v_f16);
         HVX_Vector res = Q6_V_lo_W(vp_f32);
 
-        float * block_dst = dst_ptr + i * 32;
-        hvx_vmem(block_dst) = res;
+        hvx_vmem(dst_ptr + i * VLEN_FP32) = res;
+    }
+
+    if (nloe) {
+        HVX_Vector v_f16 = *(const HVX_UVector *) (src + nvec * VLEN_FP32);
+        HVX_VectorPair vp_f32 = hvx_vec_f16_to_f32(v_f16);
+        HVX_Vector res = Q6_V_lo_W(vp_f32);
+
+        hvx_vec_store_a(dst_ptr + nvec * VLEN_FP32, nloe * sizeof(float), res);
     }
 }
 
 static inline void hvx_dequantize_row_flat_bf16_f32(float * restrict dst_ptr, const void * restrict src_ptr, uint32_t n) {
-    const int nb = n / 32;
+    const uint32_t nvec = n / VLEN_FP32;
+    const uint32_t nloe = n % VLEN_FP32;
     const uint16_t * src = (const uint16_t *) src_ptr;
 
-    for (int i = 0; i < nb; i++) {
-        HVX_Vector v_bf16 = *(const HVX_UVector *) (src + i * 32);
+    for (uint32_t i = 0; i < nvec; i++) {
+        HVX_Vector v_bf16 = *(const HVX_UVector *) (src + i * VLEN_FP32);
         HVX_VectorPair p = Q6_Ww_vunpack_Vh(v_bf16);
         HVX_Vector res = Q6_Vw_vasl_VwR(Q6_V_lo_W(p), 16);
 
-        float * block_dst = dst_ptr + i * 32;
-        hvx_vmem(block_dst) = res;
+        hvx_vmem(dst_ptr + i * VLEN_FP32) = res;
+    }
+
+    if (nloe) {
+        HVX_Vector v_bf16 = *(const HVX_UVector *) (src + nvec * VLEN_FP32);
+        HVX_VectorPair p = Q6_Ww_vunpack_Vh(v_bf16);
+        HVX_Vector res = Q6_Vw_vasl_VwR(Q6_V_lo_W(p), 16);
+
+        hvx_vec_store_a(dst_ptr + nvec * VLEN_FP32, nloe * sizeof(float), res);
     }
 }
 
