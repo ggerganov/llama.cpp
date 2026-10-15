@@ -2454,8 +2454,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         cb(experts, "ffn_moe_down_biased", il);
     }
 
-    // an expert output can be scaled by a norm weight, then normalized, before
-    // the router weights apply
+    // an expert output can be scaled by a norm weight, then normalized, before the router weights apply
     if (post_exp_norm) {
         experts = ggml_mul(ctx0, experts, post_exp_norm);
         experts = ggml_rms_norm(ctx0, experts, post_exp_norm_eps);
