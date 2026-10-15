@@ -1641,7 +1641,7 @@ common_chat_msg common_chat_peg_parse(const common_peg_arena &          src_pars
             } else if (params.format == COMMON_CHAT_FORMAT_PEG_MINIMAX_M3) {
                 mapper = std::make_unique<common_chat_peg_minimax_m3_mapper>(msg);
             } else {
-                mapper = std::make_unique<common_chat_peg_mapper>(msg, params.generation_prompt.size());
+                mapper = std::make_unique<common_chat_peg_mapper>(msg);
             }
             mapper->from_ast(ctx.ast, result);
 
@@ -1665,7 +1665,7 @@ common_chat_msg common_chat_peg_parse(const common_peg_arena &          src_pars
     } else if (params.format == COMMON_CHAT_FORMAT_PEG_MINIMAX_M3) {
         mapper = std::make_unique<common_chat_peg_minimax_m3_mapper>(msg);
     } else {
-        mapper = std::make_unique<common_chat_peg_mapper>(msg, params.generation_prompt.size());
+        mapper = std::make_unique<common_chat_peg_mapper>(msg);
     }
     mapper->from_ast(ctx.ast, result);
 
