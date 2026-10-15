@@ -223,6 +223,8 @@ class Qwen3Model(Qwen2Model):
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
+        if self.hparams.get("use_bidirectional_attention"):
+            self.gguf_writer.add_causal_attention(False)
         if self.is_rerank:
             self.gguf_writer.add_pooling_type(gguf.PoolingType.RANK)
             self.gguf_writer.add_classifier_output_labels(["yes", "no"])
@@ -252,6 +254,11 @@ class Qwen3Model(Qwen2Model):
                 if is_tied_head:
                     yield from super().modify_tensors(data_torch, name, bid)
                 return
+
+        # output embedding projection (voyage-4-nano)
+        if name == "linear.weight":
+            self.gguf_writer.add_embedding_length_out(data_torch.shape[0])
+            name = "dense_2_out.weight"
 
         yield from super().modify_tensors(data_torch, name, bid)
 
