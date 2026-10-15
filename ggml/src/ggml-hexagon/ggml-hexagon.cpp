@@ -317,17 +317,17 @@ enum ggml_hexagon_tensor_flags {
 };
 
 static inline bool ggml_hexagon_is_tiled_weight_type(enum ggml_type type) {
-    return type == GGML_TYPE_Q4_0 || type == GGML_TYPE_Q4_1 ||
-           type == GGML_TYPE_Q8_0 || type == GGML_TYPE_IQ4_NL ||
-           type == GGML_TYPE_MXFP4 || type == GGML_TYPE_Q6_K ||
-           type == GGML_TYPE_Q4_K || type == GGML_TYPE_Q5_K ||
-           type == GGML_TYPE_Q3_K || type == GGML_TYPE_Q2_K ||
-           type == GGML_TYPE_F16  || type == GGML_TYPE_F32  ||
+    return type == GGML_TYPE_Q4_0  || type == GGML_TYPE_Q4_1   ||
+           type == GGML_TYPE_Q8_0  || type == GGML_TYPE_IQ4_NL ||
+           type == GGML_TYPE_MXFP4 || type == GGML_TYPE_Q6_K   ||
+           type == GGML_TYPE_Q4_K  || type == GGML_TYPE_Q5_K   ||
+           type == GGML_TYPE_Q3_K  || type == GGML_TYPE_Q2_K   ||
+           type == GGML_TYPE_F16   || type == GGML_TYPE_F32    ||
            type == GGML_TYPE_BF16;
 }
 
 static inline bool ggml_hexagon_is_tiled_weight_tensor(const struct ggml_tensor * t) {
-    if (ggml_is_view(t)) {
+    if (!ggml_is_contiguous(t) || ggml_is_view(t)) {
         return false;
     }
     if (!ggml_hexagon_is_tiled_weight_type(t->type)) {
@@ -6615,8 +6615,7 @@ static void ggml_hexagon_precompute_get_rows_params(
     const uint32_t ne12 = src1->ne[2];
     const uint32_t nr = ne10 * ne11 * ne12;
 
-    const auto * extra = (const ggml_hexagon_tensor_extra *) src0->extra;
-    const bool tiled = (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED) != 0);
+    const bool tiled = ggml_hexagon_tensor_is_tiled(src0);
     const int wtype = (tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
 
     if (tiled) {
@@ -6627,8 +6626,6 @@ static void ggml_hexagon_precompute_get_rows_params(
         kparams->kernel_type = HTP_GET_ROWS_KERNEL_FLAT;
     }
 
-    const uint32_t chunks_per_row = 1;
-    const uint32_t chunk_size = ne00;
     const uint32_t total_tasks = nr;
 
     kparams->n_threads = (std::min)((uint32_t)sess->n_threads, total_tasks);
@@ -6648,14 +6645,10 @@ static void ggml_hexagon_precompute_get_rows_params(
 
     kparams->vtcm_size = (total_tasks == 0) ? 0 : vtcm_layout.total_bytes;
     kparams->tasks_per_thread = kparams->n_threads > 0 ? (total_tasks + kparams->n_threads - 1) / kparams->n_threads : 0;
-
-    kparams->chunks_per_row = chunks_per_row;
-    kparams->chunk_size = chunk_size;
     kparams->total_tasks = total_tasks;
 
     kparams->div_ne10 = ne10 > 0 ? init_fastdiv_values(ne10) : fastdiv_values{0, 0};
     kparams->div_ne10_ne11 = (ne10 * ne11) > 0 ? init_fastdiv_values(ne10 * ne11) : fastdiv_values{0, 0};
-    kparams->div_chunks_per_row = chunks_per_row > 0 ? init_fastdiv_values(chunks_per_row) : fastdiv_values{0, 0};
     kparams->div_ne02 = ne02 > 0 ? init_fastdiv_values(ne02) : fastdiv_values{0, 0};
     kparams->div_ne03 = ne03 > 0 ? init_fastdiv_values(ne03) : fastdiv_values{0, 0};
 }
@@ -8022,24 +8015,12 @@ static bool ggml_hexagon_supported_get_rows(const struct ggml_hexagon_session * 
     const struct ggml_tensor * src1 = op->src[1]; // indices
     const struct ggml_tensor * dst  = op;
 
-    if ((src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) && ggml_is_view(src0)) {
-        return false;
-    }
-
-    if (src0->type != dst->type && src0->ne[0] < 32) {
-        return false;
-    }
-
     if (src0->type != GGML_TYPE_F32 && src0->type != GGML_TYPE_F16 && src0->type != GGML_TYPE_BF16 &&
         src0->type != GGML_TYPE_Q4_0 && src0->type != GGML_TYPE_Q4_K && src0->type != GGML_TYPE_Q5_K && src0->type != GGML_TYPE_Q6_K && src0->type != GGML_TYPE_Q8_0 && src0->type != GGML_TYPE_I32) {
         return false;
     }
 
-    if (src0->type == GGML_TYPE_Q4_0 && (!ggml_is_contiguous(src0) || ggml_is_permuted(src0) || src0->ne[0] % QK4_0)) {
-        return false;
-    }
-
-    if ((src0->type == GGML_TYPE_Q4_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) && (!ggml_is_contiguous(src0) || ggml_is_permuted(src0) || src0->ne[0] % QK_K)) {
+    if (!ggml_is_contiguous_rows(src0) || !ggml_is_contiguous_rows(src1) || !ggml_is_contiguous_rows(dst)) {
         return false;
     }
 
@@ -9026,9 +9007,9 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
 
             htp_opnode node(HTP_OP_INVALID, n);
             node.opcode = op_remap_to_htp(n);
-            if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID) {
+            if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID || node.opcode == HTP_OP_GET_ROWS) {
                 ggml_tensor * src0 = node.node->src[0];
-                if (ggml_hexagon_needs_repack(src0) && src0->data) {
+                if (ggml_hexagon_needs_repack(src0)) {
                     if (opt_verbose) {
                         char dims_buf[64];
                         char strides_buf[64];
@@ -9042,10 +9023,11 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                     memcpy(raw.data(), src0->data, raw.size());
                     repack_tensor_tiled(src0, raw.data(), raw.size());
                     auto * extra = (ggml_hexagon_tensor_extra *) src0->extra;
-                    if (extra) {
-                        extra->flags |= GGML_HEXAGON_TENSOR_TILED;
-                    }
+                    extra->flags |= GGML_HEXAGON_TENSOR_TILED;
                 }
+            }
+
+            if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID) {
                 ggml_hexagon_precompute_matmul_params(sess,
                     node.node->src[0], node.node->src[1], node.node,
                     (struct htp_mm_kernel_params *)node.kernel_params
