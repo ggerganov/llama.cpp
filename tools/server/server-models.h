@@ -136,10 +136,10 @@ private:
     // models asked to stop, still counted as running until the monitor records their exit
     std::set<std::string> stopping_models;
 
-    // tags of downloads that never finished. The cache names partial files after their
-    // content hash, so this is the only record of what is still incomplete: it lets a
-    // restarted router list them without starting a download
-    std::set<std::string> unfinished_downloads;
+    // downloads that never finished, each tag with the sidecar kinds it pulls. The cache
+    // names partial files after their content hash, so this is the only record of what is
+    // still incomplete: it lets a restarted router list, resume or remove them
+    std::map<std::string, std::vector<std::string>> unfinished_downloads;
 
     // set to true while load_models() is executing a reload; load() will wait until clear
     bool is_reloading = false;
@@ -265,8 +265,11 @@ public:
     // write them back; callers hold the mutex
     void save_unfinished_downloads();
 
-    // tags of unfinished downloads (thread-safe)
-    std::vector<std::string> get_unfinished_downloads();
+    // forget an unfinished download and return its sidecar kinds; callers hold the mutex
+    std::vector<std::string> take_unfinished_download(const std::string & name);
+
+    // unfinished downloads with their sidecar kinds (thread-safe)
+    std::map<std::string, std::vector<std::string>> get_unfinished_downloads();
 
     // drop a download that will never be resumed, its tag and its partial files (thread-safe)
     void remove_unfinished_download(const std::string & name);
@@ -281,6 +284,8 @@ public:
         server_child_mode mode = SERVER_CHILD_MODE_NORMAL;
         // used for spawning a downloading child process
         std::optional<server_model_meta> custom_meta = std::nullopt;
+        // download mode: the sidecar kinds pulled with the model, as -hf would
+        std::vector<std::string> sidecars;
     };
 
     // load and unload model instances

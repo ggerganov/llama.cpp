@@ -8,7 +8,6 @@
 #include "json.h"
 
 #include <algorithm>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -498,18 +497,15 @@ static gguf_split_info get_gguf_split_info(const std::string & path) {
 }
 
 // Q4_0 -> 4, F16 -> 16, NVFP4 -> 4, Q8_K_M -> 8, etc
-static int quant_bits_from_tag(const std::string & tag) {
-    auto pos = tag.find_first_of("0123456789");
+static int extract_quant_bits(const std::string & filename) {
+    auto split = get_gguf_split_info(filename);
 
+    auto pos = split.tag.find_first_of("0123456789");
     if (pos == std::string::npos) {
         return 0;
     }
 
-    return std::stoi(tag.substr(pos));
-}
-
-static int extract_quant_bits(const std::string & filename) {
-    return quant_bits_from_tag(get_gguf_split_info(filename).tag);
+    return std::stoi(split.tag.substr(pos));
 }
 
 static hf_cache::hf_files get_split_files(const hf_cache::hf_files & files,
@@ -530,191 +526,12 @@ static hf_cache::hf_files get_split_files(const hf_cache::hf_files & files,
     return result;
 }
 
-// sidecar filename tokens, as used in `<quant>-<sidecar>` download tags,
-// e.g. `Q4_0-mtp` for `mtp-Model-Q4_0.gguf`, `BF16-mmproj` for `mmproj-BF16.gguf`
-static const std::vector<std::string> sidecar_tokens = {
-    "mtp", "eagle3", "dflash", "dspark", "mmproj", "imatrix",
-};
-
-static bool iequals(const std::string & a, const std::string & b) {
-    return a.size() == b.size() &&
-        std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-            return std::tolower((unsigned char) x) == std::tolower((unsigned char) y);
-        });
-}
-
-// split a `<quant>-<sidecar>` tag into its parts, e.g. `Q4_0-mtp` -> {`Q4_0`, `mtp`};
-// a bare sidecar tag (`mtp`) yields an empty quant; no sidecar yields an empty token
-static std::pair<std::string, std::string> split_sidecar_tag(const std::string & tag) {
-    for (const auto & t : sidecar_tokens) {
-        if (tag.size() > t.size() + 1 && iequals(tag.substr(tag.size() - t.size() - 1), "-" + t)) {
-            return { tag.substr(0, tag.size() - t.size() - 1), t };
-        }
-        if (iequals(tag, t)) {
-            return { "", t };
-        }
-    }
-    return { tag, "" };
-}
-
-// filename with directory and extension removed, e.g. `sub/mtp-Model-Q4_0.gguf` -> `mtp-Model-Q4_0`
-static std::string stem_of(const std::string & path) {
-    std::string base = path;
-    if (auto pos = base.rfind('/'); pos != std::string::npos) {
-        base = base.substr(pos + 1);
-    }
-    string_remove_suffix(base, ".gguf");
-    return base;
-}
-
-static std::string to_lower(std::string s) {
-    for (char & c : s) {
-        c = (char) std::tolower((unsigned char) c);
-    }
-    return s;
-}
-
-// the sidecar token a filename carries, in any case, and whether the name
-// alone decides it:
-// - certain: `mmproj` / `imatrix` as a whole word anywhere (`mmproj_f16.gguf`,
-//   `Model.imatrix.gguf`), or the token as the leading segment
-//   (`mtp-Model-Q4_0.gguf`, `imatrix.gguf`)
-// - ambiguous: the token as an infix or trailing segment (`Model-MTP-BF16.gguf`,
-//   `Model-BF16-mtp.gguf`), which also names full models with embedded draft
-//   heads (`Model-Q8D-MTP.gguf`); sidecar_token_of settles it on the listing
-// the token must be a whole segment, so `smtp-Model.gguf` and
-// `Phi-2-OmniMatrix.i1-Q4_K_M.gguf` are plain models; only a `.gguf` file is
-// ever a sidecar, so `quantization-mmproj-Q8_0.json` is none
-struct sidecar_name {
-    std::string token;
-    bool        certain = false;
-};
-
-// `word` in `base` bounded by the name ends or by a `-`, `_` or `.` separator
-static bool has_word(const std::string & base, const std::string & word) {
-    auto is_sep = [](char c) { return c == '-' || c == '_' || c == '.'; };
-    for (size_t pos = base.find(word); pos != std::string::npos; pos = base.find(word, pos + 1)) {
-        size_t end = pos + word.size();
-        if ((pos == 0 || is_sep(base[pos - 1])) && (end == base.size() || is_sep(base[end]))) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static sidecar_name sidecar_name_of(const std::string & path) {
-    if (!string_ends_with(path, ".gguf")) {
-        return {};
-    }
-
-    const std::string base = to_lower(stem_of(path));
-
-    if (base.empty()) {
-        return {};
-    }
-
-    for (const auto & t : sidecar_tokens) {
-        if (base == t || base.rfind(t + "-", 0) == 0 || base.rfind(t + "_", 0) == 0) {
-            return { t, true };
-        }
-        if ((t == "mmproj" || t == "imatrix") && has_word(base, t)) {
-            return { t, true };
-        }
-        if (base.find("-" + t + "-") != std::string::npos ||
-            string_ends_with(base, "-" + t) || string_ends_with(base, "-" + t + "-draft")) {
-            return { t, false };
-        }
-    }
-    return {};
-}
-
-// name with the sidecar token segment removed, lowercased for tag parsing,
-// e.g. `Model-MTP-Q4_0` -> `model-q4_0`
-static std::string strip_sidecar_token(const std::string & base, const std::string & token) {
-    const std::string lower = to_lower(base);
-
-    if (lower == token) {
-        return {};
-    }
-    if (lower.rfind(token + "-", 0) == 0 || lower.rfind(token + "_", 0) == 0) {
-        return lower.substr(token.size() + 1);
-    }
-    const std::string seg = "-" + token + "-";
-    if (auto pos = lower.find(seg); pos != std::string::npos) {
-        return lower.substr(0, pos) + "-" + lower.substr(pos + seg.size());
-    }
-    const std::string draft_tail = "-" + token + "-draft";
-    if (string_ends_with(lower, draft_tail)) {
-        return lower.substr(0, lower.size() - draft_tail.size());
-    }
-    if (string_ends_with(lower, "-" + token)) {
-        return lower.substr(0, lower.size() - token.size() - 1);
-    }
-    return lower;
-}
-
-// the quant a sidecar file belongs to, from its name with the token stripped;
-// a short-form name (`mmproj-F16.gguf`) leaves the bare quant, which has no
-// `-` separator for the tag regex, so it becomes the tag directly; a quant
-// always carries its bit count, so a name ending in a word (`mtp-Model-it.gguf`)
-// belongs to no quant and yields an empty tag
-static std::string sidecar_quant(const std::string & path, const std::string & token) {
-    std::string name = strip_sidecar_token(stem_of(path), token);
-    std::string tag  = get_gguf_split_info(name + ".gguf").tag;
-
-    if (tag.empty() && name.find('-') == std::string::npos) {
-        for (char & c : name) {
-            c = (char) std::toupper((unsigned char) c);
-        }
-        tag = name;
-    }
-
-    if (tag.find_first_of("0123456789") == std::string::npos) {
-        return {};
-    }
-
-    return tag;
-}
-
-// the sidecar token of `file` within its listing: a certain name decides alone,
-// an ambiguous one is a sidecar only next to its main weights, a token-free GGUF
-// of the same repo whose name extends the sidecar name with the token and the
-// quant removed; so `Model-MTP-BF16.gguf` next to `Model-UD-Q8_K_XL.gguf` is a
-// draft head, and a lone `Model-Q8D-MTP.gguf` stays a model
-static std::string sidecar_token_of(const hf_cache::hf_files & files, const hf_cache::hf_file & file) {
-    auto [token, certain] = sidecar_name_of(file.path);
-
-    if (token.empty() || certain) {
-        return token;
-    }
-
-    auto split = get_gguf_split_info(strip_sidecar_token(stem_of(file.path), token) + ".gguf");
-    std::string family = split.prefix;
-    if (!split.tag.empty()) {
-        family.resize(family.size() - split.tag.size() - 1);
-    }
-
-    for (const auto & f : files) {
-        if (f.repo_id != file.repo_id || !string_ends_with(f.path, ".gguf") ||
-            !sidecar_name_of(f.path).token.empty()) {
-            continue;
-        }
-        const std::string stem = to_lower(stem_of(f.path));
-        if (stem.rfind(family + "-", 0) == 0 || stem.rfind(family + ".", 0) == 0) {
-            return token;
-        }
-    }
-    return {};
-}
-
-// pick the best sibling GGUF carrying the sidecar `token` (e.g. "mmproj" / "mtp"),
+// pick the best sibling GGUF whose filename contains `keyword` (e.g. "mmproj" / "mtp"),
 // preferring deeper shared directory prefix with the model, then exact `tag` match,
-// then closest quantization to the tag when given, or to the model otherwise;
-// an empty `model` skips the directory constraint and matches by tag alone, where
-// an empty tag selects the sidecar whose name carries no quant
+// then closest quantization to the tag when given, or to the model otherwise
 static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
                                            const std::string        & model,
-                                           const std::string        & token,
+                                           const std::string        & keyword,
                                            const std::string        & tag = "") {
     hf_cache::hf_file best;
     size_t best_depth = 0;
@@ -727,34 +544,40 @@ static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
         c = (char) std::toupper((unsigned char) c);
     }
 
-    int model_bits = tag_upper.empty() ? extract_quant_bits(model) : quant_bits_from_tag(tag_upper);
+    int model_bits = 0;
+    if (!tag_upper.empty()) {
+        auto pos = tag_upper.find_first_of("0123456789");
+        model_bits = pos == std::string::npos ? 0 : std::stoi(tag_upper.substr(pos));
+    } else {
+        model_bits = extract_quant_bits(model);
+    }
     auto model_parts = string_split<std::string>(model, '/');
+    auto model_dir = model_parts.end() - 1;
 
     for (const auto & f : files) {
-        if (sidecar_token_of(files, f) != token) {
+        if (!string_ends_with(f.path, ".gguf") ||
+            f.path.find(keyword) == std::string::npos) {
             continue;
         }
 
         auto sib_parts = string_split<std::string>(f.path, '/');
         auto sib_dir = sib_parts.end() - 1;
 
-        size_t depth = 0;
-        if (!model.empty()) {
-            auto model_dir = model_parts.end() - 1;
-            auto [_, dir] = std::mismatch(model_parts.begin(), model_dir,
-                                          sib_parts.begin(), sib_dir);
-            if (dir != sib_dir) {
-                continue;
-            }
-            depth = dir - sib_parts.begin();
+        auto [_, dir] = std::mismatch(model_parts.begin(), model_dir,
+                                      sib_parts.begin(), sib_dir);
+        if (dir != sib_dir) {
+            continue;
         }
 
-        // rank by the quant the sidecar belongs to, with the token segment
-        // stripped from its name
-        auto sib_tag = sidecar_quant(f.path, token);
-        auto bits    = quant_bits_from_tag(sib_tag);
-        auto diff    = std::abs(bits - model_bits);
-        bool exact   = sib_tag == tag_upper && (!tag_upper.empty() || model.empty());
+        size_t depth = dir - sib_parts.begin();
+        auto bits = extract_quant_bits(f.path);
+        auto diff = std::abs(bits - model_bits);
+
+        std::string path_upper = f.path;
+        for (char & c : path_upper) {
+            c = (char) std::toupper((unsigned char) c);
+        }
+        bool exact = !tag_upper.empty() && path_upper.find("-" + tag_upper + ".") != std::string::npos;
 
         if (!found || depth > best_depth ||
             (depth == best_depth && exact && !best_exact) ||
@@ -777,30 +600,43 @@ static hf_cache::hf_file find_best_mmproj(const hf_cache::hf_files & files,
 static hf_cache::hf_file find_best_mtp(const hf_cache::hf_files & files,
                                        const std::string        & model,
                                        const std::string        & tag = "") {
-    return find_best_sibling(files, model, "mtp", tag);
+    return find_best_sibling(files, model, "mtp-", tag);
 }
 
 static hf_cache::hf_file find_best_eagle3(const hf_cache::hf_files & files,
                                           const std::string        & model,
                                           const std::string        & tag = "") {
-    return find_best_sibling(files, model, "eagle3", tag);
+    return find_best_sibling(files, model, "eagle3-", tag);
 }
 
 static hf_cache::hf_file find_best_dflash(const hf_cache::hf_files & files,
                                           const std::string        & model,
                                           const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dflash", tag);
+    return find_best_sibling(files, model, "dflash-", tag);
 }
 
 static hf_cache::hf_file find_best_dspark(const hf_cache::hf_files & files,
                                           const std::string        & model,
                                           const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dspark", tag);
+    return find_best_sibling(files, model, "dspark-", tag);
 }
 
-// a plain model file: a GGUF that is no sidecar within its listing
-static bool gguf_file_is_model(const hf_cache::hf_files & files, const hf_cache::hf_file & file) {
-    return string_ends_with(file.path, ".gguf") && sidecar_token_of(files, file).empty();
+static bool gguf_filename_is_model(const std::string & filepath) {
+    if (!string_ends_with(filepath, ".gguf")) {
+        return false;
+    }
+
+    std::string filename = filepath;
+    if (auto pos = filename.rfind('/'); pos != std::string::npos) {
+        filename = filename.substr(pos + 1);
+    }
+
+    return filename.find("mmproj")  == std::string::npos &&
+           filename.find("imatrix") == std::string::npos &&
+           filename.find("mtp-")    == std::string::npos &&
+           filename.find("eagle3-") == std::string::npos &&
+           filename.find("dflash-") == std::string::npos &&
+           filename.find("dspark-") == std::string::npos;
 }
 
 static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
@@ -816,7 +652,7 @@ static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
     for (const auto & t : tags) {
         std::regex pattern(t + "[.-]", std::regex::icase);
         for (const auto & f : files) {
-            if (gguf_file_is_model(files, f) &&
+            if (gguf_filename_is_model(f.path) &&
                 std::regex_search(f.path, pattern)) {
                 auto split = get_gguf_split_info(f.path);
                 if (split.count > 1 && split.index != 1) {
@@ -830,7 +666,7 @@ static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
     // fallback to first available model only if tag is empty
     if (tag.empty()) {
         for (const auto & f : files) {
-            if (gguf_file_is_model(files, f)) {
+            if (gguf_filename_is_model(f.path)) {
                 auto split = get_gguf_split_info(f.path);
                 if (split.count > 1 && split.index != 1) {
                     continue;
@@ -892,28 +728,8 @@ common_download_hf_plan common_download_get_hf_plan(const common_params_model & 
         }
     } else {
         primary = find_best_model(all, tag);
-
-        // a `<quant>-<sidecar>` tag (e.g. `Q4_0-mtp`) requests that sidecar alone;
-        // find_best_model skips every sidecar, so the sidecar resolves here
-        // whenever the tag carries one
-        auto [base_tag, sidecar] = split_sidecar_tag(tag);
-
-        if (primary.path.empty() && !sidecar.empty()) {
-            auto found = find_best_sibling(all, "", sidecar, base_tag);
-
-            if (!found.path.empty()) {
-                if      (sidecar == "mtp")    plan.mtp    = found;
-                else if (sidecar == "eagle3") plan.eagle3 = found;
-                else if (sidecar == "dflash") plan.dflash = found;
-                else if (sidecar == "dspark") plan.dspark = found;
-                else if (sidecar == "mmproj") plan.mmproj = found;
-                else                          plan.imatrix = found;
-            }
-        }
-
         // a requested sidecar can resolve on its own, without a full model of the same tag
-        if (primary.path.empty() && sidecar.empty() &&
-            !opts.download_mtp && !opts.download_dflash && !opts.download_eagle3 && !opts.download_dspark) {
+        if (primary.path.empty() && !opts.download_mtp && !opts.download_dflash && !opts.download_eagle3 && !opts.download_dspark) {
             LOG_ERR("%s: no GGUF files found in repository %s\n", __func__, repo.c_str());
             list_available_gguf_files(all);
             return plan;
@@ -941,7 +757,7 @@ common_download_hf_plan common_download_get_hf_plan(const common_params_model & 
         plan.dspark = find_best_dspark(all, primary.path, tag);
     }
 
-    if (primary.path.empty() && plan.mmproj.local_path.empty() && plan.imatrix.local_path.empty() &&
+    if (primary.path.empty() &&
         plan.mtp.local_path.empty() && plan.dflash.local_path.empty() && plan.eagle3.local_path.empty() && plan.dspark.local_path.empty()) {
         LOG_ERR("%s: no GGUF files found in repository %s\n", __func__, repo.c_str());
         list_available_gguf_files(all);
@@ -1115,29 +931,17 @@ std::vector<common_cached_model_info> common_list_cached_models() {
     auto files = hf_cache::get_cached_files();
 
     for (const auto & f : files) {
-        // a sidecar file (see sidecar_token_of) is listed under its own
-        // `<quant>-<sidecar>` tag, so a cached `mtp-Model-Q4_0.gguf` or short
-        // `mmproj-F16.gguf` shows up as `<repo>:Q4_0-mtp` / `<repo>:F16-mmproj`;
-        // every other GGUF stays a loadable model
-        auto token = sidecar_token_of(files, f);
-
-        std::string tag;
-        if (token.empty()) {
-            auto split = get_gguf_split_info(f.path);
-
-            if (split.index != 1 || split.tag.empty()) {
-                continue;
-            }
-
-            tag = split.tag;
-        } else {
-            // a sidecar that belongs to no quant is listed under its bare token
-            auto quant = sidecar_quant(f.path, token);
-            tag = quant.empty() ? token : quant + "-" + token;
+        auto split = get_gguf_split_info(f.path);
+        if (split.index != 1 || split.tag.empty() ||
+            split.prefix.find("mmproj")  != std::string::npos ||
+            split.prefix.find("mtp-")    != std::string::npos ||
+            split.prefix.find("eagle3-") != std::string::npos ||
+            split.prefix.find("dflash-") != std::string::npos ||
+            split.prefix.find("dspark-") != std::string::npos) {
+            continue;
         }
-
-        if (seen.insert(f.repo_id + ":" + tag).second) {
-            result.push_back({f.repo_id, tag});
+        if (seen.insert(f.repo_id + ":" + split.tag).second) {
+            result.push_back({f.repo_id, split.tag});
         }
     }
 
@@ -1164,21 +968,16 @@ std::string common_download_resolve_path(const std::string & hf_repo_with_tag, c
     return find_best_model(files, tag).local_path;
 }
 
-// remove the partial files a download of `hf_repo_with_tag` leaves next to their
-// blobs, resolved the way the download resolves them: the model files and, for a
-// quant tag, the mmproj the server pulls with them
-static bool remove_partial_files(const std::string & hf_repo_with_tag, bool with_mmproj, const std::string & bearer_token) {
+// remove the partial files a download of `hf_repo_with_tag` with `opts` leaves
+// next to their blobs, resolved through the same plan the download follows
+static bool remove_partial_files(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
     common_params_model model;
     model.hf_repo = hf_repo_with_tag;
-
-    common_download_opts opts;
-    opts.bearer_token    = bearer_token;
-    opts.download_mmproj = with_mmproj;
 
     auto plan = common_download_get_hf_plan(model, opts);
 
     hf_cache::hf_files planned = plan.model_files;
-    for (const auto & f : { plan.mmproj, plan.imatrix, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
+    for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
         if (!f.local_path.empty()) {
             planned.push_back(f);
         }
@@ -1194,7 +993,7 @@ static bool remove_partial_files(const std::string & hf_repo_with_tag, bool with
     return removed;
 }
 
-bool common_download_remove(const std::string & hf_repo_with_tag, const std::string & bearer_token) {
+bool common_download_remove(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
     namespace fs = std::filesystem;
 
     auto [repo_id, tag] = common_download_split_repo_tag(hf_repo_with_tag);
@@ -1203,14 +1002,10 @@ bool common_download_remove(const std::string & hf_repo_with_tag, const std::str
         return hf_cache::remove_cached_repo(repo_id);
     }
 
-    // a `<quant>-<sidecar>` tag (`Q4_0-mtp`) targets that sidecar alone; a bare
-    // sidecar tag (`mtp`) targets the sidecar files that belong to no quant
-    auto [base_tag, sidecar] = split_sidecar_tag(tag);
-
     // an unfinished download has no snapshot entry, only partial files
-    bool removed = remove_partial_files(hf_repo_with_tag, sidecar.empty(), bearer_token);
+    bool removed = remove_partial_files(hf_repo_with_tag, opts);
 
-    std::string tag_upper = sidecar.empty() ? tag : base_tag;
+    std::string tag_upper = tag;
     for (char & c : tag_upper) {
         c = (char) std::toupper((unsigned char) c);
     }
@@ -1220,25 +1015,13 @@ bool common_download_remove(const std::string & hf_repo_with_tag, const std::str
         return removed;
     }
 
-    // collect the snapshot entries the tag selects; sidecar files keep their
-    // own tags, so a plain quant tag never removes them
+    // collect snapshot entries whose tag matches
     std::vector<fs::path> to_remove;
     for (const auto & f : files) {
-        auto token = sidecar_token_of(files, f);
-
-        if (sidecar.empty()) {
-            if (!token.empty()) {
-                continue;
-            }
-            if (get_gguf_split_info(f.path).tag != tag_upper) {
-                continue;
-            }
-        } else {
-            if (token != sidecar || sidecar_quant(f.path, sidecar) != tag_upper) {
-                continue;
-            }
+        auto split = get_gguf_split_info(f.path);
+        if (split.tag == tag_upper) {
+            to_remove.emplace_back(f.local_path);
         }
-        to_remove.emplace_back(f.local_path);
     }
 
     if (to_remove.empty()) {

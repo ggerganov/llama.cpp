@@ -50,25 +50,21 @@ int llama_download(int argc, char ** argv) {
         printf("%s\n", params.models_preset.c_str());
         return 0;
     }
-    // a sidecar tag (`<quant>-<sidecar>` or bare `<sidecar>`) downloads the sidecar alone
-    const std::string & draft = params.speculative.draft.mparams.path;
-    if (params.model.path.empty() && params.mmproj.path.empty() && draft.empty()) {
+    if (params.model.path.empty()) {
         fprintf(stderr, "error: model download failed\n");
         return 1;
     }
-    if (!params.model.path.empty() && !std::filesystem::exists(params.model.path)) {
+    if (!std::filesystem::exists(params.model.path)) {
         fprintf(stderr, "error: model file does not exist: %s\n", params.model.path.c_str());
         return 1;
     }
 
-    if (!params.model.path.empty()) {
-        printf("%s\n", params.model.path.c_str());
-    }
+    printf("%s\n", params.model.path.c_str());
     if (!params.mmproj.path.empty()) {
         printf("%s\n", params.mmproj.path.c_str());
     }
-    if (!draft.empty()) {
-        printf("%s\n", draft.c_str());
+    if (!params.speculative.draft.mparams.path.empty()) {
+        printf("%s\n", params.speculative.draft.mparams.path.c_str());
     }
 
     return 0;
