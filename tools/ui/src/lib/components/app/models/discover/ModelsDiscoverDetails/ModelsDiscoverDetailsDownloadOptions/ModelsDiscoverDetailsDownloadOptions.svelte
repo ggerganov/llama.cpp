@@ -47,23 +47,15 @@
 	}
 
 	/**
-	 * Download state of a main quant's chip, from the status feed. The chip stands
-	 * for the quant and the draft beside it, so it only reads as downloaded once
-	 * both are on disk: a draft that is still missing keeps the chip downloadable,
-	 * and posting the model again tops that sidecar up.
+	 * Download state of a main quant's chip, from the status feed: the quant alone,
+	 * since a draft it is missing gets a chip of its own to add it.
 	 */
-	function stateFor(
-		repoWithTag: string,
-		companion: ModelCompanionDraft | null
-	): ModelDownloadEntryState {
+	function stateFor(repoWithTag: string): ModelDownloadEntryState {
 		const isDownloading = modelsStore.status.isDownloadInProgress(repoWithTag);
 		const isPaused = modelsStore.status.isDownloadPaused(repoWithTag);
 
 		return {
-			isDownloaded:
-				!isDownloading &&
-				modelsStore.status.isModelDownloaded(repoWithTag) &&
-				(!companion || companion.onDisk),
+			isDownloaded: !isDownloading && modelsStore.status.isModelDownloaded(repoWithTag),
 			isDownloading,
 			isFailed: modelsStore.status.hasFailedDownload(repoWithTag),
 			isPaused,
@@ -189,7 +181,7 @@
 						quant,
 						// the store adds the model's mmproj and the sidecars it already pulls
 						sidecars: companion ? [companion.kind] : [],
-						state: stateFor(ModelsService.buildDownloadTag(modelId, quant, null), companion)
+						state: stateFor(ModelsService.buildDownloadTag(modelId, quant, null))
 					}
 				];
 			})

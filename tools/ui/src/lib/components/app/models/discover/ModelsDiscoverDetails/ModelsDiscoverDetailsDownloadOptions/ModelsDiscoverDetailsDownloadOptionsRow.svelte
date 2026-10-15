@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
+	import ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton from './ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton.svelte';
 	import ModelsDiscoverDetailsDownloadOptionsQuantDownloadButton from './ModelsDiscoverDetailsDownloadOptionsQuantDownloadButton.svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import {
@@ -57,6 +58,15 @@
 
 		return mainMemGb + (draftGb ?? 0);
 	});
+
+	/** Drafts a downloaded quant is missing, each getting a chip of its own to add. */
+	let missingDrafts = $derived(
+		files.flatMap((file) =>
+			file.state.isDownloaded && file.companion && !file.companion.onDisk
+				? [{ companion: file.companion, repoWithTag: file.state.repoWithTag }]
+				: []
+		)
+	);
 </script>
 
 <div class="py-3">
@@ -98,6 +108,13 @@
 					{file}
 					{onRequestCancel}
 					{onRequestDelete}
+				/>
+			{/each}
+
+			{#each missingDrafts as draft (draft.repoWithTag + ':' + draft.companion.kind)}
+				<ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton
+					companion={draft.companion}
+					repoWithTag={draft.repoWithTag}
 				/>
 			{/each}
 		</div>

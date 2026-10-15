@@ -18,6 +18,15 @@
 export { default as ModelsDiscoverDetailsDownloadOptions } from './ModelsDiscoverDetailsDownloadOptions.svelte';
 
 /**
+ * **ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton** - Add a missing draft
+ *
+ * A downloaded model that is missing the draft of its quant offers the draft as
+ * its own chip: the click posts the model with that kind, and the server keeps
+ * the files already on disk and pulls the draft.
+ */
+export { default as ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton } from './ModelsDiscoverDetailsDownloadOptionsDraftDownloadButton.svelte';
+
+/**
  * **ModelsDiscoverDetailsDownloadOptionsRow** - One bit-depth group of quants
  *
  * A single bit-depth row inside ModelsDiscoverDetailsDownloadOptions: the

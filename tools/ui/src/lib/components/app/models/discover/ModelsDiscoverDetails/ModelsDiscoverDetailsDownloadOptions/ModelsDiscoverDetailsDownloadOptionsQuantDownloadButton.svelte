@@ -49,8 +49,16 @@
 	/** Draft the chip pulls with its quant, e.g. `MTP`; null when none matches. */
 	let companion = $derived(file.companion);
 
+	/**
+	 * The joined draft reads once it rides along or lands: a downloaded model
+	 * missing its draft keeps to its own weights, and the draft gets its own chip.
+	 */
+	let showsCompanion = $derived(companion ? companion.onDisk || !entry.isDownloaded : false);
+
 	/** What the chip's actions name: the quant file and, when it rides along, its draft. */
-	let downloadLabel = $derived(companion ? `${file.path} + ${companion.path}` : file.path);
+	let downloadLabel = $derived(
+		showsCompanion && companion ? `${file.path} + ${companion.path}` : file.path
+	);
 
 	let tooltipText = $derived(
 		entry.isDownloading
@@ -65,7 +73,9 @@
 	);
 
 	/** Bytes the chip downloads: the quant file and, when it rides along, its draft. */
-	let downloadBytes = $derived((file.size ?? 0) + (companion?.size ?? 0));
+	let downloadBytes = $derived(
+		(file.size ?? 0) + (showsCompanion && companion ? companion.size : 0)
+	);
 </script>
 
 {#snippet chipBody(dividerClass: string)}
@@ -74,7 +84,7 @@
 	     `Q4_K_M + [MTP:Q8_0] | 20.0 GB`, the size covering both files. -->
 	<span class="font-medium">{label}</span>
 
-	{#if companion}
+	{#if showsCompanion && companion}
 		<span class="text-muted-foreground/60">+</span>
 
 		<span class="{SIDECAR_BADGE_CLASS} inline-flex items-center gap-0.5">
