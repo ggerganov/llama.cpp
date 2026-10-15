@@ -3,7 +3,7 @@
 </script>
 
 <!-- Static skeleton of ModelsDiscoverDetails: header, metadata chips, download options and readme lines. -->
-<div class="space-y-6 p-6" data-slot="model-details-skeleton">
+<div class="@container space-y-6 p-6 pr-0" data-slot="model-details-skeleton">
 	<!-- Header: avatar, name with capability icons, base model line, HF link -->
 	<div class="space-y-3">
 		<div class="flex items-start justify-between gap-3">
@@ -29,6 +29,9 @@
 			<Skeleton class="h-3.5 w-24" />
 		</div>
 
+		<!-- catalog family description, else the HF card description -->
+		<Skeleton class="h-3.5 my-4 w-full" />
+
 		<!-- metadata chips -->
 		<div class="space-y-3">
 			<div class="flex flex-wrap items-center gap-1.5">
@@ -44,13 +47,13 @@
 	</div>
 
 	<!-- Download options: quant rows, CTA, terminal command -->
-	<div
-		class="rounded-3xl border border-border/30 bg-muted/40 p-4 shadow-sm dark:border-border/20 dark:bg-muted/50"
-	>
-		<div class="space-y-3 divide-y divide-border/50 dark:divide-border/35 pb-1">
+	<div class="rounded-3xl border border-border/30 bg-muted/60 shadow-sm dark:border-border/20">
+		<div class="flex w-full flex-col divide-y divide-border/50 px-4 pb-1 dark:divide-border/35">
 			{#each [0, 1, 2] as _, index (index)}
-				<div class="grid grid-cols-[5rem_1fr] items-start gap-3 py-3">
-					<div class="space-y-1.5 pt-1">
+				<div
+					class="grid grid-cols-[5rem_1fr] items-center gap-3 py-3 @max-lg:grid-cols-1 @max-lg:gap-1.5"
+				>
+					<div class="space-y-1.5">
 						<Skeleton class="h-4 w-14" />
 
 						<Skeleton class="h-2.5 w-24" />
@@ -65,7 +68,7 @@
 			{/each}
 		</div>
 
-		<div class="space-y-2.5 border-t border-border/50 pt-3.5 dark:border-border/35">
+		<div class="space-y-2.5 border-t border-border/50 px-4 pt-3.5 dark:border-border/35">
 			<Skeleton class="h-9 w-full rounded-md" />
 
 			<div class="flex items-center gap-3">
@@ -81,13 +84,15 @@
 	</div>
 
 	<!-- Readme -->
-	<div class="space-y-2.5">
-		<Skeleton class="h-3.5 w-full" />
+	<div class="p-3 rounded-3xl border border-border/30 bg-muted/60 shadow-sm dark:border-border/20">
+		<div class="space-y-2.5">
+			<Skeleton class="h-3.5 w-full" />
 
-		<Skeleton class="h-3.5 w-full" />
+			<Skeleton class="h-3.5 w-full" />
 
-		<Skeleton class="h-3.5 w-5/6" />
+			<Skeleton class="h-3.5 w-5/6" />
 
-		<Skeleton class="h-3.5 w-2/3" />
+			<Skeleton class="h-3.5 w-2/3" />
+		</div>
 	</div>
 </div>
