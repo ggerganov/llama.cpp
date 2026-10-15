@@ -29,6 +29,11 @@ struct llama_ubatch {
         return n_pos >= 3;
     }
 
+    // mixed: type picks token or embd per row, pos has n_pos sections for all rows
+    bool is_mixed() const {
+        return type != nullptr;
+    }
+
     uint32_t b_equal_seqs; // note: this is a boolean, but we use an int32_t for alignment
                            //       otherwise address sanitizer complains
     // TODO: whole_seqs for embeddings?
@@ -43,25 +48,32 @@ struct llama_ubatch {
     // seq_idx:    indices of the unique sequence ids in the ubatch in [0, n_seqs_unq)
     //             used for extracting sequence pooled embeddings
 
-    //                          // size               | idx | val
-    llama_token  *  token;      // [n_tokens]         | i   | id, token
-    float        *  embd;       // [n_embd, n_tokens] | i   | embd
-    llama_pos    *  pos;        // [n_tokens*n_pos]   | i   | pos
+    //                          // size                     | idx | val
+    llama_token  *  token;      // [n_tokens]               | i   | id, token
+    float        *  embd;       // [n_embd, n_tokens]       | i   | embd
+    float        *  embd_state; // [n_embd_state, n_tokens] | i   | hidden state carried over from a previous stage (e.g. MTP)
+    llama_pos    *  pos;        // [n_tokens*n_pos]         | i   | pos
     int32_t      *  n_seq_id;   // [n_tokens]         | i   | -
     llama_seq_id ** seq_id;     // [n_tokens]         | s   | s0, s1, seq_id
     llama_seq_id *  seq_id_unq; // [n_seqs_unq]       | s   | seq_id
     int32_t      *  seq_idx;    // [LLAMA_MAX_SEQ]    | -   | seq_idx
     int8_t       *  output;     // [n_tokens]         | i   | -
+    int8_t       *  type;       // [n_tokens]         | i   | -     (mixed ubatch only, 0 - token, 1 - embd)
+    int32_t      *  decision_order; // [n_tokens], NULL if no entry has one, see llama_batch_ext_set_decision_order()
 
     struct data_t {
         std::vector<llama_token>    token;
         std::vector<float>          embd;
+        std::vector<float>          embd_state;
         std::vector<llama_pos>      pos;
         std::vector<int32_t>        n_seq_id;
         std::vector<llama_seq_id *> seq_id;      // these point into the seq_id_data below
         std::vector<llama_seq_id>   seq_id_unq;
         std::vector<int32_t>        seq_idx;
         std::vector<int8_t>         output;
+        std::vector<int8_t>         type;
+        std::vector<int32_t>        batch_idxs;  // original batch index for each token
+        std::vector<int32_t>        decision_order;
 
         std::vector<llama_seq_id> seq_id_data;
     };
@@ -70,17 +82,23 @@ struct llama_ubatch {
     std::shared_ptr<data_t> data;
 };
 
+// crash if a mixed ubatch reaches code that expects only tokens or only embd
+#define ASSERT_EMBD_OR_TOKEN(ubatch) GGML_ASSERT(!(ubatch).is_mixed() && "mixed token/embd ubatch is not supported here")
+
 struct llama_hparams;
 
-// MTP hook batches carry the target model's hidden state (n_embd_out size).
 // DFlash batches carry the fused target features at the encoder input width (n_embd_inp_enc size).
-// Normal batches carry token embeddings (n_embd_inp size).
+// Other batches carry token embeddings (n_embd_inp size).
 size_t llama_batch_ext_select_n_embd_inp(llama_context_type ctx_type, llm_arch arch, const llama_hparams & hparams);
+
+// MTP contexts also take the target model's hidden state (n_embd_out size), 0 = no state input
+size_t llama_batch_ext_select_n_embd_state(llama_context_type ctx_type, const llama_hparams & hparams);
 
 struct llama_batch_ext {
     const size_t n_tokens_max;     // max number of tokens that can be stored in the batch
     const size_t n_embd_inp;       // decoder embd row width
     const size_t n_embd_inp_enc;   // encoder embd row width (e.g. eagle3/dflash extracted features)
+    const size_t n_embd_state;     // state embd row width, 0 if the context takes no state
     const llama_seq_id n_seq_max;  // max number of sequences
     llama_memory_i * mem;          // memory for position inference
     const llama_token n_vocab;     // max token ID that we accept
@@ -94,12 +112,16 @@ struct llama_batch_ext {
         llama_token  id = LLAMA_TOKEN_NULL;
         bool         has_embd = false; // whether embd_off is set
         size_t       embd_off = 0; // index offset in the embd array
+        bool         has_state = false; // whether state_off is set
+        size_t       state_off = 0; // index offset in the state array
         bool         output = false; // TODO: have dedicated output flags
+        int32_t      decision_order = 0; // see llama_batch_ext_set_decision_order()
         std::unordered_set<llama_seq_id> seq_ids;
         std::array<llama_pos, GGML_MROPE_SECTIONS> pos = {0, 0, 0, 0};
     };
     std::vector<token> tokens;
     std::vector<float> embd;
+    std::vector<float> state;
 
     llama_batch_ext(llama_context * ctx);
 
@@ -122,14 +144,16 @@ struct llama_batch_ext {
     bool add_seq(int32_t idx, llama_seq_id seq_id);
     bool set_token_id(int32_t idx, llama_token id);
     bool set_token_embd(int32_t idx, llama_embd embd_in);
+    bool set_token_state(int32_t idx, llama_embd state_in);
     bool set_token_pos(int32_t idx, const llama_pos * pos_in);
     bool set_output(int32_t idx, bool output_last);
+    bool set_decision_order(int32_t idx, int32_t order);
 };
 
 // a helper for sanitizing, fulfilling and splitting a batch
 class llama_batch_allocr {
 public:
-    llama_batch_allocr(uint32_t n_pos_per_embd);
+    llama_batch_allocr(uint32_t n_pos_per_embd, bool allow_mixed = false);
 
     // convert a llama_batch_ext to internal llama_batch and sanitize it
     bool init(
@@ -162,6 +186,7 @@ public:
     llama_ubatch split_equal(uint32_t n_ubatch, bool sequential, uint32_t n_keep_tail);
 
     // sequence-set-wise split - each ubatch contains a single sequence-set
+    // TODO: extend to support multiple _full_ sequences in the ubatch
     llama_ubatch split_seq(uint32_t n_ubatch);
 
     // a helper method for creating a well-defined ubatch of tokens
@@ -187,12 +212,17 @@ private:
     //       ref: https://github.com/ggml-org/llama.cpp/issues/13694#issuecomment-2983871762
     const uint32_t n_pos_per_embd;
 
+    const bool allow_mixed;
+
     uint32_t n_embd;
+    uint32_t n_embd_state;
     uint32_t n_seq_max;
     uint32_t n_outputs;
 
     std::vector<llama_token>    token_vec;    // owned token IDs built from llama_batch_ext
     std::vector<float>          embd_vec;     // owned embeddings built from llama_batch_ext
+    std::vector<int8_t>         is_embd_vec;  // mixed batch only (= 1 if embd, 0 if text token)
+    std::vector<float>          state_vec;    // owned state embeddings built from llama_batch_ext, llama_batch has no slot for them
     std::vector<llama_seq_id>   seq_id_data;  // flat storage for seq_id pointers below
 
     std::vector<llama_pos>      pos;
@@ -201,6 +231,7 @@ private:
     std::vector<llama_seq_id>   seq_id_unq;
     std::vector<int32_t>        seq_idx;
     std::vector<int8_t>         output;
+    std::vector<int32_t>        decision_order; // empty if no entry has one
 
     using pos_set_t = std::set<llama_pos>;
     using seq_cpl_t = std::vector<bool>;
