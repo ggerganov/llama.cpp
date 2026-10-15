@@ -110,7 +110,6 @@ jobs:
             -DGGML_SYCL=ON \
             -DCMAKE_C_COMPILER=icx \
             -DCMAKE_CXX_COMPILER=icpx \
-            -DLLAMA_OPENSSL=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_SYCL_F16=${{ matrix.fp16 }} \
             -DGGML_SYCL_SUPPORT_LEVEL_ZERO_API=ON \
