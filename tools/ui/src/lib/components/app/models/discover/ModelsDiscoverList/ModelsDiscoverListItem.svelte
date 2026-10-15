@@ -5,20 +5,41 @@
 	import ModelOrgAvatar from '../../ModelOrgAvatar.svelte';
 	import { Pause, Play, X } from '@lucide/svelte';
 	import { ActionIcon } from '$lib/components/app';
-	import { HF_MMPROJ_FILENAME_TOKEN, HF_MODALITY_PIPELINE_TAGS } from '$lib/constants';
+	import { HF_MMPROJ_FILENAME_TOKEN, HF_MODALITY_PIPELINE_TAGS, MODEL_ID } from '$lib/constants';
 	import { ModelDraftSidecar, ModelRowDownloadState } from '$lib/enums';
-	import { HuggingFaceService, ModelsService } from '$lib/services';
+	import { HuggingFaceService } from '$lib/services';
 	import { modelsDiscoverStore, modelsStore } from '$lib/stores';
 	import type { ModelsDiscoverSizeRange } from '$lib/stores/models-discover/index.svelte';
-	import type { HfModelInfo } from '$lib/types/huggingface';
+	import type { HfModelInfo, HfModelSiblingRef } from '$lib/types/huggingface';
 	import type {
-		ModelDownloadEntry,
 		ModelDownloadProgress,
 		ModelModalities,
 		ModelSidecarBadge
 	} from '$lib/types/models';
-	import { detectThinkingSupport, detectToolUseSupport, isDraftSidecar, orgOf } from '$lib/utils';
+	import {
+		detectThinkingSupport,
+		detectToolUseSupport,
+		directoryOf,
+		isDraftSidecar,
+		isServerSidecarFile,
+		orgOf
+	} from '$lib/utils';
 	import { SvelteSet } from 'svelte/reactivity';
+
+	/**
+	 * True when a file of the weights sits in the draft's directory: the server
+	 * resolves a sidecar against the model file beside it, never across directories.
+	 */
+	function hasWeightsBeside(siblings: HfModelSiblingRef[], draftPath: string): boolean {
+		const directory = directoryOf(draftPath);
+
+		return siblings.some(
+			(sibling) =>
+				MODEL_ID.WEIGHT_EXTENSION_REGEX.test(sibling.rfilename) &&
+				directoryOf(sibling.rfilename) === directory &&
+				!HuggingFaceService.extractQuantMeta(sibling.rfilename)?.sidecar
+		);
+	}
 
 	interface Props {
 		model: HfModelInfo;
@@ -32,8 +53,6 @@
 			/** Ask the list to confirm cancelling; the list owns the single dialog. */
 			onRequestCancel?: (repoWithTag: string) => void;
 		};
-		/** The repo's draft downloads, rendered as sub-lines inside the item. */
-		drafts?: ModelDownloadEntry[];
 		/** Show the original (base) model's org avatar instead of the repo's org. */
 		showBaseModelAvatar?: boolean;
 		/** Draft sidecars already on disk, rendered as checked sub-lines. */
@@ -44,7 +63,6 @@
 	let {
 		active = false,
 		download,
-		drafts = [],
 		model,
 		onSelect,
 		showBaseModelAvatar = false,
@@ -90,16 +108,24 @@
 		return { audio, video, vision };
 	});
 
-	// Draft sidecars (mtp, dflash, dspark, eagle3) present in the repo, e.g.
-	// speculative-decoding drafts. The list only tells which drafts the repo
-	// offers, not how they are configured, so one badge per kind and no quant.
+	// Draft sidecars (mtp, dflash, dspark, eagle3) the repo offers, badged with no
+	// quant: the list does not know how the server configures them. Only the drafts
+	// the server can actually pull are shown, so a badge never outlives the file
+	// find_best_sibling would resolve.
 	let draftKinds = $derived.by<ModelDraftSidecar[]>(() => {
+		const siblings = model.siblings ?? [];
 		const kinds = new SvelteSet<ModelDraftSidecar>();
 
-		for (const sibling of model.siblings ?? []) {
+		for (const sibling of siblings) {
 			const sidecar = HuggingFaceService.extractQuantMeta(sibling.rfilename)?.sidecar;
 
-			if (sidecar && isDraftSidecar(sidecar)) kinds.add(sidecar);
+			if (!sidecar || !isDraftSidecar(sidecar)) continue;
+
+			if (!isServerSidecarFile(sibling.rfilename, sidecar)) continue;
+
+			if (!hasWeightsBeside(siblings, sibling.rfilename)) continue;
+
+			kinds.add(sidecar);
 		}
 
 		return Object.values(ModelDraftSidecar).filter((kind) => kinds.has(kind));
@@ -181,7 +207,7 @@
 					<ActionIcon
 						icon={state.isPaused ? Play : Pause}
 						iconSize="h-4 w-4"
-						onclick={() => void modelsStore.status.toggleDownloadWithDrafts(state.repoWithTag)}
+						onclick={() => void modelsStore.status.toggleDownload(state.repoWithTag)}
 						stopPropagationOnClick
 						tooltip={state.isPaused ? 'Resume downloading' : 'Pause downloading'}
 						tooltipAsTitle
@@ -202,20 +228,6 @@
 	</div>
 
 	<div class="flex flex-col px-2.5 pb-1.5">
-		{#each drafts as draft (draft.repoWithTag)}
-			{@const parsed = ModelsService.parseModelId(draft.repoWithTag)}
-
-			<ModelDraftSubline
-				connectorClass="ml-8"
-				kind={parsed.sidecar ?? ''}
-				percent={draft.progress && draft.progress.totalBytes > 0
-					? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
-					: null}
-				quant={parsed.quantization}
-				state={draft.isPaused ? ModelRowDownloadState.PAUSED : ModelRowDownloadState.DOWNLOADING}
-			/>
-		{/each}
-
 		{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
 			<ModelDraftSubline
 				connectorClass="ml-8"
