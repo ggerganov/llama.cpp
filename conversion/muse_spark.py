@@ -122,8 +122,8 @@ class MuseSparkModel(TextModel):
             yield from super().modify_tensors(data_torch, name, bid)
             return
 
-        # Norm preserving residual gate: alpha scales the stream, beta the branch,
-        # with alpha^2 + beta^2 = 1. Both follow from the weight, so resolve them here
+        # Norm preserving residual gate: alpha scales the stream, beta the branch, with alpha^2 + beta^2 = 1
+        # Both follow from the weight, so resolve them here
         if name.endswith("_residual_gate.gate"):
             assert bid is not None
             attn = "post_attention" in name
