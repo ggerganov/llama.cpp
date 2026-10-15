@@ -143,7 +143,7 @@ Writing high-performance operators for Hexagon requires following specific guide
   - `buffer->usage` is unknown at scheduling time.
   - `is_tiled` or `extra->flags & GGML_HEXAGON_TENSOR_TILED` is not set yet.
 - Operator support decisions must depend strictly on static tensor properties: operand types (`t->type`), shapes (`t->ne`), strides (`t->nb`), and operation parameters.
-- Repacking (converting weights to tiled layout) is an internal optimization applied during `set_tensor()` or lazy-repack. Non-weight tensors or test harness tensors with the same type remain in flat layout.
+- Repacking (converting weights to tiled layout) is an internal optimization applied during `set_tensor()` or rt-repack. Non-weight tensors or test harness tensors with the same type remain in flat layout.
 - Therefore, any supported type (such as BF16, F16, quantized types) must be supported both when repacked into tiles and when stored flat in memory.
 
 ### Multiline Macro Formatting

@@ -9057,7 +9057,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                         htp_opformat fmt;
                         fmt.format_tensor_dims(dims_buf, sizeof(dims_buf), src0);
                         fmt.format_tensor_strides(strides_buf, sizeof(strides_buf), src0);
-                        GGML_LOG_DEBUG("ggml-hex: %s lazy-repack %s|%s|%s|%s|size %zu\n",
+                        GGML_LOG_DEBUG("ggml-hex: %s rt-repack %s|%s|%s|%s|size %zu\n",
                                        sess->c_name(), src0->name, dims_buf, ggml_type_name(src0->type), strides_buf, ggml_nbytes(src0));
                     }
                     std::vector<uint8_t> raw(ggml_nbytes(src0));
