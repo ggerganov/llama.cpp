@@ -942,9 +942,8 @@ private:
     ggml_tensor * build_semantic_enc(ggml_context * ctx, ggml_tensor * wav, stream_io * st) const;
     ggml_tensor * build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav, stream_io * st) const;
 
-    ggml_tensor * create_tensor_from_file(llama_model_loader & ml, const LLM_TN_IMPL & tn);
-    void load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2);
-    void load_tok_part(llama_model_loader & ml, tok_part & part, const tok_tensors & ids, uint32_t n_stages, const std::array<uint32_t, LLAMA_MAX_VV_STAGES> & depths);
+    void load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2, int64_t n_in);
+    void load_tok_part(llama_model_loader & ml, tok_part & part, const tok_tensors & ids, const llama_hparams_vv_tokenizer & hp, bool decoder);
 };
 
 

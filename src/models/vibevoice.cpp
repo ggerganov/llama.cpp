@@ -94,106 +94,88 @@ void llama_model_vibevoice::load_arch_hparams(llama_model_loader & ml) {
     }
 }
 
-// the shape comes from the file, it is not checked against hparams yet
-ggml_tensor * llama_model_vibevoice::create_tensor_from_file(llama_model_loader & ml, const LLM_TN_IMPL & tn) {
-    const ggml_tensor * meta = ml.require_tensor_meta(tn.str());
-    const int64_t * ne = meta->ne;
-
-    switch (ggml_n_dims(meta)) {
-        case 1:  return create_tensor(ml, tn, {ne[0]}, 0);
-        case 2:  return create_tensor(ml, tn, {ne[0], ne[1]}, 0);
-        case 3:  return create_tensor(ml, tn, {ne[0], ne[1], ne[2]}, 0);
-        default: return create_tensor(ml, tn, {ne[0], ne[1], ne[2], ne[3]}, 0);
-    }
+void llama_model_vibevoice::load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2, int64_t n_in) {
+    const int64_t n_embd = hparams.n_embd;
+    conn.fc1   = create_tensor(ml, tn(fc1,  "weight"), {n_in, n_embd}, 0);
+    conn.fc1_b = create_tensor(ml, tn(fc1,  "bias"),   {n_embd}, 0);
+    conn.norm  = create_tensor(ml, tn(norm, "weight"), {n_embd}, 0);
+    conn.fc2   = create_tensor(ml, tn(fc2,  "weight"), {n_embd, n_embd}, 0);
+    conn.fc2_b = create_tensor(ml, tn(fc2,  "bias"),   {n_embd}, 0);
 }
 
-void llama_model_vibevoice::load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2) {
-    conn.fc1   = create_tensor_from_file(ml, tn(fc1,  "weight"));
-    conn.fc1_b = create_tensor_from_file(ml, tn(fc1,  "bias"));
-    conn.norm  = create_tensor_from_file(ml, tn(norm, "weight"));
-    conn.fc2   = create_tensor_from_file(ml, tn(fc2,  "weight"));
-    conn.fc2_b = create_tensor_from_file(ml, tn(fc2,  "bias"));
-}
-
-void llama_model_vibevoice::load_tok_part(llama_model_loader & ml, tok_part & part, const tok_tensors & ids, uint32_t n_stages, const std::array<uint32_t, LLAMA_MAX_VV_STAGES> & depths) {
+void llama_model_vibevoice::load_tok_part(llama_model_loader & ml, tok_part & part, const tok_tensors & ids, const llama_hparams_vv_tokenizer & hp, bool decoder) {
+    const uint32_t n_stages = decoder ? hp.n_dec_stages : hp.n_enc_stages;
+    const auto & depths = decoder ? hp.dec_depths : hp.enc_depths;
     part.stages.resize(n_stages);
 
     for (uint32_t s = 0; s < n_stages; ++s) {
         auto & stage = part.stages[s];
+        const int64_t c = (int64_t) hp.n_filters << (decoder ? n_stages - 1 - s : s);
 
-        stage.conv   = create_tensor_from_file(ml, tn(ids.conv, "weight", s));
-        stage.conv_b = create_tensor_from_file(ml, tn(ids.conv, "bias",   s));
-
-        if (depths[s] == 0 || depths[s] > LLAMA_MAX_LAYERS) {
-            throw std::runtime_error(format("vibevoice: invalid tokenizer stage depth %u", depths[s]));
+        if (s == 0) {
+            stage.conv = create_tensor(ml, tn(ids.conv, "weight", s), {7, decoder ? (int64_t) hp.vae_dim : 1, c}, 0);
+        } else if (decoder) {
+            stage.conv = create_tensor(ml, tn(ids.conv, "weight", s), {2LL * hp.dec_ratios[s - 1], c, 2*c}, 0);
+        } else {
+            stage.conv = create_tensor(ml, tn(ids.conv, "weight", s), {2LL * hp.enc_ratios[n_stages - 1 - s], c/2, c}, 0);
         }
-        stage.blocks.resize(depths[s]);
+        stage.conv_b = create_tensor(ml, tn(ids.conv, "bias", s), {c}, 0);
 
+        stage.blocks.resize(depths[s]);
         for (uint32_t b = 0; b < depths[s]; ++b) {
             auto & blk = stage.blocks[b];
 
-            blk.norm       = create_tensor_from_file(ml, tn(ids.norm,      "weight", s, b));
-            blk.dwconv     = create_tensor_from_file(ml, tn(ids.dwconv,    "weight", s, b));
-            blk.dwconv_b   = create_tensor_from_file(ml, tn(ids.dwconv,    "bias",   s, b));
-            blk.gamma      = create_tensor_from_file(ml, tn(ids.gamma,     "weight", s, b));
-            blk.ffn_norm   = create_tensor_from_file(ml, tn(ids.ffn_norm,  "weight", s, b));
-            blk.ffn_up     = create_tensor_from_file(ml, tn(ids.ffn_up,    "weight", s, b));
-            blk.ffn_up_b   = create_tensor_from_file(ml, tn(ids.ffn_up,    "bias",   s, b));
-            blk.ffn_down   = create_tensor_from_file(ml, tn(ids.ffn_down,  "weight", s, b));
-            blk.ffn_down_b = create_tensor_from_file(ml, tn(ids.ffn_down,  "bias",   s, b));
-            blk.ffn_gamma  = create_tensor_from_file(ml, tn(ids.ffn_gamma, "weight", s, b));
+            blk.norm       = create_tensor(ml, tn(ids.norm,      "weight", s, b), {c}, 0);
+            blk.dwconv     = create_tensor(ml, tn(ids.dwconv,    "weight", s, b), {7, 1, c}, 0);
+            blk.dwconv_b   = create_tensor(ml, tn(ids.dwconv,    "bias",   s, b), {c}, 0);
+            blk.gamma      = create_tensor(ml, tn(ids.gamma,     "weight", s, b), {c}, 0);
+            blk.ffn_norm   = create_tensor(ml, tn(ids.ffn_norm,  "weight", s, b), {c}, 0);
+            blk.ffn_up     = create_tensor(ml, tn(ids.ffn_up,    "weight", s, b), {c, 4*c}, 0);
+            blk.ffn_up_b   = create_tensor(ml, tn(ids.ffn_up,    "bias",   s, b), {4*c}, 0);
+            blk.ffn_down   = create_tensor(ml, tn(ids.ffn_down,  "weight", s, b), {4*c, c}, 0);
+            blk.ffn_down_b = create_tensor(ml, tn(ids.ffn_down,  "bias",   s, b), {c}, 0);
+            blk.ffn_gamma  = create_tensor(ml, tn(ids.ffn_gamma, "weight", s, b), {c}, 0);
         }
     }
 
-    part.head   = create_tensor_from_file(ml, tn(ids.head, "weight"));
-    part.head_b = create_tensor_from_file(ml, tn(ids.head, "bias"));
+    const int64_t n_in  = decoder ? hp.n_filters : (int64_t) hp.n_filters << (n_stages - 1);
+    const int64_t n_out = decoder ? 1 : hp.vae_dim;
+    part.head   = create_tensor(ml, tn(ids.head, "weight"), {7, n_in, n_out}, 0);
+    part.head_b = create_tensor(ml, tn(ids.head, "bias"),   {n_out}, 0);
 }
 
 void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
     llama_model_qwen2::load_arch_tensors(ml);
 
     const auto & vv = hparams.vibevoice;
+    const int64_t n_embd = hparams.n_embd;
+    const int64_t n_ff   = vv.diff_n_ff;
+    const int64_t n_lat  = vv.diff_latent_size;
 
-    load_connector(ml, acoustic_conn, LLM_TENSOR_VV_ACOUSTIC_CONN_FC1, LLM_TENSOR_VV_ACOUSTIC_CONN_NORM, LLM_TENSOR_VV_ACOUSTIC_CONN_FC2);
-    load_connector(ml, semantic_conn, LLM_TENSOR_VV_SEMANTIC_CONN_FC1, LLM_TENSOR_VV_SEMANTIC_CONN_NORM, LLM_TENSOR_VV_SEMANTIC_CONN_FC2);
-
-    // create_tensor_from_file trusts the file; audio_frame decode_embd reads n_embd floats from speech feedback
-    if (acoustic_conn.fc1->ne[0] != (int64_t) vv.diff_latent_size ||
-            acoustic_conn.fc2->ne[1] != (int64_t) hparams.n_embd ||
-            acoustic_conn.fc2_b->ne[0] != (int64_t) hparams.n_embd ||
-            semantic_conn.fc1->ne[0] != (int64_t) vv.semantic.vae_dim ||
-            semantic_conn.fc2->ne[1] != (int64_t) hparams.n_embd ||
-            semantic_conn.fc2_b->ne[0] != (int64_t) hparams.n_embd) {
-        throw std::runtime_error(format(
-                "vibevoice: connector dims incompatible with latents/n_embd "
-                "(acoustic fc1.in=%lld fc2.out=%lld, semantic fc1.in=%lld fc2.out=%lld, "
-                "diff_latent=%u semantic_vae=%u n_embd=%u)",
-                (long long) acoustic_conn.fc1->ne[0], (long long) acoustic_conn.fc2->ne[1],
-                (long long) semantic_conn.fc1->ne[0], (long long) semantic_conn.fc2->ne[1],
-                vv.diff_latent_size, vv.semantic.vae_dim, hparams.n_embd));
-    }
+    load_connector(ml, acoustic_conn, LLM_TENSOR_VV_ACOUSTIC_CONN_FC1, LLM_TENSOR_VV_ACOUSTIC_CONN_NORM, LLM_TENSOR_VV_ACOUSTIC_CONN_FC2, vv.diff_latent_size);
+    load_connector(ml, semantic_conn, LLM_TENSOR_VV_SEMANTIC_CONN_FC1, LLM_TENSOR_VV_SEMANTIC_CONN_NORM, LLM_TENSOR_VV_SEMANTIC_CONN_FC2, vv.semantic.vae_dim);
 
     // diffusion head
     {
-        diff.noisy_proj = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_NOISY_PROJ, "weight"));
-        diff.cond_proj  = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_COND_PROJ,  "weight"));
-        diff.t_embd_fc1 = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_T_EMBD_FC1, "weight"));
-        diff.t_embd_fc2 = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_T_EMBD_FC2, "weight"));
+        diff.noisy_proj = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_NOISY_PROJ, "weight"), {n_lat, n_embd}, 0);
+        diff.cond_proj  = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_COND_PROJ,  "weight"), {n_embd, n_embd}, 0);
+        diff.t_embd_fc1 = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_T_EMBD_FC1, "weight"), {256, n_embd}, 0);
+        diff.t_embd_fc2 = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_T_EMBD_FC2, "weight"), {n_embd, n_embd}, 0);
 
         diff.layers.resize(vv.diff_n_layer);
 
         for (uint32_t i = 0; i < vv.diff_n_layer; ++i) {
             auto & layer = diff.layers[i];
 
-            layer.norm     = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_NORM,     "weight", i));
-            layer.adaln    = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_ADALN,    "weight", i));
-            layer.ffn_gate = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_FFN_GATE, "weight", i));
-            layer.ffn_up   = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_FFN_UP,   "weight", i));
-            layer.ffn_down = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_FFN_DOWN, "weight", i));
+            layer.norm     = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_NORM,     "weight", i), {n_embd}, 0);
+            layer.adaln    = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_ADALN,    "weight", i), {n_embd, 3*n_embd}, 0);
+            layer.ffn_gate = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_FFN_GATE, "weight", i), {n_embd, n_ff}, 0);
+            layer.ffn_up   = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_FFN_UP,   "weight", i), {n_embd, n_ff}, 0);
+            layer.ffn_down = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_FFN_DOWN, "weight", i), {n_ff, n_embd}, 0);
         }
 
-        diff.final_adaln = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_FINAL_ADALN, "weight"));
-        diff.final_proj  = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_FINAL_PROJ,  "weight"));
+        diff.final_adaln = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_FINAL_ADALN, "weight"), {n_embd, 2*n_embd}, 0);
+        diff.final_proj  = create_tensor(ml, tn(LLM_TENSOR_VV_DIFF_FINAL_PROJ,  "weight"), {n_embd, n_lat}, 0);
     }
 
     // tokenizers
@@ -214,9 +196,9 @@ void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
             LLM_TENSOR_VV_SEMANTIC_ENC_FFN_NORM, LLM_TENSOR_VV_SEMANTIC_ENC_FFN_UP, LLM_TENSOR_VV_SEMANTIC_ENC_FFN_DOWN, LLM_TENSOR_VV_SEMANTIC_ENC_FFN_GAMMA,
         };
 
-        load_tok_part(ml, acoustic_enc, acoustic_enc_ids, vv.acoustic.n_enc_stages, vv.acoustic.enc_depths);
-        load_tok_part(ml, acoustic_dec, acoustic_dec_ids, vv.acoustic.n_dec_stages, vv.acoustic.dec_depths);
-        load_tok_part(ml, semantic_enc, semantic_enc_ids, vv.semantic.n_enc_stages, vv.semantic.enc_depths);
+        load_tok_part(ml, acoustic_enc, acoustic_enc_ids, vv.acoustic, false);
+        load_tok_part(ml, acoustic_dec, acoustic_dec_ids, vv.acoustic, true);
+        load_tok_part(ml, semantic_enc, semantic_enc_ids, vv.semantic, false);
     }
 }
 
