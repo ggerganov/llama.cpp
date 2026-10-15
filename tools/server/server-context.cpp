@@ -446,6 +446,10 @@ struct server_slot {
 
     bool can_split() const {
         GGML_ASSERT(task);
+        // a decision over a non-causal context reads the whole prompt in one batch
+        if (task->type == SERVER_TASK_TYPE_DECISION && !llama_get_causal_attn(ctx_tgt)) {
+            return false;
+        }
         // MTP supports splitting - uses task->need_embd() not need_embd()
         if (!task->need_embd()) {
             return true;
@@ -590,7 +594,8 @@ struct server_slot {
             state = SLOT_STATE_IDLE;
 
             // do not keep context of the child slots - the parent's context is enough
-            if (task->is_child()) {
+            // nor of the stateless slots - no task ever reuses it
+            if (task->is_child() || task->is_stateless()) {
                 prompt_clear();
             }
 
@@ -692,6 +697,10 @@ struct server_slot {
         SLT_INF(*this,
                 "   graphs reused = %10d\n",
                 llama_perf_context(ctx_tgt).n_reused);
+
+        SLT_INF(*this,
+                "  graph reallocs = %10d    / %5d        (same size) / (changed size)\n",
+                llama_perf_context(ctx_tgt).n_reallocs_same, llama_perf_context(ctx_tgt).n_reallocs_diff);
 
         const int32_t n_draft_total       = stats.n_draft_tokens;
         const int32_t n_draft_accepted    = stats.n_draft_accepted;
@@ -1481,6 +1490,13 @@ private:
             batch.init(ctx_tgt, std::max(n_batch, params_base.n_parallel), n_embd);
         }
 
+        // decision requests rarely repeat a state, the prompt cache is opt-in for decision models
+        if (decision.type != COMMON_DECISION_TYPE_NONE && !params_base.cache_ram_explicit) {
+            SRV_INF("%s", "decision model: prompt cache disabled by default, use `--cache-ram N` to enable it\n");
+            params_base.cache_ram_mib    = 0;
+            params_base.cache_idle_slots = false;
+        }
+
         if (params_base.cache_ram_mib != 0) {
             if (params_base.cache_ram_mib < 0) {
                 SRV_TRC("prompt cache is enabled, size limit: %s\n", "no limit");
@@ -1686,6 +1702,11 @@ private:
         if (task.id_slot != -1) {
             ret = get_slot_by_id(task.id_slot);
             if (ret) {
+                // a busy slot is returned untouched, the caller defers the task
+                if (ret->is_processing()) {
+                    return ret;
+                }
+
                 SLT_INF(*ret, "selected slot by id (%d)\n", task.id_slot);
             }
         }
@@ -1769,8 +1790,8 @@ private:
         if (ret) {
             update_cache = update_cache && prompt_cache;
 
-            // cache prompts only for completion tasks
-            update_cache = update_cache && task.type == SERVER_TASK_TYPE_COMPLETION;
+            // cache prompts only for the tasks that reuse them
+            update_cache = update_cache && !task.is_stateless();
 
             if (update_cache) {
                 SRV_TRC("%s", "updating prompt cache\n");
@@ -3584,15 +3605,18 @@ private:
                                 return;
                             }
 
-                            const bool is_stateless_task = slot.task->type == SERVER_TASK_TYPE_EMBEDDING || slot.task->type == SERVER_TASK_TYPE_RERANK;
-
-                            if (slot.task->params.cache_prompt && !is_stateless_task) {
+                            if (slot.task->params.cache_prompt && !slot.task->is_stateless()) {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 n_past = slot.prompt.tokens.get_common_prefix(input_tokens);
 
                                 // the children start from the shared prefix, do not go past it
                                 if (slot.task->n_tokens_shared > 0) {
                                     n_past = std::min(n_past, slot.task->n_tokens_shared);
+                                }
+
+                                // the outputs of a decision are read from the batch, so its first position must be evaluated
+                                if (n_decision_first >= 0) {
+                                    n_past = std::min(n_past, n_decision_first);
                                 }
 
                                 // if there is an alora invoked, don't cache after the invocation start

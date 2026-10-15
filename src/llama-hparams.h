@@ -36,6 +36,13 @@ enum llama_non_causal_type {
     LLAMA_NON_CAUSAL_TYPE_SWA_FULL = 2, // all layers non-causal, SWA not applied between tokens of the current ubatch (deepseek 4)
 };
 
+// M-RoPE: which input position slot feeds each RoPE section
+enum llama_rope_section_order {
+    LLAMA_ROPE_SECTION_ORDER_UNSPECIFIED = -1,
+    LLAMA_ROPE_SECTION_ORDER_TYXZ        = 0, // default, slot i feeds section i
+    LLAMA_ROPE_SECTION_ORDER_ZYXT        = 1, // MiniCPM-V 4.7: time last
+};
+
 // forward declaration; full definition in llama-graph.h
 enum llm_ffn_op_type : int;
 
@@ -166,6 +173,8 @@ struct llama_hparams {
 
     std::array<int, 4> rope_sections;
 
+    enum llama_rope_section_order rope_section_order = LLAMA_ROPE_SECTION_ORDER_TYXZ;
+
     // Per-layer RoPE enable flags (1 = use RoPE, 0 = NoPE)
     // by default, all layers use RoPE (controlled by rope_finetuned)
     std::array<uint32_t, LLAMA_MAX_LAYERS> rope_pattern;
@@ -255,6 +264,12 @@ struct llama_hparams {
     uint32_t dflash_conv_group_size  = 0;
     uint32_t dflash_selector_rank    = 0;
     uint32_t dflash_selector_top_k   = 0;
+    uint32_t lilicorr_hidden_size    = 0;
+    uint32_t lilicorr_candidate_topk = 0;
+    uint32_t lilicorr_num_heads      = 0;
+    uint32_t lilicorr_layers         = 0;
+    float    lilicorr_vector_eps     = 0.0f;
+    float    lilicorr_logit_scale    = 0.0f;
 
     // llama4 smallthinker
     uint32_t n_moe_layer_step        = 0;

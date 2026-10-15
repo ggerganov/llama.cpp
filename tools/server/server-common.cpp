@@ -156,6 +156,8 @@ std::vector<std::string> server_model_output_modalities(common_decision_type dec
         case COMMON_DECISION_TYPE_LAYA:
         case COMMON_DECISION_TYPE_CLEF:
         case COMMON_DECISION_TYPE_PPLX_DECIDER:
+        case COMMON_DECISION_TYPE_VLLM_DECISION2:
+        case COMMON_DECISION_TYPE_VLLM_D3:
         case COMMON_DECISION_TYPE_LFM2_D1:
         case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
             return {"decisions"};
@@ -1432,7 +1434,7 @@ json oaicompat_chat_params_parse(
     session_params.echo = json_value(body, "echo", false);
     out_session = common_chat_session(opt.tmpls.get(), vocab, inputs, session_params);
 
-    llama_params["prompt"] = out_session.prompt();
+    llama_params["prompt"] = out_session.prompt().str();
 
     // Reasoning budget: pass parameters through to sampling layer
     {
