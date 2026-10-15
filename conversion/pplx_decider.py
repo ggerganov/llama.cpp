@@ -35,6 +35,7 @@ def _load_pplx_decider_hparams(dir_model: Path) -> dict[str, Any]:
 
 @ModelBase.register("PplxDeciderModel")
 @ModelBase.example("perplexity-ai/pplx-decider-v1-27b")
+@ModelBase.example("FINAL-Bench/Darwin-27B-ZTC-v5")
 class PplxDeciderModel(Qwen3_5TextModel):
     model_arch = gguf.MODEL_ARCH.QWEN35
     no_mtp = True  # the checkpoint has no MTP head
@@ -80,8 +81,9 @@ class PplxDeciderModel(Qwen3_5TextModel):
     @classmethod
     def filter_tensors(cls, item: tuple[str, Callable[[], Tensor]]) -> tuple[str, Callable[[], Tensor]] | None:
         name, gen = item
-        # the checkpoint is the bare backbone, its text tensors have no "model." prefix
-        if name.startswith("language_model."):
+        # the checkpoint is the bare backbone, its text tensors have no "model." prefix:
+        # "language_model.*" for multimodal checkpoints, the bare layer names for text-only ones
+        if name.startswith(("language_model.", "layers.", "embed_tokens.", "norm.")):
             name = "model." + name
         return super().filter_tensors((name, gen))
 
@@ -92,7 +94,8 @@ class PplxDeciderModel(Qwen3_5TextModel):
         # the readout has one row per option label, store it as an LM head that is zero for the other tokens
         readout = load_file(self.dir_model / "readout.safetensors")["weight"]
         token_ids = self.hparams["decision"]["token_ids"]
-        n_vocab = self.hparams["text_config"]["vocab_size"]
+        # text-only checkpoints (Qwen3_5TextModel) keep the text config at the root
+        n_vocab = self.hparams.get("text_config", self.hparams)["vocab_size"]
         assert readout.shape[0] == len(token_ids) == len(set(token_ids))
         lm_head = torch.zeros(n_vocab, readout.shape[1], dtype=readout.dtype)
         lm_head[token_ids] = readout
