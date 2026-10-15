@@ -378,15 +378,14 @@ export class ModelStatusManager {
 
 		if (badges.length === 0) return listed;
 
+		// one badge per kind: the listing carries kinds only, so its badge of a kind
+		// the args already name would read as a second draft of the same kind
 		const merged = [...badges];
 
 		for (const badge of listed) {
-			if (
-				!merged.some(
-					(b) => b.kind === badge.kind && b.repo === badge.repo && b.quant === badge.quant
-				)
-			)
+			if (!merged.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
 				merged.push(badge);
+			}
 		}
 
 		return merged;
