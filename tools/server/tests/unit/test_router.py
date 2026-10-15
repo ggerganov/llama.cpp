@@ -665,3 +665,31 @@ def test_router_download_sidecars():
         assert not any(i.endswith("-" + kind) for i in entries), f"a {kind} sidecar is listed as a model"
 
     server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
+
+
+def test_router_download_conflicts():
+    """A download is refused over one on its way, and over a model that is running."""
+    global server
+    server.models_max = 2
+    server.start()
+
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
+
+    # a download on its way is not started again; the entry reports the state before
+    # the child fetches anything, so the probe lands inside the download
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID})
+    assert res.status_code == 200
+    _wait_for_model_status(MODEL_DOWNLOAD_ID, {"downloading"}, timeout=30)
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID})
+    assert res.status_code == 400
+    assert "is already downloading" in res.body["error"]["message"]
+
+    # a loaded model holds its files, so it goes only once it is unloaded; the
+    # reload that follows the download parks the entry as unloaded
+    _wait_for_model_status(MODEL_DOWNLOAD_ID, {"downloaded", "unloaded"}, timeout=MODEL_DOWNLOAD_TIMEOUT)
+    _load_model_and_wait(MODEL_DOWNLOAD_ID, timeout=120)
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID})
+    assert res.status_code == 400
+    assert "is running, unload it first" in res.body["error"]["message"]

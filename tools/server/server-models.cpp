@@ -2405,11 +2405,21 @@ void server_models_routes::init_routes() {
         if (models.has_model(name)) {
             auto existing = models.get_meta(name);
 
+            if (existing.has_value()) {
+                // a download on its way is not started again, and a running model
+                // holds its files, so it goes only once it is unloaded
+                if (existing->status == SERVER_MODEL_STATUS_DOWNLOADING) {
+                    throw std::invalid_argument("model '" + name + "' is already downloading");
+                }
+                if (existing->is_running()) {
+                    throw std::invalid_argument("model '" + name + "' is running, unload it first");
+                }
+            }
+
             // the entry can disappear here: get_meta() triggers the reload that
             // erases a finished download, which is the resume case as well
-            const bool resumable = existing.has_value() && !existing->is_running() &&
+            const bool resumable = existing.has_value() &&
                 (existing->status == SERVER_MODEL_STATUS_DOWNLOADED ||
-                 existing->status == SERVER_MODEL_STATUS_DOWNLOADING ||
                  (existing->source == SERVER_MODEL_SOURCE_CACHE && existing->status == SERVER_MODEL_STATUS_UNLOADED));
 
             if (existing.has_value() && !resumable) {
