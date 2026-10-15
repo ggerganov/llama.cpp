@@ -299,11 +299,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
         ms.add_kv(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, uint32_t(5));
     } else if (arch == LLM_ARCH_COHERE2MOE || arch == LLM_ARCH_MIMO2 || arch == LLM_ARCH_STEP35 || arch == LLM_ARCH_SPARK2_5 ||
             arch == LLM_ARCH_MUSE_GLIMMER || arch == LLM_ARCH_GRANITE_SWA || arch == LLM_ARCH_DOTS3NOTE ||
-            arch == LLM_ARCH_MAPLE ||
-            // diffusion-gemma needs a mix: with every layer sliding, the non-SWA mask
-            // is built and used by nothing, so ggml-alloc never gives it a buffer and
-            // set_input dereferences a null one. A real model has both kinds of layer.
-            arch == LLM_ARCH_DIFFUSION_GEMMA) {
+            arch == LLM_ARCH_MAPLE) {
         std::vector<uint32_t> pattern;
         pattern.reserve(n_layer);
         for (uint32_t il = 0; il < n_layer; il++) {
@@ -476,6 +472,15 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
         // the loader rejects anything <= 0. Kept well under the 128 tokens the
         // backend comparison decodes, so both halves of that split are exercised.
         ms.add_kv(LLM_KV_DIFFUSION_CANVAS_LENGTH, uint32_t(16));
+        // diffusion-gemma needs a mix: with every layer sliding, the non-SWA mask
+        // is built and used by nothing, so ggml-alloc never gives it a buffer and
+        // set_input dereferences a null one. A real model has both kinds of layer.
+        std::vector<uint32_t> pattern;
+        pattern.reserve(n_layer);
+        for (uint32_t il = 0; il < n_layer; il++) {
+            pattern.push_back(il % 2);
+        }
+        ms.add_kv(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, pattern);
     }
     ms.add_kv(LLM_KV_WKV_HEAD_SIZE,               n_embd/n_head);
     ms.add_kv(LLM_KV_SHORTCONV_L_CACHE,           uint32_t(3));
