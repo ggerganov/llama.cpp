@@ -5,23 +5,22 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { HuggingFaceService } from '$lib/services';
 	import { modelsStore } from '$lib/stores';
-	import type { HfModelSibling, ModelDownloadEntryState, ModelSelectableFile } from '$lib/types';
+	import type { ModelQuantChip } from '$lib/types';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		/** GGUF file the chip stands for. */
-		file: HfModelSibling;
-		/** Download state of the file, from the parent's status feed. */
-		entry: ModelDownloadEntryState;
-		/** The draft sidecar that rides along when this main quant downloads; main chips only. */
-		companion?: ModelSelectableFile & { state: ModelDownloadEntryState };
+		/** The main quant chip: its file, its download state and its joined drafts. */
+		file: ModelQuantChip;
 		/** Ask the parent to confirm deleting a downloaded model; the chip owns no dialog. */
 		onRequestDelete?: (repoWithTag: string) => void;
 		/** Ask the parent to confirm cancelling an in-flight download. */
 		onRequestCancel?: (repoWithTag: string) => void;
 	}
 
-	let { companion, entry, file, onRequestCancel, onRequestDelete }: Props = $props();
+	let { file, onRequestCancel, onRequestDelete }: Props = $props();
+
+	/** The download is one unit per quant: the chip's state covers its drafts too. */
+	let entry = $derived(file.state);
 
 	// one source, so the idle, in-flight and downloaded chip states stay identical
 	const SIDECAR_BADGE_CLASS =
@@ -29,29 +28,16 @@
 
 	/** Queue the download; a failed attempt leaves partial files, drop them first. */
 	async function startDownload() {
-		// the quant-matched draft rides along in the same download; the manual draft
-		// chips stay available
-		const companionSidecar =
-			companion &&
-			!companion.state.isDownloaded &&
-			!companion.state.isDownloading &&
-			!companion.state.isPaused
-				? HuggingFaceService.extractQuantMeta(companion.path)?.sidecar
-				: null;
-
 		try {
 			if (entry.isFailed) await modelsStore.status.cancelDownload(entry.repoWithTag);
 
-			await modelsStore.status.downloadModel(
-				entry.repoWithTag,
-				companionSidecar ? [companionSidecar] : []
-			);
+			// the joined drafts and the mmproj ride along: the server picks their files
+			await modelsStore.status.downloadModel(entry.repoWithTag, file.sidecars);
 		} catch {
 			// the store already toasted the failure
 		}
 	}
 
-	let meta = $derived(HuggingFaceService.extractQuantMeta(file.path));
 	let label = $derived(labelFor(file.path));
 
 	let percent = $derived(
@@ -60,28 +46,46 @@
 			: null
 	);
 
+	/** Draft the chip pulls with its quant, e.g. `MTP`; null when none matches. */
+	let companion = $derived(file.companion);
+
+	/** What the chip's actions name: the quant file and, when it rides along, its draft. */
+	let downloadLabel = $derived(companion ? `${file.path} + ${companion.path}` : file.path);
+
 	let tooltipText = $derived(
 		entry.isDownloading
 			? 'Pause downloading'
 			: entry.isPaused
 				? 'Resume downloading'
 				: entry.isDownloaded
-					? 'Delete model'
+					? `Delete ${downloadLabel}`
 					: entry.isFailed
-						? `Retry download: ${file.path}`
-						: `Download ${file.path}`
+						? `Retry download: ${downloadLabel}`
+						: `Download ${downloadLabel}`
 	);
+
+	/** Bytes the chip downloads: the quant file and, when it rides along, its draft. */
+	let downloadBytes = $derived((file.size ?? 0) + (companion?.size ?? 0));
 </script>
 
 {#snippet chipBody(dividerClass: string)}
-	<!-- badge, label and divider: identical on every chip state -->
-	{#if meta?.sidecar}
-		<span class={SIDECAR_BADGE_CLASS}>
-			{meta.sidecar}
+	<!-- label, joined draft and divider: identical on every chip state. The draft
+	     rides with this quant, so it reads as part of the same chip:
+	     `Q4_K_M + [MTP:Q8_0] | 20.0 GB`, the size covering both files. -->
+	<span class="font-medium">{label}</span>
+
+	{#if companion}
+		<span class="text-muted-foreground/60">+</span>
+
+		<span class="{SIDECAR_BADGE_CLASS} inline-flex items-center gap-0.5">
+			<!-- the draft's own quant, so a 4-bit model paired with a 16-bit draft head reads at a glance -->
+			{companion.kind}{companion.quant ? `:${companion.quant}` : ''}
+
+			{#if companion.onDisk}
+				<Check class="h-2.5 w-2.5" />
+			{/if}
 		</span>
 	{/if}
-
-	<span class="font-medium">{label}</span>
 
 	<span class={dividerClass}></span>
 {/snippet}
@@ -116,7 +120,7 @@
 			'-my-1 mx-0.75 w-px self-stretch bg-green-600/25 transition-colors duration-200 group-hover:bg-destructive/30 dark:bg-green-600/30 dark:group-hover:bg-destructive/30'
 		)}
 
-		<span>{HuggingFaceService.formatFileSize(file.size ?? 0)}</span>
+		<span>{HuggingFaceService.formatFileSize(downloadBytes)}</span>
 
 		<!-- icon slot: crossfade check -> x; touch devices show the delete affordance directly -->
 		<span class="relative inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
@@ -149,7 +153,7 @@
 		{:else if entry.isPaused}
 			<span>Paused</span>
 		{:else}
-			<span>{HuggingFaceService.formatFileSize(file.size ?? 0)}</span>
+			<span>{HuggingFaceService.formatFileSize(downloadBytes)}</span>
 		{/if}
 
 		{#if entry.isDownloading}
@@ -217,7 +221,7 @@
 
 		{@render chipBody('-my-1 mx-0.75 w-px self-stretch bg-border')}
 
-		<span>{HuggingFaceService.formatFileSize(file.size ?? 0)}</span>
+		<span>{HuggingFaceService.formatFileSize(downloadBytes)}</span>
 
 		<span class="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
 			{#if entry.isFailed}

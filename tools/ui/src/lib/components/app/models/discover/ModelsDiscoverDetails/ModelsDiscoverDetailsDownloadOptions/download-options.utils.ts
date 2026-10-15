@@ -5,10 +5,9 @@ import type { ModelSelectableFile } from '$lib/types';
 import { isAuxSidecar, isDraftSidecar } from '$lib/utils';
 
 /**
- * Draft kinds in the order a main-model download pulls them along. DFlash
- * wins: on the models that ship both it drafts a block at a time and stays
- * accurate further out than MTP's few tokens. A repo carrying only the other
- * kind keeps it; a kind not listed here never rides along automatically.
+ * Draft kinds in the order a chip lists them. DFlash wins: on the models that
+ * ship both it drafts a block at a time and stays accurate further out than
+ * MTP's few tokens; a kind not listed here sorts last.
  */
 export const DRAFT_PREFERENCE_ORDER: readonly ModelDraftSidecar[] = [
 	ModelDraftSidecar.DFLASH,
@@ -29,6 +28,17 @@ export function classify(path: string): ModelSelectableFileKind {
 	if (!sidecar) return ModelSelectableFileKind.MAIN;
 
 	return isAuxSidecar(sidecar) ? ModelSelectableFileKind.AUX : ModelSelectableFileKind.DRAFT;
+}
+
+/** Draft kinds best first, so a chip lists its joined badges in the pull order. */
+export function sortDraftKinds(kinds: readonly ModelDraftSidecar[]): ModelDraftSidecar[] {
+	const rank = (kind: ModelDraftSidecar) => {
+		const index = DRAFT_PREFERENCE_ORDER.indexOf(kind);
+
+		return index === -1 ? DRAFT_PREFERENCE_ORDER.length : index;
+	};
+
+	return [...kinds].sort((a, b) => rank(a) - rank(b));
 }
 
 /** Display label of a file: its quant, else the file name without the extension. */

@@ -1,4 +1,5 @@
-import type { ModelSelectableFileKind } from '$lib/enums';
+import type { ModelSidecar } from '$lib/constants';
+import type { ModelDraftSidecar, ModelSelectableFileKind } from '$lib/enums';
 import type { HfModelSibling } from '$lib/types/huggingface';
 
 /**
@@ -28,3 +29,29 @@ export type ModelBitDepthRow = { bitDepth: number; files: HfModelSibling[] };
 
 /** A selectable GGUF, tagged with its role: main weights, draft, or aux (mmproj). */
 export type ModelSelectableFile = HfModelSibling & { kind: ModelSelectableFileKind };
+
+/**
+ * Draft file joined to a main quant: the server pulls the two together, so a
+ * chip carries its draft as a badge instead of a download of its own.
+ */
+export interface ModelCompanionDraft {
+	/** Draft sidecar kind, e.g. `mtp`. */
+	kind: ModelDraftSidecar;
+	/** True when the listing reports the kind already on disk. */
+	onDisk: boolean;
+	/** Quant of the draft file itself; null when its name carries none. */
+	quant: string | null;
+	/** Repo-relative path of the draft file, e.g. `dflash-model-Q8_0.gguf`. */
+	path: string;
+	/** Size of the draft file in bytes, for the total and the memory hint. */
+	size: number;
+}
+
+/** A main quant chip: its file, its download state and the draft that rides with it. */
+export interface ModelQuantChip extends ModelSelectableFile {
+	/** Draft the chip pulls with the model, badged on the chip; null when none of its kind matches. */
+	companion: ModelCompanionDraft | null;
+	/** Sidecar kinds the download posts on top of the model's own; the joined draft. */
+	sidecars: ModelSidecar[];
+	state: ModelDownloadEntryState;
+}

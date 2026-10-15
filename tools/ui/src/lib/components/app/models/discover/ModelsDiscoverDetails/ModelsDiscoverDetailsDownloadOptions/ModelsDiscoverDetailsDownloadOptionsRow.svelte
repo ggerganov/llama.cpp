@@ -6,34 +6,30 @@
 		OTHER_BIT_DEPTH,
 		OTHER_BIT_DEPTH_LABEL
 	} from '$lib/constants';
-	import { ModelSelectableFileKind } from '$lib/enums';
-	import type { ModelDownloadEntryState, ModelSelectableFile } from '$lib/types';
+	import type { ModelQuantChip } from '$lib/types';
 	import { minMemoryTierGb } from '$lib/utils';
 
 	interface Props {
 		/** Bit depth of the row; `99` renders as "Other". */
 		bitDepth: number;
-		/** The draft sidecar that rides along with a main download, per main file. */
-		companionDraftFor?: (file: ModelSelectableFile) =>
-			| (ModelSelectableFile & {
-					state: ModelDownloadEntryState;
-			  })
-			| undefined;
-		/** Every GGUF of this bit depth, with download state attached. */
-		files: (ModelSelectableFile & { state: ModelDownloadEntryState })[];
+		/** The row's main quant chips. */
+		files: ModelQuantChip[];
 		/** Forwarded to each chip: ask the parent to confirm a cancel. */
 		onRequestCancel?: (repoWithTag: string) => void;
 		/** Forwarded to each chip: ask the parent to confirm a delete. */
 		onRequestDelete?: (repoWithTag: string) => void;
 	}
 
-	let { bitDepth, companionDraftFor, files, onRequestCancel, onRequestDelete }: Props = $props();
+	let { bitDepth, files, onRequestCancel, onRequestDelete }: Props = $props();
 
-	let mainFile = $derived(files.find((f) => f.kind === ModelSelectableFileKind.MAIN) ?? null);
-	let draftFile = $derived(files.find((f) => f.kind === ModelSelectableFileKind.DRAFT) ?? null);
-
+	let mainFile = $derived(files[0] ?? null);
 	let mainMemGb = $derived(mainFile ? minMemoryTierGb(mainFile.size ?? 0) : null);
-	let draftMemGb = $derived(draftFile ? minMemoryTierGb(draftFile.size ?? 0) : null);
+	// the draft the row's first chip pulls, on top of its own weights
+	let draftMemGb = $derived.by(() => {
+		const size = mainFile?.companion?.size ?? 0;
+
+		return size > 0 ? minMemoryTierGb(size) : null;
+	});
 </script>
 
 <div class="grid grid-cols-[5rem_1fr] items-center gap-3 py-3 @max-lg:grid-cols-1 @max-lg:gap-1.5">
@@ -60,10 +56,6 @@
 	<div class="flex flex-wrap justify-end gap-1.5 @max-lg:justify-start">
 		{#each files as file (file.path)}
 			<ModelsDiscoverDetailsDownloadOptionsQuantDownloadButton
-				companion={companionDraftFor && file.kind === ModelSelectableFileKind.MAIN
-					? companionDraftFor(file)
-					: undefined}
-				entry={file.state}
 				{file}
 				{onRequestCancel}
 				{onRequestDelete}

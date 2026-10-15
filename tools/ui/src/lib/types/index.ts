@@ -116,7 +116,9 @@ export type {
 // Models discover types
 export type {
 	ModelBitDepthRow,
+	ModelCompanionDraft,
 	ModelDownloadEntryState,
+	ModelQuantChip,
 	ModelQuantOption,
 	ModelSelectableFile
 } from './models-discover';

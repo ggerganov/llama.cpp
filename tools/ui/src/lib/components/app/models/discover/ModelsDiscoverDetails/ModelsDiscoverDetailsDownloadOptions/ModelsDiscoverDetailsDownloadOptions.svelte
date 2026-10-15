@@ -1,23 +1,25 @@
 <script lang="ts">
-	import {
-		classify,
-		DRAFT_PREFERENCE_ORDER,
-		draftBadgeOf,
-		labelFor
-	} from './download-options.utils';
+	import { classify, draftBadgeOf, labelFor, sortDraftKinds } from './download-options.utils';
 	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
 	import ModelsDiscoverDetailsDownloadOptionsRow from './ModelsDiscoverDetailsDownloadOptionsRow.svelte';
 	import { ChevronDown, Terminal } from '@lucide/svelte';
 	import { DialogConfirmDownload } from '$lib/components/app/dialogs';
-	import { ModelDownloadConfirmAction, ModelSelectableFileKind } from '$lib/enums';
+	import * as Select from '$lib/components/ui/select';
+	import {
+		ModelDownloadConfirmAction,
+		ModelDraftSidecar,
+		ModelSelectableFileKind
+	} from '$lib/enums';
 	import { HuggingFaceService, ModelsService } from '$lib/services';
 	import { modelsStore } from '$lib/stores';
 	import type {
 		ModelBitDepthRow,
+		ModelCompanionDraft,
 		ModelDownloadEntryState,
 		ModelQuantOption,
 		ModelSelectableFile
 	} from '$lib/types';
+	import { directoryOf, isServerSidecarFile } from '$lib/utils';
 	import { cubicOut } from 'svelte/easing';
 	import { slide } from 'svelte/transition';
 
@@ -26,15 +28,9 @@
 		modelId: string;
 		/** GGUF files grouped by bit depth. */
 		bitDepthRows: ModelBitDepthRow[];
-		/** Download state lookup; defaults to the models store status feed. */
-		getDownloadState?: (
-			repoWithTag: string,
-			filePath: string,
-			isSidecar: boolean
-		) => ModelDownloadEntryState;
 	}
 
-	let { bitDepthRows, getDownloadState, modelId }: Props = $props();
+	let { bitDepthRows, modelId }: Props = $props();
 
 	// collapsed until asked for; the panel remounts per model
 	let commandOpen = $state(false);
@@ -57,18 +53,12 @@
 		confirmOpen = true;
 	}
 
-	function stateFor(
-		repoWithTag: string,
-		filePath: string,
-		isSidecar: boolean
-	): ModelDownloadEntryState {
-		if (getDownloadState) return getDownloadState(repoWithTag, filePath, isSidecar);
-
+	/** Download state of a main quant's tag, from the status feed. */
+	function stateFor(repoWithTag: string): ModelDownloadEntryState {
 		const isDownloading = modelsStore.status.isDownloadInProgress(repoWithTag);
 		const isPaused = modelsStore.status.isDownloadPaused(repoWithTag);
 
 		return {
-			// a sidecar reads as downloaded when its model lists it on disk
 			isDownloaded: !isDownloading && modelsStore.status.isModelDownloaded(repoWithTag),
 			isDownloading,
 			isFailed: modelsStore.status.hasFailedDownload(repoWithTag),
@@ -82,70 +72,114 @@
 	}
 
 	/**
-	 * Every selectable file with its kind and download state, in row order.
+	 * Every GGUF of the panel with its role, in row order.
 	 * Single source of truth for the chip rows and the command selects.
 	 */
-	let selectableFiles = $derived.by(() => {
-		const files: (ModelSelectableFile & { state: ModelDownloadEntryState })[] = [];
+	let selectableFiles = $derived.by(() =>
+		bitDepthRows.flatMap((row) => row.files.map((file) => ({ ...file, kind: classify(file.path) })))
+	);
 
-		for (const row of bitDepthRows) {
-			for (const file of row.files) {
-				const meta = HuggingFaceService.extractQuantMeta(file.path);
-				const tag = ModelsService.buildDownloadTag(
-					modelId,
-					meta?.quant ?? null,
-					meta?.sidecar ?? null
-				);
+	/** Sidecar kinds the repo reports on disk, so a chip tells a pulled draft from a missing one. */
+	let onDiskDrafts = $derived(modelsStore.status.getDraftSidecars(modelId));
 
-				files.push({
-					...file,
-					kind: classify(file.path),
-					state: stateFor(tag, file.path, Boolean(meta?.sidecar))
-				});
-			}
-		}
+	/** Draft kinds the repo ships, best first and once each; one rides with every chip. */
+	let draftKinds = $derived(
+		sortDraftKinds(
+			selectableFiles
+				.flatMap((file) =>
+					file.kind === ModelSelectableFileKind.DRAFT ? [draftBadgeOf(file)] : []
+				)
+				.filter((kind): kind is ModelDraftSidecar => kind !== null)
+				.filter((kind, index, all) => all.indexOf(kind) === index)
+		)
+	);
 
-		return files;
-	});
+	// the operator's draft pick; the best available kind rides along until they change it
+	let draftPick = $state<ModelDraftSidecar | null>(null);
+	let draftKind = $derived(draftPick ?? draftKinds[0] ?? null);
 
-	/** The quant-matched draft that rides along with a main quant download, or undefined. */
-	function companionDraftFor(
-		file: ModelSelectableFile
-	): (ModelSelectableFile & { state: ModelDownloadEntryState }) | undefined {
-		const quant = HuggingFaceService.extractQuantMeta(file.path)?.quant;
+	/** Bits of a file's quant, 0 when its name carries none, as the server reads it. */
+	function bitsOf(path: string): number {
+		const quant = HuggingFaceService.extractQuantMeta(path)?.quant;
 
-		if (!quant) return undefined;
+		return (quant ? HuggingFaceService.getBitDepth(quant) : null) ?? 0;
+	}
 
+	/**
+	 * Draft that rides with a quant: the file of the picked kind the server would
+	 * pull. Its own directory, then the exact quant, then the closest bit depth -
+	 * a 4-bit model pairs with a 16-bit draft head when the repo ships no 4-bit
+	 * one, the way -hf settles it.
+	 */
+	function companionFor(
+		main: Pick<ModelSelectableFile, 'path'>,
+		quant: string | null
+	): ModelCompanionDraft | null {
+		if (!draftKind) return null;
+
+		const directory = directoryOf(main.path);
 		const candidates = selectableFiles.filter(
 			(candidate) =>
 				candidate.kind === ModelSelectableFileKind.DRAFT &&
-				HuggingFaceService.extractQuantMeta(candidate.path)?.quant === quant
+				draftBadgeOf(candidate) === draftKind &&
+				// the two rules the server's own lookup applies: the token it scans
+				// for, and the same directory as the weights
+				isServerSidecarFile(candidate.path, draftKind) &&
+				directoryOf(candidate.path) === directory
 		);
 
-		for (const kind of DRAFT_PREFERENCE_ORDER) {
-			const candidate = candidates.find(
-				(c) => HuggingFaceService.extractQuantMeta(c.path)?.sidecar === kind
-			);
-			const tracked =
-				candidate &&
-				(candidate.state.isDownloaded || candidate.state.isDownloading || candidate.state.isPaused);
+		if (candidates.length === 0) return null;
 
-			if (candidate && !tracked) return candidate;
-		}
+		const quantOf = (candidate: ModelSelectableFile) =>
+			HuggingFaceService.extractQuantMeta(candidate.path)?.quant ?? null;
+		const mainBits = quant ? bitsOf(main.path) : 0;
+		const exact = quant ? candidates.find((candidate) => quantOf(candidate) === quant) : undefined;
+		// the closest bit depth wins when the exact quant is missing, ties on file order
+		const closest = [...candidates].sort(
+			(a, b) => Math.abs(bitsOf(a.path) - mainBits) - Math.abs(bitsOf(b.path) - mainBits)
+		)[0];
+		const picked = exact ?? closest;
 
-		return undefined;
+		if (!picked) return null;
+
+		const pickedQuant = quantOf(picked);
+
+		return {
+			kind: draftKind,
+			// on disk when the model's own sidecar option reports it, or when a loaded
+			// model's args name that same draft file
+			onDisk:
+				modelsStore.status.isModelDownloaded(
+					ModelsService.buildDownloadTag(modelId, quant, draftKind)
+				) || onDiskDrafts.some((badge) => badge.kind === draftKind && badge.quant === pickedQuant),
+			path: picked.path,
+			quant: pickedQuant,
+			size: picked.size ?? 0
+		};
 	}
 
-	/** Rows for the row component: per-bit-depth files with state attached. */
+	/** Rows for the row component: one chip per main quant, its draft joined to it. */
 	let rows = $derived.by(() =>
-		bitDepthRows.map((row) => {
-			const paths = new Set(row.files.map((f) => f.path));
+		bitDepthRows.map((row) => ({
+			bitDepth: row.bitDepth,
+			files: row.files.flatMap((file) => {
+				if (classify(file.path) !== ModelSelectableFileKind.MAIN) return [];
 
-			return {
-				bitDepth: row.bitDepth,
-				files: selectableFiles.filter((f) => paths.has(f.path))
-			};
-		})
+				const quant = HuggingFaceService.extractQuantMeta(file.path)?.quant ?? null;
+				const companion = companionFor(file, quant);
+
+				return [
+					{
+						...file,
+						companion,
+						kind: ModelSelectableFileKind.MAIN,
+						// the store adds the model's mmproj and the sidecars it already pulls
+						sidecars: companion ? [companion.kind] : [],
+						state: stateFor(ModelsService.buildDownloadTag(modelId, quant, null))
+					}
+				];
+			})
+		}))
 	);
 
 	function optionFor(file: ModelSelectableFile): ModelQuantOption {
@@ -173,13 +207,39 @@
 
 {#if bitDepthRows.length}
 	<section class="rounded-3xl border border-border/30 bg-muted/60 shadow-sm dark:border-border/20">
-		<!-- One chip per file, each an independent download action with its own
-			 lifecycle state; nothing here selects anything. -->
+		<!-- The repo ships more than one draft flavour: the pick in the corner decides
+		     which one every chip on this panel pulls. -->
+		{#if draftKinds.length > 1}
+			<div
+				class="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-2.5 dark:border-border/35"
+			>
+				<span class="text-xs text-muted-foreground">Draft model</span>
+
+				<Select.Root
+					onValueChange={(value) => value && (draftPick = value as ModelDraftSidecar)}
+					type="single"
+					value={draftKind}
+				>
+					<Select.Trigger aria-label="Draft model type" size="xs">
+						{draftKind}
+					</Select.Trigger>
+
+					<Select.Content class="font-mono text-xs">
+						{#each draftKinds as kind (kind)}
+							<Select.Item class="text-xs" label={kind} value={kind}>{kind}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
+		{/if}
+
+		<!-- One chip per main quant, each an independent download action. The draft
+			 of that quant rides with it and badges the chip; the server picks its file,
+			 the way -hf does. -->
 		<div class="flex w-full flex-col divide-y divide-border/50 px-4 pb-1 dark:divide-border/35">
 			{#each rows as row (row.bitDepth)}
 				<ModelsDiscoverDetailsDownloadOptionsRow
 					bitDepth={row.bitDepth}
-					{companionDraftFor}
 					files={row.files}
 					onRequestCancel={requestCancel}
 					onRequestDelete={requestDelete}
