@@ -358,7 +358,7 @@ cmake -B build -DGGML_BACKEND_DL=ON -DGGML_SYCL=ON -DGGML_SYCL_SEPARATE_BUILD=ON
 
 # Option 2: SYCL + ROCm: HIPCXX is set explicitly, so the ROCm compiler is not confused with the clang shipped with oneAPI
 HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
-	cmake -B build -DGGML_BACKEND_DL=ON -DGGML_SYCL=ON -DGGML_SYCL_SEPARATE_BUILD=ON -DGGML_HIP=ON
+    cmake -B build -DGGML_BACKEND_DL=ON -DGGML_SYCL=ON -DGGML_SYCL_SEPARATE_BUILD=ON -DGGML_HIP=ON
 
 # build all binary
 cmake --build build --config Release -j -v
