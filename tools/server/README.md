@@ -1722,16 +1722,6 @@ The number of options of a `choice` question is limited by the model, for exampl
 
 For laya, clef, gliner, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available.
 
-*GLiNER2.5-Decide:*
-
-Convert the `fastino/GLiNER2.5-Decide` checkpoint directory with `convert_hf_to_gguf.py`, then serve its GGUF with this endpoint. This supports the DeBERTa-v2 encoder variant used by the checkpoint and its classification head. It does not support entity spans, records, other GLiNER checkpoints or standalone DeBERTa models.
-
-The question id is the task name; `instructions` is its optional prompt (use an empty string to omit it). Option keys are label names and their descriptions are appended to the prompt in option order. The schema and each lowercased text word are tokenized separately, matching the upstream processor. A period is appended to text that does not end in `.`, `!` or `?`, including empty text. All questions share one encoder pass, so adding a question can change another question's scores.
-
-`choice` uses softmax over the label logits. `score` uses the numeric level keys as labels and returns their expected index; `noul` uses `false` and `true` as labels and returns the softmax probability of `true`. These are classification mappings, without fitted calibration or an independent sigmoid/multi-label response. There is no automatic truncation: the full schema and text must fit in `--ubatch-size` and the context. The GGUF contains the encoder and classifier tensors only; extraction tensors are omitted. Existing gliner.cpp GGUF files must be reconverted from the original checkpoint.
-
-An optional CPU F32 regression can be run with `GLINER_F32_LOCAL_MODEL=/path/to/model.gguf` and `LLAMA_SERVER_BIN_PATH=/path/to/llama-server`: run `pytest tools/server/tests/unit/test_gliner.py`.
-
 *Image input:*
 
 Image input needs a model that supports it (for example: openjev, clef, pplx-decider, vllm-d3, lfm2-d1, lfm2-d1-omni) and its multimodal projector, see `--mmproj`.

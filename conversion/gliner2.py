@@ -17,7 +17,7 @@ def _is_gliner2_checkpoint(dir_model: Path) -> bool:
         return False
     with open(dir_model / "config.json", encoding="utf-8") as f:
         config = json.load(f)
-    return config.get("model_type") == "extractor" and config.get("architecture") == "span"
+    return config.get("model_type") in ("extractor", "gliner2") and config.get("architecture") == "span"
 
 
 @ModelBase.register_hparams_loader(_is_gliner2_checkpoint)

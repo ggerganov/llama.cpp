@@ -142,7 +142,6 @@ private:
     size_t n_outputs(const server_decision_question & question) const;
     // LFM2_D1: label text and tokens of each option
     void d1_labels(const server_decision_question & question, std::vector<std::string> & texts, std::vector<llama_tokens> & groups) const;
-    void fill_task_gliner(const json & state, const std::vector<server_decision_question> & questions, server_task & task) const;
     void fill_task_laya(llama_tokens & tokens, const server_decision_question & question, server_task & task) const;
     void fill_task_d1omni(
             const json & state,
