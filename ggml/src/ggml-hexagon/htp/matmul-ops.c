@@ -2794,7 +2794,7 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
 
     const bool is_tiled = (tile_size > 0);
 
-    if (k % 32 != 0 || (is_tiled && n % 32 != 0)) {
+    if (k % 32 != 0) {
         return -1;
     }
     if (!hex_is_aligned(dst, sizeof(float))) { return -1; }

@@ -3602,21 +3602,18 @@ struct ggml_hexagon_opbatch {
     bool same_shape(const htp_tensor * h, const ggml_tensor * t) const {
         auto extra = (ggml_hexagon_tensor_extra *) t->extra;
 
-        int64_t ne0 = t->ne[0];
-        int64_t ne1 = t->ne[1];
         const bool is_tiled = (extra->flags & GGML_HEXAGON_TENSOR_TILED) != 0;
-        if (is_tiled) {
-            ne0 = hex_round_up(ne0, 32);
-            ne1 = hex_round_up(ne1, 32);
-        }
-        int64_t nb1 = is_tiled ? (int64_t) ggml_hexagon_tiled_row_size(t->type, ne0) : t->nb[1];
-        int64_t nb2 = is_tiled ? nb1 * ne1      : t->nb[2];
-        int64_t nb3 = is_tiled ? nb2 * t->ne[2] : t->nb[3];
+        const int64_t ne0_padded = hex_round_up(t->ne[0], 32);
+        const int64_t ne1_padded = hex_round_up(t->ne[1], 32);
+
+        int64_t nb1 = is_tiled ? (int64_t) ggml_hexagon_tiled_row_size(t->type, ne0_padded) : t->nb[1];
+        int64_t nb2 = is_tiled ? nb1 * ne1_padded : t->nb[2];
+        int64_t nb3 = is_tiled ? nb2 * t->ne[2]   : t->nb[3];
         int64_t nb0 = (is_tiled && (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16)) ? sizeof(ggml_fp16_t) : t->nb[0];
         enum ggml_type expected_type = (is_tiled && (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : t->type;
 
         return (h->type == expected_type) &&
-               (h->ne[0] == ne0) && (h->ne[1] == ne1) && (h->ne[2] == t->ne[2]) && (h->ne[3] == t->ne[3]) &&
+               (h->ne[0] == t->ne[0]) && (h->ne[1] == t->ne[1]) && (h->ne[2] == t->ne[2]) && (h->ne[3] == t->ne[3]) &&
                (h->nb[0] == nb0) && (h->nb[1] == nb1) && (h->nb[2] == nb2) && (h->nb[3] == nb3);
     }
 
@@ -3651,29 +3648,28 @@ struct ggml_hexagon_opbatch {
         h.ti    = ti;
         h.data  = t_offset;
         h.type  = t->type;
+        h.ne[0] = t->ne[0];
+        h.ne[1] = t->ne[1];
+        h.ne[2] = t->ne[2];
+        h.ne[3] = t->ne[3];
 
         const bool is_tiled = (extra->flags & GGML_HEXAGON_TENSOR_TILED) != 0;
         if (is_tiled) {
             if (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16) {
                 h.type  = GGML_TYPE_F16;
                 h.nb[0] = sizeof(ggml_fp16_t);
-            }
-            h.ne[0] = hex_round_up(t->ne[0], 32);
-            h.ne[1] = hex_round_up(t->ne[1], 32);
-            h.ne[2] = t->ne[2];
-            h.ne[3] = t->ne[3];
-
-            if (t->type != GGML_TYPE_F32 && t->type != GGML_TYPE_BF16) {
+            } else {
                 h.nb[0] = t->nb[0];
             }
-            h.nb[1] = ggml_hexagon_tiled_row_size(t->type, h.ne[0]);
-            h.nb[2] = h.nb[1] * h.ne[1];
+            const int64_t ne0_padded = hex_round_up(t->ne[0], 32);
+            const int64_t ne1_padded = hex_round_up(t->ne[1], 32);
+            h.nb[1] = ggml_hexagon_tiled_row_size(t->type, ne0_padded);
+            h.nb[2] = h.nb[1] * ne1_padded;
             h.nb[3] = h.nb[2] * h.ne[2];
             h.size  = h.nb[3] * h.ne[3];
             t_size  = h.size;
         } else {
             h.size  = t_size;
-            h.ne[0] = t->ne[0]; h.ne[1] = t->ne[1]; h.ne[2] = t->ne[2]; h.ne[3] = t->ne[3];
             h.nb[0] = t->nb[0]; h.nb[1] = t->nb[1]; h.nb[2] = t->nb[2]; h.nb[3] = t->nb[3];
         }
 
@@ -5850,7 +5846,6 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     const struct ggml_tensor * src0,
     const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
-    int ne01_padded,
     bool is_matmul_id,
     bool is_batched
 ) {
@@ -5859,12 +5854,13 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     }
 
     const int ne00  = src0->ne[0];
+    const int ne01  = src0->ne[1];
     const int ne11  = src1->ne[1];
     const int ne12  = src1->ne[2];
     const int wtype = src0->type;
 
     // HMX weight tiles accept non-32-aligned N for non-matmul_id.
-    if (ne01_padded % 32 != 0 && is_matmul_id) {
+    if (ne01 % 32 != 0 && is_matmul_id) {
         return false;
     }
 
@@ -6209,11 +6205,10 @@ static void ggml_hexagon_precompute_matmul_params_impl(
     const bool is_tiled = ggml_hexagon_tensor_is_tiled(src0);
     const int wtype = (is_tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_tiled ? hex_round_up(ne00, 32) : ne00;
-    const int ne01_padded = is_tiled ? hex_round_up(ne01, 32) : ne01;
     const int ne11_padded = hex_round_up(ne11, 32);
     // VTCM has to hold whole 32-row weight tiles, so size for the rounded-up N
     // even when the tensor itself is ragged.
-    const int  ne01_tiled  = hex_round_up(ne01_padded, 32);
+    const int ne01_tiled  = hex_round_up(ne01, 32);
 
     const bool is_matmul_id = (dst->op == GGML_OP_MUL_MAT_ID);
     const bool is_batched   = (ne02 * ne03 > 1 || ne12 * ne13 > 1);
@@ -6222,7 +6217,7 @@ static void ggml_hexagon_precompute_matmul_params_impl(
 
     // Check HMX eligibility and try precomputing HMX parameters
     bool hmx_enabled = (sess->n_hmx > 0) && (opt_mm_select >= 2);
-    if (hmx_enabled && ggml_hexagon_matmul_is_hmx_eligible(src0, src1, dst, ne01_padded, is_matmul_id, is_batched)) {
+    if (hmx_enabled && ggml_hexagon_matmul_is_hmx_eligible(src0, src1, dst, is_matmul_id, is_batched)) {
         if (ggml_hexagon_precompute_hmx_mm_params(sess, src0, src1, dst, wtype, ne00_padded, ne01_tiled, ne02, ne11, ne12, ne11_padded, is_matmul_id, is_batched, src2_size, vtcm_budget, kparams)) {
             goto finalize;
         }
@@ -7359,15 +7354,14 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
     const bool is_tiled = ggml_hexagon_tensor_is_tiled(src0);
     const int wtype = (is_tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
     const int ne00_padded = is_tiled ? hex_round_up(ne00, 32) : ne00;
-    const int ne01_padded = is_tiled ? hex_round_up(ne01, 32) : ne01;
     const int ne11_padded = hex_round_up(ne11, 32);
-    const int ne01_tiled  = hex_round_up(ne01_padded, 32);
+    const int ne01_tiled  = hex_round_up(ne01, 32);
 
     const size_t vtcm_budget = sess->vtcm_size;
     const bool is_batched = (ne02 * ne03 > 1 || ne12 * ne13 > 1);
 
     bool hmx_enabled = (sess->n_hmx > 0) && (opt_mm_select >= 2);
-    if (hmx_enabled && ggml_hexagon_matmul_is_hmx_eligible(src0, act, nullptr, ne01_padded, false, is_batched)) {
+    if (hmx_enabled && ggml_hexagon_matmul_is_hmx_eligible(src0, act, nullptr, false, is_batched)) {
         if (ggml_hexagon_precompute_hmx_mm_params(sess, src0, act, nullptr, wtype, ne00_padded, ne01_tiled, ne02, ne11, ne12, ne11_padded, false, is_batched, 0, vtcm_budget, kparams)) {
             kparams->n_weights = n_weights;
             goto finalize;
@@ -8852,20 +8846,15 @@ static bool mm_is_hmx_eligible(const ggml_tensor * t) {
     const ggml_tensor * src0 = t->src[0];
     const ggml_tensor * src1 = t->src[1];
 
-    const bool is_tiled = ggml_hexagon_tensor_is_tiled(src0);
-
     if (ggml_hexagon_matmul_can_collapse(src0, src1, t)) {
         const ggml_tensor src1_c = ggml_hexagon_tensor_collapse_rows(src1);
-        const int ne01_padded = is_tiled ? hex_round_up(src0->ne[1], 32) : src0->ne[1];
-        return ggml_hexagon_matmul_is_hmx_eligible(src0, &src1_c, t, ne01_padded, false, false);
+        return ggml_hexagon_matmul_is_hmx_eligible(src0, &src1_c, t, false, false);
     }
 
     const bool is_matmul_id = (t->op == GGML_OP_MUL_MAT_ID);
     const bool is_batched   = (src0->ne[2] * src0->ne[3] > 1 || src1->ne[2] * src1->ne[3] > 1);
 
-    const int ne01_padded = is_tiled ? hex_round_up(src0->ne[1], 32) : src0->ne[1];
-
-    return ggml_hexagon_matmul_is_hmx_eligible(src0, src1, t, ne01_padded, is_matmul_id, is_batched);
+    return ggml_hexagon_matmul_is_hmx_eligible(src0, src1, t, is_matmul_id, is_batched);
 }
 
 static bool is_supported_mul_mat_nx_kernel(const ggml_tensor * src0, const struct htp_mm_kernel_params * kparams) {
