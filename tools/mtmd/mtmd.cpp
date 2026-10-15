@@ -898,6 +898,12 @@ struct mtmd_context {
                 {
                     image_preproc = std::make_unique<mtmd_image_preprocessor_fixed_size>(ctx_v);
                 } break;
+            case PROJECTOR_TYPE_NEMOTRON_OMNI:
+                {
+                    img_beg = "<img>";
+                    img_end = "</img>";
+                    image_preproc = std::make_unique<mtmd_image_preprocessor_dyn_size>(ctx_v);
+                } break;
             case PROJECTOR_TYPE_LFM2:
                 {
                     // multi-tile:
@@ -1002,6 +1008,12 @@ struct mtmd_context {
                     aud_beg = "<|audio_bos|>";
                     aud_end = "<|audio_eos|>";
                     audio_preproc = std::make_unique<mtmd_audio_preprocessor_whisper>(ctx_a);
+                } break;
+            case PROJECTOR_TYPE_MUSE_SPARK_AUDIO:
+                {
+                    aud_beg = "<|soft_audio_start|>";
+                    aud_end = "<|soft_audio_end|>";
+                    audio_preproc = std::make_unique<mtmd_audio_preprocessor_muse_spark_audio>(ctx_a);
                 } break;
             case PROJECTOR_TYPE_QWEN3A:
                 {
@@ -1607,6 +1619,7 @@ struct mtmd_tokenizer {
 
                 clip_image_f32_batch batch_f32;
                 batch_f32.is_audio = false;
+                batch_f32.is_video = bitmaps[0]->mergeable;
                 batch_f32.entries = std::move(preproc_out.entries);
                 // do NOT use preproc_out from this point on, it's moved
 

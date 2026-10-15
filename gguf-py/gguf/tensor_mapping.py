@@ -182,11 +182,48 @@ class TensorNameMap:
         MODEL_TENSOR.A_QF_PROJ_LINEAR: (
             "projector.linear",
         ),
+        MODEL_TENSOR.LILICORR_TOKEN_PROJ: (
+            "model.lilicorr.token_proj",
+        ),
+        MODEL_TENSOR.LILICORR_PASS_HIDDEN_PROJ: (
+            "model.lilicorr.pass_hidden_proj",
+        ),
+        MODEL_TENSOR.LILICORR_SLOT_EMBD: (
+            "model.lilicorr.slot_embedding",
+        ),
+        MODEL_TENSOR.LILICORR_RANK_EMBD: (
+            "model.lilicorr.rank_embedding",
+        ),
+        MODEL_TENSOR.LILICORR_ATTN_BIAS: (
+            "model.lilicorr.attention_bias",
+        ),
+        MODEL_TENSOR.LILICORR_CONTEXT_PROJ: (
+            "model.lilicorr.context_proj",
+        ),
+        MODEL_TENSOR.LILICORR_OUTPUT_NORM: (
+            "model.lilicorr.output_norm",
+        ),
+        MODEL_TENSOR.LILICORR_ANCHOR_NORM: (
+            "model.lilicorr.anchor_norm",
+        ),
+        MODEL_TENSOR.LILICORR_FACTOR_INPUT_PROJ: (
+            "model.lilicorr.factor_input_proj",
+        ),
+        MODEL_TENSOR.LILICORR_OUT_HEAD: (
+            "model.lilicorr.out_head",
+        ),
+        MODEL_TENSOR.LILICORR_IN_HEAD: (
+            "model.lilicorr.in_head",
+        ),
+        MODEL_TENSOR.LILICORR_ANCHOR_OUT_HEAD: (
+            "model.lilicorr.anchor_out_head",
+        ),
     }
 
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
+            "model.lilicorr.layers.{bid}.attn_norm",                # lilicorr
             "gpt_neox.layers.{bid}.input_layernorm",                # gptneox
             "transformer.h.{bid}.ln_1",                             # gpt2 gpt-j refact qwen jais exaone
             "transformer.blocks.{bid}.norm_1",                      # mpt
@@ -324,6 +361,7 @@ class TensorNameMap:
 
         # Attention output
         MODEL_TENSOR.ATTN_OUT: (
+            "model.lilicorr.layers.{bid}.attn.out_proj",                    # lilicorr
             "gpt_neox.layers.{bid}.attention.dense",                        # gptneox
             "transformer.h.{bid}.attn.c_proj",                              # gpt2 refact qwen jais
             "transformer.blocks.{bid}.attn.out_proj",                       # mpt
@@ -407,6 +445,8 @@ class TensorNameMap:
 
         # Feed-forward norm
         MODEL_TENSOR.FFN_NORM: (
+            "model.lilicorr.layers.{bid}.mlp_norm",                          # lilicorr
+            "model.lilicorr.feature_mlp.{bid}.norm",                         # lilicorr
             "gpt_neox.layers.{bid}.post_attention_layernorm",                # gptneox
             "transformer.h.{bid}.ln_2",                                      # gpt2 refact qwen jais exaone
             "h.{bid}.post_attention_layernorm",                              # bloom
@@ -490,6 +530,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_EXP_PROBS_B: (
             "model.layers.{bid}.mlp.gate.e_score_correction",               # deepseek-v3 dots1
+            "model.layers.{bid}.mlp.gate.e_score_correction_bias",          # muse-spark
             "model.layers.{bid}.mlp.moe_statics.e_score_correction",        # ernie4.5-moe
             "model.layers.{bid}.mlp.gate.expert_bias",                      # bailingmoe2
             "model.layers.{bid}.mlp.expert_bias",                           # afmoe
@@ -504,6 +545,8 @@ class TensorNameMap:
 
         # Feed-forward up
         MODEL_TENSOR.FFN_UP: (
+            "model.lilicorr.layers.{bid}.mlp.up_proj",                # lilicorr
+            "model.lilicorr.feature_mlp.{bid}.up_proj",               # lilicorr
             "gpt_neox.layers.{bid}.mlp.dense_h_to_4h",                # gptneox
             "transformer.h.{bid}.mlp.c_fc",                           # gpt2 jais
             "transformer.blocks.{bid}.ffn.up_proj",                   # mpt
@@ -632,14 +675,26 @@ class TensorNameMap:
 
         MODEL_TENSOR.MOE_LATENT_DOWN: (
             "backbone.layers.{bid}.mixer.fc1_latent_proj",                 # nemotron 3 super
+            "model.layers.{bid}.mlp.pre_expert_proj",                      # muse-spark
         ),
 
         MODEL_TENSOR.MOE_LATENT_UP: (
             "backbone.layers.{bid}.mixer.fc2_latent_proj",                 # nemotron 3 super
+            "model.layers.{bid}.mlp.post_expert_proj",                     # muse-spark
+        ),
+
+        MODEL_TENSOR.FFN_PRE_EXP_NORM: (
+            "model.layers.{bid}.mlp.pre_expert_norm",                      # muse-spark
+        ),
+
+        MODEL_TENSOR.FFN_POST_EXP_NORM: (
+            "model.layers.{bid}.mlp.experts.post_expert_norm",             # muse-spark
         ),
 
         # Feed-forward down
         MODEL_TENSOR.FFN_DOWN: (
+            "model.lilicorr.layers.{bid}.mlp.down_proj",              # lilicorr
+            "model.lilicorr.feature_mlp.{bid}.down_proj",             # lilicorr
             "gpt_neox.layers.{bid}.mlp.dense_4h_to_h",                # gptneox
             "transformer.h.{bid}.mlp.c_proj",                         # gpt2 refact qwen jais
             "transformer.blocks.{bid}.ffn.down_proj",                 # mpt
@@ -1554,6 +1609,9 @@ class TensorNameMap:
         MODEL_TENSOR.DFLASH_SELECTOR_HIDDEN: (
             "model.candidate_selector.hidden_projection",
         ),
+        MODEL_TENSOR.LILICORR_ATTN_IN_PROJ: (
+            "model.lilicorr.layers.{bid}.attn.in_proj",
+        ),
 
         MODEL_TENSOR.CLS: (
             "classifier",       # jina
@@ -1688,6 +1746,7 @@ class TensorNameMap:
             "vision_model.class_embedding", # llama 4
             "model.vision.patch_embedding.cls_embedding", # cogvlm
             "vision_model.radio_model.model.patch_generator.cls_token.token", # Nemotron Nano v2 VL
+            "vision_model.embeddings.cls_register_token", # Nemotron Omni
             "model.vision_model.embeddings.class_embedding", # Deepseek-OCR
         ),
 
@@ -1709,6 +1768,7 @@ class TensorNameMap:
             "model.vision_model.embeddings.patch_embedding", # Deepseek-OCR CLIP
             "siglip2.vision_model.embeddings.patch_embedding",
             "vision_model.radio_model.model.patch_generator.embedder", # Nemotron Nano v2 VL
+            "vision_model.embeddings.patch_projection", # Nemotron Omni
             "model.vision_tower.patch_embedder.input_proj", # gemma4
             "vision_tower.patch_embed.patchifier.proj", # dots.ocr
             "vision_encoder.patch_embed.proj", # dots3note
@@ -1741,6 +1801,7 @@ class TensorNameMap:
             "model.vision.patch_embedding.position_embedding", # cogvlm
             "visual.embeddings.position_embedding", # glm4v
             "vision_model.radio_model.model.patch_generator.pos_embed", # Nemotron Nano v2 VL
+            "vision_model.embeddings.position_embedding", # Nemotron Omni
             "model.vision_tower.patch_embedder.position_embedding_table", # gemma4
             "vision_model.positional_embedding", # Step3-VL
             "model.vision_embedder.pos_embedding", # gemma4 unified
@@ -1771,6 +1832,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_Q: (
+            "vision_model.encoder.layer.{bid}.attention.attention.query", # Nemotron Omni
             "model.vision_tower.vision_model.encoder.layers.{bid}.self_attn.q_proj", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.q_proj",
             "model.vision_tower.encoder.layers.{bid}.self_attn.q_proj", # minicpmv4_6
@@ -1799,6 +1861,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_K: (
+            "vision_model.encoder.layer.{bid}.attention.attention.key", # Nemotron Omni
             "model.vision_tower.vision_model.encoder.layers.{bid}.self_attn.k_proj", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.k_proj",
             "model.vision_tower.encoder.layers.{bid}.self_attn.k_proj", # minicpmv4_6
@@ -1827,6 +1890,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_V: (
+            "vision_model.encoder.layer.{bid}.attention.attention.value", # Nemotron Omni
             "model.vision_tower.vision_model.encoder.layers.{bid}.self_attn.v_proj", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.v_proj",
             "model.vision_tower.encoder.layers.{bid}.self_attn.v_proj", # minicpmv4_6
@@ -1847,6 +1911,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_INPUT_NORM: (
+            "vision_model.encoder.layer.{bid}.norm1", # Nemotron Omni
             "vision.blocks.{bid}.norm1", # deepseek4v
             "model.vision_tower.vision_model.encoder.layers.{bid}.layer_norm1", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm1",
@@ -1873,6 +1938,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_ATTN_O: (
+            "vision_model.encoder.layer.{bid}.attention.output.dense", # Nemotron Omni
             "vision.blocks.{bid}.attn.wo", # deepseek4v
             "model.vision_tower.vision_model.encoder.layers.{bid}.self_attn.out_proj", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.self_attn.out_proj",
@@ -1905,6 +1971,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_POST_ATTN_NORM: (
+            "vision_model.encoder.layer.{bid}.norm2", # Nemotron Omni
             "vision.blocks.{bid}.norm2", # deepseek4v
             "model.vision_tower.vision_model.encoder.layers.{bid}.layer_norm2", # Granite4Vision
             "vision_tower.vision_model.encoder.layers.{bid}.layer_norm2",
@@ -1932,6 +1999,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_FFN_UP: (
+            "vision_model.encoder.layer.{bid}.mlp.fc1", # Nemotron Omni
             "vision.blocks.{bid}.mlp.w1_up", # deepseek4v (split from fused w1)
             "vision_encoder.blocks.{bid}.mlp.fc3", # dots3note
             "model.vision_tower.vision_model.encoder.layers.{bid}.mlp.fc1", # Granite4Vision
@@ -1969,6 +2037,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_ENC_FFN_DOWN: (
+            "vision_model.encoder.layer.{bid}.mlp.fc2", # Nemotron Omni
             "vision.blocks.{bid}.mlp.w2", # deepseek4v
             "vision_encoder.blocks.{bid}.mlp.fc2", # dots3note
             "model.vision_tower.vision_model.encoder.layers.{bid}.mlp.fc2", # Granite4Vision
@@ -2027,12 +2096,14 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.V_LAYER_SCALE_1: (
+            "vision_model.encoder.layer.{bid}.layer_scale1", # Nemotron Omni
             "vision_tower.vision_model.encoder.layers.{bid}.ls1", # InternVL
             "model.vision_tower.encoder.layer.{bid}.lambda_1", # Intern-S1
             "vision_model.transformer.resblocks.{bid}.ls_1", # Step3-VL
         ),
 
         MODEL_TENSOR.V_LAYER_SCALE_2: (
+            "vision_model.encoder.layer.{bid}.layer_scale2", # Nemotron Omni
             "vision_tower.vision_model.encoder.layers.{bid}.ls2", # InternVL
             "model.vision_tower.encoder.layer.{bid}.lambda_2", # Intern-S1
             "vision_model.transformer.resblocks.{bid}.ls_2", # Step3-VL
@@ -2067,6 +2138,7 @@ class TensorNameMap:
             "siglip2.vision_model.post_layernorm",
             "model.qwen2_model.model.model.norm", # Deepseek-OCR-2 qwen2
             "model.vision_tower.ln_post", # muse-glimmer
+            "vision_projector.vision_final_layernorm", # Nemotron Omni Reasoning V3
         ),
 
         MODEL_TENSOR.V_MM_POST_NORM: (
