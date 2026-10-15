@@ -90,7 +90,7 @@
 		onSeeInDiscover={isDownload
 			? () => uiStore.openModelsDiscover(repoOf(option.model))
 			: undefined}
-		onToggleDownload={() => void modelsStore.status.toggleDownloadWithDrafts(option.model)}
+		onToggleDownload={() => void modelsStore.status.toggleDownload(option.model)}
 		{onToggleLoad}
 		{onUseInChat}
 		{onUseInNewChat}
@@ -155,7 +155,7 @@
 				onSeeInDiscover={isDownload
 					? () => uiStore.openModelsDiscover(repoOf(option.model))
 					: undefined}
-				onToggleDownload={() => void modelsStore.status.toggleDownloadWithDrafts(option.model)}
+				onToggleDownload={() => void modelsStore.status.toggleDownload(option.model)}
 				{onToggleLoad}
 				{onUseInChat}
 				{onUseInNewChat}
@@ -173,7 +173,7 @@
 	<DialogConfirmDownload
 		action={ModelDownloadConfirmAction.CANCEL}
 		onClose={() => (cancelDownloadOpen = false)}
-		onConfirm={() => void modelsStore.status.cancelDownloadWithDrafts(option.model)}
+		onConfirm={() => void modelsStore.status.cancelDownload(option.model)}
 		open={cancelDownloadOpen}
 		repoWithTag={option.model}
 	/>

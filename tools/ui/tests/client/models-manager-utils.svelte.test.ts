@@ -100,7 +100,7 @@ describe('downloadGroups', () => {
 				repo === 'org/Qwen3-8B' ? [{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo }] : []
 		);
 
-		// the sub-lines carry the drafts, so the inline badges stay empty
+		// the sub-lines carry the sidecars, so the inline badges stay empty
 		expect(groups[0].base).toMatchObject({
 			backendId: LOCAL_BACKEND_ID,
 			draftSidecars: [],
@@ -111,28 +111,16 @@ describe('downloadGroups', () => {
 		]);
 	});
 
-	it('hangs the repo draft downloads off the main row', () => {
+	it('keeps one row per tracked download, sidecars included', () => {
 		const main = { isPaused: false, progress: null, repoWithTag: 'org/Qwen3-8B:Q4_K_M' };
-		const draft = {
-			isPaused: false,
-			progress: { downloadedBytes: 10, files: {}, totalBytes: 100 },
-			repoWithTag: 'org/Qwen3-8B:Q4_K_M-dflash'
-		};
-		const groups = downloadGroups([main, draft], [], () => []);
+		const other = { isPaused: true, progress: null, repoWithTag: 'org/Qwen3-8B:Q8_0' };
+		const groups = downloadGroups([main, other], [], () => []);
 
-		expect(groups).toHaveLength(1);
-		expect(groups[0].key).toBe('download::org/Qwen3-8B:Q4_K_M');
-		expect(groups[0].base.model).toBe('org/Qwen3-8B:Q4_K_M');
-		expect(groups[0].draftEntries).toEqual([draft]);
-	});
-
-	it('keeps a row of its own for a draft with no main download', () => {
-		const draft = { isPaused: false, progress: null, repoWithTag: 'org/Qwen3-8B:Q8_0-dflash' };
-		const groups = downloadGroups([draft], [], () => []);
-
-		expect(groups).toHaveLength(1);
-		expect(groups[0].base.model).toBe('org/Qwen3-8B:Q8_0-dflash');
-		expect(groups[0].draftEntries).toBeUndefined();
+		expect(groups).toHaveLength(2);
+		expect(groups.map((group) => group.key)).toEqual([
+			'download::org/Qwen3-8B:Q4_K_M',
+			'download::org/Qwen3-8B:Q8_0'
+		]);
 	});
 });
 

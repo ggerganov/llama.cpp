@@ -12,13 +12,10 @@
 	import { DropdownMenuActions } from '$lib/components/app';
 	import { MODEL_ROW_GRID_CLASS, MODEL_ROW_TRAILING_CELL_CLASS } from '$lib/constants';
 	import { ModelRowDownloadState } from '$lib/enums';
-	import { ModelsService } from '$lib/services';
 	import { deviceStore, modelsStore } from '$lib/stores';
-	import type { ModelDownloadEntry, ModelOption, ModelSidecarBadge } from '$lib/types/models';
+	import type { ModelOption, ModelSidecarBadge } from '$lib/types/models';
 
 	interface Props {
-		/** Draft downloads hanging off the row, when it stands for a download. */
-		draftEntries?: ModelDownloadEntry[];
 		isFavorite: (option: ModelOption) => boolean;
 		option: ModelOption;
 		onDelete: (option: ModelOption) => void;
@@ -31,7 +28,6 @@
 	}
 
 	let {
-		draftEntries,
 		indent = 0,
 		isFavorite,
 		onDelete,
@@ -104,27 +100,11 @@
 			</span>
 		</button>
 
-		{#if draftEntries?.length || sidecarBadges?.length}
+		{#if sidecarBadges?.length}
 			<!-- w-fit keeps the trailing state beside the badges instead of floating
 			     to the end of the wide model column -->
 			<div class="flex w-fit flex-col pb-1">
-				{#each draftEntries as draft (draft.repoWithTag)}
-					{@const parsed = ModelsService.parseModelId(draft.repoWithTag)}
-
-					<ModelDraftSubline
-						connectorClass="ml-8"
-						kind={parsed.sidecar ?? ''}
-						percent={draft.progress && draft.progress.totalBytes > 0
-							? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
-							: null}
-						quant={parsed.quantization}
-						state={draft.isPaused
-							? ModelRowDownloadState.PAUSED
-							: ModelRowDownloadState.DOWNLOADING}
-					/>
-				{/each}
-
-				{#each sidecarBadges ?? [] as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+				{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
 					<ModelDraftSubline
 						connectorClass="ml-8"
 						kind={badge.kind}

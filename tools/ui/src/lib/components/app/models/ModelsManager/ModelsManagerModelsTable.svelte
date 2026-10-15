@@ -247,7 +247,6 @@
 		</CollapsibleRegion>
 	{:else}
 		<ModelsManagerModelRow
-			draftEntries={entry.draftEntries}
 			{indent}
 			{isFavorite}
 			onDelete={requestDelete}

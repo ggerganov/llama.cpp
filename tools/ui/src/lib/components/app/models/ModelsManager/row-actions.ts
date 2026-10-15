@@ -32,7 +32,7 @@ export function modelRowActions(
 			{
 				icon: isPaused ? MODEL_DOWNLOAD_ICONS.resume : MODEL_DOWNLOAD_ICONS.pause,
 				label: isPaused ? 'Resume downloading' : 'Pause downloading',
-				onclick: () => void modelsStore.status.toggleDownloadWithDrafts(option.model)
+				onclick: () => void modelsStore.status.toggleDownload(option.model)
 			},
 			{
 				icon: Trash2,

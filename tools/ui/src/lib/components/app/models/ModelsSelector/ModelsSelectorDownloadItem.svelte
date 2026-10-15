@@ -14,8 +14,6 @@
 	interface Props {
 		/** One entry from the status feed: an in-flight or paused download. */
 		entry: ModelDownloadEntry;
-		/** The repo's draft downloads, rendered as sub-lines inside the item. */
-		drafts?: ModelDownloadEntry[];
 		/** Draft sidecars already on disk, rendered as checked sub-lines. */
 		sidecars?: ModelSidecarBadge[];
 		/** Ask the list to confirm cancelling; the list owns the single dialog. */
@@ -24,7 +22,7 @@
 		showOrgName?: boolean;
 	}
 
-	let { drafts = [], entry, onRequestCancel, showOrgName = true, sidecars = [] }: Props = $props();
+	let { entry, onRequestCancel, showOrgName = true, sidecars = [] }: Props = $props();
 
 	let percent = $derived(
 		entry.progress && entry.progress.totalBytes > 0
@@ -64,14 +62,14 @@
 <!-- One in-flight download; same actions as the discover quant chips: the row
      itself pauses / resumes, the trailing X cancels (stops and discards the
      partial files). Both affordances fade in on hover, the slots are reserved
-     so the list never reflows. The repo's draft downloads hang off the item as
+     so the list never reflows. The repo's on-disk sidecars hang off the item as
      compact sub-lines instead of rows of their own. -->
 <div class="group relative rounded-sm transition-colors hover:bg-accent/50">
 	<div class="flex items-center gap-2 p-2 text-left text-sm">
 		<button
 			aria-label={actionText}
 			class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
-			onclick={() => void modelsStore.status.toggleDownloadWithDrafts(entry.repoWithTag)}
+			onclick={() => void modelsStore.status.toggleDownload(entry.repoWithTag)}
 			type="button"
 		>
 			{#if orgName}
@@ -137,20 +135,6 @@
 	</div>
 
 	<div class="flex flex-col px-2 pb-1.5">
-		{#each drafts as draft (draft.repoWithTag)}
-			{@const parsedDraft = ModelsService.parseModelId(draft.repoWithTag)}
-
-			<ModelDraftSubline
-				connectorClass="ml-4"
-				kind={parsedDraft.sidecar ?? ''}
-				percent={draft.progress && draft.progress.totalBytes > 0
-					? Math.round((draft.progress.downloadedBytes / draft.progress.totalBytes) * 100)
-					: null}
-				quant={parsedDraft.quantization}
-				state={draft.isPaused ? ModelRowDownloadState.PAUSED : ModelRowDownloadState.DOWNLOADING}
-			/>
-		{/each}
-
 		{#each sidecars as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
 			<ModelDraftSubline
 				connectorClass="ml-4"

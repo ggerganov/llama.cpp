@@ -38,7 +38,7 @@
 			class="h-5 w-5 hover:text-foreground"
 			icon={isPaused ? MODEL_DOWNLOAD_ICONS.resume : MODEL_DOWNLOAD_ICONS.pause}
 			iconSize="h-4 w-4"
-			onclick={() => void modelsStore.status.toggleDownloadWithDrafts(option.model)}
+			onclick={() => void modelsStore.status.toggleDownload(option.model)}
 			stopPropagationOnClick
 			tooltip={isPaused ? 'Resume downloading' : 'Pause downloading'}
 			tooltipAsTitle
