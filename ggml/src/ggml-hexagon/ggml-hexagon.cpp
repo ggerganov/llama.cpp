@@ -4166,7 +4166,8 @@ struct ggml_hexagon_opbatch {
             const ggml_tensor * w0 = last_node.inputs[0];
             const ggml_tensor * x  = last_node.inputs[curr_n];
 
-            if (x_in != x || w_in->type != w0->type || w_in->ne[0] != w0->ne[0]) {
+            if (x_in != x || w_in->type != w0->type || w_in->ne[0] != w0->ne[0] ||
+                ggml_hexagon_tensor_is_tiled(w_in) != ggml_hexagon_tensor_is_tiled(w0)) {
                 return false;
             }
             if (!last_node.fused.empty() && (mm_is_hmx_eligible(last_node.fused[0]) != mm_is_hmx_eligible(node.node))) {
@@ -4322,7 +4323,8 @@ struct ggml_hexagon_opbatch {
             const ggml_tensor * x   = last_node.inputs[curr_n];
             const ggml_tensor * ids = last_node.inputs[curr_n + 1];
 
-            if (x_in != x || ids_in != ids || w_in->type != w0->type || w_in->ne[0] != w0->ne[0] || w_in->ne[2] != w0->ne[2]) {
+            if (x_in != x || ids_in != ids || w_in->type != w0->type || w_in->ne[0] != w0->ne[0] || w_in->ne[2] != w0->ne[2] ||
+                ggml_hexagon_tensor_is_tiled(w_in) != ggml_hexagon_tensor_is_tiled(w0)) {
                 return false;
             }
             if (!last_node.fused.empty() && (mm_is_hmx_eligible(last_node.fused[0]) != mm_is_hmx_eligible(node.node))) {
@@ -7368,7 +7370,7 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
         }
     }
 
-    if (!is_tiled || wtype == GGML_TYPE_F16 || wtype == GGML_TYPE_F32) {
+    if (!is_tiled || ne10 % 32 != 0) {
         kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
         return;
     }
@@ -7378,21 +7380,17 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
         const size_t act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
         const size_t src0_row_size = src0->nb[1];
 
-        uint32_t best_n_prefetch = 16;
-
-        if (is_tiled) {
-            const uint32_t max_prefetch = (act_nrows > HTP_MM_HMX_MIN_NROWS) ? 2 : 16;
-            best_n_prefetch = 2;
-            for (uint32_t d = max_prefetch; d >= 2; d /= 2) {
-                struct htp_mm_hvx_vtcm_layout L;
-                htp_mm_hvx_vtcm_layout_build(
-                    &L, HTP_MM_KERNEL_HVX_QUANT_ROW, wtype, ne10, act_nrows, sess->n_threads,
-                    0, src0_row_size, act_row_size, 0, d, false, true
-                );
-                if (L.total_bytes <= sess->vtcm_size) {
-                    best_n_prefetch = d;
-                    break;
-                }
+        const uint32_t max_prefetch = (act_nrows > HTP_MM_HMX_MIN_NROWS) ? 2 : 16;
+        uint32_t best_n_prefetch = 2;
+        for (uint32_t d = max_prefetch; d >= 2; d /= 2) {
+            struct htp_mm_hvx_vtcm_layout L;
+            htp_mm_hvx_vtcm_layout_build(
+                &L, HTP_MM_KERNEL_HVX_QUANT_ROW, wtype, ne10, act_nrows, sess->n_threads,
+                0, src0_row_size, act_row_size, 0, d, false, true
+            );
+            if (L.total_bytes <= sess->vtcm_size) {
+                best_n_prefetch = d;
+                break;
             }
         }
 
@@ -7406,15 +7404,17 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
         );
 
         if (try_tiled && L.total_bytes <= sess->vtcm_size) {
-            kparams->kernel_type    = HTP_MM_KERNEL_HVX_QUANT_ROW;
-            kparams->act_row_size   = act_row_size;
-            kparams->vtcm_src0_size = L.src0_bytes;
-            kparams->vtcm_act_size  = L.act_bytes;
-            kparams->vtcm_bias_size = 0;
-            kparams->vtcm_dst_size  = L.dst_bytes;
-            kparams->vtcm_size      = L.total_bytes;
-            kparams->n_prefetch     = best_n_prefetch;
-            kparams->n_weights      = n_weights;
+            kparams->kernel_type       = HTP_MM_KERNEL_HVX_QUANT_ROW;
+            kparams->tile_size         = htp_mm_get_weight_tile_size(wtype);
+            kparams->aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
+            kparams->act_row_size      = act_row_size;
+            kparams->vtcm_src0_size    = L.src0_bytes;
+            kparams->vtcm_act_size     = L.act_bytes;
+            kparams->vtcm_bias_size    = 0;
+            kparams->vtcm_dst_size     = L.dst_bytes;
+            kparams->vtcm_size         = L.total_bytes;
+            kparams->n_prefetch        = best_n_prefetch;
+            kparams->n_weights         = n_weights;
         } else {
             kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
             return;
@@ -8862,9 +8862,8 @@ static bool is_supported_mul_mat_nx_kernel(const ggml_tensor * src0, const struc
         return kparams->kernel_type == HTP_MM_KERNEL_HMX_2D;
     }
 
-    if (!ggml_hexagon_is_tiled_weight_type(src0->type) ||
-        src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16) {
-        return false;  // F16, F32, BF16 have no fused HVX kernel
+    if (!ggml_hexagon_tensor_is_tiled(src0)) {
+        return false;
     }
 
     return kparams->kernel_type == HTP_MM_KERNEL_HVX_QUANT_ROW;
@@ -8875,8 +8874,7 @@ static bool is_supported_mul_mat_id_nx_kernel(const ggml_tensor * src0, const st
         return kparams->kernel_type == HTP_MM_KERNEL_HMX_2D;
     }
 
-    if (!ggml_hexagon_is_tiled_weight_type(src0->type) ||
-        src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16) {
+    if (!ggml_hexagon_tensor_is_tiled(src0)) {
         return false;
     }
 
@@ -8894,11 +8892,10 @@ static bool is_mergeable_mul_mat(const ggml_tensor * t) {
         return ggml_hexagon_is_hmx_weight_type(src0->type);
     }
 
-    // HVX path requires F32 activations and tiled weights (except floats)
+    // HVX path requires F32 activations and tiled weights
     if (src1->type != GGML_TYPE_F32) return false;
 
-    return ggml_hexagon_is_tiled_weight_type(src0->type) &&
-           src0->type != GGML_TYPE_F16 && src0->type != GGML_TYPE_F32 && src0->type != GGML_TYPE_BF16;
+    return ggml_hexagon_tensor_is_tiled(src0);
 }
 
 static bool is_mergeable_mul_mat_pair(const ggml_tensor * n1, const ggml_tensor * n2) {
@@ -8914,6 +8911,9 @@ static bool is_mergeable_mul_mat_pair(const ggml_tensor * n1, const ggml_tensor 
     if (n1->src[0]->type != n2->src[0]->type) {
         return false;
     }
+    if (ggml_hexagon_tensor_is_tiled(n1->src[0]) != ggml_hexagon_tensor_is_tiled(n2->src[0])) {
+        return false;
+    }
     if (mm_is_hmx_eligible(n1) != mm_is_hmx_eligible(n2)) {
         return false;
     }
@@ -8924,7 +8924,11 @@ static bool is_mergeable_mul_mat_id(const ggml_tensor * t) {
     if (t->op != GGML_OP_MUL_MAT_ID) return false;
 
     const ggml_tensor * src0 = t->src[0];
-    return ggml_hexagon_is_tiled_weight_type(src0->type);
+    if (mm_is_hmx_eligible(t)) {
+        return ggml_hexagon_is_hmx_weight_type(src0->type);
+    }
+
+    return ggml_hexagon_tensor_is_tiled(src0);
 }
 
 static bool is_mergeable_mul_mat_id_pair(const ggml_tensor * n1, const ggml_tensor * n2) {
@@ -8944,6 +8948,9 @@ static bool is_mergeable_mul_mat_id_pair(const ggml_tensor * n1, const ggml_tens
         return false;
     }
     if (n1->src[0]->type != n2->src[0]->type) {
+        return false;
+    }
+    if (ggml_hexagon_tensor_is_tiled(n1->src[0]) != ggml_hexagon_tensor_is_tiled(n2->src[0])) {
         return false;
     }
     if (mm_is_hmx_eligible(n1) != mm_is_hmx_eligible(n2)) {
