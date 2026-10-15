@@ -718,8 +718,16 @@ static common_download_opts sidecar_download_opts(const common_params & params, 
     return opts;
 }
 
-// the sidecar kinds of a cached model present on disk, as the offline plan resolves them
-static json cached_sidecars(const std::string & name) {
+// the sidecar kinds of a model present on disk, as the offline plan resolves them;
+// a preset can name its repo apart from the name it is listed under
+static json cached_sidecars(const server_model_meta & meta) {
+    std::string name = meta.name;
+
+    std::string hf_repo;
+    if (meta.preset.get_option("LLAMA_ARG_HF_REPO", hf_repo) && !hf_repo.empty()) {
+        name = hf_repo;
+    }
+
     common_params_model model;
     model.hf_repo = name;
 
@@ -2244,6 +2252,9 @@ void server_models_routes::init_routes() {
         json models_json = json::array();
         auto all_models = models.get_all_meta();
         std::time_t t = std::time(0);
+        // a download on its way has no files to resolve yet, only the kinds it pulls
+        const auto unfinished = models.get_unfinished_downloads();
+
         for (const auto & meta : all_models) {
             if (meta.hidden) {
                 continue; // cache model deduplicated by a preset
@@ -2285,9 +2296,15 @@ void server_models_routes::init_routes() {
                 model_info["context_length"] = meta.n_ctx_train;
             }
 
-            // the sidecars a cached model has on disk, resolved as -hf would load them
-            if (meta.source == SERVER_MODEL_SOURCE_CACHE && meta.status != SERVER_MODEL_STATUS_DOWNLOADING) {
-                model_info["sidecars"] = cached_sidecars(meta.name);
+            // the sidecars a model has on disk, resolved as -hf would load them: a
+            // preset names a repo as well, while a models dir holds plain files. A
+            // download on its way reports the kinds it pulls, as an unfinished one does
+            const auto it_unfinished = unfinished.find(meta.name);
+
+            if (it_unfinished != unfinished.end()) {
+                model_info["sidecars"] = it_unfinished->second;
+            } else if (meta.source != SERVER_MODEL_SOURCE_MODELS_DIR) {
+                model_info["sidecars"] = cached_sidecars(meta);
             }
 
             // merge with loaded_info from the child process if available

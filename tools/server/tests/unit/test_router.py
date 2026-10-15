@@ -693,3 +693,31 @@ def test_router_download_conflicts():
     res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID})
     assert res.status_code == 400
     assert "is running, unload it first" in res.body["error"]["message"]
+
+
+def test_router_preset_model_sidecars():
+    """A preset model reports the sidecars its files have on disk, like a cached one."""
+    global server
+
+    preset_path = os.path.join(TMP_DIR, "test_preset_sidecars.ini")
+
+    with open(preset_path, "w") as f:
+        f.write("[preset-sidecars]\nhf-repo = ggml-org/tinygemma3-GGUF:Q8_0\n")
+
+    server.models_preset = preset_path
+    server.start()
+
+    try:
+        # the mmproj of that repo lands next to the model, as -hf would pull it
+        res = server.make_request("POST", "/models", data={"model": MODEL_A, "sidecars": ["mmproj"]})
+        assert res.status_code == 200
+        _wait_for_model_status(MODEL_A, {"downloaded", "unloaded"}, timeout=MODEL_DOWNLOAD_TIMEOUT)
+
+        res = server.make_request("GET", "/models")
+        assert res.status_code == 200
+        entries = {item["id"]: item for item in res.body.get("data", [])}
+
+        assert entries["preset-sidecars"]["source"] == "preset"
+        assert entries["preset-sidecars"]["sidecars"] == ["mmproj"]
+    finally:
+        os.remove(preset_path)
