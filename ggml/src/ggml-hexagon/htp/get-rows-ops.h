@@ -77,6 +77,18 @@ static inline void htp_get_rows_vtcm_layout_build(
         case HTP_TYPE_Q8_0:
             src0_row_size = (ne00 / 32) * 34;
             break;
+        case HTP_TYPE_Q4_0:
+            src0_row_size = (ne00 / 32) * 18;
+            break;
+        case HTP_TYPE_Q4_K:
+            src0_row_size = (ne00 / 256) * 144;
+            break;
+        case HTP_TYPE_Q5_K:
+            src0_row_size = (ne00 / 256) * 176;
+            break;
+        case HTP_TYPE_Q6_K:
+            src0_row_size = (ne00 / 256) * 210;
+            break;
         default:
             src0_row_size = 0;
             break;
