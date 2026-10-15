@@ -32,8 +32,8 @@ function entry(id: string, sidecars: string[] = [], status = ServerModelStatus.D
 function stubEndpoints() {
 	const post = vi.spyOn(ModelsService, 'downloadModel').mockResolvedValue({ success: true });
 	const cancel = vi.spyOn(ModelsService, 'cancelDownload').mockResolvedValue({ success: true });
+	const unload = vi.spyOn(ModelsService, 'unload').mockResolvedValue({ success: true });
 
-	vi.spyOn(ModelsService, 'unload').mockResolvedValue({ success: true });
 	vi.spyOn(ModelsService, 'watchModelEvents').mockResolvedValue(undefined);
 	vi.spyOn(ModelsService, 'list').mockResolvedValue({
 		data: [],
@@ -41,7 +41,7 @@ function stubEndpoints() {
 		object: 'list'
 	} as unknown as ApiModelsListResponse);
 
-	return { cancel, post };
+	return { cancel, post, unload };
 }
 
 describe('model download flows', () => {
@@ -49,6 +49,8 @@ describe('model download flows', () => {
 		vi.restoreAllMocks();
 		serverStore.role = ServerRole.ROUTER;
 		modelsStore.routerModels = [];
+		// the store is a singleton: drop what an earlier case tracked
+		modelsStore.status.unsubscribe();
 	});
 
 	it('posts once for two quick clicks on the same chip', async () => {
@@ -79,6 +81,32 @@ describe('model download flows', () => {
 		expect(modelsStore.status.isModelDownloaded(TAG)).toBe(true);
 		// the sidecar option of that model reads the draft off the same entry
 		expect(modelsStore.status.isModelDownloaded(`${TAG}-dflash`)).toBe(true);
+	});
+
+	it('does not pause a download whose POST is still on its way', async () => {
+		const { post, unload } = stubEndpoints();
+
+		let release: () => void = () => {};
+
+		post.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					release = () => resolve({ success: true });
+				})
+		);
+
+		const started = modelsStore.status.downloadModel(TAG, [ModelDraftSidecar.DFLASH]);
+
+		// the chip reads as downloading before the server answers, so a second click
+		// must not stop a model that never started
+		await modelsStore.status.pauseDownload(TAG);
+
+		expect(unload).not.toHaveBeenCalled();
+		expect(modelsStore.status.isDownloadInProgress(TAG)).toBe(true);
+		expect(modelsStore.status.isDownloadPaused(TAG)).toBe(false);
+
+		release();
+		await started;
 	});
 
 	it('resumes with the sidecars the download started with', async () => {

@@ -527,9 +527,13 @@ export class ModelStatusManager {
 			return;
 		}
 
-		this.subscribe();
-
 		const { model } = downloadTarget(repoWithTag);
+
+		// a POST still on its way has nothing to stop: unloading would kill a model
+		// that never started and leave the store neither in flight nor paused
+		if (this.pendingDownloads.has(model)) return;
+
+		this.subscribe();
 
 		this.stopRequests.set(model, ModelDownloadStopRequest.PAUSE);
 
