@@ -585,6 +585,15 @@ std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t b
     std::vector<float> v(n * (uncond ? 2 : 1));
     std::vector<float> guided(uncond ? n : 0);
 
+    // final.proj rows can disagree with metadata diff_latent_size (create_tensor_from_file trusts the file)
+    if (ggml_nbytes(out) != v.size() * sizeof(float)) {
+        ggml_gallocr_free(galloc);
+        ggml_free(ctx);
+        throw std::runtime_error(format(
+                "vibevoice: diffusion output size %zu does not match latent buffer %zu (diff_latent_size %u)",
+                (size_t) ggml_nelements(out), v.size(), vv.diff_latent_size));
+    }
+
     diff_sampler sampler(vv.diff_train_steps, vv.diff_inference_steps);
 
     for (float timestep : sampler.timesteps) {
@@ -770,6 +779,15 @@ static int64_t vv_enc_hop(const llama_hparams_vv_tokenizer & hp) {
     return hop;
 }
 
+// waveform samples per latent frame from the acoustic decoder upsample ratios
+static int64_t vv_dec_hop(const llama_hparams_vv_tokenizer & hp) {
+    int64_t hop = 1;
+    for (uint32_t s = 0; s + 1 < hp.n_dec_stages; ++s) {
+        hop *= hp.dec_ratios[s];
+    }
+    return hop;
+}
+
 std::vector<float> llama_model_vibevoice::semantic_enc_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * wav, int64_t n_samples) const {
     GGML_ASSERT(n_samples > 0 && n_samples % vv_enc_hop(hparams.vibevoice.semantic) == 0);
 
@@ -786,8 +804,16 @@ std::vector<float> llama_model_vibevoice::semantic_enc_stream(ggml_backend_t bac
 
 std::vector<float> llama_model_vibevoice::speech_feedback_stream(ggml_backend_t backend, tok_stream_cache & semantic_cache,
         const float * scaled_latents, const float * wav, int64_t n_new) const {
-    const int64_t hop = vv_enc_hop(hparams.vibevoice.semantic);
+    const int64_t hop    = vv_enc_hop(hparams.vibevoice.semantic);
+    const int64_t ac_hop = vv_dec_hop(hparams.vibevoice.acoustic);
     GGML_ASSERT(n_new > 0);
+
+    // audio_frame passes a chunk of ac_hop samples; a larger semantic hop would read past it in vv_run_stream
+    if (hop <= 0 || ac_hop <= 0 || hop > ac_hop) {
+        throw std::runtime_error(format(
+                "vibevoice: semantic hop %zu is incompatible with acoustic hop %zu",
+                (size_t) hop, (size_t) ac_hop));
+    }
 
     ggml_context * ctx = vv_stream_ctx_init();
 
