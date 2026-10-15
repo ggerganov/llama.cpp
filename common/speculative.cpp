@@ -2697,6 +2697,9 @@ common_speculative_init_result::common_speculative_init_result(
             LOG_ERR("%s: failed to create MTP context\n", __func__);
             return;
         }
+        if (!params.lora_adapters.empty()) {
+            common_set_adapter_lora(ctx_dft, params.lora_adapters);
+        }
 
         pimpl->context.reset(ctx_dft);
     }
