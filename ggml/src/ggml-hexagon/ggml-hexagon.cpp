@@ -6615,9 +6615,7 @@ static void ggml_hexagon_precompute_get_rows_params(
     const uint32_t ne12 = src1->ne[2];
     const uint32_t nr = ne10 * ne11 * ne12;
 
-    const ggml_tensor * src0_base = src0->view_src ? src0->view_src : src0;
-    const auto * extra = src0_base->buffer && ggml_backend_buffer_is_hexagon(src0_base->buffer) ?
-        (const ggml_hexagon_tensor_extra *) src0_base->extra : nullptr;
+    const auto * extra = (const ggml_hexagon_tensor_extra *) src0->extra;
     const bool tiled = (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED) != 0);
     const int wtype = (tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
 
@@ -8025,26 +8023,6 @@ static bool ggml_hexagon_supported_get_rows(const struct ggml_hexagon_session * 
     const struct ggml_tensor * dst  = op;
 
     if ((src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q6_K) && ggml_is_view(src0)) {
-        return false;
-    }
-
-    const ggml_tensor * src0_base = src0->view_src ? src0->view_src : src0;
-    bool is_tiled = false;
-    if (src0_base->buffer && ggml_backend_buffer_is_hexagon(src0_base->buffer) && src0_base->extra) {
-        const auto * extra = (const ggml_hexagon_tensor_extra *) src0_base->extra;
-        is_tiled = (extra->flags & GGML_HEXAGON_TENSOR_TILED) != 0;
-        if (is_tiled && src0->type != GGML_TYPE_Q4_0 && src0->type != GGML_TYPE_Q4_K &&
-            src0->type != GGML_TYPE_Q5_K && src0->type != GGML_TYPE_Q6_K && src0->type != GGML_TYPE_Q8_0 &&
-            src0->type != GGML_TYPE_F16 && src0->type != GGML_TYPE_F32 && src0->type != GGML_TYPE_BF16) {
-            return false;
-        }
-        if (is_tiled && dst->type != GGML_TYPE_F32) {
-            return false;
-        }
-    }
-
-    // View offsets use the raw quantized layout and cannot address a tiled allocation.
-    if (ggml_is_view(src0) && is_tiled) {
         return false;
     }
 
