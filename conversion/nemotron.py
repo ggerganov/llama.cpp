@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -89,19 +89,22 @@ class LiLiCorrDraftModel(DFlashModel):
         self.gguf_writer.add_lilicorr_vector_eps(float(dflash_config["lilicorr_vector_eps"]))
         self.gguf_writer.add_lilicorr_logit_scale(float(dflash_config["lilicorr_logit_scale"]))
 
+    def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
+        if name.startswith("model.lilicorr.layers."):
+            parts = name.split(".", 4)
+            if not parts[4].startswith("attn.in_proj."):
+                parts[3] = str(self.block_count + int(parts[3]))
+            name = ".".join(parts)
+        elif name.startswith("model.lilicorr.feature_norm."):
+            feature_bid = self.block_count + self.lilicorr_geometry["num_layers"]
+            name = name.replace("model.lilicorr.feature_norm.", f"model.lilicorr.feature_mlp.{feature_bid}.norm.")
+        elif name.startswith("model.lilicorr.feature_mlp."):
+            feature_bid = self.block_count + self.lilicorr_geometry["num_layers"]
+            name = name.replace("model.lilicorr.feature_mlp.", f"model.lilicorr.feature_mlp.{feature_bid}.")
+        return super().map_tensor_name(name, try_suffixes)
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         if name.startswith("model.lilicorr."):
-            if name.startswith("model.lilicorr.layers."):
-                parts = name.split(".", 4)
-                if not parts[4].startswith("attn.in_proj."):
-                    parts[3] = str(self.block_count + int(parts[3]))
-                name = ".".join(parts)
-            elif name.startswith("model.lilicorr.feature_norm."):
-                feature_bid = self.block_count + self.lilicorr_geometry["num_layers"]
-                name = name.replace("model.lilicorr.feature_norm.", f"model.lilicorr.feature_mlp.{feature_bid}.norm.")
-            elif name.startswith("model.lilicorr.feature_mlp."):
-                feature_bid = self.block_count + self.lilicorr_geometry["num_layers"]
-                name = name.replace("model.lilicorr.feature_mlp.", f"model.lilicorr.feature_mlp.{feature_bid}.")
             yield self.map_tensor_name(name), data_torch
             return
         yield from super().modify_tensors(data_torch, name, bid)
