@@ -81,6 +81,9 @@ void llama_model_vibevoice::load_arch_hparams(llama_model_loader & ml) {
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_LAYERNORM_EPS,    vv.diff_f_norm_rms_eps);
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_TRAIN_STEPS,      vv.diff_train_steps);
     ml.get_key(LLM_KV_VIBEVOICE_DIFFUSION_INFERENCE_STEPS,  vv.diff_inference_steps);
+    if (vv.diff_inference_steps == 0 || vv.diff_inference_steps > vv.diff_train_steps) {
+        throw std::runtime_error(format("vibevoice: invalid diffusion step counts: inference %u, training %u (require 0 < inference <= training)", vv.diff_inference_steps, vv.diff_train_steps));
+    }
 
     // all released checkpoints use the same scheduler, it is the only one we will implement
     std::string diff_type;
