@@ -1688,6 +1688,7 @@ class AgenticDataset(BaseDataset):
 
     HF_REPO = "ilintar/SACB"
     is_agentic = True
+    ae: Any  # the agentic_eval module, set in _load_dataset
 
     def __init__(self, source: Optional[str] = None, lang: Optional[str] = None,
                  max_turns: int = 50, context_limit: Optional[int] = None,
@@ -2263,8 +2264,10 @@ class Processor:
             + (f"\nerror: {ep.get('error')}" if ep.get("error") else "")
         )
         title = f"{task_id} ({result.get('task_id')})"
+        dataset = eval_state.loaded_dataset
+        assert isinstance(dataset, AgenticDataset)
         try:
-            path = eval_state.loaded_dataset.ae.write_transcript(
+            path = dataset.ae.write_transcript(
                 messages, self.transcript_dir / task_id, title, meta)
         except OSError as e:
             print(f"Warning: could not write transcript for {task_id}: {e}")
