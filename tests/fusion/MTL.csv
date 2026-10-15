@@ -167,6 +167,7 @@ maple               ,0   ,any     ,RMS_NORM+MUL                ,      9
 maple               ,0   ,any     ,SOFT_MAX+ARGSORT+GET_ROWS+SUM_ROWS+CLAMP+DIV,      2
 mellum              ,0   ,any     ,MUL+ADD                     ,      4
 mellum              ,0   ,any     ,RMS_NORM+MUL                ,      9
+mellum              ,0   ,any     ,SOFT_MAX+ARGSORT+GET_ROWS+SUM_ROWS+CLAMP+DIV,      2
 mimo2               ,0   ,any     ,MUL+ADD                     ,      4
 mimo2               ,0   ,any     ,RMS_NORM+MUL                ,      5
 minicpm             ,0   ,any     ,RMS_NORM+MUL                ,      5
