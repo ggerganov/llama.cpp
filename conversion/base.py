@@ -578,10 +578,11 @@ class ModelBase:
                 else:
                     raise NotImplementedError(f"Quant format {quant_format!r} for method {quant_method!r} is not yet supported")
             elif quant_method == "modelopt":
+                dequant_fp8()
                 # Stacked-expert NVFP4 checkpoints (e.g. Inkling-NVFP4) store experts as
                 # w13_weight/w2_weight with .scale/.scale2/.input_amax/.original_shape
                 # auxiliaries; the main tensors do not end in .weight, so the NVFP4 path
-                # below would silently skip them. Reject them with a clear error.
+                # above silently skips them. Reject them with a clear error.
                 stacked_expert_aux = [
                     n for n in self.model_tensors
                     if n.endswith((".scale2", ".input_amax", ".original_shape"))
@@ -592,7 +593,6 @@ class ModelBase:
                         f"({len(stacked_expert_aux)} auxiliary tensors like {stacked_expert_aux[0]!r}), "
                         "which is not supported yet. Convert from the unquantized (BF16) checkpoint instead."
                     )
-                dequant_fp8()
             elif quant_method is not None:
                 raise NotImplementedError(f"Quant method is not yet supported: {quant_method!r}")
 
