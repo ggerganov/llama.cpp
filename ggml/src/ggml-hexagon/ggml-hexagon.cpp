@@ -3839,7 +3839,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     struct htp_mm_kernel_params * kparams
 ) {
     const bool is_tiled = ggml_hexagon_tensor_is_tiled(src0);
-    const int aligned_tile_size = is_tiled ? htp_mm_get_weight_aligned_tile_size(wtype) : 0;
+    const int aligned_tile_size = is_tiled ? htp_tensor_get_tile_padded_size(wtype) : 0;
     const int n_threads = (int)sess->n_threads;
     const int ne10 = act->ne[0];
 
@@ -3897,7 +3897,7 @@ static bool ggml_hexagon_precompute_hmx_mm_params(
     kparams->n_chunk = n_chunk;
     kparams->n_threads = n_threads;
     kparams->n_act_threads = act_threads_selected;
-    kparams->tile_size = is_tiled ? htp_mm_get_weight_tile_size(wtype) : 0;
+    kparams->tile_size = is_tiled ? htp_tensor_get_tile_size(wtype) : 0;
     kparams->aligned_tile_size = aligned_tile_size;
     kparams->act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
     kparams->vtcm_size = vtcm_size;
@@ -3949,8 +3949,8 @@ static void ggml_hexagon_precompute_hvx_mm_params(
 
     if (is_tiled) {
         // Tiled HVX (quantized weights or tiled F16/F32/BF16)
-        kparams->tile_size = htp_mm_get_weight_tile_size(wtype);
-        kparams->aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
+        kparams->tile_size = htp_tensor_get_tile_size(wtype);
+        kparams->aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
 
         const bool k_align = (ne10 % 32 == 0);
 
@@ -5323,8 +5323,8 @@ static void ggml_hexagon_precompute_fused_mmnx_params(
 
         if (try_tiled && L.total_bytes <= sess->vtcm_size) {
             kparams->kernel_type       = HTP_MM_KERNEL_HVX_QUANT_ROW;
-            kparams->tile_size         = htp_mm_get_weight_tile_size(wtype);
-            kparams->aligned_tile_size = htp_mm_get_weight_aligned_tile_size(wtype);
+            kparams->tile_size         = htp_tensor_get_tile_size(wtype);
+            kparams->aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
             kparams->act_row_size      = act_row_size;
             kparams->vtcm_src0_size    = L.src0_bytes;
             kparams->vtcm_act_size     = L.act_bytes;

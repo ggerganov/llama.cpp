@@ -274,8 +274,8 @@ static void hvx_mm_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
 
     const dma_addr_t src0_row = src0->data;
 
-    const uint32_t tile_size = htp_mm_get_weight_tile_size(src0->type);
-    const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src0->type);
+    const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
+    const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
     uint32_t n_k_tiles_w = ne00 / 32;
     uint32_t n_k_tiles_a = ne10 / 32;
@@ -376,8 +376,8 @@ static void hvx_mv_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     const uint8_t * restrict act_col = (const uint8_t *) act_data;
     float * restrict dst_col          = (float *) dst->data;
 
-    const uint32_t tile_size = htp_mm_get_weight_tile_size(src0->type);
-    const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src0->type);
+    const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
+    const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
     uint32_t n_k_tiles_w = ne00 / 32;
     uint32_t n_k_tiles_a = ne10 / 32;
@@ -468,8 +468,8 @@ static void hvx_mm_nx_2d_tiled(unsigned int nth, unsigned int ith, void * data) 
         if (!src_w || !dst) continue;
         dma_queue * dma_q = octx->ctx->dma[ith];
 
-        const uint32_t tile_size = htp_mm_get_weight_tile_size(src_w->type);
-        const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src_w->type);
+        const uint32_t tile_size = htp_tensor_get_tile_size(src_w->type);
+        const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src_w->type);
         const uint32_t tile_row_transfer_size_aligned = n_k_tiles_a * aligned_tile_size;
 
         const uint32_t ne00 = src_w->ne[0];
@@ -837,8 +837,8 @@ static void hvx_mm_4d_tiled(unsigned int nth, unsigned int ith, void * data) {
     uint8_t * restrict vtcm_src0_ptr = mmctx->vtcm_src0 + mmctx->vtcm_src0_size_per_thread * ith;
     uint8_t * restrict act_data = mmctx->vtcm_act;
 
-    const uint32_t tile_size = htp_mm_get_weight_tile_size(src0->type);
-    const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src0->type);
+    const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
+    const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
     const uint32_t n_k_tiles_w = ne00 / 32;
     const uint32_t n_k_tiles_a = ne10 / 32;
@@ -1341,8 +1341,8 @@ static void hvx_mm_id_tiled(unsigned int nth, unsigned int ith, void * data) {
 
         const dma_addr_t src0_row = src0->data + cur_a * nb02;
 
-        const uint32_t tile_size = htp_mm_get_weight_tile_size(src0->type);
-        const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src0->type);
+        const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
+        const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
         const uint32_t n_k_tiles_w = ne00 / 32;
         const uint32_t n_k_tiles_a = ne10 / 32;
         const uint32_t tile_row_stride = n_k_tiles_w * tile_size;
@@ -1429,8 +1429,8 @@ static void hvx_mv_id_tiled(unsigned int nth, unsigned int ith, void * data) {
         const uint8_t * restrict act_col = (const uint8_t *) act_data;
         float * restrict dst_row          = (float *) (dst->data + ie1 * nb1);
 
-        const uint32_t tile_size = htp_mm_get_weight_tile_size(src0->type);
-        const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src0->type);
+        const uint32_t tile_size = htp_tensor_get_tile_size(src0->type);
+        const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
         const uint32_t n_k_tiles_w = ne00 / 32;
         const uint32_t n_k_tiles_a = ne10 / 32;
         const uint32_t tile_row_stride = n_k_tiles_w * tile_size;
@@ -1518,8 +1518,8 @@ static void hvx_mv_id_nx_tiled(unsigned int nth, unsigned int ith, void * data) 
             const uint8_t * restrict act_col = (const uint8_t *) act_data;
             float * restrict dst_row = (float *) (dst->data + ie1 * dst->nb[1]);
 
-            const uint32_t tile_size = htp_mm_get_weight_tile_size(src_w->type);
-            const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src_w->type);
+            const uint32_t tile_size = htp_tensor_get_tile_size(src_w->type);
+            const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src_w->type);
             const uint32_t n_k_tiles_w = src_w->ne[0] / 32;
             const uint32_t n_k_tiles_a = act->ne[0] / 32;
             const uint32_t tile_row_stride = n_k_tiles_w * tile_size;
@@ -1609,8 +1609,8 @@ static void hvx_mm_id_nx_tiled(unsigned int nth, unsigned int ith, void * data) 
 
             const dma_addr_t src0_row = src_w->data + cur_a * src_w->nb[2];
 
-            const uint32_t tile_size = htp_mm_get_weight_tile_size(src_w->type);
-            const uint32_t aligned_tile_size = htp_mm_get_weight_aligned_tile_size(src_w->type);
+            const uint32_t tile_size = htp_tensor_get_tile_size(src_w->type);
+            const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src_w->type);
             const uint32_t n_k_tiles_w = src_w->ne[0] / 32;
             const uint32_t n_k_tiles_a = act->ne[0] / 32;
             const uint32_t tile_row_stride = n_k_tiles_w * tile_size;
@@ -2367,8 +2367,8 @@ static void dequantize_tiled_weight_chunk_to_fp16_tiles(
     state.traces           = ctx->trace;
     state.ctx              = ctx;
 
-    state.tile_size = htp_mm_get_weight_tile_size(weight_type);
-    state.aligned_tile_size = htp_mm_get_weight_aligned_tile_size(weight_type);
+    state.tile_size = htp_tensor_get_tile_size(weight_type);
+    state.aligned_tile_size = htp_tensor_get_tile_padded_size(weight_type);
 
     if (state.n_tasks == 1 || n_threads == 1) {
         dequantize_tiled_worker_loop(1, 0, &state);

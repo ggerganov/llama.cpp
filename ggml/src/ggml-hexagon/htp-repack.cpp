@@ -128,7 +128,7 @@ static void unpack_from_tiled_grid_32(void * data, const ggml_tensor * t, size_t
 // --- Block-32 Quantized Types (Q4_0, IQ4_NL, Q4_1, Q8_0, MXFP4) ---
 
 static void repack_q4_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_to_tiled_grid_32<block_q4_0, 1>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_0,
+    repack_to_tiled_grid_32<block_q4_0, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_0,
         [](uint8_t * tile_dst, const block_q4_0 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
@@ -148,7 +148,7 @@ static void repack_q4_0_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q4_0(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_from_tiled_grid_32<block_q4_0, 1>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_0,
+    unpack_from_tiled_grid_32<block_q4_0, 1>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q4_0,
         [](block_q4_0 * dst_slice, const uint8_t * tile_src, int64_t ne0, int64_t start_row, int64_t end_row, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             transpose_tile_to_nibbles(tile_quants, tile_src);
@@ -165,7 +165,7 @@ static void repack_tiled_q4_0(void * data, const ggml_tensor * t, size_t offset,
 }
 
 static void repack_q4_1_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_to_tiled_grid_32<block_q4_1, 1>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_1,
+    repack_to_tiled_grid_32<block_q4_1, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
         [](uint8_t * tile_dst, const block_q4_1 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
@@ -187,7 +187,7 @@ static void repack_q4_1_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q4_1(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_from_tiled_grid_32<block_q4_1, 1>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_1,
+    unpack_from_tiled_grid_32<block_q4_1, 1>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
         [](block_q4_1 * dst_slice, const uint8_t * tile_src, int64_t ne0, int64_t start_row, int64_t end_row, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             transpose_tile_to_nibbles(tile_quants, tile_src);
@@ -205,7 +205,7 @@ static void repack_tiled_q4_1(void * data, const ggml_tensor * t, size_t offset,
 }
 
 static void repack_mxfp4_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_to_tiled_grid_32<block_mxfp4, 1>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_MXFP4,
+    repack_to_tiled_grid_32<block_mxfp4, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_MXFP4,
         [](uint8_t * tile_dst, const block_mxfp4 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             uint8_t * scale_dst = tile_dst + 512;
@@ -225,7 +225,7 @@ static void repack_mxfp4_tiled(ggml_tensor * t, const void * data, size_t offset
 }
 
 static void repack_tiled_mxfp4(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_from_tiled_grid_32<block_mxfp4, 1>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_MXFP4,
+    unpack_from_tiled_grid_32<block_mxfp4, 1>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_MXFP4,
         [](block_mxfp4 * dst_slice, const uint8_t * tile_src, int64_t ne0, int64_t start_row, int64_t end_row, int64_t row_stride, int ct, int kt) {
             uint8_t tile_quants[32][32];
             transpose_tile_to_nibbles(tile_quants, tile_src);
@@ -242,7 +242,7 @@ static void repack_tiled_mxfp4(void * data, const ggml_tensor * t, size_t offset
 }
 
 static void repack_q8_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_to_tiled_grid_32<block_q8_0, 1>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q8_0,
+    repack_to_tiled_grid_32<block_q8_0, 1>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q8_0,
         [](uint8_t * tile_dst, const block_q8_0 * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             for (int cp = 0; cp < 16; cp++) {
                 const int col0 = cp * 2;
@@ -263,7 +263,7 @@ static void repack_q8_0_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q8_0(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_from_tiled_grid_32<block_q8_0, 1>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q8_0,
+    unpack_from_tiled_grid_32<block_q8_0, 1>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q8_0,
         [](block_q8_0 * dst_slice, const uint8_t * tile_src, int64_t ne0, int64_t start_row, int64_t end_row, int64_t row_stride, int ct, int kt) {
             for (int cp = 0; cp < 16; cp++) {
                 const int col0 = cp * 2;
@@ -291,7 +291,7 @@ static void repack_tiled_q8_0(void * data, const ggml_tensor * t, size_t offset,
 
 template <typename SrcT, typename ToFp16Fn>
 static void repack_float_to_f16_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size, ToFp16Fn && to_fp16) {
-    repack_to_tiled_grid_32<SrcT, 32>(t, data, offset, size, HTP_MM_HMX_TILE_SIZE,
+    repack_to_tiled_grid_32<SrcT, 32>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_F16,
         [&](uint8_t * tile_bytes, const SrcT * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             uint16_t * tile_dst = (uint16_t *) tile_bytes;
             for (int cp = 0; cp < 16; cp++) {
@@ -309,7 +309,7 @@ static void repack_float_to_f16_tiled(ggml_tensor * t, const void * data, size_t
 
 template <typename DstT, typename FromFp16Fn>
 static void unpack_f16_tiled_to_float(void * data, const ggml_tensor * t, size_t offset, size_t size, FromFp16Fn && from_fp16) {
-    unpack_from_tiled_grid_32<DstT, 32>(data, t, offset, size, HTP_MM_HMX_TILE_SIZE,
+    unpack_from_tiled_grid_32<DstT, 32>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_F16,
         [&](DstT * dst_slice, const uint8_t * tile_bytes, int64_t ne0, int64_t start_row, int64_t end_row, int64_t row_stride, int ct, int kt) {
             const uint16_t * tile_src = (const uint16_t *) tile_bytes;
             for (int cp = 0; cp < 16; cp++) {
@@ -438,7 +438,7 @@ static inline uint8_t q6_K_get_quant(const block_q6_K * b, int e) {
 }
 
 static void repack_q6_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q6_K>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q6_K,
+    repack_kquant_to_tiled_grid<block_q6_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q6_K,
         [](uint8_t * tile, const block_q6_K * b, int row, int kt_local) {
             const float d     = GGML_FP16_TO_FP32(b->d);
             uint8_t * lo_pl   = tile;
@@ -459,7 +459,7 @@ static void repack_q6_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q6_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q6_K>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q6_K,
+    unpack_kquant_from_tiled_grid<block_q6_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q6_K,
         [](block_q6_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             float sub_scales[16];
             for (int kt_local = 0; kt_local < 8; kt_local++) {
@@ -589,7 +589,7 @@ static bool hexagon_recover_k_scales(const ggml_half * prod, int n, int lmin, in
 }
 
 static void repack_q3_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q3_K>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q3_K,
+    repack_kquant_to_tiled_grid<block_q3_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q3_K,
         [](uint8_t * tile, const block_q3_K * b, int row, int kt_local) {
             const float d     = GGML_FP16_TO_FP32(b->d);
             uint8_t * lo_pl   = tile;
@@ -612,7 +612,7 @@ static void repack_q3_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q3_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q3_K>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q3_K,
+    unpack_kquant_from_tiled_grid<block_q3_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q3_K,
         [](block_q3_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             ggml_half sub_scales[16];
             for (int kt_local = 0; kt_local < 8; kt_local++) {
@@ -670,7 +670,7 @@ static void repack_tiled_q3_K(void * data, const ggml_tensor * t, size_t offset,
 }
 
 static void repack_q2_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q2_K>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q2_K,
+    repack_kquant_to_tiled_grid<block_q2_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q2_K,
         [](uint8_t * tile, const block_q2_K * b, int row, int kt_local) {
             uint8_t * lo_pl   = tile;
             uint8_t * sc_pl   = tile + 256;
@@ -691,7 +691,7 @@ static void repack_q2_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q2_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q2_K>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q2_K,
+    unpack_kquant_from_tiled_grid<block_q2_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q2_K,
         [](block_q2_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             for (int kt_local = 0; kt_local < 8; kt_local++) {
                 const uint8_t *   tile  = sb_tiles + kt_local * tile_size;
@@ -773,7 +773,7 @@ static inline void pack_k4_scales_mins(uint8_t * scales, ggml_half * d, ggml_hal
 }
 
 static void repack_q4_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q4_K>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_1,
+    repack_kquant_to_tiled_grid<block_q4_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
         [](uint8_t * tile_dst, const block_q4_K * b, int row, int kt_local) {
             const float d    = GGML_FP16_TO_FP32(b->d);
             const float dmin = GGML_FP16_TO_FP32(b->dmin);
@@ -797,7 +797,7 @@ static void repack_q4_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q4_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q4_K>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q4_1,
+    unpack_kquant_from_tiled_grid<block_q4_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q4_1,
         [](block_q4_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             float sub_scales[8];
             float sub_mins[8];
@@ -826,7 +826,7 @@ static void repack_tiled_q4_K(void * data, const ggml_tensor * t, size_t offset,
 }
 
 static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
-    repack_kquant_to_tiled_grid<block_q5_K>(t, data, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q5_K,
+    repack_kquant_to_tiled_grid<block_q5_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q5_K,
         [](uint8_t * tile_dst, const block_q5_K * b, int row, int kt_local) {
             const float d     = GGML_FP16_TO_FP32(b->d);
             const float dmin  = GGML_FP16_TO_FP32(b->dmin);
@@ -861,7 +861,7 @@ static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset,
 }
 
 static void repack_tiled_q5_K(void * data, const ggml_tensor * t, size_t offset, size_t size) {
-    unpack_kquant_from_tiled_grid<block_q5_K>(data, t, offset, size, HTP_MM_WEIGHT_TILE_SIZE_Q5_K,
+    unpack_kquant_from_tiled_grid<block_q5_K>(data, t, offset, size, HTP_TENSOR_TILE_SIZE_Q5_K,
         [](block_q5_K * b, const uint8_t * sb_tiles, size_t tile_size, int row) {
             float sub_scales[8];
             float sub_mins[8];

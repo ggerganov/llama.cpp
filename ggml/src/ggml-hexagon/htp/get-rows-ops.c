@@ -17,7 +17,6 @@
 #include "htp-tensor.h"
 #include "hvx-utils.h"
 #include "hvx-quant.h"
-#include "matmul-ops.h"
 #include "get-rows-ops.h"
 #include "work-queue.h"
 
@@ -266,8 +265,8 @@ static inline struct get_rows_tiled_task get_rows_tiled_calc_task(
     const uint32_t i02 = i11 - q02 * ne02;
     const uint32_t q03 = fastdiv(i12, &kparams->div_ne03);
     const uint32_t i03 = i12 - q03 * ne03;
-    const uint32_t column_tile = i01 / HTP_MM_HMX_TILE_N_ROWS;
-    const uint32_t row = i01 % HTP_MM_HMX_TILE_N_ROWS;
+    const uint32_t column_tile = i01 / HTP_TENSOR_TILE_N_ROWS;
+    const uint32_t row = i01 % HTP_TENSOR_TILE_N_ROWS;
     const dma_addr_t matrix = octx->src[0]->data + i02*nb02 + i03*nb03;
 
     struct get_rows_tiled_task task;
@@ -289,7 +288,7 @@ static void get_rows_thread_tiled(unsigned int nth, unsigned int ith, void * dat
     }
 
     const uint32_t ir1 = MIN(ir0 + dr, grctx->task_start + grctx->tasks);
-    const uint32_t n_k_tiles = ne00 / HTP_MM_HMX_TILE_N_COLS;
+    const uint32_t n_k_tiles = ne00 / HTP_TENSOR_TILE_N_COLS;
     const struct htp_get_rows_vtcm_layout * vtcm_layout = &grctx->vtcm_layout;
     uint8_t * src_spad_base = grctx->vtcm_base + vtcm_layout->off_src0 + ith * vtcm_layout->src0_bytes_per_thread;
     uint8_t * dst_spad_base = grctx->vtcm_base + vtcm_layout->off_dst + ith * vtcm_layout->dst_bytes_per_thread;
@@ -459,8 +458,8 @@ int op_get_rows(struct htp_ops_context * octx) {
                 case HTP_TYPE_Q6_K: grctx.compute_tiled = hvx_dequantize_row_tiled_q6_k_f32; break;
                 default:            return HTP_STATUS_NO_SUPPORT;
             }
-            grctx.tile_size   = htp_mm_get_weight_tile_size(octx->src[0]->type);
-            grctx.tile_stride = (grctx.tile_size + 127) & ~127;
+            grctx.tile_size   = htp_tensor_get_tile_size(octx->src[0]->type);
+            grctx.tile_stride = htp_tensor_get_tile_padded_size(octx->src[0]->type);
             q_func = get_rows_thread_tiled;
             break;
         case HTP_GET_ROWS_KERNEL_FLAT:

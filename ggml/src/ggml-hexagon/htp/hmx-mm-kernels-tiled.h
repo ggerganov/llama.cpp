@@ -615,7 +615,7 @@ static void dequantize_tiled_weight_to_fp16_task_q5_k(
     }
 }
 
-// Q6_K stores 6-bit weights and one fp16 scale per 16 k, see HTP_MM_WEIGHT_TILE_SIZE_Q6_K.
+// Q6_K stores 6-bit weights and one fp16 scale per 16 k, see HTP_TENSOR_TILE_SIZE_Q6_K.
 // A k-group holds 4 k per row, the HMX tile holds 2, so each group is dealt into two tiles.
 static void dequantize_tiled_weight_to_fp16_task_q6_k(
         const tiled_dequantize_state_t *state,
@@ -673,7 +673,7 @@ static void dequantize_tiled_weight_to_fp16_task_q6_k(
     }
 }
 
-// Q3_K stores 3-bit weights and one fp16 scale per 16 k, see HTP_MM_WEIGHT_TILE_SIZE_Q3_K.
+// Q3_K stores 3-bit weights and one fp16 scale per 16 k, see HTP_TENSOR_TILE_SIZE_Q3_K.
 static void dequantize_tiled_weight_to_fp16_task_q3_k(
         const tiled_dequantize_state_t *state,
         uint32_t start_tile, uint32_t end_tile) {
@@ -705,7 +705,7 @@ static void dequantize_tiled_weight_to_fp16_task_q3_k(
     }
 }
 
-// Q2_K stores 2-bit weights, the ggml scale bytes and d / -dmin per super-block, see HTP_MM_WEIGHT_TILE_SIZE_Q2_K.
+// Q2_K stores 2-bit weights, the ggml scale bytes and d / -dmin per super-block, see HTP_TENSOR_TILE_SIZE_Q2_K.
 static void dequantize_tiled_weight_to_fp16_task_q2_k(
         const tiled_dequantize_state_t *state,
         uint32_t start_tile, uint32_t end_tile) {

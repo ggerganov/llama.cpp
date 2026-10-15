@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "ggml.h"
-#include "htp/matmul-ops.h"
+#include "htp/htp-tensor.h"
 
 static inline bool htp_is_tiled_weight_type(enum ggml_type type) {
     return type == GGML_TYPE_Q4_0  || type == GGML_TYPE_Q4_1   ||
@@ -40,16 +40,16 @@ static inline size_t htp_tiled_row_size(enum ggml_type type, int64_t ne0) {
         return (size_t) ne0 * sizeof(ggml_fp16_t);
     }
     if (type == GGML_TYPE_Q6_K) {
-        return (size_t) (ne0 / 32) * (HTP_MM_WEIGHT_TILE_SIZE_Q6_K / 32);
+        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q6_K / 32);
     }
     if (type == GGML_TYPE_Q4_K) {
-        return (size_t) (ne0 / 32) * (HTP_MM_WEIGHT_TILE_SIZE_Q4_1 / 32);
+        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q4_1 / 32);
     }
     if (type == GGML_TYPE_Q5_K) {
-        return (size_t) (ne0 / 32) * (HTP_MM_WEIGHT_TILE_SIZE_Q5_K / 32);
+        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q5_K / 32);
     }
     if (type == GGML_TYPE_Q3_K) {
-        return (size_t) (ne0 / 32) * (HTP_MM_WEIGHT_TILE_SIZE_Q3_K / 32);
+        return (size_t) (ne0 / 32) * (HTP_TENSOR_TILE_SIZE_Q3_K / 32);
     }
     return ggml_row_size(type, ne0);
 }
