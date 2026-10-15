@@ -51,6 +51,8 @@ export interface ModelCompanionDraft {
 export interface ModelQuantChip extends ModelSelectableFile {
 	/** Draft the chip pulls with the model, badged on the chip; null when none of its kind matches. */
 	companion: ModelCompanionDraft | null;
+	/** Quant of the chip's own file; null when its name carries none. */
+	quant: string | null;
 	/** Sidecar kinds the download posts on top of the model's own; the joined draft. */
 	sidecars: ModelSidecar[];
 	state: ModelDownloadEntryState;

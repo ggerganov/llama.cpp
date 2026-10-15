@@ -1,119 +1,46 @@
 <script lang="ts">
-	import { Check, Copy, Plus, X } from '@lucide/svelte';
+	import { Check, Copy } from '@lucide/svelte';
 	import * as Select from '$lib/components/ui/select';
-	import {
-		COPY_FEEDBACK_RESET_MS,
-		DEFAULT_BASE_BIT_DEPTH,
-		MODEL_ID,
-		OTHER_BIT_DEPTH,
-		SERVE_COMMAND,
-		SPEC_TYPE
-	} from '$lib/constants';
+	import { COPY_FEEDBACK_RESET_MS, MODEL_ID, SERVE_COMMAND, SPEC_TYPE } from '$lib/constants';
 	import type { ModelDraftSidecar } from '$lib/enums';
-	import { HuggingFaceService } from '$lib/services';
-	import type { ModelQuantOption } from '$lib/types';
 	import { copyToClipboard } from '$lib/utils';
 
 	interface Props {
+		/** Full HuggingFace repo id, e.g. `ggml-org/gemma-3-4b-it-GGUF`. */
 		modelId: string;
-		/** Non-draft quants of the repo, in bit-depth row order. */
-		mainOptions: ModelQuantOption[];
-		/** Draft sidecar files with their sidecar badge; empty when the repo ships none. */
-		draftOptions: (ModelQuantOption & { badge: ModelDraftSidecar | null })[];
+		/** Quant the command pins on `-hf`; null when the row's file carries none. */
+		quant?: string | null;
+		/**
+		 * Draft kind the panel downloads with the model, null when the sidecars are
+		 * off. The server resolves the draft file itself, so the command only names
+		 * its type.
+		 */
+		draftKind?: ModelDraftSidecar | null;
+		/** Draft kinds the repo ships; the command offers them in its own pick. */
+		draftKinds?: ModelDraftSidecar[];
+		/** Fires when the command's pick changes, so the panel's own pick follows. */
+		onDraftKindChange?: (kind: ModelDraftSidecar) => void;
 	}
 
-	let { draftOptions, mainOptions, modelId }: Props = $props();
+	let {
+		draftKind = null,
+		draftKinds = [],
+		modelId,
+		onDraftKindChange,
+		quant = null
+	}: Props = $props();
 
-	// Command picks, owned here: nothing two-way binds them to the quant chips.
-	let basePick = $state<string | null>(null);
-	let draftPick = $state<string | null>(null);
-	let draftTypePick = $state<ModelDraftSidecar | null>(null);
-	let withDraft = $state(false);
-
-	function bitDepthOf(path: string): number {
-		const quant = HuggingFaceService.extractQuantMeta(path)?.quant;
-
-		return quant ? (HuggingFaceService.getBitDepth(quant) ?? OTHER_BIT_DEPTH) : OTHER_BIT_DEPTH;
-	}
-
-	/**
-	 * Base file the command points at: the user's pick while it still exists in
-	 * the options, else the 4-bit file, else the lowest bit depth available. A
-	 * stale pick (the details pane switched models) falls back on its own.
-	 */
-	let baseOption = $derived.by(() => {
-		const picked = mainOptions.find((option) => option.path === basePick);
-
-		if (picked) return picked;
-
-		const preferred = mainOptions.find(
-			(option) => bitDepthOf(option.path) === DEFAULT_BASE_BIT_DEPTH
-		);
-
-		if (preferred) return preferred;
-
-		const ranked = [...mainOptions].sort((a, b) => bitDepthOf(a.path) - bitDepthOf(b.path));
-
-		return ranked[0] ?? null;
-	});
-
-	/** Draft sidecar types the repo ships, in option order. */
-	let specTypes = $derived(
-		draftOptions
-			.map((option) => option.badge)
-			.filter((badge): badge is ModelDraftSidecar => badge !== null)
-			.filter((badge, index, all) => all.indexOf(badge) === index)
-	);
-
-	/**
-	 * Draft type the --spec-type select points at: the user's pick while it
-	 * still exists, else the first type the repo ships.
-	 */
-	let draftType = $derived(
-		draftTypePick && specTypes.includes(draftTypePick) ? draftTypePick : (specTypes[0] ?? null)
-	);
-
-	/** Draft files of the picked type; the quant select only offers these. */
-	let typeDraftOptions = $derived(draftOptions.filter((option) => option.badge === draftType));
-
-	/** Draft file the -hfd tag points at: the user's pick, else the first of the type. */
-	let draftOption = $derived(
-		withDraft
-			? (typeDraftOptions.find((option) => option.path === draftPick) ??
-					typeDraftOptions[0] ??
-					null)
-			: null
-	);
-
-	/** Quant of the file the `-hf` tag points at; null when the file carries no quant. */
-	let mainQuant = $derived(
-		baseOption ? (HuggingFaceService.extractQuantMeta(baseOption.path)?.quant ?? null) : null
-	);
-
-	/** Quant of the file the `-hfd` tag points at. */
-	let draftQuant = $derived(
-		draftOption ? (HuggingFaceService.extractQuantMeta(draftOption.path)?.quant ?? null) : null
-	);
-
-	/** `--spec-type` value; null when no draft type resolved. */
-	let specType = $derived(draftType ? SPEC_TYPE[draftType] : null);
-
-	/** The llama serve command, composed from the inline picks. */
+	/** The llama serve command: the row's quant and, when it rides along, the draft. */
 	let command = $derived.by(() => {
 		const parts = [
 			SERVE_COMMAND.BIN,
 			SERVE_COMMAND.SUBCOMMAND,
 			SERVE_COMMAND.MODEL_FLAG,
-			mainQuant ? `${modelId}${MODEL_ID.QUANTIZATION_SEPARATOR}${mainQuant}` : modelId
+			quant ? `${modelId}${MODEL_ID.QUANTIZATION_SEPARATOR}${quant}` : modelId
 		];
 
-		if (draftOption && draftQuant) {
-			parts.push(
-				SERVE_COMMAND.DRAFT_FLAG,
-				`${modelId}${MODEL_ID.QUANTIZATION_SEPARATOR}${draftQuant}`,
-				SERVE_COMMAND.SPEC_TYPE_FLAG,
-				specType ?? ''
-			);
+		if (draftKind) {
+			parts.push(SERVE_COMMAND.SPEC_TYPE_FLAG, SPEC_TYPE[draftKind]);
 		}
 
 		return parts.join(' ');
@@ -142,117 +69,50 @@
 		<span class="shrink-0">{SERVE_COMMAND.MODEL_FLAG}</span>
 
 		<span class="shrink-0">
-			{modelId}{mainQuant ? MODEL_ID.QUANTIZATION_SEPARATOR : ''}
+			{modelId}{quant ? MODEL_ID.QUANTIZATION_SEPARATOR : ''}
 		</span>
 
-		<!-- Base quant: always part of the command, the 4-bit file by default. -->
-		{#if baseOption}
-			<Select.Root onValueChange={(v) => v && (basePick = v)} type="single" value={baseOption.path}>
-				<Select.Trigger
-					aria-label="Base model quantization"
-					class="-ml-2 border-primary/15 bg-primary/[0.07] font-mono text-foreground hover:bg-primary/15 focus-visible:border-primary/40 focus-visible:ring-0"
-					size="xs"
-				>
-					{baseOption.label}
-				</Select.Trigger>
-
-				<Select.Content class="font-mono text-xs">
-					{#each mainOptions as option (option.path)}
-						<Select.Item class="text-xs" label={option.label} value={option.path}>
-							{option.label}
-						</Select.Item>
-					{/each}
-				</Select.Content>
-			</Select.Root>
+		<!-- the row's own quant, so no pick is needed here -->
+		{#if quant}
+			<span class="shrink-0 rounded-md border border-primary/15 bg-primary/[0.07] px-1.5">
+				{quant}
+			</span>
 		{/if}
 
-		<!-- Draft add: a tiny dashed affordance right of the base part; gone once added. -->
-		{#if draftOptions.length && !withDraft}
-			<button
-				aria-label="Add draft model"
-				class="mx-1 inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-dashed border-border/60 px-1.5 text-[10px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
-				onclick={() => (withDraft = true)}
-				type="button"
-			>
-				<Plus class="h-3 w-3" />
+		<!-- The draft rides with the model, so the flag only names its type; the
+		     checkbox below turns it on, the server resolves the file. The pick is
+		     the panel's own, so changing it here changes it there. -->
+		{#if draftKind}
+			<span class="shrink-0">{SERVE_COMMAND.SPEC_TYPE_FLAG}</span>
 
-				add draft model
-			</button>
-		{/if}
-
-		<!-- Draft segment: quant and spec type of the picked draft flavour. The X
-				 at the end drops the whole segment (the add button is gone once added);
-				 it only appears while hovering the segment, or directly on touch -->
-		{#if draftOption}
-			<span class="group/draft inline-flex shrink-0 items-center gap-x-2">
-				<span>{SERVE_COMMAND.DRAFT_FLAG}</span>
-
-				<span class="shrink-0">
-					{modelId}{draftQuant ? MODEL_ID.QUANTIZATION_SEPARATOR : ''}
-				</span>
-
+			<!-- the select only earns its chrome when there is a real choice to make -->
+			{#if draftKinds.length > 1}
 				<Select.Root
-					onValueChange={(v) => v && (draftPick = v)}
+					onValueChange={(value) => value && onDraftKindChange?.(value as ModelDraftSidecar)}
 					type="single"
-					value={draftOption.path}
+					value={draftKind}
 				>
 					<Select.Trigger
-						aria-label="Draft model quantization"
-						class="-ml-2 border-primary/15 bg-primary/[0.07] font-mono text-foreground hover:bg-primary/15 focus-visible:border-primary/40 focus-visible:ring-0"
+						aria-label="Draft type"
+						class="border-primary/15 bg-primary/[0.07] font-mono text-foreground hover:bg-primary/15 focus-visible:border-primary/40 focus-visible:ring-0"
 						size="xs"
 					>
-						{draftOption.label}
+						{SPEC_TYPE[draftKind]}
 					</Select.Trigger>
 
 					<Select.Content class="font-mono text-xs">
-						{#each typeDraftOptions as option (option.path)}
-							<Select.Item class="text-xs" label={option.label} value={option.path}>
-								{option.label}
+						{#each draftKinds as kind (kind)}
+							<Select.Item class="text-xs" label={SPEC_TYPE[kind]} value={kind}>
+								{SPEC_TYPE[kind]}
 							</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>
-
-				{#if draftType}
-					<span>{SERVE_COMMAND.SPEC_TYPE_FLAG}</span>
-
-					<!-- the select only earns its chrome when there is a real choice to make -->
-					{#if specTypes.length > 1}
-						<Select.Root
-							onValueChange={(v) => v && (draftTypePick = v as ModelDraftSidecar)}
-							type="single"
-							value={draftType}
-						>
-							<Select.Trigger
-								aria-label="Draft type"
-								class="border-primary/15 bg-primary/[0.07] font-mono text-foreground hover:bg-primary/15 focus-visible:border-primary/40 focus-visible:ring-0"
-								size="xs"
-							>
-								{SPEC_TYPE[draftType]}
-							</Select.Trigger>
-
-							<Select.Content class="font-mono text-xs">
-								{#each specTypes as type (type)}
-									<Select.Item class="text-xs" label={SPEC_TYPE[type]} value={type}>
-										{SPEC_TYPE[type]}
-									</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-					{:else}
-						<span>{SPEC_TYPE[draftType]}</span>
-					{/if}
-				{/if}
-
-				<button
-					aria-label="Remove draft model"
-					class="shrink-0 cursor-pointer text-muted-foreground/60 opacity-0 transition-[opacity,color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-destructive group-hover/draft:opacity-100 [@media(pointer:coarse)]:opacity-100"
-					onclick={() => (withDraft = false)}
-					type="button"
-				>
-					<X class="h-3 w-3" />
-				</button>
-			</span>
+			{:else}
+				<span class="shrink-0 rounded-md border border-primary/15 bg-primary/[0.07] px-1.5">
+					{SPEC_TYPE[draftKind]}
+				</span>
+			{/if}
 		{/if}
 	</div>
 

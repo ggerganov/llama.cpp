@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { classify, draftBadgeOf, labelFor, sortDraftKinds } from './download-options.utils';
-	import ModelsDiscoverDetailsDownloadOptionsDownloadCommand from './ModelsDiscoverDetailsDownloadOptionsDownloadCommand.svelte';
+	import { classify, draftBadgeOf, sortDraftKinds } from './download-options.utils';
 	import ModelsDiscoverDetailsDownloadOptionsRow from './ModelsDiscoverDetailsDownloadOptionsRow.svelte';
-	import { ChevronDown, Terminal } from '@lucide/svelte';
 	import { DialogConfirmDownload } from '$lib/components/app/dialogs';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Select from '$lib/components/ui/select';
 	import {
 		ModelDownloadConfirmAction,
@@ -16,12 +15,9 @@
 		ModelBitDepthRow,
 		ModelCompanionDraft,
 		ModelDownloadEntryState,
-		ModelQuantOption,
 		ModelSelectableFile
 	} from '$lib/types';
 	import { directoryOf, isServerSidecarFile } from '$lib/utils';
-	import { cubicOut } from 'svelte/easing';
-	import { slide } from 'svelte/transition';
 
 	interface Props {
 		/** Full HuggingFace repo id, e.g. `ggml-org/gemma-3-4b-it-GGUF`. */
@@ -31,9 +27,6 @@
 	}
 
 	let { bitDepthRows, modelId }: Props = $props();
-
-	// collapsed until asked for; the panel remounts per model
-	let commandOpen = $state(false);
 
 	// one shared dialog confirms the panel's destructive chip actions; the target
 	// is kept after closing so its copy stays rendered through the close transition
@@ -53,13 +46,24 @@
 		confirmOpen = true;
 	}
 
-	/** Download state of a main quant's tag, from the status feed. */
-	function stateFor(repoWithTag: string): ModelDownloadEntryState {
+	/**
+	 * Download state of a main quant's chip, from the status feed. The chip stands
+	 * for the quant and the draft beside it, so it only reads as downloaded once
+	 * both are on disk: a draft that is still missing keeps the chip downloadable,
+	 * and posting the model again tops that sidecar up.
+	 */
+	function stateFor(
+		repoWithTag: string,
+		companion: ModelCompanionDraft | null
+	): ModelDownloadEntryState {
 		const isDownloading = modelsStore.status.isDownloadInProgress(repoWithTag);
 		const isPaused = modelsStore.status.isDownloadPaused(repoWithTag);
 
 		return {
-			isDownloaded: !isDownloading && modelsStore.status.isModelDownloaded(repoWithTag),
+			isDownloaded:
+				!isDownloading &&
+				modelsStore.status.isModelDownloaded(repoWithTag) &&
+				(!companion || companion.onDisk),
 			isDownloading,
 			isFailed: modelsStore.status.hasFailedDownload(repoWithTag),
 			isPaused,
@@ -97,6 +101,15 @@
 	// the operator's draft pick; the best available kind rides along until they change it
 	let draftPick = $state<ModelDraftSidecar | null>(null);
 	let draftKind = $derived(draftPick ?? draftKinds[0] ?? null);
+
+	/** The drafts are opt-in: unchecked, a chip downloads the quant alone. */
+	let withDraft = $state(true);
+
+	/** One kind leaves the pick nothing to choose: it reads as the value it holds. */
+	let draftKindReadonly = $derived(draftKinds.length < 2);
+
+	/** The pick names the kind the way the badges do: upper case. */
+	let draftKindLabel = $derived(draftKind?.toUpperCase() ?? '');
 
 	/** Bits of a file's quant, 0 when its name carries none, as the server reads it. */
 	function bitsOf(path: string): number {
@@ -166,73 +179,26 @@
 				if (classify(file.path) !== ModelSelectableFileKind.MAIN) return [];
 
 				const quant = HuggingFaceService.extractQuantMeta(file.path)?.quant ?? null;
-				const companion = companionFor(file, quant);
+				const companion = withDraft ? companionFor(file, quant) : null;
 
 				return [
 					{
 						...file,
 						companion,
 						kind: ModelSelectableFileKind.MAIN,
+						quant,
 						// the store adds the model's mmproj and the sidecars it already pulls
 						sidecars: companion ? [companion.kind] : [],
-						state: stateFor(ModelsService.buildDownloadTag(modelId, quant, null))
+						state: stateFor(ModelsService.buildDownloadTag(modelId, quant, null), companion)
 					}
 				];
 			})
 		}))
 	);
-
-	function optionFor(file: ModelSelectableFile): ModelQuantOption {
-		return {
-			label: labelFor(file.path),
-			path: file.path
-		};
-	}
-
-	/** Non-draft quants for the command's base select, in row order. */
-	let mainOptions = $derived(
-		selectableFiles.filter((f) => f.kind === ModelSelectableFileKind.MAIN).map(optionFor)
-	);
-
-	/** Draft options for the command's draft select; a repo can ship several flavours. */
-	let draftOptions = $derived(
-		selectableFiles
-			.filter((f) => f.kind === ModelSelectableFileKind.DRAFT)
-			.map((f) => ({
-				...optionFor(f),
-				badge: draftBadgeOf(f)
-			}))
-	);
 </script>
 
 {#if bitDepthRows.length}
 	<section class="rounded-3xl border border-border/30 bg-muted/60 shadow-sm dark:border-border/20">
-		<!-- The repo ships more than one draft flavour: the pick in the corner decides
-		     which one every chip on this panel pulls. -->
-		{#if draftKinds.length > 1}
-			<div
-				class="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-2.5 dark:border-border/35"
-			>
-				<span class="text-xs text-muted-foreground">Draft model</span>
-
-				<Select.Root
-					onValueChange={(value) => value && (draftPick = value as ModelDraftSidecar)}
-					type="single"
-					value={draftKind}
-				>
-					<Select.Trigger aria-label="Draft model type" size="xs">
-						{draftKind}
-					</Select.Trigger>
-
-					<Select.Content class="font-mono text-xs">
-						{#each draftKinds as kind (kind)}
-							<Select.Item class="text-xs" label={kind} value={kind}>{kind}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-			</div>
-		{/if}
-
 		<!-- One chip per main quant, each an independent download action. The draft
 			 of that quant rides with it and badges the chip; the server picks its file,
 			 the way -hf does. -->
@@ -240,46 +206,59 @@
 			{#each rows as row (row.bitDepth)}
 				<ModelsDiscoverDetailsDownloadOptionsRow
 					bitDepth={row.bitDepth}
+					draftKind={withDraft ? draftKind : null}
+					{draftKinds}
 					files={row.files}
+					{modelId}
+					onDraftKindChange={(kind) => (draftPick = kind)}
 					onRequestCancel={requestCancel}
 					onRequestDelete={requestDelete}
 				/>
 			{/each}
 		</div>
 
-		<!-- Terminal command, collapsed until asked for; its picks are not bound to the chips. -->
-		<div class="border-t border-border/50 px-4 pt-2.5 pb-3 dark:border-border/35">
-			<button
-				aria-expanded={commandOpen}
-				class="flex w-full cursor-pointer items-center gap-2 rounded-md py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-				onclick={() => (commandOpen = !commandOpen)}
-				type="button"
+		<!-- The drafts are opt-in, and the pick decides which flavour every chip
+		     above pulls. The pick sits between the two label halves, so its own click
+		     cannot toggle the checkbox. A repo shipping a single kind still shows it,
+		     readonly. -->
+		{#if draftKinds.length}
+			<div
+				class="flex flex-wrap items-center justify-start gap-x-1.5 gap-y-1 border-t border-border/50 px-4 py-2.5 text-xs text-muted-foreground dark:border-border/35"
 			>
-				<Terminal class="h-3.5 w-3.5 shrink-0" />
+				<label class="flex cursor-pointer items-center gap-2" for="discover-draft-sidecars">
+					<Checkbox bind:checked={withDraft} id="discover-draft-sidecars" />
 
-				<span class="flex-1">
-					{commandOpen
-						? 'Hide the download command for terminal'
-						: 'Show the download command for terminal'}
-				</span>
+					Download model with a
+				</label>
 
-				<ChevronDown
-					class="h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] {commandOpen
-						? 'rotate-180'
-						: ''}"
-				/>
-			</button>
+				<Select.Root
+					disabled={!withDraft || draftKindReadonly}
+					onValueChange={(value) => value && (draftPick = value as ModelDraftSidecar)}
+					type="single"
+					value={draftKind}
+				>
+					<Select.Trigger
+						aria-label="Draft type"
+						class={draftKindReadonly
+							? 'disabled:cursor-default disabled:opacity-100 [&_svg]:hidden'
+							: ''}
+						size="xs"
+					>
+						{draftKindLabel}
+					</Select.Trigger>
 
-			{#if commandOpen}
-				<div transition:slide={{ duration: 200, easing: cubicOut }} class="pt-2.5">
-					<ModelsDiscoverDetailsDownloadOptionsDownloadCommand
-						{draftOptions}
-						{mainOptions}
-						{modelId}
-					/>
-				</div>
-			{/if}
-		</div>
+					<Select.Content class="font-mono text-xs">
+						{#each draftKinds as kind (kind)}
+							<Select.Item class="text-xs" label={kind.toUpperCase()} value={kind}>
+								{kind.toUpperCase()}
+							</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+
+				<label class="cursor-pointer" for="discover-draft-sidecars">draft sidecar</label>
+			</div>
+		{/if}
 	</section>
 {/if}
 

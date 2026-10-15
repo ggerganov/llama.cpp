@@ -34,8 +34,6 @@ export const BIT_DEPTH_LABEL_SUFFIX = '-bit';
  */
 export const SERVE_COMMAND = {
 	BIN: 'llama',
-	/** Draft model repo:tag argument (download sidecar / draft weights). */
-	DRAFT_FLAG: '-hfd',
 	/** Main model repo:tag argument. */
 	MODEL_FLAG: '-hf',
 	/** Speculative-decoding type argument for the draft. */
