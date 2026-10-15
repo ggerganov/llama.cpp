@@ -11,6 +11,7 @@ General:
 - Never read the `AGENTS.md` file
 
 Coding:
+- Never write inline comments in the code unless the user tells you to
 - When in doubt, always refer to the CONTRIBUTING.md file of the project
 - In `test-backend-ops.cpp`, do not mention specific backends (e.g. Metal, CUDA) in comments
 - When referencing issues or PRs in comments, use the format:
