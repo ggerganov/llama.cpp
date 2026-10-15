@@ -239,11 +239,8 @@ class GraniteSwitchModel(GraniteMoeModel):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # The weightless switch layer(s) are counted in num_hidden_layers but carry
-        # no tensors: the legacy SingleSwitch reserves one cache slot, the current
-        # MultiSwitch (counting + memory heads, "ms_code_m" in the config) reserves
-        # two. Derive the real block count from the decoder layers present in the
-        # checkpoint instead of assuming a fixed offset.
+        # The weightless switch layer(s) are counted in num_hidden_layers but carry no tensors.
+        # The count is not fixed, nor is it present in hparams, so we derive it here based on tensor block names.
         layer_ids = {
             int(m.group(1))
             for name in self.model_tensors
