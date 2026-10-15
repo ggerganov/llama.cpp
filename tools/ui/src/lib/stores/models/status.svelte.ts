@@ -156,14 +156,16 @@ export class ModelStatusManager {
 	private loadProgress = new SvelteMap<string, ModelLoadProgress>();
 	/** Paused downloads with their last reported progress, or null when none arrived before the pause. */
 	private pausedDownloads = new SvelteMap<string, ModelDownloadProgress | null>();
+	/** Models with a download POST in flight, so a second click cannot post again. */
+	private pendingDownloads = new SvelteSet<string>();
 	// /models/sse feed state, the single source of truth for status and load progress
 	private statusAbort: AbortController | null = null;
 	private statusReaderActive = false;
+
 	private statusWaiters = new SvelteMap<
 		string,
 		{ target: ServerModelStatus; resolve: () => void; reject: (e: Error) => void }
 	>();
-
 	/** Models the user asked to stop (pause or cancel); the download_failed the stop triggers is intentional, not a failure. */
 	private stopRequests = new SvelteMap<string, ModelDownloadStopRequest>();
 
@@ -279,6 +281,12 @@ export class ModelStatusManager {
 			...extraSidecars
 		].filter((kind, i, all) => SERVER_SIDECARS.includes(kind) && all.indexOf(kind) === i);
 
+		// a second click must not post again: the server would answer that the model
+		// already exists, so a download already on its way is left alone
+		if (this.pendingDownloads.has(model) || this.isDownloadInProgress(model)) return;
+
+		this.pendingDownloads.add(model);
+
 		// the feed must be live so the resulting models_reload event refreshes the list
 		this.subscribe();
 
@@ -288,6 +296,10 @@ export class ModelStatusManager {
 		const snapshot = this.pausedDownloads.get(model) ?? null;
 		const wasPaused = this.pausedDownloads.has(model);
 
+		// the download reads as in flight from here, so the chip shows it before the
+		// server answers; the feed refines it with the real counts
+		this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
+
 		try {
 			const res = await ModelsService.downloadModel(model, sidecars);
 
@@ -296,17 +308,18 @@ export class ModelStatusManager {
 			}
 
 			// the marker gives way to the live entry, seeded with the last reported
-			// progress so the row does not fall back to 0%; the feed refines it
+			// progress so the row does not fall back to 0%
 			this.deletePausedDownload(model);
 			this.stopRequests.delete(model);
 			this.failedDownloads.delete(model);
 			this.downloadSidecars.set(model, sidecars);
-			this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
 
 			toast.success(`Download started: ${this.host.toDisplayName(model)}`);
 		} catch (error) {
-			// the download did not start: a resumed one stays paused rather than
-			// dropping off the list, which reads as a finished download
+			// the download did not start: the optimistic entry goes, and a resumed one
+			// stays paused rather than dropping off the list
+			this.downloadProgress.delete(model);
+
 			if (wasPaused) {
 				this.setPausedDownload(model, snapshot);
 			}
@@ -316,6 +329,8 @@ export class ModelStatusManager {
 			toast.error(`Download failed: ${model} (${reason})`);
 
 			throw error;
+		} finally {
+			this.pendingDownloads.delete(model);
 		}
 	}
 
