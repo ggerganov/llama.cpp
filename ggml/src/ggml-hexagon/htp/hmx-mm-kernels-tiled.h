@@ -14,11 +14,15 @@ static const __fp16 iq4_nl_to_fp16_lut[64] __attribute__((aligned(VLEN))) = {
 
 // --- tiled format dequantizers ---
 
-typedef struct {
+typedef struct tiled_dequantize_state tiled_dequantize_state_t;
+typedef void (*tiled_dequant_task_fn_t)(const tiled_dequantize_state_t * state, uint32_t start_tile, uint32_t end_tile);
+
+struct tiled_dequantize_state {
     struct htp_context      * ctx;
     struct htp_thread_trace * traces;
     __fp16                  * dst;
     const uint8_t           * src;
+    tiled_dequant_task_fn_t   task_fn;
 
     struct fastdiv_values     n_k_tiles_div;
     uint32_t                  n_k_tiles;
@@ -31,7 +35,7 @@ typedef struct {
     uint32_t                  k_block;
     size_t                    row_stride;
     uint32_t                  weight_type;
-} tiled_dequantize_state_t;
+};
 
 // Dequantize a single tile from tiled weight data (already in VTCM) to tile-major FP16.
 static void dequantize_tiled_weight_to_fp16_task_q4_0(

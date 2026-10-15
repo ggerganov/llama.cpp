@@ -25,10 +25,6 @@ static inline bool htp_tensor_is_extended(const struct htp_tensor * t) {
     return t && (t->data >> 32) != 0;
 }
 
-static inline uint32_t * htp_tensor_flags(const struct htp_tensor * t) {
-    return (uint32_t *) &t->flags;
-}
-
 static inline bool htp_tensor_is_contiguous(const struct htp_tensor * t, uint32_t type_size) {
     uint32_t next_nb = type_size;
     if (t->ne[0] != 1 && t->nb[0] != next_nb) {
@@ -125,18 +121,28 @@ static inline struct htp_tensor_mdev_range htp_tensor_mdev_partition(uint32_t to
     return range;
 }
 
+static inline bool htp_tensor_is_tiled(const struct htp_tensor * t) {
+    return t && (t->flags & HTP_TENSOR_TILED) != 0;
+}
+
 static inline uint32_t htp_tensor_get_row_size(int type, uint32_t ne00) {
     switch (type) {
-        case HTP_TYPE_F32:  return ne00 * 4;
+        case HTP_TYPE_F32:    return ne00 * 4;
         case HTP_TYPE_F16:
-        case HTP_TYPE_BF16: return ne00 * 2;
-        case HTP_TYPE_Q8_0: return (ne00 / 32) * 34;
-        case HTP_TYPE_Q4_0: return (ne00 / 32) * 18;
-        case HTP_TYPE_Q4_K: return (ne00 / 256) * 144;
-        case HTP_TYPE_Q5_K: return (ne00 / 256) * 176;
-        case HTP_TYPE_Q6_K: return (ne00 / 256) * 210;
-        case HTP_TYPE_I32:  return ne00 * 4;
-        default:            return 0;
+        case HTP_TYPE_BF16:   return ne00 * 2;
+        case HTP_TYPE_Q8_0:   return (ne00 / 32) * 34;
+        case HTP_TYPE_Q4_0:
+        case HTP_TYPE_IQ4_NL: return (ne00 / 32) * 18;
+        case HTP_TYPE_Q4_1:   return (ne00 / 32) * 20;
+        case HTP_TYPE_MXFP4:  return (ne00 / 32) * 17;
+        case HTP_TYPE_Q2_K:   return (ne00 / 256) * 84;
+        case HTP_TYPE_Q3_K:   return (ne00 / 256) * 110;
+        case HTP_TYPE_Q4_K:   return (ne00 / 256) * 144;
+        case HTP_TYPE_Q5_K:   return (ne00 / 256) * 176;
+        case HTP_TYPE_Q6_K:   return (ne00 / 256) * 210;
+        case HTP_TYPE_I32:    return ne00 * 4;
+        case HTP_TYPE_I64:    return ne00 * 8;
+        default:              return 0;
     }
 }
 

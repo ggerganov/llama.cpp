@@ -83,32 +83,7 @@ static inline void htp_get_rows_vtcm_layout_build(
         return;
     }
 
-    uint32_t src0_row_size = 0;
-    switch (type) {
-        case HTP_TYPE_F16:
-        case HTP_TYPE_BF16:
-            src0_row_size = ne00 * 2;
-            break;
-        case HTP_TYPE_Q8_0:
-            src0_row_size = (ne00 / 32) * 34;
-            break;
-        case HTP_TYPE_Q4_0:
-            src0_row_size = (ne00 / 32) * 18;
-            break;
-        case HTP_TYPE_Q4_K:
-            src0_row_size = (ne00 / 256) * 144;
-            break;
-        case HTP_TYPE_Q5_K:
-            src0_row_size = (ne00 / 256) * 176;
-            break;
-        case HTP_TYPE_Q6_K:
-            src0_row_size = (ne00 / 256) * 210;
-            break;
-        default:
-            src0_row_size = 0;
-            break;
-    }
-
+    const uint32_t src0_row_size = htp_tensor_get_row_size(type, ne00);
     size_t src0_row_size_aligned = (src0_row_size + 255) & ~255;
     size_t dst_row_size_aligned  = (ne00 * sizeof(float) + 255) & ~255;
 
