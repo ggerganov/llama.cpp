@@ -32,8 +32,6 @@ class MellumModel(TextModel):
         if (norm_topk_prob := self.hparams.get("norm_topk_prob")) is not None:
             self.gguf_writer.add_expert_weights_norm(norm_topk_prob)
 
-        self.gguf_writer.add_expert_gating_func(gguf.ExpertGatingFuncType.SOFTMAX)
-
     _experts: list[dict[str, Tensor]] | None = None
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
