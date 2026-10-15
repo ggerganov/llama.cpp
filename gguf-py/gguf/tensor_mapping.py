@@ -2789,6 +2789,7 @@ class TensorNameMap:
             "conformer.layers.{bid}.conv.batch_norm", # lfm2
             "conformer.layers.{bid}.lconv1d.pre_layer_norm", # gemma3n
             "sound_encoder.encoder.layers.{bid}.conv.norm", # parakeet
+            "encoder.layers.{bid}.conv.batch_norm", # granite_speech
         ),
 
         MODEL_TENSOR.A_ENC_CONV_NORM_MEAN: (
@@ -2797,7 +2798,6 @@ class TensorNameMap:
 
         MODEL_TENSOR.A_ENC_CONV_NORM_VAR: (
             "sound_encoder.encoder.layers.{bid}.conv.norm.running_var", # parakeet
-            "encoder.layers.{bid}.conv.batch_norm", # granite_speech
         ),
 
         MODEL_TENSOR.A_ENC_CONV_PW1: (
