@@ -993,40 +993,9 @@ static bool remove_partial_files(const std::string & hf_repo_with_tag, const com
     return removed;
 }
 
-bool common_download_remove(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
+// remove snapshot entries of `repo_id`, then the blobs no remaining entry references
+static bool remove_snapshot_entries(const std::string & repo_id, const std::vector<std::filesystem::path> & to_remove) {
     namespace fs = std::filesystem;
-
-    auto [repo_id, tag] = common_download_split_repo_tag(hf_repo_with_tag);
-
-    if (tag.empty()) {
-        return hf_cache::remove_cached_repo(repo_id);
-    }
-
-    // an unfinished download has no snapshot entry, only partial files
-    bool removed = remove_partial_files(hf_repo_with_tag, opts);
-
-    std::string tag_upper = tag;
-    for (char & c : tag_upper) {
-        c = (char) std::toupper((unsigned char) c);
-    }
-
-    auto files = hf_cache::get_cached_files(repo_id);
-    if (files.empty()) {
-        return removed;
-    }
-
-    // collect snapshot entries whose tag matches
-    std::vector<fs::path> to_remove;
-    for (const auto & f : files) {
-        auto split = get_gguf_split_info(f.path);
-        if (split.tag == tag_upper) {
-            to_remove.emplace_back(f.local_path);
-        }
-    }
-
-    if (to_remove.empty()) {
-        return removed;
-    }
 
     // resolve blob paths from symlinks before deleting snapshot entries
     std::vector<fs::path> blobs_to_check;
@@ -1078,4 +1047,64 @@ bool common_download_remove(const std::string & hf_repo_with_tag, const common_d
     }
 
     return true;
+}
+
+bool common_download_remove(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
+    namespace fs = std::filesystem;
+
+    auto [repo_id, tag] = common_download_split_repo_tag(hf_repo_with_tag);
+
+    if (tag.empty()) {
+        return hf_cache::remove_cached_repo(repo_id);
+    }
+
+    // an unfinished download has no snapshot entry, only partial files
+    bool removed = remove_partial_files(hf_repo_with_tag, opts);
+
+    std::string tag_upper = tag;
+    for (char & c : tag_upper) {
+        c = (char) std::toupper((unsigned char) c);
+    }
+
+    auto files = hf_cache::get_cached_files(repo_id);
+    if (files.empty()) {
+        return removed;
+    }
+
+    // collect snapshot entries whose tag matches
+    std::vector<fs::path> to_remove;
+    for (const auto & f : files) {
+        auto split = get_gguf_split_info(f.path);
+        if (split.tag == tag_upper) {
+            to_remove.emplace_back(f.local_path);
+        }
+    }
+
+    if (to_remove.empty()) {
+        return removed;
+    }
+
+    return remove_snapshot_entries(repo_id, to_remove);
+}
+
+bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
+    common_params_model model;
+    model.hf_repo = hf_repo_with_tag;
+
+    common_download_opts cached = opts;
+    cached.offline = true;
+
+    auto plan = common_download_get_hf_plan(model, cached);
+
+    std::vector<std::filesystem::path> to_remove;
+    for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
+        if (!f.local_path.empty()) {
+            to_remove.emplace_back(std::filesystem::u8path(f.local_path));
+        }
+    }
+    if (to_remove.empty()) {
+        return false;
+    }
+
+    return remove_snapshot_entries(common_download_split_repo_tag(hf_repo_with_tag).first, to_remove);
 }

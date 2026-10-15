@@ -578,16 +578,14 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 			item,
 			parsed: ModelsService.parseModelId(item.id)
 		}));
-		// sidecar entries mark downloaded sidecar files, not loadable models, and the router
-		// lists them under their own `<repo>:<quant>-<sidecar>` id: pair each draft with its
-		// repo here and drop the entries below
+		// each cached model lists the sidecars it has on disk: pair the drafts with their repo
 		const draftSidecarsByRepo = ModelsService.draftSidecarsByRepo(response.data);
 
 		return (
 			entries
-				// the router also lists projector files by filename, which carry the
-				// sidecar token inside the id rather than after a colon
-				.filter(({ item, parsed }) => !parsed.sidecar && !ModelsService.isSidecarEntry(item.id))
+				// a models dir can still name an entry after a projector file, which is
+				// no loadable model
+				.filter(({ parsed }) => !parsed.sidecar)
 				// in-flight and unfinished downloads are not usable models yet; the
 				// selector tracks them in its "Download in progress" section instead
 				.filter(

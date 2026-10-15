@@ -2258,6 +2258,8 @@ Payload:
 
 `sidecars` lists the sidecar kinds pulled with the model, picked by the server the way `-hf` picks them: `mmproj`, and the draft heads `mtp`, `dflash`, `eagle3` and `dspark`. It defaults to `["mmproj"]`, as `-hf` does.
 
+Posting a model that is already in the cache and not running downloads the sidecars it lacks and keeps the files already on disk.
+
 Response (download is started in the background):
 
 ```json
@@ -2283,6 +2285,8 @@ Response (error, cannot start the download):
 IMPORTANT: only model stored in cache can be deleted. You cannot delete models in a preset.
 
 Model name must be passed via query param: `?model={name}`
+
+To remove one sidecar of a cached model and keep the model, add `&sidecar={kind}` (`mmproj`, `mtp`, `dflash`, `eagle3` or `dspark`); the model must not be running.
 
 If delete success, it will send an SSE event of type `model_remove`
 

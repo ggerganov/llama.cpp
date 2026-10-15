@@ -626,3 +626,42 @@ def test_router_delete_model():
     # Model should no longer appear in GET /models
     ids = _get_model_ids(is_reload=False)
     assert MODEL_DOWNLOAD_ID not in ids, f"{MODEL_DOWNLOAD_ID} still present after deletion"
+
+
+def test_router_download_sidecars():
+    """Case 3: sidecars are a parameter of the download, never models of their own."""
+    global server
+    server.start()
+
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
+
+    # an unknown sidecar kind is rejected before anything starts
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": ["lora"]})
+    assert res.status_code == 400
+    assert MODEL_DOWNLOAD_ID not in _get_model_ids(is_reload=False)
+
+    sse_events: list = []
+    stop = threading.Event()
+    sse_ready = threading.Event()
+    threading.Thread(
+        target=_listen_sse, args=(server, sse_events, stop, sse_ready), daemon=True
+    ).start()
+    assert sse_ready.wait(10), "SSE client failed to connect"
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": []})
+    assert res.status_code == 200
+    finished = _wait_for_sse_event(
+        sse_events, "download_finished", MODEL_DOWNLOAD_ID, MODEL_DOWNLOAD_TIMEOUT
+    )
+    stop.set()
+    assert finished, "Never received download_finished SSE event"
+
+    # the model lists the sidecars it has on disk, and no sidecar is listed as a model
+    res = server.make_request("GET", "/models")
+    assert res.status_code == 200
+    entries = {item["id"]: item for item in res.body.get("data", [])}
+    assert entries[MODEL_DOWNLOAD_ID]["sidecars"] == []
+    for kind in ("mmproj", "mtp", "dflash", "eagle3", "dspark"):
+        assert not any(i.endswith("-" + kind) for i in entries), f"a {kind} sidecar is listed as a model"
+
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")

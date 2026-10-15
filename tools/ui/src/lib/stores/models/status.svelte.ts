@@ -10,10 +10,15 @@ import {
 	CLI_FLAGS,
 	HF_UD_QUANT_PREFIX_REGEX,
 	MODEL_ID,
-	PATH_SEPARATOR,
+	type ModelSidecar,
 	STORAGE_APP_NAME
 } from '$lib/constants';
-import { ModelDownloadStopRequest, ServerModelsSseEventType, ServerModelStatus } from '$lib/enums';
+import {
+	ModelAuxSidecar,
+	ModelDownloadStopRequest,
+	ServerModelsSseEventType,
+	ServerModelStatus
+} from '$lib/enums';
 import { HuggingFaceService } from '$lib/services/huggingface.service';
 import { ModelsService } from '$lib/services/models.service';
 import type { ModelPropsManager } from '$lib/stores/models/props.svelte';
@@ -27,7 +32,7 @@ import type {
 } from '$lib/types';
 import type { ModelSidecarBadge } from '$lib/types/models';
 import { repoOf } from '$lib/utils/model-names';
-import { isAuxSidecar } from '$lib/utils/sidecars';
+import { isAuxSidecar, isDraftSidecar } from '$lib/utils/sidecars';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';
 
@@ -67,45 +72,37 @@ function downloadIdKey(repoWithTag: string): string {
 	return `${repo.toUpperCase()}:${tag.toUpperCase().replace(HF_UD_QUANT_PREFIX_REGEX, '')}`;
 }
 
+/** Sidecar kinds the server pulls with a model, as -hf does. */
+const SERVER_SIDECARS: readonly string[] = ['mmproj', 'mtp', 'dflash', 'eagle3', 'dspark'];
+
+/**
+ * The model a download option stands for, and the sidecar it adds: `<repo>:<quant>`
+ * is the model itself, `<repo>:<quant>-<sidecar>` a sidecar of that model, and a
+ * sidecar without quant belongs to the repo's default model.
+ */
+function downloadTarget(repoWithTag: string): { model: string; sidecar: ModelSidecar | null } {
+	const parsed = ModelsService.parseModelId(repoWithTag);
+
+	if (!parsed.sidecar) return { model: repoWithTag, sidecar: null };
+
+	const repo = repoOf(repoWithTag);
+	const model = parsed.quantization
+		? `${repo}${MODEL_ID.QUANTIZATION_SEPARATOR}${parsed.quantization}`
+		: repo;
+
+	return { model, sidecar: parsed.sidecar };
+}
+
 /** Zeroed progress, used until the first feed record reports real counts. */
 function emptyDownloadProgress(): ModelDownloadProgress {
 	return { downloadedBytes: 0, files: {}, totalBytes: 0 };
 }
 
 export class ModelStatusManager {
-	/**
-	 * Sidecar files pulled by registered models, as `<repo>/<file>` keys.
-	 * Sidecars are not separate /v1/models entries - the router pulls them as
-	 * sidecars of a main model and records them in its `--model-draft` /
-	 * `--mmproj` args.
-	 */
-	private downloadedSidecars = $derived.by(() => {
-		const result = new SvelteSet<string>();
-
-		for (const m of this.host.routerModels) {
-			const args = m.status?.args;
-
-			if (!args) continue;
-
-			for (let i = 0; i < args.length - 1; i++) {
-				if (
-					args[i] !== CLI_FLAGS.MODEL_DRAFT &&
-					args[i] !== CLI_FLAGS.MODEL_DRAFT_SHORT &&
-					args[i] !== CLI_FLAGS.MMPROJ
-				) {
-					continue;
-				}
-
-				const parsed = HuggingFaceService.parseCachePath(args[i + 1]);
-
-				if (parsed) result.add(`${parsed.repo}${PATH_SEPARATOR}${parsed.file}`);
-			}
-		}
-
-		return result;
-	});
-
+	/** In-flight downloads by model, with their aggregated progress. */
 	private downloadProgress = new SvelteMap<string, ModelDownloadProgress>();
+	/** Sidecar kinds each in-flight or paused download pulls with its model. */
+	private downloadSidecars = new SvelteMap<string, ModelSidecar[]>();
 	/**
 	 * Draft sidecars the registered models pull with them, keyed by the repo of the model
 	 * that pulls them: the router records them in the model's `--model-draft` args.
@@ -156,9 +153,9 @@ export class ModelStatusManager {
 
 		return result;
 	});
-	/** `<repo>:<tag>` strings whose most recent download attempt failed (download_failed). */
+	/** Models whose most recent download attempt failed (download_failed). */
 	private failedDownloads = new SvelteSet<string>();
-	/** Draft sidecars the router listing reports as sidecar-only entries, keyed by repo. */
+	/** Draft sidecars the cached models report on disk, keyed by repo. */
 	private listedSidecarsByRepo = $derived.by(() =>
 		ModelsService.draftSidecarsByRepo(this.host.routerModels)
 	);
@@ -174,14 +171,14 @@ export class ModelStatusManager {
 		{ target: ServerModelStatus; resolve: () => void; reject: (e: Error) => void }
 	>();
 
-	/** Tags the user asked to stop (pause or cancel); the download_failed the stop triggers is intentional, not a failure. */
+	/** Models the user asked to stop (pause or cancel); the download_failed the stop triggers is intentional, not a failure. */
 	private stopRequests = new SvelteMap<string, ModelDownloadStopRequest>();
 
 	/**
-	 * Cancel an in-flight download, or remove a downloaded/failed entry from the
-	 * cache (ROUTER mode only). The server's remove endpoint covers both: dropping
-	 * a running download discards its partial files, dropping a cached model
-	 * deletes the files on disk, so the delete action resolves through this too.
+	 * Cancel an in-flight download, or remove a downloaded/failed model from the
+	 * cache (ROUTER mode only). The option of a sidecar of a cached model removes
+	 * only that sidecar; any other option removes the whole model with the
+	 * partial files of its download.
 	 */
 	async cancelDownload(repoWithTag: string): Promise<boolean> {
 		if (!serverStore.isRouterMode) {
@@ -192,42 +189,36 @@ export class ModelStatusManager {
 
 		this.subscribe();
 
+		const { model, sidecar } = downloadTarget(repoWithTag);
 		// in-flight: the kill triggers download_failed over the feed; mark it as a
 		// user cancel so it settles silently instead of toasting a failure
-		const wasInFlight = this.downloadProgress.has(repoWithTag);
+		const wasInFlight = this.downloadProgress.has(model);
 
 		if (wasInFlight) {
-			this.stopRequests.set(repoWithTag, ModelDownloadStopRequest.CANCEL);
+			this.stopRequests.set(model, ModelDownloadStopRequest.CANCEL);
 		}
 
 		// a downloaded model registers under the name the router derived from the
 		// cached file (e.g. the UD- quant prefix is dropped), so resolve the tag to
 		// the registered id before asking the server to remove it
 		const registeredId =
-			this.host.routerModels.find((m) => downloadIdKey(m.id) === downloadIdKey(repoWithTag))?.id ??
-			repoWithTag;
+			this.host.routerModels.find((m) => downloadIdKey(m.id) === downloadIdKey(model))?.id ?? model;
+		const sidecarOnly = sidecar !== null && !wasInFlight && this.isModelDownloaded(model);
 
 		try {
-			const res = await ModelsService.cancelDownload(registeredId);
+			const res = await ModelsService.cancelDownload(registeredId, sidecarOnly ? sidecar : null);
 			const ok = res.success === true;
 
-			if (ok) {
-				this.downloadProgress.delete(repoWithTag);
-				this.failedDownloads.delete(repoWithTag);
-				this.deletePausedDownload(repoWithTag);
-
-				// the feed's model_remove refreshes the list too, but refetch here as
-				// well: a missed event, or an id the rows do not know, would leave the
-				// list stale after a successful delete
-				void this.host.fetchRouterModels();
-
-				// a delete takes the model's quant-matched draft sidecars with it: on
-				// disk they are useless alone and easy to leave behind; deleting a
-				// sidecar itself must not sweep its siblings away
-				if (!wasInFlight && !ModelsService.parseModelId(repoWithTag).sidecar) {
-					void this.deleteDraftSidecars(repoWithTag);
-				}
+			if (ok && !sidecarOnly) {
+				this.downloadProgress.delete(model);
+				this.downloadSidecars.delete(model);
+				this.failedDownloads.delete(model);
+				this.deletePausedDownload(model);
 			}
+
+			// the feed's model_remove refreshes the list too, but refetch here as well:
+			// a missed event, or a sidecar removal that sends none, would leave it stale
+			if (ok) void this.host.fetchRouterModels();
 
 			return ok;
 		} catch (error) {
@@ -237,21 +228,9 @@ export class ModelStatusManager {
 		}
 	}
 
-	/**
-	 * Cancel a download together with its quant-matched draft sidecars,
-	 * confirmed once.
-	 */
+	/** Cancel a download with the draft sidecars it pulls: one download carries them all. */
 	async cancelDownloadWithDrafts(repoWithTag: string): Promise<boolean> {
-		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const tags = [repoWithTag, ...this.quantMatchedDrafts(repoWithTag, cluster?.drafts ?? [])];
-
-		let ok = true;
-
-		for (const tag of tags) {
-			ok = (await this.cancelDownload(tag)) && ok;
-		}
-
-		return ok;
+		return this.cancelDownload(downloadTarget(repoWithTag).model);
 	}
 
 	/**
@@ -281,15 +260,36 @@ export class ModelStatusManager {
 
 	/**
 	 * POST /models starts the download in the background; the feed reports
-	 * progress, and models_reload refreshes the list once it finishes.
-	 * Re-posting a paused tag resumes from the partial files kept on disk.
+	 * progress, and models_reload refreshes the list once it finishes. The
+	 * option of a sidecar posts its model with that sidecar, along with the mmproj
+	 * and the sidecars the model already pulls, so the server keeps the files on
+	 * disk and adds the missing ones; re-posting a paused model resumes it.
 	 */
-	async downloadModel(repoWithTag: string): Promise<void> {
+	async downloadModel(repoWithTag: string, extraSidecars: ModelSidecar[] = []): Promise<void> {
 		if (!serverStore.isRouterMode) {
 			toast.error('Model downloads are only available in router mode');
 
 			return;
 		}
+
+		const { model, sidecar } = downloadTarget(repoWithTag);
+
+		if (sidecar && !SERVER_SIDECARS.includes(sidecar)) {
+			toast.error(`The ${sidecar} file is not downloadable from here`);
+
+			return;
+		}
+
+		const registered = this.host.routerModels.find(
+			(m) => downloadIdKey(m.id) === downloadIdKey(model)
+		);
+		const sidecars = [
+			ModelAuxSidecar.MMPROJ,
+			...(registered?.sidecars ?? []),
+			...(this.downloadSidecars.get(model) ?? []),
+			...(sidecar ? [sidecar] : []),
+			...extraSidecars
+		].filter((kind, i, all) => SERVER_SIDECARS.includes(kind) && all.indexOf(kind) === i);
 
 		// the feed must be live so the resulting models_reload event refreshes the list
 		this.subscribe();
@@ -297,11 +297,11 @@ export class ModelStatusManager {
 		// the marker and its last reported progress survive until the request is
 		// accepted: dropping them first would drop the paused state, which reads as
 		// a lost download if the server rejects the resume
-		const snapshot = this.pausedDownloads.get(repoWithTag) ?? null;
-		const wasPaused = this.pausedDownloads.has(repoWithTag);
+		const snapshot = this.pausedDownloads.get(model) ?? null;
+		const wasPaused = this.pausedDownloads.has(model);
 
 		try {
-			const res = await ModelsService.downloadModel(repoWithTag);
+			const res = await ModelsService.downloadModel(model, sidecars);
 
 			if (!res.success) {
 				throw new Error(res.error?.message ?? 'Server rejected the download request');
@@ -309,22 +309,23 @@ export class ModelStatusManager {
 
 			// the marker gives way to the live entry, seeded with the last reported
 			// progress so the row does not fall back to 0%; the feed refines it
-			this.deletePausedDownload(repoWithTag);
-			this.stopRequests.delete(repoWithTag);
-			this.failedDownloads.delete(repoWithTag);
-			this.downloadProgress.set(repoWithTag, snapshot ?? emptyDownloadProgress());
+			this.deletePausedDownload(model);
+			this.stopRequests.delete(model);
+			this.failedDownloads.delete(model);
+			this.downloadSidecars.set(model, sidecars);
+			this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
 
-			toast.success(`Download started: ${this.host.toDisplayName(repoWithTag)}`);
+			toast.success(`Download started: ${this.host.toDisplayName(model)}`);
 		} catch (error) {
 			// the download did not start: a resumed one stays paused rather than
 			// dropping off the list, which reads as a finished download
 			if (wasPaused) {
-				this.setPausedDownload(repoWithTag, snapshot);
+				this.setPausedDownload(model, snapshot);
 			}
 
 			const reason = error instanceof Error ? error.message : 'unknown error';
 
-			toast.error(`Download failed: ${repoWithTag} (${reason})`);
+			toast.error(`Download failed: ${model} (${reason})`);
 
 			throw error;
 		}
@@ -364,32 +365,57 @@ export class ModelStatusManager {
 		return [...clusters.values()];
 	}
 
-	/** Tracked downloads (in flight or paused) for the selector's "Download in progress" section. */
+	/**
+	 * Tracked downloads (in flight or paused) for the selector's "Download in
+	 * progress" section: one entry per model, then one per draft sidecar it pulls,
+	 * sharing the model's progress.
+	 */
 	getDownloadEntries(): ModelDownloadEntry[] {
-		const inFlight = Array.from(this.downloadProgress, ([repoWithTag, progress]) => ({
-			isPaused: false,
-			progress,
-			repoWithTag
-		}));
-		// a tag can carry a stale pause mark next to its live entry, e.g. after the
-		// list adopted it again while it was resuming: one row per tag, the live one
-		const paused = Array.from(this.pausedDownloads, ([repoWithTag, progress]) => ({
-			isPaused: true,
-			progress,
-			repoWithTag
-		})).filter((entry) => !this.downloadProgress.has(entry.repoWithTag));
+		const models = [
+			...Array.from(this.downloadProgress, ([model, progress]) => ({
+				isPaused: false,
+				model,
+				progress
+			})),
+			// a model can carry a stale pause mark next to its live entry, e.g. after
+			// the list adopted it again while it was resuming: one row, the live one
+			...Array.from(this.pausedDownloads, ([model, progress]) => ({
+				isPaused: true,
+				model,
+				progress
+			})).filter((entry) => !this.downloadProgress.has(entry.model))
+		];
+		const entries: ModelDownloadEntry[] = [];
 
-		return [...inFlight, ...paused];
+		for (const { isPaused, model, progress } of models) {
+			entries.push({ isPaused, progress, repoWithTag: model });
+
+			const quant = ModelsService.parseModelId(model).quantization;
+
+			for (const kind of this.downloadSidecars.get(model) ?? []) {
+				if (!isDraftSidecar(kind)) continue;
+
+				entries.push({
+					isPaused,
+					progress,
+					repoWithTag: ModelsService.buildDownloadTag(repoOf(model), quant, kind)
+				});
+			}
+		}
+
+		return entries;
 	}
 
 	getDownloadProgress(repoWithTag: string): ModelDownloadProgress | null {
-		return this.downloadProgress.get(repoWithTag) ?? null;
+		return this.isDownloadInProgress(repoWithTag)
+			? (this.downloadProgress.get(downloadTarget(repoWithTag).model) ?? null)
+			: null;
 	}
 
 	/**
 	 * Draft sidecars a repo pulls with its model, e.g. `mtp` at `Q8_0`: the
 	 * router records loaded models' sidecars in their `--model-draft` args, and
-	 * lists downloaded sidecar files as sidecar-only entries.
+	 * lists the sidecars each cached model has on disk.
 	 */
 	getDraftSidecars(repoId: string): ModelSidecarBadge[] {
 		const badges = this.draftSidecarsByRepo.get(repoId) ?? [];
@@ -416,29 +442,43 @@ export class ModelStatusManager {
 	}
 
 	getPausedDownloadProgress(repoWithTag: string): ModelDownloadProgress | null {
-		return this.pausedDownloads.get(repoWithTag) ?? null;
+		return this.isDownloadPaused(repoWithTag)
+			? (this.pausedDownloads.get(downloadTarget(repoWithTag).model) ?? null)
+			: null;
 	}
 
 	hasFailedDownload(repoWithTag: string): boolean {
-		return this.failedDownloads.has(repoWithTag);
+		const { model } = downloadTarget(repoWithTag);
+
+		return this.failedDownloads.has(model) && this.pullsSidecar(repoWithTag);
 	}
 
-	/** Active while the feed reports download_progress for the tag. */
+	/** Active while the feed reports download_progress for the option's model, and it pulls the option. */
 	isDownloadInProgress(repoWithTag: string): boolean {
-		return this.downloadProgress.has(repoWithTag);
+		return (
+			this.downloadProgress.has(downloadTarget(repoWithTag).model) && this.pullsSidecar(repoWithTag)
+		);
 	}
 
 	isDownloadPaused(repoWithTag: string): boolean {
+		const { model } = downloadTarget(repoWithTag);
+
 		// a running download outranks its pause mark, which can outlive a resume
-		return this.pausedDownloads.has(repoWithTag) && !this.downloadProgress.has(repoWithTag);
+		return (
+			this.pausedDownloads.has(model) &&
+			!this.downloadProgress.has(model) &&
+			this.pullsSidecar(repoWithTag)
+		);
 	}
 
 	/**
-	 * True when the tag is already registered in the /v1/models list; both ids
-	 * are normalized, see downloadIdKey().
+	 * True when the option's model is registered in the /v1/models list and, for
+	 * a sidecar option, reports that sidecar on disk; both ids are normalized,
+	 * see downloadIdKey().
 	 */
 	isModelDownloaded(repoWithTag: string): boolean {
-		const key = downloadIdKey(repoWithTag);
+		const { model, sidecar } = downloadTarget(repoWithTag);
+		const key = downloadIdKey(model);
 
 		// an unfinished download (downloading or incomplete) is not a model on disk,
 		// so the download options offer it as resumable instead
@@ -446,16 +486,13 @@ export class ModelStatusManager {
 			(m) =>
 				downloadIdKey(m.id) === key &&
 				m.status?.value !== ServerModelStatus.DOWNLOADING &&
-				m.status?.value !== ServerModelStatus.INCOMPLETE
+				m.status?.value !== ServerModelStatus.INCOMPLETE &&
+				(!sidecar || (m.sidecars ?? []).includes(sidecar))
 		);
 	}
 
 	isOperationInProgress(modelId: string): boolean {
 		return this.loadingStates.get(modelId) ?? false;
-	}
-
-	isSidecarDownloaded(repoId: string, filePath: string): boolean {
-		return this.downloadedSidecars.has(`${repoId}/${filePath}`);
 	}
 
 	async load(modelId: string): Promise<void> {
@@ -488,24 +525,18 @@ export class ModelStatusManager {
 		}
 	}
 
-	/**
-	 * Status of a repo's main weights as the listing reports it, null when the
-	 * repo has no main entry (e.g. only a sidecar was downloaded).
-	 */
+	/** Status of a repo's model as the listing reports it, null when the repo has none. */
 	mainStatus(repo: string): ServerModelStatus | null {
 		const entry = this.host.routerModels.find(
-			(m) =>
-				repoOf(m.id) === repo &&
-				!ModelsService.parseModelId(m.id).sidecar &&
-				!ModelsService.isSidecarEntry(m.id)
+			(m) => repoOf(m.id) === repo && !ModelsService.parseModelId(m.id).sidecar
 		);
 
 		return (entry?.status?.value as ServerModelStatus) ?? null;
 	}
 
 	/**
-	 * The server stops the download child but keeps the partial file, so re-posting
-	 * the tag resumes where it stopped. The feed reports the stop as download_failed;
+	 * The server stops the download child but keeps the partial files, so re-posting
+	 * the model resumes where it stopped. The feed reports the stop as download_failed;
 	 * the 'pause' stop request marks it as intentional, and the paused state is stored
 	 * before the request: an unconfirmed pause would leave the chip spinning.
 	 */
@@ -518,24 +549,26 @@ export class ModelStatusManager {
 
 		this.subscribe();
 
-		this.stopRequests.set(repoWithTag, ModelDownloadStopRequest.PAUSE);
+		const { model } = downloadTarget(repoWithTag);
 
-		const snapshot = this.downloadProgress.get(repoWithTag) ?? null;
-		const wasInFlight = this.downloadProgress.delete(repoWithTag);
+		this.stopRequests.set(model, ModelDownloadStopRequest.PAUSE);
 
-		this.setPausedDownload(repoWithTag, snapshot);
+		const snapshot = this.downloadProgress.get(model) ?? null;
+		const wasInFlight = this.downloadProgress.delete(model);
+
+		this.setPausedDownload(model, snapshot);
 
 		try {
-			await ModelsService.unload(repoWithTag);
+			await ModelsService.unload(model);
 		} catch {
-			this.stopRequests.delete(repoWithTag);
-			this.deletePausedDownload(repoWithTag);
+			this.stopRequests.delete(model);
+			this.deletePausedDownload(model);
 
 			if (wasInFlight) {
-				this.downloadProgress.set(repoWithTag, snapshot ?? emptyDownloadProgress());
+				this.downloadProgress.set(model, snapshot ?? emptyDownloadProgress());
 			}
 
-			toast.error(`Failed to pause: ${repoWithTag}`);
+			toast.error(`Failed to pause: ${model}`);
 		}
 	}
 
@@ -552,12 +585,16 @@ export class ModelStatusManager {
 
 	/**
 	 * A model the server lists as incomplete is a download that never finished: it
-	 * runs in no tab and carries no progress. Offer it as paused, and re-posting
-	 * the tag resumes it from the files already on disk.
+	 * runs in no tab and carries no progress. Offer it as paused with the sidecars
+	 * it pulls, and re-posting the model resumes it from the files already on disk.
 	 */
 	syncPausedDownloads(): void {
 		for (const model of this.host.routerModels) {
 			if (model.status?.value !== ServerModelStatus.INCOMPLETE) continue;
+
+			if (!this.downloadSidecars.has(model.id)) {
+				this.downloadSidecars.set(model.id, model.sidecars ?? []);
+			}
 
 			if (this.pausedDownloads.has(model.id)) continue;
 
@@ -565,23 +602,12 @@ export class ModelStatusManager {
 		}
 	}
 
-	/**
-	 * Pause or resume a download together with the draft sidecars riding along
-	 * with it: the main model's controls own the whole cluster, the sub-lines
-	 * carry no controls of their own.
-	 */
+	/** Pause or resume a download with the draft sidecars riding along: one download carries them all. */
 	async toggleDownloadWithDrafts(repoWithTag: string): Promise<void> {
-		const resume = this.isDownloadPaused(repoWithTag);
-		const cluster = this.getDownloadClusters().find((c) => c.repo === repoOf(repoWithTag));
-		const drafts = this.quantMatchedDrafts(
-			repoWithTag,
-			(cluster?.drafts ?? []).filter((draft) => (resume ? draft.isPaused : !draft.isPaused))
-		);
+		const { model } = downloadTarget(repoWithTag);
 
-		for (const tag of [repoWithTag, ...drafts]) {
-			if (resume) await this.downloadModel(tag);
-			else await this.pauseDownload(tag);
-		}
+		if (this.isDownloadPaused(model)) await this.downloadModel(model);
+		else await this.pauseDownload(model);
 	}
 
 	async unload(modelId: string): Promise<void> {
@@ -643,6 +669,7 @@ export class ModelStatusManager {
 			// user cancel: settle silently, the feed's model_remove cleans up the entry
 			this.failedDownloads.delete(event.model);
 			this.deletePausedDownload(event.model);
+			this.downloadSidecars.delete(event.model);
 
 			return;
 		}
@@ -664,6 +691,7 @@ export class ModelStatusManager {
 
 		if (ok) {
 			this.failedDownloads.delete(event.model);
+			this.downloadSidecars.delete(event.model);
 
 			// the finished download only registers in /v1/models on the next list
 			// fetch (the server reloads its model table then), so refetch to flip
@@ -762,53 +790,15 @@ export class ModelStatusManager {
 		}
 	}
 
-	/**
-	 * Delete the draft sidecars that match the deleted model's quant. A draft is
-	 * quant-matched to its main, so a `Q8_0` delete takes `Q8_0-dflash` but leaves
-	 * the other quants' drafts alone. Best effort: a sidecar that fails to resolve
-	 * or remove stays behind, the next delete can pick it up.
-	 */
-	private async deleteDraftSidecars(repoWithTag: string): Promise<void> {
-		const repo = repoOf(repoWithTag);
-		const quant = ModelsService.parseModelId(repoWithTag).quantization;
-
-		if (!quant) return;
-
-		const sidecars = this.getDraftSidecars(repo).filter((badge) => badge.quant === quant);
-
-		for (const badge of sidecars) {
-			const tag = `${repo}:${badge.quant}-${badge.kind}`;
-			const registeredId =
-				this.host.routerModels.find((m) => downloadIdKey(m.id) === downloadIdKey(tag))?.id ?? tag;
-
-			try {
-				const res = await ModelsService.cancelDownload(registeredId);
-
-				if (res.success !== true) {
-					console.warn(`Failed to remove the draft sidecar ${registeredId}`);
-				}
-			} catch (error) {
-				console.warn(`Failed to remove the draft sidecar ${registeredId}:`, error);
-			}
-		}
-
-		if (sidecars.length > 0) void this.host.fetchRouterModels();
-	}
-
 	private deletePausedDownload(repoWithTag: string): boolean {
 		return this.pausedDownloads.delete(repoWithTag);
 	}
 
-	/**
-	 * Draft tags of the repo's cluster that share the main's quant, so every
-	 * cascade acts on exactly what a delete would take with it.
-	 */
-	private quantMatchedDrafts(repoWithTag: string, drafts: ModelDownloadEntry[]): string[] {
-		const quant = ModelsService.parseModelId(repoWithTag).quantization;
+	/** True when the option is the model itself, or a sidecar its download pulls. */
+	private pullsSidecar(repoWithTag: string): boolean {
+		const { model, sidecar } = downloadTarget(repoWithTag);
 
-		return drafts
-			.filter((draft) => ModelsService.parseModelId(draft.repoWithTag).quantization === quant)
-			.map((draft) => draft.repoWithTag);
+		return !sidecar || (this.downloadSidecars.get(model) ?? []).includes(sidecar);
 	}
 
 	private rejectStatus(modelId: string, error: Error): void {
@@ -829,6 +819,7 @@ export class ModelStatusManager {
 			this.downloadProgress.delete(modelId);
 			this.failedDownloads.delete(modelId);
 			this.deletePausedDownload(modelId);
+			this.downloadSidecars.delete(modelId);
 			this.stopRequests.delete(modelId);
 			this.rejectStatus(modelId, new Error(`Model removed: ${this.host.toDisplayName(modelId)}`));
 		}

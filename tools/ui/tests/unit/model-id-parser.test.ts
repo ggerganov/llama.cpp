@@ -1,3 +1,4 @@
+import type { ModelSidecar } from '$lib/constants';
 import { ModelAuxSidecar, ModelDraftSidecar } from '$lib/enums';
 import { ModelsService } from '$lib/services/models.service';
 import { describe, expect, it } from 'vitest';
@@ -390,12 +391,16 @@ describe('parseModelId', () => {
 });
 
 describe('draftSidecarsByRepo', () => {
-	const entry = (id: string) => ({ id, status: { value: 'downloaded' } });
+	const entry = (id: string, sidecars: ModelSidecar[], status = 'unloaded') => ({
+		id,
+		sidecars,
+		status: { value: status }
+	});
 
-	it('keeps one badge per kind and quant', () => {
+	it('keeps one badge per kind and quant, at the quant of each model', () => {
 		const byRepo = ModelsService.draftSidecarsByRepo([
-			entry('ggml-org/model:Q4_0-mtp'),
-			entry('ggml-org/model:Q8_0-mtp')
+			entry('ggml-org/model:Q4_0', [ModelDraftSidecar.MTP]),
+			entry('ggml-org/model:Q8_0', [ModelDraftSidecar.MTP])
 		]);
 
 		expect(byRepo.get('ggml-org/model')).toEqual([
@@ -404,11 +409,11 @@ describe('draftSidecarsByRepo', () => {
 		]);
 	});
 
-	it('drops duplicates and aux sidecars', () => {
+	it('drops duplicates, aux sidecars and unfinished downloads', () => {
 		const byRepo = ModelsService.draftSidecarsByRepo([
-			entry('ggml-org/model:Q4_0-mtp'),
-			entry('ggml-org/model:Q4_0-mtp'),
-			entry('ggml-org/model:Q4_0-mmproj')
+			entry('ggml-org/model:Q4_0', [ModelDraftSidecar.MTP, ModelAuxSidecar.MMPROJ]),
+			entry('ggml-org/model:Q4_0', [ModelDraftSidecar.MTP]),
+			entry('ggml-org/model:Q8_0', [ModelDraftSidecar.MTP], 'incomplete')
 		]);
 
 		expect(byRepo.get('ggml-org/model')).toEqual([

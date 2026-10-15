@@ -29,22 +29,23 @@
 
 	/** Queue the download; a failed attempt leaves partial files, drop them first. */
 	async function startDownload() {
+		// the quant-matched draft rides along in the same download; the manual draft
+		// chips stay available
+		const companionSidecar =
+			companion &&
+			!companion.state.isDownloaded &&
+			!companion.state.isDownloading &&
+			!companion.state.isPaused
+				? HuggingFaceService.extractQuantMeta(companion.path)?.sidecar
+				: null;
+
 		try {
 			if (entry.isFailed) await modelsStore.status.cancelDownload(entry.repoWithTag);
 
-			await modelsStore.status.downloadModel(entry.repoWithTag);
-
-			// the quant-matched draft rides along; the manual draft chips stay available
-			if (
-				companion &&
-				!companion.state.isDownloaded &&
-				!companion.state.isDownloading &&
-				!companion.state.isPaused
-			) {
-				void modelsStore.status.downloadModel(companion.state.repoWithTag).catch(() => {
-					// the store already toasted the failure
-				});
-			}
+			await modelsStore.status.downloadModel(
+				entry.repoWithTag,
+				companionSidecar ? [companionSidecar] : []
+			);
 		} catch {
 			// the store already toasted the failure
 		}

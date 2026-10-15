@@ -2399,9 +2399,9 @@ void server_models_routes::init_routes() {
             throw std::invalid_argument("model validation failed, unable to download");
         }
 
-        // reject if model already exists, but a paused download parks its entry as
-        // DOWNLOADED until the next reload: re-posting that tag is how a resume is
-        // asked for, so a download that is not running is replaced instead
+        // a model that exists is downloaded again when it is not running: a paused
+        // download parks its entry as DOWNLOADED until the next reload, and a cached
+        // model gets the sidecars it lacks; the files on disk are kept either way
         if (models.has_model(name)) {
             auto existing = models.get_meta(name);
 
@@ -2409,7 +2409,8 @@ void server_models_routes::init_routes() {
             // erases a finished download, which is the resume case as well
             const bool resumable = existing.has_value() && !existing->is_running() &&
                 (existing->status == SERVER_MODEL_STATUS_DOWNLOADED ||
-                 existing->status == SERVER_MODEL_STATUS_DOWNLOADING);
+                 existing->status == SERVER_MODEL_STATUS_DOWNLOADING ||
+                 (existing->source == SERVER_MODEL_SOURCE_CACHE && existing->status == SERVER_MODEL_STATUS_UNLOADED));
 
             if (existing.has_value() && !resumable) {
                 throw std::invalid_argument("model '" + name + "' already exists");
@@ -2440,6 +2441,22 @@ void server_models_routes::init_routes() {
         std::string name = req.get_param("model");
         if (name.empty()) {
             throw std::invalid_argument("model must be a non-empty string");
+        }
+
+        // a sidecar alone goes, the model keeps its files
+        std::string sidecar = req.get_param("sidecar");
+        if (!sidecar.empty()) {
+            if (!has_sidecar(SIDECAR_KINDS, sidecar)) {
+                throw std::invalid_argument("unknown sidecar '" + sidecar + "', expected one of mmproj, mtp, dflash, eagle3, dspark");
+            }
+            auto meta = models.get_meta(name);
+            if (meta.has_value() && (meta->is_running() || meta->status == SERVER_MODEL_STATUS_DOWNLOADING)) {
+                throw std::invalid_argument("model '" + name + "' is in use, unload it first");
+            }
+            bool ok = common_download_remove_sidecars(name, sidecar_download_opts(params, { sidecar }));
+            SRV_INF("removing sidecar %s of model name=%s (%s)\n", sidecar.c_str(), name.c_str(), ok ? "succeeded" : "nothing on disk");
+            res_ok(res, {{"success", ok}});
+            return res;
         }
 
         // a download listed from an earlier run has no instance, only its tag and

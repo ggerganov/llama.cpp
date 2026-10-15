@@ -19,7 +19,6 @@ import {
 	normalizeModelName,
 	repoOf,
 	sidecarFromFileToken,
-	sidecarFromTag,
 	splitSseRecords
 } from '$lib/utils';
 import { getAuthHeaders } from '$lib/utils/api-headers';
@@ -28,8 +27,9 @@ export class ModelsService {
 	private static readonly SSE_RECONNECT_MS = 1000;
 
 	/**
-	 * Build the `<repo>:<tag>` string POST /models expects, so callers don't need
-	 * to know the tag conventions.
+	 * Build the `<repo>:<tag>` id of a download option: `<quant>` for the model
+	 * weights, `<quant>-<sidecar>` for a sidecar of that quant. The UI keys its
+	 * options with it; the server only ever sees the model and its sidecar kinds.
 	 */
 	static buildDownloadTag(
 		repoId: string,
@@ -46,68 +46,65 @@ export class ModelsService {
 	}
 
 	/**
-	 * Cancel an in-flight download, or remove a downloaded/failed entry from the
-	 * model cache (ROUTER mode only): DELETE /models?model=<repo:tag>.
+	 * Cancel an in-flight download, or remove a downloaded/failed model from the
+	 * cache (ROUTER mode only): DELETE /models?model=<repo:tag>. With a sidecar,
+	 * only that sidecar of the cached model goes and the model stays.
 	 */
-	static async cancelDownload(hfRepoWithTag: string): Promise<ApiModelsDownloadResponse> {
-		return apiDelete<ApiModelsDownloadResponse>(API_MODELS.DELETE, {
-			model: hfRepoWithTag
-		});
+	static async cancelDownload(
+		model: string,
+		sidecar: ModelSidecar | null = null
+	): Promise<ApiModelsDownloadResponse> {
+		return apiDelete<ApiModelsDownloadResponse>(
+			API_MODELS.DELETE,
+			sidecar ? { model, sidecar } : { model }
+		);
 	}
 
 	/**
 	 * Start a model download from HuggingFace (ROUTER mode only). The response
 	 * returns immediately; progress arrives over /models/sse. The server picks
-	 * the file matching the tag and also pulls the model's mmproj/draft sidecars.
+	 * the model file matching the tag and the files of the sidecar kinds, as -hf
+	 * does; posting a cached model again adds the sidecars it lacks.
 	 */
-	static async downloadModel(hfRepoWithTag: string): Promise<ApiModelsDownloadResponse> {
-		const payload: ApiModelsDownloadRequest = { model: hfRepoWithTag };
+	static async downloadModel(
+		model: string,
+		sidecars: ModelSidecar[]
+	): Promise<ApiModelsDownloadResponse> {
+		const payload: ApiModelsDownloadRequest = { model, sidecars };
 
 		return apiPost<ApiModelsDownloadResponse>(API_MODELS.DOWNLOAD, payload);
 	}
 
 	/**
-	 * Draft sidecar badges the router listing reports for downloaded sidecar
-	 * files: they appear as sidecar-only entries under their
-	 * `<repo>:<quant>-<sidecar>` id, keyed here by the repo their model
-	 * belongs to.
+	 * Draft sidecar badges of the cached models, keyed by repo: each listing
+	 * entry reports the sidecar kinds it has on disk, at the entry's own quant.
 	 */
 	static draftSidecarsByRepo(
-		entries: { id: string; status?: { value?: unknown } }[]
+		entries: { id: string; sidecars?: ModelSidecar[]; status?: { value?: unknown } }[]
 	): Map<string, ModelSidecarBadge[]> {
 		const byRepo = new Map<string, ModelSidecarBadge[]>();
 
-		for (const { id, status } of entries) {
-			// a sidecar still downloading or unfinished is not on disk yet; the
-			// download row tracks it
+		for (const { id, sidecars, status } of entries) {
+			// an unfinished download is not on disk yet; the download row tracks it
 			if (
 				status?.value === ServerModelStatus.DOWNLOADING ||
 				status?.value === ServerModelStatus.INCOMPLETE
 			)
 				continue;
 
-			const parsed = this.parseModelId(id);
-
-			if (!parsed.sidecar || isAuxSidecar(parsed.sidecar)) continue;
-
 			const repo = repoOf(id);
-			// the entry id's quant is the sidecar file's own quant
-			const badge: ModelSidecarBadge = {
-				kind: parsed.sidecar,
-				quant: parsed.quantization,
-				repo
-			};
-			const kinds = byRepo.get(repo);
+			const quant = this.parseModelId(id).quantization;
 
-			if (kinds) {
-				if (
-					!kinds.some(
-						(b) => b.kind === badge.kind && b.repo === badge.repo && b.quant === badge.quant
-					)
-				)
-					kinds.push(badge);
-			} else {
-				byRepo.set(repo, [badge]);
+			for (const kind of sidecars ?? []) {
+				if (isAuxSidecar(kind)) continue;
+
+				const kinds = byRepo.get(repo) ?? [];
+
+				if (!kinds.some((b) => b.kind === kind && b.quant === quant)) {
+					kinds.push({ kind, quant, repo });
+				}
+
+				byRepo.set(repo, kinds);
 			}
 		}
 
@@ -134,18 +131,6 @@ export class ModelsService {
 
 	static isModelLoading(model: ApiModelDataEntry): boolean {
 		return model.status.value === ServerModelStatus.LOADING;
-	}
-
-	/**
-	 * True when a router entry id marks a downloaded sidecar file, e.g.
-	 * `org/model:Q4_0-mtp` or `org/model:mmproj`, not a loadable model.
-	 */
-	static isSidecarEntry(modelId: string): boolean {
-		const idx = modelId.indexOf(MODEL_ID.QUANTIZATION_SEPARATOR);
-
-		if (idx === MODEL_ID.NOT_FOUND) return false;
-
-		return sidecarFromTag(modelId.slice(idx + 1)) !== null;
 	}
 
 	/**

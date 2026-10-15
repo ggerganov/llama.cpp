@@ -68,12 +68,8 @@
 		const isPaused = modelsStore.status.isDownloadPaused(repoWithTag);
 
 		return {
-			// solo downloads register in /v1/models under the tag (args stay empty),
-			// while drafts pulled by a loaded model only show up as its --model-draft
-			isDownloaded:
-				!isDownloading &&
-				(modelsStore.status.isModelDownloaded(repoWithTag) ||
-					(isSidecar && modelsStore.status.isSidecarDownloaded(modelId, filePath))),
+			// a sidecar reads as downloaded when its model lists it on disk
+			isDownloaded: !isDownloading && modelsStore.status.isModelDownloaded(repoWithTag),
 			isDownloading,
 			isFailed: modelsStore.status.hasFailedDownload(repoWithTag),
 			isPaused,

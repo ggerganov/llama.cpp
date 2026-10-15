@@ -109,6 +109,11 @@ std::string common_docker_resolve_model(const std::string & docker);
 // returns true if anything was removed
 bool common_download_remove(const std::string & hf_repo_with_tag, const common_download_opts & opts = {});
 
+// remove the cached sidecar files `opts` selects for "user/model:tag", as the cached
+// plan resolves them, and leave the model files in place
+// returns true if anything was removed
+bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const common_download_opts & opts);
+
 struct common_download_hf_plan {
     hf_cache::hf_file primary;
     hf_cache::hf_files model_files;
