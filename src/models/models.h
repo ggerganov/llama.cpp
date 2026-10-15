@@ -879,6 +879,19 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
         std::vector<float> x0_prev;
     };
 
+    // classifier-free guidance on stacked head outputs: guided = uncond + scale * (cond - uncond)
+    // all three buffers are length n (latent_size * n_frames)
+    static void cfg_guide(const float * v_cond, const float * v_uncond, float * guided, size_t n, float scale);
+
+    // undo speech scaling in place: x = x / speech_scaling_factor - speech_bias_factor
+    void unscale_speech_latents(float * latents, size_t n) const;
+
+    // next-token speech embedding for one or more frames (upstream acoustic_conn + semantic_conn)
+    // scaled_latents [vae_dim, N] are still in diffusion/speech space (before unscale)
+    // wav [T, 1] is the decoded mono waveform with T = N * hop (hop = prod(acoustic.dec_ratios))
+    // returns [n_embd, N] = acoustic_conn(scaled_latents) + semantic_conn(semantic_enc(wav))
+    ggml_tensor * build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav) const;
+
 private:
     struct tok_tensors;
 

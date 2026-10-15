@@ -484,3 +484,38 @@ void llama_model_vibevoice::diff_sampler::step(const float * v, float * x, size_
     x0_prev = std::move(x0);
     i++;
 }
+
+//
+// generation wiring: CFG + speech feedback embeds
+//
+
+void llama_model_vibevoice::cfg_guide(const float * v_cond, const float * v_uncond, float * guided, size_t n, float scale) {
+    for (size_t i = 0; i < n; ++i) {
+        guided[i] = v_uncond[i] + scale * (v_cond[i] - v_uncond[i]);
+    }
+}
+
+void llama_model_vibevoice::unscale_speech_latents(float * latents, size_t n) const {
+    const float scale = hparams.vibevoice.speech_scaling_factor;
+    const float bias  = hparams.vibevoice.speech_bias_factor;
+    for (size_t i = 0; i < n; ++i) {
+        latents[i] = latents[i] / scale - bias;
+    }
+}
+
+// acoustic_conn(scaled latents) + semantic_conn(semantic_enc(wav)), matches upstream feedback embeds
+ggml_tensor * llama_model_vibevoice::build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav) const {
+    const auto & vv = hparams.vibevoice;
+
+    GGML_ASSERT(ggml_is_matrix(scaled_latents) && scaled_latents->ne[0] == vv.diff_latent_size);
+    GGML_ASSERT(ggml_is_matrix(wav) && wav->ne[1] == 1);
+
+    ggml_tensor * acoustic_emb = build_connector(ctx, scaled_latents, acoustic_conn);
+
+    ggml_tensor * semantic_latents = build_semantic_enc(ctx, wav);
+    GGML_ASSERT(semantic_latents->ne[1] == scaled_latents->ne[1]);
+
+    ggml_tensor * semantic_emb = build_connector(ctx, semantic_latents, semantic_conn);
+
+    return ggml_add(ctx, acoustic_emb, semantic_emb);
+}
