@@ -89,8 +89,7 @@ class MuseSparkModel(TextModel):
 
             yield self.map_tensor_name(name), _unpermute_for_rope(data_torch, n_head)
 
-            # QK-norm has no weights of its own, synthesize them to carry the MetaP
-            # scale so the graph keeps the plain 1 / sqrt(head_dim)
+            # Synthesize QK-norm to carry the MetaP scale so the graph keeps the plain 1 / sqrt(head_dim)
             ones = torch.ones(head_dim, dtype=torch.float32)
             q_norm = ones * self.hparams["qk_scale_factor"]
             yield self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q_NORM, bid), q_norm
