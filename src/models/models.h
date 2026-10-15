@@ -901,6 +901,28 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     static constexpr llama_token audio_bos_token_id = 151652; // <|vision_start|>
     static constexpr llama_token audio_token_id     = 151654; // <|vision_pad|>
 
+    // left context of every causal conv of one tokenizer part, for chunk by chunk (streaming) decode/encode
+    // one buffer per conv in graph order, [n_ctx, C] with n_ctx = K - stride (K - 1 for the transposed convs)
+    // a cleared cache is a cold start, the left context is zeros like the padding of a full sequence
+    struct tok_stream_cache {
+        std::vector<std::vector<float>> convs;
+
+        void clear() { convs.clear(); }
+    };
+
+    // streaming build_acoustic_dec, the concatenated chunks match a decode of the full sequence
+    // unscaled latents [vae_dim * n_new] -> the new waveform samples [n_new * prod(dec_ratios)]
+    std::vector<float> acoustic_dec_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * latents, int64_t n_new) const;
+
+    // streaming build_semantic_enc, n_samples must be a multiple of the encoder hop
+    // wav [n_samples] -> the new semantic latents [semantic.vae_dim * n_samples / hop]
+    std::vector<float> semantic_enc_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * wav, int64_t n_samples) const;
+
+    // streaming build_speech_feedback, the cache is the semantic encoder one (the acoustic connector is per frame)
+    // scaled_latents [latent_size * n_new], wav [n_new * hop] -> [n_embd * n_new]
+    std::vector<float> speech_feedback_stream(ggml_backend_t backend, tok_stream_cache & semantic_cache,
+            const float * scaled_latents, const float * wav, int64_t n_new) const;
+
     // undo speech scaling in place: x = x / speech_scaling_factor - speech_bias_factor
     void unscale_speech_latents(float * latents, size_t n) const;
 
@@ -910,8 +932,15 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     // returns [n_embd, N] = acoustic_conn(scaled_latents) + semantic_conn(semantic_enc(wav))
     ggml_tensor * build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav) const;
 
+    struct stream_io;
+
 private:
     struct tok_tensors;
+
+    // with st the causal convs read their left context from cache inputs and output the updated caches
+    ggml_tensor * build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents, stream_io * st) const;
+    ggml_tensor * build_semantic_enc(ggml_context * ctx, ggml_tensor * wav, stream_io * st) const;
+    ggml_tensor * build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav, stream_io * st) const;
 
     ggml_tensor * create_tensor_from_file(llama_model_loader & ml, const LLM_TN_IMPL & tn);
     void load_connector(llama_model_loader & ml, connector & conn, llm_tensor fc1, llm_tensor norm, llm_tensor fc2);

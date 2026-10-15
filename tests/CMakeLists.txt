@@ -264,6 +264,8 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     target_include_directories(test-vibevoice-gen-wire PRIVATE ${PROJECT_SOURCE_DIR}/src)
     llama_build(test-vibevoice-lm-loop.cpp)
     target_include_directories(test-vibevoice-lm-loop PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    llama_build(test-vibevoice-stream-cache.cpp)
+    target_include_directories(test-vibevoice-stream-cache PRIVATE ${PROJECT_SOURCE_DIR}/src)
 endif()
 
 llama_build_and_test(test-chat-peg-parser.cpp peg-parser/simple-tokenize.cpp)

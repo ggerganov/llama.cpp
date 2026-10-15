@@ -200,29 +200,64 @@ void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
 // acoustic decoder
 //
 
+// left context of the causal convs when a sequence runs chunk by chunk (upstream VibeVoiceTokenizerStreamingCache)
+// every conv takes its cache as a graph input and outputs the updated one, in graph order
+struct llama_model_vibevoice::stream_io {
+    std::vector<ggml_tensor *> inp;
+    std::vector<ggml_tensor *> out;
+};
+
+// x: [T, C] -> [n_ctx + T, C], the left context is the stream cache, or zeros without a stream
+// the updated cache is the last n_ctx rows of the result
+static ggml_tensor * vv_left_context(ggml_context * ctx, ggml_tensor * x, int64_t n_ctx, llama_model_vibevoice::stream_io * st) {
+    if (n_ctx == 0) {
+        return x;
+    }
+    if (st == nullptr) {
+        return ggml_pad_ext(ctx, x, n_ctx, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    ggml_tensor * cache = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_ctx, x->ne[1]);
+    ggml_set_input(cache);
+
+    x = ggml_concat(ctx, cache, x, 0);
+
+    ggml_tensor * next = ggml_cont(ctx, ggml_view_2d(ctx, x, n_ctx, x->ne[1], x->nb[1], (x->ne[0] - n_ctx) * x->nb[0]));
+    ggml_set_output(next);
+
+    st->inp.push_back(cache);
+    st->out.push_back(next);
+
+    return x;
+}
+
 // causal conv1d with optional stride, zero left padding. x: [T, IC], w: [K, IC, OC]
 // padding_total = K - stride (upstream SConv1d); caller should pass a T that needs no extra right pad
 // returns [ceil-ish T/stride, OC]; with T % stride == 0 and K == 2*stride this is exactly T/stride
-static ggml_tensor * vv_causal_conv1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride = 1) {
+// streaming: the padding is replaced by the last K - stride inputs, chunks must be multiples of stride
+static ggml_tensor * vv_causal_conv1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride = 1, llama_model_vibevoice::stream_io * st = nullptr) {
     GGML_ASSERT(stride >= 1 && w->ne[0] >= stride);
-    const int padding_total = (int) w->ne[0] - stride;
-    x = ggml_pad_ext(ctx, x, padding_total, 0, 0, 0, 0, 0, 0, 0);
+    x = vv_left_context(ctx, x, w->ne[0] - stride, st);
     ggml_tensor * y = ggml_conv_1d(ctx, w, x, stride, 0, 1);
     return ggml_reshape_2d(ctx, y, y->ne[0], y->ne[1]);
 }
 
 // depthwise variant of vv_causal_conv1d. x: [T, C], w: [K, 1, C], returns [T, C]
-static ggml_tensor * vv_causal_conv1d_dw(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w) {
-    x = ggml_pad_ext(ctx, x, w->ne[0] - 1, 0, 0, 0, 0, 0, 0, 0);
+static ggml_tensor * vv_causal_conv1d_dw(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, llama_model_vibevoice::stream_io * st) {
+    x = vv_left_context(ctx, x, w->ne[0] - 1, st);
     ggml_tensor * y = ggml_conv_1d_dw(ctx, w, x, 1, 0, 1);
     return ggml_reshape_2d(ctx, y, y->ne[0], y->ne[1]);
 }
 
 // causal ConvTranspose1d, the (K - stride) overlap is trimmed on the right. x: [T, IC], w: [K, OC, IC], returns [T * stride, OC]
-static ggml_tensor * vv_causal_conv_transpose1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride) {
+// streaming: the last K - 1 inputs are prepended like upstream, only the outputs of the new inputs are returned
+static ggml_tensor * vv_causal_conv_transpose1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride, llama_model_vibevoice::stream_io * st) {
     GGML_ASSERT(w->ne[0] >= stride);
+    const int64_t n_new = x->ne[0];
+    const int64_t n_ctx = st ? w->ne[0] - 1 : 0;
+    x = vv_left_context(ctx, x, n_ctx, st);
     ggml_tensor * y = ggml_conv_transpose_1d(ctx, w, x, stride, 0, 1);
-    return ggml_view_2d(ctx, y, x->ne[0] * stride, y->ne[1], y->nb[1], 0);
+    return ggml_view_2d(ctx, y, n_new * stride, y->ne[1], y->nb[1], n_ctx * stride * y->nb[0]);
 }
 
 // the decoder stream is [C, T], the convs run on the transposed [T, C]
@@ -231,10 +266,11 @@ static ggml_tensor * vv_transpose(ggml_context * ctx, ggml_tensor * x) {
 }
 
 // ConvNeXt-style Block1D: RMSNorm -> depthwise conv -> gamma -> residual, RMSNorm -> FFN -> ffn_gamma -> residual
-static ggml_tensor * vv_build_tok_block(ggml_context * ctx, ggml_tensor * x, const llama_model_vibevoice::tok_block & blk, float eps) {
+static ggml_tensor * vv_build_tok_block(ggml_context * ctx, ggml_tensor * x, const llama_model_vibevoice::tok_block & blk, float eps,
+        llama_model_vibevoice::stream_io * st) {
     ggml_tensor * cur = ggml_rms_norm(ctx, x, eps);
     cur = ggml_mul(ctx, cur, blk.norm);
-    cur = vv_transpose(ctx, vv_causal_conv1d_dw(ctx, vv_transpose(ctx, cur), blk.dwconv));
+    cur = vv_transpose(ctx, vv_causal_conv1d_dw(ctx, vv_transpose(ctx, cur), blk.dwconv, st));
     cur = ggml_add(ctx, cur, blk.dwconv_b);
     cur = ggml_mul(ctx, cur, blk.gamma);
     x = ggml_add(ctx, x, cur);
@@ -252,6 +288,10 @@ static ggml_tensor * vv_build_tok_block(ggml_context * ctx, ggml_tensor * x, con
 }
 
 ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents) const {
+    return build_acoustic_dec(ctx, latents, nullptr);
+}
+
+ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents, stream_io * st) const {
     const auto & hp = hparams.vibevoice.acoustic;
 
     GGML_ASSERT(ggml_is_matrix(latents) && latents->ne[0] == hp.vae_dim);
@@ -264,19 +304,19 @@ ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml
         // the first conv is the stem, the others upsample by the decoder ratios in config order
         ggml_tensor * x = vv_transpose(ctx, cur);
         if (s == 0) {
-            x = vv_causal_conv1d(ctx, x, stage.conv);
+            x = vv_causal_conv1d(ctx, x, stage.conv, 1, st);
         } else {
-            x = vv_causal_conv_transpose1d(ctx, x, stage.conv, hp.dec_ratios[s - 1]);
+            x = vv_causal_conv_transpose1d(ctx, x, stage.conv, hp.dec_ratios[s - 1], st);
         }
         cur = ggml_add(ctx, vv_transpose(ctx, x), stage.conv_b);
 
         for (const auto & blk : stage.blocks) {
-            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps);
+            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps, st);
         }
     }
 
     // disable_last_norm: there is no norm before the head
-    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), acoustic_dec.head);
+    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), acoustic_dec.head, 1, st);
     cur = ggml_add(ctx, cur, ggml_reshape_2d(ctx, acoustic_dec.head_b, 1, acoustic_dec.head_b->ne[0]));
 
     return cur;
@@ -292,7 +332,8 @@ static ggml_tensor * vv_build_tok_enc(
         ggml_context * ctx,
         ggml_tensor * wav,
         const llama_model_vibevoice::tok_part & enc,
-        const llama_hparams_vv_tokenizer & hp) {
+        const llama_hparams_vv_tokenizer & hp,
+        llama_model_vibevoice::stream_io * st) {
     GGML_ASSERT(ggml_is_matrix(wav) && wav->ne[1] == 1);
     GGML_ASSERT(hp.n_enc_stages > 0);
 
@@ -306,21 +347,21 @@ static ggml_tensor * vv_build_tok_enc(
 
         ggml_tensor * x = vv_transpose(ctx, cur);
         if (s == 0) {
-            x = vv_causal_conv1d(ctx, x, stage.conv, 1);
+            x = vv_causal_conv1d(ctx, x, stage.conv, 1, st);
         } else {
             // reversed config ratios: first downsample uses the last config ratio
             const uint32_t stride = hp.enc_ratios[n_ratios - s];
-            x = vv_causal_conv1d(ctx, x, stage.conv, (int) stride);
+            x = vv_causal_conv1d(ctx, x, stage.conv, (int) stride, st);
         }
         cur = ggml_add(ctx, vv_transpose(ctx, x), stage.conv_b);
 
         for (const auto & blk : stage.blocks) {
-            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps);
+            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps, st);
         }
     }
 
     // disable_last_norm: there is no norm before the head
-    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), enc.head, 1);
+    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), enc.head, 1, st);
     cur = ggml_add(ctx, cur, ggml_reshape_2d(ctx, enc.head_b, 1, enc.head_b->ne[0]));
 
     // [T', vae_dim] -> [vae_dim, T']
@@ -328,11 +369,15 @@ static ggml_tensor * vv_build_tok_enc(
 }
 
 ggml_tensor * llama_model_vibevoice::build_semantic_enc(ggml_context * ctx, ggml_tensor * wav) const {
-    return vv_build_tok_enc(ctx, wav, semantic_enc, hparams.vibevoice.semantic);
+    return build_semantic_enc(ctx, wav, nullptr);
+}
+
+ggml_tensor * llama_model_vibevoice::build_semantic_enc(ggml_context * ctx, ggml_tensor * wav, stream_io * st) const {
+    return vv_build_tok_enc(ctx, wav, semantic_enc, hparams.vibevoice.semantic, st);
 }
 
 ggml_tensor * llama_model_vibevoice::build_acoustic_enc(ggml_context * ctx, ggml_tensor * wav) const {
-    return vv_build_tok_enc(ctx, wav, acoustic_enc, hparams.vibevoice.acoustic);
+    return vv_build_tok_enc(ctx, wav, acoustic_enc, hparams.vibevoice.acoustic, nullptr);
 }
 
 // speech connector: Linear -> RMSNorm -> Linear (no activation), matches upstream SpeechConnector
@@ -600,6 +645,10 @@ void llama_model_vibevoice::unscale_speech_latents(float * latents, size_t n) co
 
 // acoustic_conn(scaled latents) + semantic_conn(semantic_enc(wav)), matches upstream feedback embeds
 ggml_tensor * llama_model_vibevoice::build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav) const {
+    return build_speech_feedback(ctx, scaled_latents, wav, nullptr);
+}
+
+ggml_tensor * llama_model_vibevoice::build_speech_feedback(ggml_context * ctx, ggml_tensor * scaled_latents, ggml_tensor * wav, stream_io * st) const {
     const auto & vv = hparams.vibevoice;
 
     GGML_ASSERT(ggml_is_matrix(scaled_latents) && scaled_latents->ne[0] == vv.diff_latent_size);
@@ -607,10 +656,148 @@ ggml_tensor * llama_model_vibevoice::build_speech_feedback(ggml_context * ctx, g
 
     ggml_tensor * acoustic_emb = build_connector(ctx, scaled_latents, acoustic_conn);
 
-    ggml_tensor * semantic_latents = build_semantic_enc(ctx, wav);
+    ggml_tensor * semantic_latents = build_semantic_enc(ctx, wav, st);
     GGML_ASSERT(semantic_latents->ne[1] == scaled_latents->ne[1]);
 
     ggml_tensor * semantic_emb = build_connector(ctx, semantic_latents, semantic_conn);
 
     return ggml_add(ctx, acoustic_emb, semantic_emb);
+}
+
+//
+// streaming tokenizer: chunk by chunk decode/encode with causal conv caches
+//
+
+static ggml_context * vv_stream_ctx_init() {
+    const size_t n_nodes = 4 * GGML_DEFAULT_GRAPH_SIZE;
+
+    ggml_init_params params = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_nodes + ggml_graph_overhead_custom(n_nodes, false),
+        /*.mem_buffer =*/ nullptr,
+        /*.no_alloc   =*/ true,
+    };
+    return ggml_init(params);
+}
+
+// computes a streaming graph: sets the caches (zeros on a cold start) and the inputs, keeps the updated caches
+// frees ctx, returns out
+static std::vector<float> vv_run_stream(
+        ggml_backend_t backend,
+        ggml_context * ctx,
+        ggml_tensor * out,
+        const llama_model_vibevoice::stream_io & st,
+        llama_model_vibevoice::tok_stream_cache & cache,
+        const std::vector<std::pair<ggml_tensor *, const float *>> & inputs) {
+    const auto fail = [&](const char * msg) {
+        ggml_free(ctx);
+        throw std::runtime_error(format("vibevoice: %s", msg));
+    };
+
+    if (cache.convs.empty()) {
+        cache.convs.resize(st.inp.size());
+        for (size_t i = 0; i < st.inp.size(); ++i) {
+            cache.convs[i].assign(ggml_nelements(st.inp[i]), 0.0f);
+        }
+    }
+    if (cache.convs.size() != st.inp.size()) {
+        fail("stream cache does not match the graph");
+    }
+    for (size_t i = 0; i < st.inp.size(); ++i) {
+        if (cache.convs[i].size() != (size_t) ggml_nelements(st.inp[i])) {
+            fail("stream cache does not match the graph");
+        }
+    }
+
+    ggml_set_output(out);
+
+    ggml_cgraph * gf = ggml_new_graph_custom(ctx, 4 * GGML_DEFAULT_GRAPH_SIZE, false);
+    ggml_build_forward_expand(gf, out);
+    for (ggml_tensor * t : st.out) {
+        ggml_build_forward_expand(gf, t);
+    }
+
+    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
+    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
+        ggml_gallocr_free(galloc);
+        fail("failed to allocate the streaming graph");
+    }
+
+    for (size_t i = 0; i < st.inp.size(); ++i) {
+        ggml_backend_tensor_set(st.inp[i], cache.convs[i].data(), 0, ggml_nbytes(st.inp[i]));
+    }
+    for (const auto & [t, data] : inputs) {
+        ggml_backend_tensor_set(t, data, 0, ggml_nbytes(t));
+    }
+
+    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
+        ggml_gallocr_free(galloc);
+        fail("failed to compute the streaming graph");
+    }
+
+    for (size_t i = 0; i < st.out.size(); ++i) {
+        ggml_backend_tensor_get(st.out[i], cache.convs[i].data(), 0, ggml_nbytes(st.out[i]));
+    }
+
+    std::vector<float> res(ggml_nelements(out));
+    ggml_backend_tensor_get(out, res.data(), 0, ggml_nbytes(out));
+
+    ggml_gallocr_free(galloc);
+    ggml_free(ctx);
+
+    return res;
+}
+
+std::vector<float> llama_model_vibevoice::acoustic_dec_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * latents, int64_t n_new) const {
+    GGML_ASSERT(n_new > 0);
+
+    ggml_context * ctx = vv_stream_ctx_init();
+
+    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.acoustic.vae_dim, n_new);
+    ggml_set_input(inp);
+
+    stream_io st;
+    ggml_tensor * out = build_acoustic_dec(ctx, inp, &st);
+
+    return vv_run_stream(backend, ctx, out, st, cache, { { inp, latents } });
+}
+
+// the strided convs only see whole strides when the chunk is a multiple of the encoder hop
+static int64_t vv_enc_hop(const llama_hparams_vv_tokenizer & hp) {
+    int64_t hop = 1;
+    for (uint32_t s = 0; s + 1 < hp.n_enc_stages; ++s) {
+        hop *= hp.enc_ratios[s];
+    }
+    return hop;
+}
+
+std::vector<float> llama_model_vibevoice::semantic_enc_stream(ggml_backend_t backend, tok_stream_cache & cache, const float * wav, int64_t n_samples) const {
+    GGML_ASSERT(n_samples > 0 && n_samples % vv_enc_hop(hparams.vibevoice.semantic) == 0);
+
+    ggml_context * ctx = vv_stream_ctx_init();
+
+    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_samples, 1);
+    ggml_set_input(inp);
+
+    stream_io st;
+    ggml_tensor * out = build_semantic_enc(ctx, inp, &st);
+
+    return vv_run_stream(backend, ctx, out, st, cache, { { inp, wav } });
+}
+
+std::vector<float> llama_model_vibevoice::speech_feedback_stream(ggml_backend_t backend, tok_stream_cache & semantic_cache,
+        const float * scaled_latents, const float * wav, int64_t n_new) const {
+    const int64_t hop = vv_enc_hop(hparams.vibevoice.semantic);
+    GGML_ASSERT(n_new > 0);
+
+    ggml_context * ctx = vv_stream_ctx_init();
+
+    ggml_tensor * lat = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.vibevoice.diff_latent_size, n_new);
+    ggml_set_input(lat);
+    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_new * hop, 1);
+    ggml_set_input(inp);
+
+    stream_io st;
+    ggml_tensor * out = build_speech_feedback(ctx, lat, inp, &st);
+
+    return vv_run_stream(backend, ctx, out, st, semantic_cache, { { lat, scaled_latents }, { inp, wav } });
 }

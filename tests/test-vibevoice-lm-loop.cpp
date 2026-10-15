@@ -1,11 +1,10 @@
 // smoke test for the VibeVoice LM dual-KV audio_token loop, on top of llama_decode
 // two contexts share the model: the positive branch has the prompt, the negative (CFG) branch starts at audio_bos
-// every frame: last hidden of both -> CFG diffusion sample -> decode -> speech feedback embd fed to both branches
+// every frame: last hidden of both -> CFG diffusion sample -> streaming decode -> streaming speech feedback embd fed to both branches
 // the frames are forced, the LM is not sampled (random-weight fixtures do not argmax to audio_token)
 // usage: test-vibevoice-lm-loop <model.gguf> [n_frames]
 
 #include "ggml.h"
-#include "ggml-alloc.h"
 #include "ggml-backend.h"
 #include "llama.h"
 
@@ -18,96 +17,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
-
-static std::vector<float> decode(const llama_model_vibevoice & model, ggml_backend_t backend, const std::vector<float> & latents, int64_t n_frames) {
-    ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
-        /*.mem_buffer =*/ nullptr,
-        /*.no_alloc   =*/ true,
-    };
-    ggml_context * ctx = ggml_init(params);
-
-    ggml_tensor * inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, model.hparams.vibevoice.acoustic.vae_dim, n_frames);
-    ggml_set_input(inp);
-
-    ggml_tensor * out = model.build_acoustic_dec(ctx, inp);
-    ggml_set_output(out);
-
-    ggml_cgraph * gf = ggml_new_graph(ctx);
-    ggml_build_forward_expand(gf, out);
-
-    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
-        fprintf(stderr, "failed to allocate the decoder graph\n");
-        exit(1);
-    }
-
-    ggml_backend_tensor_set(inp, latents.data(), 0, ggml_nbytes(inp));
-    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-        fprintf(stderr, "failed to compute the decoder graph\n");
-        exit(1);
-    }
-
-    std::vector<float> wav(ggml_nelements(out));
-    ggml_backend_tensor_get(out, wav.data(), 0, ggml_nbytes(out));
-
-    ggml_gallocr_free(galloc);
-    ggml_free(ctx);
-
-    return wav;
-}
-
-// speech feedback of all frames so far [n_embd, n_frames]
-static std::vector<float> feedback(
-        const llama_model_vibevoice & model,
-        ggml_backend_t backend,
-        const std::vector<float> & scaled_latents,
-        const std::vector<float> & wav,
-        int64_t n_frames) {
-    ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
-        /*.mem_buffer =*/ nullptr,
-        /*.no_alloc   =*/ true,
-    };
-    ggml_context * ctx = ggml_init(params);
-
-    ggml_tensor * lat = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, model.hparams.vibevoice.diff_latent_size, n_frames);
-    ggml_set_input(lat);
-    ggml_tensor * wav_t = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, wav.size(), 1);
-    ggml_set_input(wav_t);
-
-    ggml_tensor * out = model.build_speech_feedback(ctx, lat, wav_t);
-    ggml_set_output(out);
-
-    ggml_cgraph * gf = ggml_new_graph(ctx);
-    ggml_build_forward_expand(gf, out);
-
-    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
-        fprintf(stderr, "failed to allocate the speech feedback graph\n");
-        exit(1);
-    }
-
-    ggml_backend_tensor_set(lat,   scaled_latents.data(), 0, ggml_nbytes(lat));
-    ggml_backend_tensor_set(wav_t, wav.data(),            0, ggml_nbytes(wav_t));
-    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-        fprintf(stderr, "failed to compute the speech feedback graph\n");
-        exit(1);
-    }
-
-    if (out->ne[0] != model.hparams.n_embd || out->ne[1] != n_frames) {
-        fprintf(stderr, "bad feedback shape [%" PRId64 ", %" PRId64 "]\n", out->ne[0], out->ne[1]);
-        exit(1);
-    }
-
-    std::vector<float> emb(ggml_nelements(out));
-    ggml_backend_tensor_get(out, emb.data(), 0, ggml_nbytes(out));
-
-    ggml_gallocr_free(galloc);
-    ggml_free(ctx);
-
-    return emb;
-}
 
 static bool all_finite(const std::vector<float> & v) {
     return std::all_of(v.begin(), v.end(), [](float x) { return std::isfinite(x); });
@@ -307,12 +216,14 @@ int main(int argc, char ** argv) {
     // restart the negative branch once, as on a new audio_bos from the positive branch
     const int64_t i_reset = n_frames / 2;
 
-    std::vector<float> scaled;  // scaled latents of all frames so far
+    // decoder and semantic encoder caches, each frame only runs the convs on its own latent and samples
+    llama_model_vibevoice::tok_stream_cache dec_cache;
+    llama_model_vibevoice::tok_stream_cache sem_cache;
+
+    int64_t n_wav = 0;
     bool wav_finite_all = true;
 
     for (int64_t i = 0; i < n_frames && ok; ++i) {
-        const int64_t n_done = i + 1;
-
         const std::vector<float> h_pos = pos.hidden(n_embd);
         const std::vector<float> h_neg = neg.hidden(n_embd);
         ok &= all_finite(h_pos) && all_finite(h_neg);
@@ -335,26 +246,24 @@ int main(int argc, char ** argv) {
             }
         }
 
-        scaled.insert(scaled.end(), lat.begin(), lat.end());
-
-        std::vector<float> unscaled = scaled;
+        std::vector<float> unscaled = lat;
         model->unscale_speech_latents(unscaled.data(), unscaled.size());
 
         // random-weight fixtures overflow the F16 conversions of the decoder, only the length is checked
-        std::vector<float> wav = decode(*model, backend, unscaled, n_done);
-        ok &= check("wav", wav, n_done * hop, false);
+        std::vector<float> wav = model->acoustic_dec_stream(backend, dec_cache, unscaled.data(), 1);
+        ok &= check("wav", wav, hop, false);
 
         // with a non-finite waveform the feedback runs on a synthetic one, so the embedding injection still runs
         if (!all_finite(wav)) {
             wav_finite_all = false;
             for (size_t k = 0; k < wav.size(); ++k) {
-                wav[k] = 0.05f * cosf(0.11f * k);
+                wav[k] = 0.05f * cosf(0.11f * (n_wav + k));
             }
         }
+        n_wav += wav.size();
 
-        // feedback of all frames so far, the encoders are causal so the last column is the feedback of this frame
-        const std::vector<float> emb_all = feedback(*model, backend, scaled, wav, n_done);
-        const std::vector<float> emb(emb_all.end() - n_embd, emb_all.end());
+        // streaming feedback of this frame, same as the last column of the feedback over all frames so far
+        const std::vector<float> emb = model->speech_feedback_stream(backend, sem_cache, lat.data(), wav.data(), 1);
         ok &= check("feedback", emb, n_embd);
 
         // the same embedding goes into both branches
@@ -387,6 +296,10 @@ int main(int argc, char ** argv) {
     const int64_t neg_expected = n_frames - i_reset;
     printf("final: pos cache %" PRId64 " (expected %" PRId64 "), neg cache %" PRId64 " (expected %" PRId64 ")\n",
             pos.n_cached(), pos_expected, neg.n_cached(), neg_expected);
+    if (ok && n_wav != n_frames * hop) {
+        fprintf(stderr, "streamed %" PRId64 " samples, expected %" PRId64 "\n", n_wav, n_frames * hop);
+        ok = false;
+    }
     if (ok && (pos.n_cached() != pos_expected || neg.n_cached() != neg_expected)) {
         fprintf(stderr, "unexpected final cache sizes\n");
         ok = false;
