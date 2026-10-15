@@ -52,8 +52,8 @@ class MuseSparkModel(TextModel):
         super().set_gguf_parameters()
         hparams = self.hparams
 
-        # MetaP resolves to two scalars, the output multiplier lands here and the
-        # attention scale rides on the synthesized QK-norm weights
+        # MetaP resolves to two scalars
+        # The output multiplier lands here and the attention scale rides on the synthesized QK-norm weights
         self.gguf_writer.add_logit_scale(hparams["output_multiplier"])
         self.gguf_writer.add_final_logit_softcapping(hparams["final_logit_softcapping"])
 
