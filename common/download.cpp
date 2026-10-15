@@ -1096,6 +1096,10 @@ bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const
 
     auto plan = common_download_get_hf_plan(model, cached);
 
+    // the partials a sidecar download left in blobs/, resolved the way the download
+    // resolves them; the snapshot entries alone would leave those behind
+    remove_partial_files(hf_repo_with_tag, opts);
+
     std::vector<std::filesystem::path> to_remove;
     for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
         if (!f.local_path.empty()) {

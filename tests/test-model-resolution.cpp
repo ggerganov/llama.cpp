@@ -379,6 +379,59 @@ static void test_partial_removal() {
 }
 
 //
+// removal of a sidecar alone: its snapshot entry goes, the model keeps its
+// files, and the partials of the sidecars a download planned go with it
+//
+
+// put a file in the cache the way a finished download leaves it, refs/main included
+static void cache_put(const std::string & repo_id, const std::string & path) {
+    namespace fs = std::filesystem;
+
+    const fs::path local = cached(repo_id, path);
+    fs::create_directories(local.parent_path());
+    { std::ofstream(local) << "gguf"; }
+
+    const fs::path ref = local.parent_path().parent_path().parent_path() / "refs" / "main";
+    fs::create_directories(ref.parent_path());
+    if (!fs::exists(ref)) {
+        std::ofstream(ref) << COMMIT << "\n";
+    }
+}
+
+static void test_sidecar_removal() {
+    namespace fs = std::filesystem;
+
+    printf("test-model-resolution: sidecar removal\n");
+
+    g_context = "sidecar removal";
+    g_repos.clear();
+    // the listing order sets the oids the partials are named after
+    g_repos["test/sidecar"] = { "model-Q4_0.gguf", "dflash-model-Q4_0.gguf", "mtp-model-Q4_0.gguf" };
+
+    cache_put("test/sidecar", "model-Q4_0.gguf");
+    cache_put("test/sidecar", "dflash-model-Q4_0.gguf");
+
+    // the mtp of that quant never finished, so it is only a partial
+    const fs::path blobs = cache_dir / "models--test--sidecar" / "blobs";
+    const fs::path mtp_part = blobs / "0000000000000000000000000000000000000003.downloadInProgress";
+    fs::create_directories(blobs);
+    { std::ofstream(mtp_part) << "gguf"; }
+
+    common_download_opts opts;
+    opts.download_dflash = true;
+    opts.download_mtp    = true;
+
+    // the sidecars go, the partial of the unfinished one with them, and the model stays
+    REQUIRE(common_download_remove_sidecars("test/sidecar:Q4_0", opts));
+    REQUIRE(!fs::exists(cached("test/sidecar", "dflash-model-Q4_0.gguf")));
+    REQUIRE(!fs::exists(mtp_part));
+    REQUIRE(fs::exists(cached("test/sidecar", "model-Q4_0.gguf")));
+
+    fs::remove_all(cache_dir / "models--test--sidecar");
+    g_repos.clear();
+}
+
+//
 // end-to-end assembly: real CLI parsing, real handler init resolving over the
 // loopback, downloads skipped by flipping offline before apply
 //
@@ -549,6 +602,7 @@ int main(void) {
 
     test_plan_resolution();
     test_partial_removal();
+    test_sidecar_removal();
     test_task_assembly();
 
     server.stop();
