@@ -32,7 +32,7 @@ import type {
 } from '$lib/types';
 import type { ModelSidecarBadge } from '$lib/types/models';
 import { repoOf } from '$lib/utils/model-names';
-import { isAuxSidecar } from '$lib/utils/sidecars';
+import { isAuxSidecar, isDraftSidecar, sidecarFromFileToken } from '$lib/utils/sidecars';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';
 
@@ -158,6 +158,44 @@ export class ModelStatusManager {
 	private pausedDownloads = new SvelteMap<string, ModelDownloadProgress | null>();
 	/** Models with a download POST in flight, so a second click cannot post again. */
 	private pendingDownloads = new SvelteSet<string>();
+	/**
+	 * Draft kinds a download on its way or unfinished reports, keyed by repo: the
+	 * files are not on disk yet, so a download row reads them as pending.
+	 */
+	private pendingSidecarsByRepo = $derived.by(() => {
+		const result = new SvelteMap<string, ModelSidecarBadge[]>();
+
+		for (const m of this.host.routerModels) {
+			if (
+				m.status?.value !== ServerModelStatus.DOWNLOADING &&
+				m.status?.value !== ServerModelStatus.INCOMPLETE
+			)
+				continue;
+
+			if (!Array.isArray(m.sidecars)) continue;
+
+			const repo = repoOf(m.id);
+
+			for (const kind of m.sidecars) {
+				const sidecar = sidecarFromFileToken(kind);
+
+				if (!sidecar || !isDraftSidecar(sidecar)) continue;
+
+				const badge: ModelSidecarBadge = { kind: sidecar, pending: true, quant: null, repo };
+				const badges = result.get(repo);
+
+				if (badges) {
+					if (!badges.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
+						badges.push(badge);
+					}
+				} else {
+					result.set(repo, [badge]);
+				}
+			}
+		}
+
+		return result;
+	});
 	// /models/sse feed state, the single source of truth for status and load progress
 	private statusAbort: AbortController | null = null;
 	private statusReaderActive = false;
@@ -373,18 +411,15 @@ export class ModelStatusManager {
 	 * lists the sidecars each cached model has on disk.
 	 */
 	getDraftSidecars(repoId: string): ModelSidecarBadge[] {
-		const badges = this.draftSidecarsByRepo.get(repoId) ?? [];
-		const listed = this.listedSidecarsByRepo.get(repoId) ?? [];
+		// one badge per kind: the args know the quant, the listing carries kinds only,
+		// and a draft still coming down is pending rather than on disk
+		const merged = [...(this.draftSidecarsByRepo.get(repoId) ?? [])];
 
-		if (badges.length === 0) return listed;
-
-		// one badge per kind: the listing carries kinds only, so its badge of a kind
-		// the args already name would read as a second draft of the same kind
-		const merged = [...badges];
-
-		for (const badge of listed) {
-			if (!merged.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
-				merged.push(badge);
+		for (const source of [this.listedSidecarsByRepo, this.pendingSidecarsByRepo]) {
+			for (const badge of source.get(repoId) ?? []) {
+				if (!merged.some((b) => b.kind === badge.kind && b.repo === badge.repo)) {
+					merged.push(badge);
+				}
 			}
 		}
 

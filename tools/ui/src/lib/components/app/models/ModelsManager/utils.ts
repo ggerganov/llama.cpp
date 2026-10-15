@@ -59,14 +59,16 @@ export function downloadGroups(
 			model: entry.repoWithTag,
 			name: entry.repoWithTag
 		};
+		// a draft still coming down badges the id, an on-disk one keeps its sub-line
+		const sidecars = sidecarsFor(repoOf(entry.repoWithTag));
+		const pending = sidecars.filter((badge) => badge.pending);
 
-		// the sub-lines carry the sidecars, so the inline badges would repeat them
 		return {
-			base: { ...option, draftSidecars: [] },
+			base: { ...option, draftSidecars: pending },
 			key: `download::${entry.repoWithTag}`,
 			kind: ModelGroupKind.QUANTS,
-			quants: [{ ...option, draftSidecars: [] }],
-			sidecarBadges: sidecarsFor(repoOf(entry.repoWithTag))
+			quants: [{ ...option, draftSidecars: pending }],
+			sidecarBadges: sidecars.filter((badge) => !badge.pending)
 		};
 	});
 }

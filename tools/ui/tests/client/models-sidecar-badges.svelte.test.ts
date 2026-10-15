@@ -10,7 +10,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 const REPO = 'ggml-org/Qwen3.8-Flash-Next-GGUF';
 
 /** A router entry; `args` stand in for the args of a loaded instance. */
-function entry(id: string, sidecars: string[] = [], args: string[] = []) {
+function entry(
+	id: string,
+	sidecars: string[] = [],
+	args: string[] = [],
+	status = ServerModelStatus.UNLOADED
+) {
 	return {
 		created: 0,
 		id,
@@ -19,7 +24,7 @@ function entry(id: string, sidecars: string[] = [], args: string[] = []) {
 		owned_by: 'llamacpp',
 		path: `/models/${id}`,
 		sidecars,
-		status: { args, value: ServerModelStatus.UNLOADED }
+		status: { args, value: status }
 	} as unknown as ApiModelDataEntry;
 }
 
@@ -55,6 +60,40 @@ describe('draft sidecar badges', () => {
 
 		expect(modelsStore.status.getDraftSidecars(REPO)).toEqual([
 			{ kind: ModelDraftSidecar.MTP, quant: null, repo: REPO }
+		]);
+	});
+
+	it('marks the drafts of a download on its way as pending', () => {
+		modelsStore.routerModels = [
+			entry(
+				`${REPO}:Q4_0`,
+				[ModelAuxSidecar.MMPROJ, ModelDraftSidecar.MTP],
+				[],
+				ServerModelStatus.DOWNLOADING
+			)
+		];
+
+		// the kinds are not on disk yet, so the row reads them as in flight
+		expect(modelsStore.status.getDraftSidecars(REPO)).toEqual([
+			{ kind: ModelDraftSidecar.MTP, pending: true, quant: null, repo: REPO }
+		]);
+	});
+
+	it('keeps the on-disk badge of a kind a download also pulls', () => {
+		modelsStore.routerModels = [
+			entry(`${REPO}:IQ4_NL`, [ModelDraftSidecar.MTP], [], ServerModelStatus.INCOMPLETE),
+			entry(
+				`${REPO}:Q8_0`,
+				[],
+				[
+					'--model-draft',
+					`/cache/models--ggml-org--Qwen3.8-Flash-Next-GGUF/snapshots/${'a'.repeat(40)}/mtp-Qwen3.8-Flash-Next-Q8_0.gguf`
+				]
+			)
+		];
+
+		expect(modelsStore.status.getDraftSidecars(REPO)).toEqual([
+			{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo: REPO }
 		]);
 	});
 });

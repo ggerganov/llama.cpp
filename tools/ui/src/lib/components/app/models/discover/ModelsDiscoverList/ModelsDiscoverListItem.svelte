@@ -69,6 +69,10 @@
 		sidecarBadges = []
 	}: Props = $props();
 
+	/** A draft still coming down badges the id, an on-disk one keeps its sub-line. */
+	let pendingDrafts = $derived(sidecarBadges.filter((badge) => badge.pending));
+	let onDiskDrafts = $derived(sidecarBadges.filter((badge) => !badge.pending));
+
 	let percent = $derived(
 		download?.progress && download.progress.totalBytes > 0
 			? Math.round((download.progress.downloadedBytes / download.progress.totalBytes) * 100)
@@ -179,6 +183,7 @@
 					class="min-w-0"
 					{contextLength}
 					draftKinds={download ? undefined : draftKinds}
+					draftSidecars={download ? pendingDrafts : undefined}
 					hideOrgName
 					iconsOnNewLine
 					{modalities}
@@ -229,9 +234,9 @@
 
 	<!-- only with sub-lines, so a plain row is the row's own height and the
 	     progress bar overlays its bottom edge -->
-	{#if sidecarBadges.length}
+	{#if onDiskDrafts.length}
 		<div class="flex flex-col px-2.5 pb-1.5">
-			{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+			{#each onDiskDrafts as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
 				<ModelDraftSubline
 					connectorClass="ml-8"
 					kind={badge.kind}

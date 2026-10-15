@@ -2,14 +2,12 @@
 	import ModelDownloadProgressBar from '../ModelDownloadProgressBar.svelte';
 	import ModelDraftSubline from '../ModelDraftSubline.svelte';
 	import ModelOrgAvatar from '../ModelOrgAvatar.svelte';
-	import { Loader2, Pause, Play, X } from '@lucide/svelte';
+	import { Info, Loader2, Pause, Play, X } from '@lucide/svelte';
 	import { ActionIcon, ModelId } from '$lib/components/app';
-	import { DISCOVER_ICON } from '$lib/constants';
 	import { ModelRowDownloadState } from '$lib/enums';
 	import { HuggingFaceService, ModelsService } from '$lib/services';
-	import { modelsStore, uiStore } from '$lib/stores';
-	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
-	import { repoOf } from '$lib/utils';
+	import { deviceStore, modelsStore, uiStore } from '$lib/stores';
+	import type { ModelDownloadEntry, ModelOption, ModelSidecarBadge } from '$lib/types';
 
 	interface Props {
 		/** One entry from the status feed: an in-flight or paused download. */
@@ -23,6 +21,18 @@
 	}
 
 	let { entry, onRequestCancel, showOrgName = true, sidecars = [] }: Props = $props();
+
+	/** A draft still coming down badges the id, an on-disk one keeps its sub-line. */
+	let pendingDrafts = $derived(sidecars.filter((badge) => badge.pending));
+	let onDiskDrafts = $derived(sidecars.filter((badge) => !badge.pending));
+
+	/** The download stands for its model, so the row's info action can open on it. */
+	let option = $derived<ModelOption>({
+		capabilities: [],
+		id: entry.repoWithTag,
+		model: entry.repoWithTag,
+		name: modelsStore.toDisplayName(entry.repoWithTag)
+	});
 
 	let percent = $derived(
 		entry.progress && entry.progress.totalBytes > 0
@@ -59,9 +69,9 @@
 	});
 </script>
 
-<!-- One in-flight download; same actions as the discover quant chips: the row
-     itself pauses / resumes, the trailing X cancels (stops and discards the
-     partial files). Both affordances fade in on hover, the slots are reserved
+<!-- One in-flight download: the row opens the model, the status slot beside it
+     pauses / resumes and the trailing X cancels (stops and discards the partial
+     files). The status slot is always there, the affordances fade in on hover,
      so the list never reflows. The repo's on-disk sidecars hang off the item as
      compact sub-lines instead of rows of their own. -->
 <div class="group relative rounded-sm transition-colors hover:bg-accent/50">
@@ -69,9 +79,13 @@
 		class="flex items-center gap-2 p-2 text-left text-sm max-md:gap-2.5 max-md:px-2.5 max-md:py-2.5"
 	>
 		<button
-			aria-label={actionText}
+			aria-label="Manage model"
 			class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
-			onclick={() => void modelsStore.status.toggleDownload(entry.repoWithTag)}
+			onclick={() =>
+				// a phone has no manager: its information dialog takes the row
+				deviceStore.isMobile
+					? uiStore.openModelInformation(option)
+					: uiStore.openModelsManager(entry.repoWithTag)}
 			type="button"
 		>
 			{#if orgName}
@@ -86,6 +100,7 @@
 
 			<ModelId
 				class="flex-1"
+				draftSidecars={pendingDrafts}
 				hideOrgName={!showOrgName}
 				modelId={entry.repoWithTag}
 				showRawTooltip
@@ -98,33 +113,43 @@
 			{:else if entry.isPaused}
 				<span class="ml-auto shrink-0 text-xs text-muted-foreground">Paused</span>
 			{/if}
+		</button>
 
-			<!-- status action: spinner -> pause on hover while in flight, play on hover
-				 when paused; opacity only for the spinner, the spin owns the transform -->
-			<span class="relative inline-flex h-5 w-5 shrink-0 items-center justify-center">
-				{#if entry.isPaused}
-					<Play
-						class="absolute h-4 w-4 scale-75 opacity-0 transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-100 group-hover:opacity-100 [@media(pointer:coarse)]:scale-100 [@media(pointer:coarse)]:opacity-100"
-					/>
-				{:else}
-					<Loader2
-						class="absolute h-4 w-4 animate-spin text-muted-foreground transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:opacity-0 [@media(pointer:coarse)]:hidden"
-					/>
+		<!-- status action: spinner -> pause on hover while in flight, play on hover
+		     when paused; opacity only for the spinner, the spin owns the transform -->
+		<button
+			aria-label={actionText}
+			class="relative inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center"
+			onclick={() => void modelsStore.status.toggleDownload(entry.repoWithTag)}
+			type="button"
+		>
+			{#if entry.isPaused}
+				<Play
+					class="absolute h-4 w-4 scale-75 opacity-0 transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-100 group-hover:opacity-100 [@media(pointer:coarse)]:scale-100 [@media(pointer:coarse)]:opacity-100"
+				/>
+			{:else}
+				<Loader2
+					class="absolute h-4 w-4 animate-spin text-muted-foreground transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:opacity-0 [@media(pointer:coarse)]:hidden"
+				/>
 
-					<Pause
-						class="absolute h-4 w-4 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
-					/>
-				{/if}
-			</span>
+				<Pause
+					class="absolute h-4 w-4 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+				/>
+			{/if}
 		</button>
 
 		<!-- the row actions keep the sizing and reveal of the other selector rows -->
 		<ActionIcon
-			ariaLabel="See in Discover"
 			class="pointer-events-none h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 hover:text-foreground [@media(pointer:coarse)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100"
-			icon={DISCOVER_ICON}
+			icon={Info}
 			iconSize="h-4 w-4"
-			onclick={() => uiStore.openModelsDiscover(repoOf(entry.repoWithTag))}
+			onclick={() =>
+				// a phone has no manager: its information dialog takes the icon
+				deviceStore.isMobile
+					? uiStore.openModelInformation(option)
+					: uiStore.openModelsManager(entry.repoWithTag)}
+			tooltip="Manage model"
+			tooltipAsTitle
 		/>
 
 		<ActionIcon
@@ -138,9 +163,9 @@
 
 	<!-- only with sub-lines: an empty strip would make the row taller than the
 	     plain ones, and the progress bar overlays the row's own bottom edge -->
-	{#if sidecars.length}
+	{#if onDiskDrafts.length}
 		<div class="flex flex-col px-2 pb-1.5">
-			{#each sidecars as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+			{#each onDiskDrafts as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
 				<ModelDraftSubline
 					connectorClass="ml-4"
 					kind={badge.kind}

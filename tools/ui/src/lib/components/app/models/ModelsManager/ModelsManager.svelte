@@ -229,13 +229,16 @@
 		return ordered;
 	});
 
-	// a caller can ask for one model to be revealed, the download rows do
+	// a caller can ask for one model to be revealed, the download rows do; a
+	// tracked download is not in the listing yet, so its own rows are searched too
 	$effect(() => {
 		const focus = uiStore.manageModelFocus;
 
 		if (!focus) return;
 
-		const option = allModels.find((model) => model.id === focus || model.model === focus);
+		const matches = (candidate: ModelOption) => candidate.id === focus || candidate.model === focus;
+		const option =
+			allModels.find(matches) ?? downloads.find((group) => matches(group.base))?.base ?? null;
 
 		if (option) selectedId = option.id;
 
