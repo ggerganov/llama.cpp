@@ -17,71 +17,6 @@
 #include <cstdlib>
 #include <vector>
 
-// diffusion head graph; cond is [n_embd, n_cond] with n_cond == n_frames or 2 * n_frames for CFG
-struct head_runner {
-    ggml_context * ctx    = nullptr;
-    ggml_gallocr_t galloc = nullptr;
-    ggml_cgraph  * gf     = nullptr;
-
-    ggml_tensor * noisy = nullptr;
-    ggml_tensor * c     = nullptr;
-    ggml_tensor * t     = nullptr;
-    ggml_tensor * out   = nullptr;
-
-    // the allocator may reuse the input buffers, all inputs are set before each compute
-    std::vector<float> cond;
-    int64_t n_noisy = 0;
-
-    head_runner(const llama_model_vibevoice & model, ggml_backend_t backend, const std::vector<float> & cond, int64_t n_noisy, int64_t n_cond) : cond(cond), n_noisy(n_noisy) {
-        const auto & hp = model.hparams;
-
-        ggml_init_params params = {
-            /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
-            /*.mem_buffer =*/ nullptr,
-            /*.no_alloc   =*/ true,
-        };
-        ctx = ggml_init(params);
-
-        noisy = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hp.vibevoice.diff_latent_size, n_noisy);
-        ggml_set_input(noisy);
-        c = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hp.n_embd, n_cond);
-        ggml_set_input(c);
-        t = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
-        ggml_set_input(t);
-
-        out = model.build_diffusion_head(ctx, noisy, c, t);
-        ggml_set_output(out);
-
-        gf = ggml_new_graph(ctx);
-        ggml_build_forward_expand(gf, out);
-
-        galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-        if (!ggml_gallocr_alloc_graph(galloc, gf)) {
-            fprintf(stderr, "failed to allocate the diffusion head graph\n");
-            exit(1);
-        }
-    }
-
-    ~head_runner() {
-        ggml_gallocr_free(galloc);
-        ggml_free(ctx);
-    }
-
-    std::vector<float> eval(ggml_backend_t backend, const std::vector<float> & x, float timestep) {
-        ggml_backend_tensor_set(noisy, x.data(),    0, ggml_nbytes(noisy));
-        ggml_backend_tensor_set(c,     cond.data(), 0, ggml_nbytes(c));
-        ggml_backend_tensor_set(t,     &timestep,   0, sizeof(float));
-        if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-            fprintf(stderr, "failed to compute the diffusion head graph\n");
-            exit(1);
-        }
-
-        std::vector<float> v(ggml_nelements(out));
-        ggml_backend_tensor_get(out, v.data(), 0, ggml_nbytes(out));
-        return v;
-    }
-};
-
 static std::vector<float> decode(const llama_model_vibevoice & model, ggml_backend_t backend, const std::vector<float> & latents, int64_t n_frames) {
     ggml_init_params params = {
         /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
@@ -170,53 +105,6 @@ static std::vector<float> feedback(
     ggml_free(ctx);
 
     return emb;
-}
-
-// sample N frames with optional CFG; when cfg_scale < 0, run cond-only (no uncond branch)
-static std::vector<float> sample_latents(
-        const llama_model_vibevoice & model,
-        ggml_backend_t backend,
-        const std::vector<float> & noise,
-        const std::vector<float> & cond,
-        const std::vector<float> & uncond,
-        int64_t n_frames,
-        float cfg_scale) {
-    const auto & vv = model.hparams.vibevoice;
-    const int64_t n_lat = vv.diff_latent_size;
-    const int64_t n_embd = model.hparams.n_embd;
-    const size_t n = (size_t) (n_lat * n_frames);
-
-    llama_model_vibevoice::diff_sampler sampler(vv.diff_train_steps, vv.diff_inference_steps);
-    std::vector<float> latents = noise;
-
-    if (cfg_scale < 0.0f) {
-        head_runner head(model, backend, cond, n_frames, n_frames);
-        for (float t : sampler.timesteps) {
-            const std::vector<float> v = head.eval(backend, latents, t);
-            sampler.step(v.data(), latents.data(), n);
-        }
-        return latents;
-    }
-
-    // stack cond then uncond along N, duplicate noisy each step (upstream CFG batch)
-    std::vector<float> cond_stack(n_embd * n_frames * 2);
-    std::copy(cond.begin(),   cond.end(),   cond_stack.begin());
-    std::copy(uncond.begin(), uncond.end(), cond_stack.begin() + n_embd * n_frames);
-
-    head_runner head(model, backend, cond_stack, n_frames * 2, n_frames * 2);
-    std::vector<float> noisy_stack(n * 2);
-    std::vector<float> guided(n);
-
-    for (float t : sampler.timesteps) {
-        std::copy(latents.begin(), latents.end(), noisy_stack.begin());
-        std::copy(latents.begin(), latents.end(), noisy_stack.begin() + n);
-
-        const std::vector<float> v = head.eval(backend, noisy_stack, t);
-        llama_model_vibevoice::cfg_guide(v.data(), v.data() + n, guided.data(), n, cfg_scale);
-        sampler.step(guided.data(), latents.data(), n);
-    }
-
-    return latents;
 }
 
 static bool check(const char * name, const std::vector<float> & v, size_t n_expected, bool require_finite = true) {
@@ -312,9 +200,9 @@ int main(int argc, char ** argv) {
     bool ok = true;
 
     // CFG scale 1 must match a cond-only sample; a larger scale must differ from both
-    const std::vector<float> lat_cond = sample_latents(*model, backend, noise, cond, uncond, n_frames, -1.0f);
-    const std::vector<float> lat_cfg1 = sample_latents(*model, backend, noise, cond, uncond, n_frames, 1.0f);
-    const std::vector<float> lat_cfg3 = sample_latents(*model, backend, noise, cond, uncond, n_frames, 3.0f);
+    const std::vector<float> lat_cond = model->sample_speech_latents(backend, noise.data(), cond.data(), nullptr,       n_frames, 1.0f);
+    const std::vector<float> lat_cfg1 = model->sample_speech_latents(backend, noise.data(), cond.data(), uncond.data(), n_frames, 1.0f);
+    const std::vector<float> lat_cfg3 = model->sample_speech_latents(backend, noise.data(), cond.data(), uncond.data(), n_frames, 3.0f);
 
     ok &= check("latents cond-only", lat_cond, n_lat * n_frames);
     ok &= check("latents cfg=1",     lat_cfg1, n_lat * n_frames);

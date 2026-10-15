@@ -883,6 +883,24 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     // all three buffers are length n (latent_size * n_frames)
     static void cfg_guide(const float * v_cond, const float * v_uncond, float * guided, size_t n, float scale);
 
+    // full denoising run of the diffusion head on the host, with a new diff_sampler for each call
+    // noise [latent_size * n_frames] is the initial sample, cond and uncond [n_embd * n_frames] are LM last hidden rows
+    // with uncond the head runs on the stacked cond/uncond batch and the outputs are combined with cfg_guide,
+    // without it (nullptr) the head runs on cond only
+    // the backend must be able to use the model weights, returns the scaled latents [latent_size * n_frames]
+    std::vector<float> sample_speech_latents(ggml_backend_t backend, const float * noise, const float * cond, const float * uncond,
+            int64_t n_frames, float cfg_scale) const;
+
+    // same, the initial sample is drawn from a standard normal seeded with seed
+    std::vector<float> sample_speech_latents(ggml_backend_t backend, const float * cond, const float * uncond,
+            int64_t n_frames, float cfg_scale, uint32_t seed) const;
+
+    // special tokens of the generation loop, upstream repurposes the Qwen2 vision tokens
+    // audio_bos starts a speech segment and resets the negative (CFG) branch to a single token cache
+    // audio_token asks for one diffusion frame, the speech feedback of that frame is the next input embedding
+    static constexpr llama_token audio_bos_token_id = 151652; // <|vision_start|>
+    static constexpr llama_token audio_token_id     = 151654; // <|vision_pad|>
+
     // undo speech scaling in place: x = x / speech_scaling_factor - speech_bias_factor
     void unscale_speech_latents(float * latents, size_t n) const;
 

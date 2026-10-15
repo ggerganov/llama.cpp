@@ -1,5 +1,9 @@
 #include "models.h"
 
+#include "ggml-alloc.h"
+
+#include <random>
+
 struct llama_model_vibevoice::tok_tensors {
     llm_tensor conv;
     llm_tensor head;
@@ -493,6 +497,97 @@ void llama_model_vibevoice::cfg_guide(const float * v_cond, const float * v_unco
     for (size_t i = 0; i < n; ++i) {
         guided[i] = v_uncond[i] + scale * (v_cond[i] - v_uncond[i]);
     }
+}
+
+// upstream sample_speech_tokens: the cond and uncond halves get the same sample, the guided v drives both
+std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t backend, const float * noise, const float * cond, const float * uncond,
+        int64_t n_frames, float cfg_scale) const {
+    const auto & vv = hparams.vibevoice;
+
+    const int64_t n_cond = uncond ? 2 * n_frames : n_frames;
+    const size_t  n      = (size_t) vv.diff_latent_size * n_frames;
+    const size_t  n_embd = (size_t) hparams.n_embd * n_frames;
+
+    ggml_init_params params = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
+        /*.mem_buffer =*/ nullptr,
+        /*.no_alloc   =*/ true,
+    };
+    ggml_context * ctx = ggml_init(params);
+
+    ggml_tensor * noisy = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, vv.diff_latent_size, n_cond);
+    ggml_set_input(noisy);
+    ggml_tensor * c = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, hparams.n_embd, n_cond);
+    ggml_set_input(c);
+    ggml_tensor * t = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);
+    ggml_set_input(t);
+
+    ggml_tensor * out = build_diffusion_head(ctx, noisy, c, t);
+    ggml_set_output(out);
+
+    ggml_cgraph * gf = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf, out);
+
+    ggml_gallocr_t galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
+    if (!ggml_gallocr_alloc_graph(galloc, gf)) {
+        ggml_gallocr_free(galloc);
+        ggml_free(ctx);
+        throw std::runtime_error("vibevoice: failed to allocate the diffusion head graph");
+    }
+
+    std::vector<float> x(noise, noise + n);
+    std::vector<float> noisy_data(n * (uncond ? 2 : 1));
+    std::vector<float> v(n * (uncond ? 2 : 1));
+    std::vector<float> guided(uncond ? n : 0);
+
+    diff_sampler sampler(vv.diff_train_steps, vv.diff_inference_steps);
+
+    for (float timestep : sampler.timesteps) {
+        std::copy(x.begin(), x.end(), noisy_data.begin());
+        if (uncond) {
+            std::copy(x.begin(), x.end(), noisy_data.begin() + n);
+        }
+
+        // the allocator may reuse the input buffers, all inputs are set before each compute
+        ggml_backend_tensor_set(noisy, noisy_data.data(), 0, ggml_nbytes(noisy));
+        ggml_backend_tensor_set(c, cond, 0, n_embd * sizeof(float));
+        if (uncond) {
+            ggml_backend_tensor_set(c, uncond, n_embd * sizeof(float), n_embd * sizeof(float));
+        }
+        ggml_backend_tensor_set(t, &timestep, 0, sizeof(float));
+
+        if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
+            ggml_gallocr_free(galloc);
+            ggml_free(ctx);
+            throw std::runtime_error("vibevoice: failed to compute the diffusion head graph");
+        }
+        ggml_backend_tensor_get(out, v.data(), 0, ggml_nbytes(out));
+
+        if (uncond) {
+            cfg_guide(v.data(), v.data() + n, guided.data(), n, cfg_scale);
+            sampler.step(guided.data(), x.data(), n);
+        } else {
+            sampler.step(v.data(), x.data(), n);
+        }
+    }
+
+    ggml_gallocr_free(galloc);
+    ggml_free(ctx);
+
+    return x;
+}
+
+std::vector<float> llama_model_vibevoice::sample_speech_latents(ggml_backend_t backend, const float * cond, const float * uncond,
+        int64_t n_frames, float cfg_scale, uint32_t seed) const {
+    std::mt19937 rng(seed);
+    std::normal_distribution<float> dist(0.0f, 1.0f);
+
+    std::vector<float> noise((size_t) hparams.vibevoice.diff_latent_size * n_frames);
+    for (float & x : noise) {
+        x = dist(rng);
+    }
+
+    return sample_speech_latents(backend, noise.data(), cond, uncond, n_frames, cfg_scale);
 }
 
 void llama_model_vibevoice::unscale_speech_latents(float * latents, size_t n) const {
