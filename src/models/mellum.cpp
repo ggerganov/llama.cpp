@@ -104,23 +104,6 @@ std::unique_ptr<llm_graph_context> llama_model_mellum::build_arch_graph(const ll
     return std::make_unique<graph<false>>(*this, params);
 }
 
-static ggml_tensor * mellum_build_rope(const llm_graph_context & g, const llama_model & model, ggml_tensor * cur, ggml_tensor * inp_pos, int il) {
-    const bool is_swa = g.hparams.is_swa(il);
-
-    const float freq_base_l   = model.get_rope_freq_base(g.cparams, il);
-    const float freq_scale_l  = model.get_rope_freq_scale(g.cparams, il);
-    const float ext_factor_l  = is_swa ? 0.0f : g.ext_factor;
-    const float attn_factor_l = is_swa ? 1.0f : g.attn_factor;
-    const float beta_fast_l   = is_swa ? 32.0f : g.beta_fast;
-    const float beta_slow_l   = is_swa ? 1.0f  : g.beta_slow;
-
-    return ggml_rope_ext(
-        g.ctx0, cur, inp_pos, nullptr,
-        g.n_rot, g.rope_type, g.n_ctx_orig, freq_base_l, freq_scale_l,
-        ext_factor_l, attn_factor_l, beta_fast_l, beta_slow_l
-        );
-}
-
 template <bool iswa>
 llama_model_mellum::graph<iswa>::graph(const llama_model & model, const llm_graph_params & params) : llm_graph_context(params) {
     const int64_t n_embd_head = hparams.n_embd_head_v();
@@ -168,8 +151,26 @@ llama_model_mellum::graph<iswa>::graph(const llama_model & model, const llm_grap
             Kcur = build_norm(Kcur, model.layers[il].attn_k_norm, nullptr, LLM_NORM_RMS, il);
             cb(Kcur, "Kcur_normed", il);
 
-            Qcur = mellum_build_rope(*this, model, Qcur, inp_pos, il);
-            Kcur = mellum_build_rope(*this, model, Kcur, inp_pos, il);
+            const bool is_swa = hparams.is_swa(il);
+
+            const float freq_base_l   = model.get_rope_freq_base(cparams, il);
+            const float freq_scale_l  = model.get_rope_freq_scale(cparams, il);
+            const float ext_factor_l  = is_swa ? 0.0f : ext_factor;
+            const float attn_factor_l = is_swa ? 1.0f : attn_factor;
+            const float beta_fast_l   = is_swa ? 32.0f : beta_fast;
+            const float beta_slow_l   = is_swa ? 1.0f  : beta_slow;
+
+            Qcur = ggml_rope_ext(
+                ctx0, Qcur, inp_pos, nullptr,
+                n_rot, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
+                ext_factor_l, attn_factor_l, beta_fast_l, beta_slow_l
+                );
+
+            Kcur = ggml_rope_ext(
+                ctx0, Kcur, inp_pos, nullptr,
+                n_rot, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
+                ext_factor_l, attn_factor_l, beta_fast_l, beta_slow_l
+                );
 
             cb(Qcur, "Qcur", il);
             cb(Kcur, "Kcur", il);
@@ -328,8 +329,26 @@ llama_model_mellum::graph_mtp<iswa>::graph_mtp(const llama_model & model, const 
         Kcur = build_norm(Kcur, layer.attn_k_norm, nullptr, LLM_NORM_RMS, il);
         cb(Kcur, "mtp_Kcur_normed", il);
 
-        Qcur = mellum_build_rope(*this, model, Qcur, inp_pos, il);
-        Kcur = mellum_build_rope(*this, model, Kcur, inp_pos, il);
+        const bool is_swa = hparams.is_swa(il);
+
+        const float freq_base_l   = model.get_rope_freq_base(cparams, il);
+        const float freq_scale_l  = model.get_rope_freq_scale(cparams, il);
+        const float ext_factor_l  = is_swa ? 0.0f : ext_factor;
+        const float attn_factor_l = is_swa ? 1.0f : attn_factor;
+        const float beta_fast_l   = is_swa ? 32.0f : beta_fast;
+        const float beta_slow_l   = is_swa ? 1.0f  : beta_slow;
+
+        Qcur = ggml_rope_ext(
+            ctx0, Qcur, inp_pos, nullptr,
+            n_rot, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
+            ext_factor_l, attn_factor_l, beta_fast_l, beta_slow_l
+            );
+
+        Kcur = ggml_rope_ext(
+            ctx0, Kcur, inp_pos, nullptr,
+            n_rot, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
+            ext_factor_l, attn_factor_l, beta_fast_l, beta_slow_l
+            );
 
         cb(Qcur, "mtp_Qcur", il);
         cb(Kcur, "mtp_Kcur", il);
