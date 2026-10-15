@@ -1466,7 +1466,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=icpx \
             -DCMAKE_INSTALL_RPATH='$ORIGIN' \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-            -DLLAMA_OPENSSL=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_SYCL_F16=${{ matrix.fp16 }}
           time cmake --build build --config Release -j $(nproc)
