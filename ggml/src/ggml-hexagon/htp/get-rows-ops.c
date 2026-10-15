@@ -189,8 +189,8 @@ static void get_rows_thread_flat(unsigned int nth, unsigned int ith, void * data
     dma_queue * dma_q = octx->ctx->dma[ith];
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
     const struct htp_get_rows_vtcm_layout * vtcm_layout = &grctx->vtcm_layout;
-    uint8_t * vtcm_src0 = grctx->vtcm_base + vtcm_layout->off_src0 + ith * vtcm_layout->src0_bytes_per_thread;
-    uint8_t * vtcm_dst  = grctx->vtcm_base + vtcm_layout->off_dst  + ith * vtcm_layout->dst_bytes_per_thread;
+    uint8_t * vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, grctx->vtcm_base, vtcm_layout->off_src0) + ith * vtcm_layout->src0_bytes_per_thread;
+    uint8_t * vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, grctx->vtcm_base, vtcm_layout->off_dst)  + ith * vtcm_layout->dst_bytes_per_thread;
     const uint32_t src0_bytes = grctx->src0_row_size;
     const uint32_t dst_bytes  = grctx->dst_row_size;
     get_rows_flat_compute_fn_t compute = grctx->compute_flat;
@@ -290,8 +290,8 @@ static void get_rows_thread_tiled(unsigned int nth, unsigned int ith, void * dat
     const uint32_t ir1 = MIN(ir0 + dr, grctx->task_start + grctx->tasks);
     const uint32_t n_k_tiles = ne00 / HTP_TENSOR_TILE_N_COLS;
     const struct htp_get_rows_vtcm_layout * vtcm_layout = &grctx->vtcm_layout;
-    uint8_t * src_spad_base = grctx->vtcm_base + vtcm_layout->off_src0 + ith * vtcm_layout->src0_bytes_per_thread;
-    uint8_t * dst_spad_base = grctx->vtcm_base + vtcm_layout->off_dst + ith * vtcm_layout->dst_bytes_per_thread;
+    uint8_t * src_spad_base = VTCM_LAYOUT_PTR(uint8_t, grctx->vtcm_base, vtcm_layout->off_src0) + ith * vtcm_layout->src0_bytes_per_thread;
+    uint8_t * dst_spad_base = VTCM_LAYOUT_PTR(uint8_t, grctx->vtcm_base, vtcm_layout->off_dst)  + ith * vtcm_layout->dst_bytes_per_thread;
     dma_queue * dma_q = octx->ctx->dma[ith];
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
 
@@ -487,7 +487,7 @@ int op_get_rows(struct htp_ops_context * octx) {
         grctx.src1_data  = (const void *) (uintptr_t) octx->src[1]->data;
         grctx.read_index = get_rows_read_index_ddr;
     } else {
-        uint8_t * vtcm_src1 = grctx.vtcm_base + grctx.vtcm_layout.off_src1;
+        uint8_t * vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, grctx.vtcm_base, grctx.vtcm_layout.off_src1);
         get_rows_dma_src1(octx, vtcm_src1, elem_size);
         grctx.src1_data  = vtcm_src1;
         grctx.read_index = get_rows_read_index_vtcm;
