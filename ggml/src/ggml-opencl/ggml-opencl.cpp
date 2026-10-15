@@ -1300,6 +1300,14 @@ struct ggml_backend_opencl_context {
     cl_kernel kernel_gemm_coopk_q4_0_q8_1_dp4a_c2 = nullptr;
     int       nsg_coopk_dp4a_q4_0  = 8;
     int       rows_coopk_dp4a_q4_0 = 4;
+    cl_kernel kernel_gemm_coopk_q4_k_q8_1_dp4a_c4 = nullptr;
+    cl_kernel kernel_gemm_coopk_q4_k_q8_1_dp4a_c2 = nullptr;
+    int       nsg_coopk_dp4a_q4_k  = 8;
+    int       rows_coopk_dp4a_q4_k = 4;
+    cl_kernel kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c4 = nullptr;
+    cl_kernel kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c2 = nullptr;
+    int       nsg_coopk_dp4a_q4_k_bin_c4 = 8;
+    int       nsg_coopk_dp4a_q4_k_bin_c2 = 8;
 #endif // GGML_OPENCL_USE_ADRENO_KERNELS
 
     void free() {
@@ -1605,6 +1613,49 @@ static void load_cl_kernels_gemm_coopk(ggml_backend_opencl_context * backend_ctx
                                  backend_ctx->rows_coopk_dp4a_q4_0, backend_ctx->nsg_coopk_dp4a_q4_0,
                                  backend_ctx->kernel_gemm_coopk_q4_0_q8_1_dp4a_c4,
                                  backend_ctx->kernel_gemm_coopk_q4_0_q8_1_dp4a_c2);
+        GGML_LOG_CONT(".");
+    }
+
+    // Q4_K
+    {
+#ifdef GGML_OPENCL_EMBED_KERNELS
+        const std::string kernel_src {
+            #include "gemm_coopk_q4_k_q8_1_dp4a.cl.h"
+        };
+#else
+        const std::string kernel_src = read_file("gemm_coopk_q4_k_q8_1_dp4a.cl");
+#endif
+        ggml_cl_coopk_build_narrow(backend_ctx, kernel_src, "kernel_gemm_coopk_q4_k_q8_1_dp4a",
+                                 backend_ctx->rows_coopk_dp4a_q4_k, backend_ctx->nsg_coopk_dp4a_q4_k,
+                                 backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c4,
+                                 backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c2);
+
+        const char * env = getenv("GGML_OPENCL_COOPK_Q4_K_BIN");
+        if (use_adreno_bin_kernels(backend_ctx) && (!env || !*env || atoi(env) != 0)) {
+            const std::string base_opts = backend_ctx->kernel_compile_opts
+                + " -DCOOPK_Q_BIN=1 -DCOOPK_ROWS=" + std::to_string(backend_ctx->rows_coopk_dp4a_q4_k);
+            for (int cols = 4; cols >= 2; cols -= 2) {
+                int & nsg = (cols == 4) ? backend_ctx->nsg_coopk_dp4a_q4_k_bin_c4
+                                        : backend_ctx->nsg_coopk_dp4a_q4_k_bin_c2;
+                int nsg_eff = nsg;
+                cl_program program = ggml_cl_build_program_coopk(
+                    backend_ctx, kernel_src.c_str(), "kernel_gemm_coopk_q4_k_q8_1_dp4a",
+                    base_opts + " -DCOOPK_COLS=" + std::to_string(cols), nsg_eff);
+                if (program == nullptr) {
+                    continue;
+                }
+                cl_int err;
+                cl_kernel kernel = clCreateKernel(program, "kernel_gemm_coopk_q4_k_q8_1_dp4a", &err);
+                if (err != CL_SUCCESS) { kernel = nullptr; }
+                CL_CHECK(clReleaseProgram(program));
+                if (cols == 4) {
+                    backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c4 = kernel;
+                } else {
+                    backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c2 = kernel;
+                }
+                nsg = nsg_eff;
+            }
+        }
         GGML_LOG_CONT(".");
     }
 }
@@ -21887,6 +21938,86 @@ static void ggml_cl_mul_mat_q4_k_f32_adreno_ila(ggml_backend_t backend, const gg
     int N = ne1;
     int K = ne00;
 
+    // CoopK handles with _bin use the bin weight layout (uint-transposed q), with K-major Q8_1 activations (K contiguous).
+    // This switch disables only this bin-layout path; weight conversion is unchanged.
+    static const char * env_coopk_bin = getenv("GGML_OPENCL_COOPK_Q4_K_BIN");
+    const bool use_coopk_bin = !env_coopk_bin || !*env_coopk_bin || atoi(env_coopk_bin) != 0;
+    if (use_coopk_bin && ne1 >= 2 && ne1 <= 4 &&
+        ggml_cl_coopk_dp4a_narrow_on(backend_ctx, dst, backend_ctx->rows_coopk_dp4a_q4_k) &&
+        backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c4 != nullptr &&
+        ((ne1 <= 2) ? backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c2
+                    : backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c4) != nullptr) {
+        cl_mem b_sub_buf = nullptr;
+        region.origin = offset1;
+        region.size   = (size_t)K * N * sizeof(float);
+        CL_CHECK((b_sub_buf = clCreateSubBuffer(extra1->data_device, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err), err));
+
+        // Allocate all kernel columns; padded columns have independent accumulators and are not stored.
+        const int    cols            = (ne1 <= 2) ? 2 : 4;
+        const size_t size_qa         = (size_t)cols * K * sizeof(cl_char);
+        const size_t n_blocks_padded = (size_t)cols * (K / 32);
+        const size_t size_qa_prev    = backend_ctx->prealloc_moe_qa.size;
+        const size_t size_da_prev    = backend_ctx->prealloc_moe_da.size;
+        backend_ctx->prealloc_moe_qa.allocate(context, size_qa);
+        backend_ctx->prealloc_moe_da.allocate(context, n_blocks_padded * sizeof(cl_half));
+        backend_ctx->prealloc_moe_sa.allocate(context, n_blocks_padded * sizeof(cl_half));
+        if (backend_ctx->prealloc_moe_qa.size != size_qa_prev) {
+            const cl_char z8 = 0;
+            CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_qa.buffer,
+                                         &z8, sizeof(z8), 0, backend_ctx->prealloc_moe_qa.size, 0, NULL, NULL));
+        }
+        if (backend_ctx->prealloc_moe_da.size != size_da_prev) {
+            const cl_half z16 = 0;
+            CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_da.buffer,
+                                         &z16, sizeof(z16), 0, backend_ctx->prealloc_moe_da.size, 0, NULL, NULL));
+            CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_sa.buffer,
+                                         &z16, sizeof(z16), 0, backend_ctx->prealloc_moe_sa.size, 0, NULL, NULL));
+        }
+
+        cl_int n_blocks = (cl_int)((size_t)N * (K / 32));
+        cl_kernel kernel_quant = backend_ctx->kernel_quant_a_q8_1;
+        CL_CHECK(clSetKernelArg(kernel_quant, 0, sizeof(cl_mem), &b_sub_buf));
+        CL_CHECK(clSetKernelArg(kernel_quant, 1, sizeof(cl_mem), &backend_ctx->prealloc_moe_qa.buffer));
+        CL_CHECK(clSetKernelArg(kernel_quant, 2, sizeof(cl_mem), &backend_ctx->prealloc_moe_da.buffer));
+        CL_CHECK(clSetKernelArg(kernel_quant, 3, sizeof(cl_mem), &backend_ctx->prealloc_moe_sa.buffer));
+        CL_CHECK(clSetKernelArg(kernel_quant, 4, sizeof(cl_int), &n_blocks));
+        size_t local_work_size_quant[1]  = { 64 };
+        size_t global_work_size_quant[1] = { (size_t)((((size_t)n_blocks + 63) / 64) * 64) };
+        backend_ctx->enqueue_ndrange_kernel(kernel_quant, 1, global_work_size_quant, local_work_size_quant, dst);
+
+        cl_kernel kernel_coopk = (ne1 <= 2) ? backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c2
+                                            : backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_bin_c4;
+        const int nsg_selected = (ne1 <= 2) ? backend_ctx->nsg_coopk_dp4a_q4_k_bin_c2
+                                            : backend_ctx->nsg_coopk_dp4a_q4_k_bin_c4;
+        const cl_uchar mask_d6 = 0x3F, mask_d4 = 0x0F, mask_hi2 = 0xC0;
+        const cl_int   n_padded = cols;
+        CL_CHECK(clSetKernelArg(kernel_coopk,  0, sizeof(cl_mem),   &extra0_q4_k->q));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  1, sizeof(cl_mem),   &extra0_q4_k->s));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  2, sizeof(cl_mem),   &extra0_q4_k->d));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  3, sizeof(cl_mem),   &extra0_q4_k->dm));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  4, sizeof(cl_mem),   &backend_ctx->prealloc_moe_qa.buffer));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  5, sizeof(cl_mem),   &backend_ctx->prealloc_moe_da.buffer));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  6, sizeof(cl_mem),   &backend_ctx->prealloc_moe_sa.buffer));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  7, sizeof(cl_mem),   &extrad->data_device));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  8, sizeof(cl_ulong), &offsetd));
+        CL_CHECK(clSetKernelArg(kernel_coopk,  9, sizeof(cl_int),   &ne01));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 10, sizeof(cl_int),   &n_padded));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 11, sizeof(cl_int),   &ne00));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 12, sizeof(cl_int),   &ne1));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 13, sizeof(cl_uchar), &mask_d6));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 14, sizeof(cl_uchar), &mask_d4));
+        CL_CHECK(clSetKernelArg(kernel_coopk, 15, sizeof(cl_uchar), &mask_hi2));
+
+        // Each width can compile with a different subgroup count.
+        const size_t nsg = (size_t)nsg_selected;
+        size_t local_work_size[3]  = { 64, nsg, 1 };
+        size_t global_work_size[3] = { (size_t)(ne01 / backend_ctx->rows_coopk_dp4a_q4_k), nsg, 1 };
+        backend_ctx->enqueue_ndrange_kernel(kernel_coopk, 3, global_work_size, local_work_size, dst);
+
+        CL_CHECK(clReleaseMemObject(b_sub_buf));
+        return;
+    }
+
     if (ne1 == 1) {
         cl_mem b_sub_buf = nullptr;
         cl_mem b_img     = nullptr;
@@ -22333,6 +22464,74 @@ static void ggml_cl_mul_mat_q4_k_f32_adreno(ggml_backend_t backend, const ggml_t
         region.origin = offset1;
         region.size = K * N * sizeof(float);
         CL_CHECK((b_sub_buf = clCreateSubBuffer(extra1->data_device, 0, CL_BUFFER_CREATE_TYPE_REGION, &region, &err), err));
+
+        // CoopK handles without _bin use the same untiled weight layout as gemm_noshuffle_q4_k_f32.
+        // Activations use K-major Q8_1 SoA (K contiguous).
+        if (ggml_cl_coopk_dp4a_narrow_on(backend_ctx, dst, backend_ctx->rows_coopk_dp4a_q4_k)
+            && backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c4 != nullptr
+            && ((N <= 2) ? backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c2
+                         : backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c4) != nullptr) {
+            const int    cols            = (N <= 2) ? 2 : 4;
+            const size_t size_qa         = (size_t)cols * K * sizeof(cl_char);
+            const size_t n_blocks_padded = (size_t)cols * (K / 32);
+            const size_t size_qa_prev    = backend_ctx->prealloc_moe_qa.size;
+            const size_t size_da_prev    = backend_ctx->prealloc_moe_da.size;
+            backend_ctx->prealloc_moe_qa.allocate(context, size_qa);
+            backend_ctx->prealloc_moe_da.allocate(context, n_blocks_padded * sizeof(cl_half));
+            backend_ctx->prealloc_moe_sa.allocate(context, n_blocks_padded * sizeof(cl_half));
+            if (backend_ctx->prealloc_moe_qa.size != size_qa_prev) {
+                const cl_char z8 = 0;
+                CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_qa.buffer,
+                                             &z8, sizeof(z8), 0, backend_ctx->prealloc_moe_qa.size, 0, NULL, NULL));
+            }
+            if (backend_ctx->prealloc_moe_da.size != size_da_prev) {
+                const cl_half z16 = 0;
+                CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_da.buffer,
+                                             &z16, sizeof(z16), 0, backend_ctx->prealloc_moe_da.size, 0, NULL, NULL));
+                CL_CHECK(clEnqueueFillBuffer(backend_ctx->queue, backend_ctx->prealloc_moe_sa.buffer,
+                                             &z16, sizeof(z16), 0, backend_ctx->prealloc_moe_sa.size, 0, NULL, NULL));
+            }
+
+            cl_int n_blocks = (cl_int)((size_t)N * (K / 32));
+            cl_kernel kernel_quant = backend_ctx->kernel_quant_a_q8_1;
+            CL_CHECK(clSetKernelArg(kernel_quant, 0, sizeof(cl_mem), &b_sub_buf));
+            CL_CHECK(clSetKernelArg(kernel_quant, 1, sizeof(cl_mem), &backend_ctx->prealloc_moe_qa.buffer));
+            CL_CHECK(clSetKernelArg(kernel_quant, 2, sizeof(cl_mem), &backend_ctx->prealloc_moe_da.buffer));
+            CL_CHECK(clSetKernelArg(kernel_quant, 3, sizeof(cl_mem), &backend_ctx->prealloc_moe_sa.buffer));
+            CL_CHECK(clSetKernelArg(kernel_quant, 4, sizeof(cl_int), &n_blocks));
+            size_t local_work_size_quant[1]  = { 64 };
+            size_t global_work_size_quant[1] = { (size_t)((((size_t)n_blocks + 63) / 64) * 64) };
+            backend_ctx->enqueue_ndrange_kernel(kernel_quant, 1, global_work_size_quant, local_work_size_quant, dst);
+
+            cl_kernel kernel_coopk = (N <= 2) ? backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c2
+                                              : backend_ctx->kernel_gemm_coopk_q4_k_q8_1_dp4a_c4;
+            const cl_uchar mask_d6 = 0x3F, mask_d4 = 0x0F, mask_hi2 = 0xC0;
+            const cl_int   n_padded = cols;
+            CL_CHECK(clSetKernelArg(kernel_coopk,  0, sizeof(cl_mem),   &extra0_q4_k->q));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  1, sizeof(cl_mem),   &extra0_q4_k->s));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  2, sizeof(cl_mem),   &extra0_q4_k->d));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  3, sizeof(cl_mem),   &extra0_q4_k->dm));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  4, sizeof(cl_mem),   &backend_ctx->prealloc_moe_qa.buffer));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  5, sizeof(cl_mem),   &backend_ctx->prealloc_moe_da.buffer));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  6, sizeof(cl_mem),   &backend_ctx->prealloc_moe_sa.buffer));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  7, sizeof(cl_mem),   &extrad->data_device));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  8, sizeof(cl_ulong), &offsetd));
+            CL_CHECK(clSetKernelArg(kernel_coopk,  9, sizeof(cl_int),   &M));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 10, sizeof(cl_int),   &n_padded));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 11, sizeof(cl_int),   &K));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 12, sizeof(cl_int),   &N));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 13, sizeof(cl_uchar), &mask_d6));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 14, sizeof(cl_uchar), &mask_d4));
+            CL_CHECK(clSetKernelArg(kernel_coopk, 15, sizeof(cl_uchar), &mask_hi2));
+
+            const size_t nsg = (size_t)backend_ctx->nsg_coopk_dp4a_q4_k;
+            size_t local_work_size[3]  = { 64, nsg, 1 };
+            size_t global_work_size[3] = { (size_t)(M / backend_ctx->rows_coopk_dp4a_q4_k), nsg, 1 };
+            backend_ctx->enqueue_ndrange_kernel(kernel_coopk, 3, global_work_size, local_work_size, dst);
+
+            CL_CHECK(clReleaseMemObject(b_sub_buf));
+            return;
+        }
 
         // image for activations
         img_fmt = {CL_RGBA, CL_FLOAT};
