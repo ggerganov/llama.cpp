@@ -227,16 +227,20 @@
 		{/if}
 	</div>
 
-	<div class="flex flex-col px-2.5 pb-1.5">
-		{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
-			<ModelDraftSubline
-				connectorClass="ml-8"
-				kind={badge.kind}
-				quant={badge.quant}
-				state={ModelRowDownloadState.DOWNLOADED}
-			/>
-		{/each}
-	</div>
+	<!-- only with sub-lines, so a plain row is the row's own height and the
+	     progress bar overlays its bottom edge -->
+	{#if sidecarBadges.length}
+		<div class="flex flex-col px-2.5 pb-1.5">
+			{#each sidecarBadges as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+				<ModelDraftSubline
+					connectorClass="ml-8"
+					kind={badge.kind}
+					quant={badge.quant}
+					state={ModelRowDownloadState.DOWNLOADED}
+				/>
+			{/each}
+		</div>
+	{/if}
 
 	{#if download?.progress && download.progress.totalBytes > 0}
 		<ModelDownloadProgressBar

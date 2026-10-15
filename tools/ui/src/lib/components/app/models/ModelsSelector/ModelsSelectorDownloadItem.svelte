@@ -65,7 +65,9 @@
      so the list never reflows. The repo's on-disk sidecars hang off the item as
      compact sub-lines instead of rows of their own. -->
 <div class="group relative rounded-sm transition-colors hover:bg-accent/50">
-	<div class="flex items-center gap-2 p-2 text-left text-sm">
+	<div
+		class="flex items-center gap-2 p-2 text-left text-sm max-md:gap-2.5 max-md:px-2.5 max-md:py-2.5"
+	>
 		<button
 			aria-label={actionText}
 			class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
@@ -134,16 +136,20 @@
 		/>
 	</div>
 
-	<div class="flex flex-col px-2 pb-1.5">
-		{#each sidecars as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
-			<ModelDraftSubline
-				connectorClass="ml-4"
-				kind={badge.kind}
-				quant={badge.quant}
-				state={ModelRowDownloadState.DOWNLOADED}
-			/>
-		{/each}
-	</div>
+	<!-- only with sub-lines: an empty strip would make the row taller than the
+	     plain ones, and the progress bar overlays the row's own bottom edge -->
+	{#if sidecars.length}
+		<div class="flex flex-col px-2 pb-1.5">
+			{#each sidecars as badge (badge.repo + ':' + badge.kind + ':' + (badge.quant ?? ''))}
+				<ModelDraftSubline
+					connectorClass="ml-4"
+					kind={badge.kind}
+					quant={badge.quant}
+					state={ModelRowDownloadState.DOWNLOADED}
+				/>
+			{/each}
+		</div>
+	{/if}
 
 	{#if entry.progress && entry.progress.totalBytes > 0}
 		<ModelDownloadProgressBar
