@@ -69,6 +69,7 @@ class GGMLQuants:
             "tq1_0", "tq2_0",
             "mxfp4",
             "nvfp4",
+            "q1_0", "q2_0",
             "iq2_xxs", "iq2_xs", "iq2_s", "iq3_xxs", "iq3_s", "iq1_s", "iq1_m",
             "iq4_nl", "iq4_xs",
         ):
@@ -233,20 +234,6 @@ def do_test(libggml_path: Path, quick: bool = False, user_type: GGMLQuantization
                 logger.error(f"Dequantization from random f16 data as {qtype.name} does not match ❌")
             else:
                 logger.info(f"Dequantization from random f16 data as {qtype.name} matches exactly ✅")
-
-
-# expected bytes are from the C reference, so this runs without libggml
-def test_q1_0_q2_0_known_values():
-    j = np.arange(128)
-    x = np.stack([np.where(j % 8 == 0, 0.5, -0.5), np.zeros(128)]).astype(np.float32)
-    q = gguf.quantize(x, GGMLQuantizationType.Q1_0)
-    assert [bytes(r).hex() for r in q] == ["0038" + "01" * 16, "0000" + "ff" * 16]
-    np.testing.assert_array_equal(gguf.dequantize(q, GGMLQuantizationType.Q1_0), x)
-
-    x = np.stack([np.tile([-2, -1, 1, 0], 16), np.zeros(64)]).astype(np.float32)
-    q = gguf.quantize(x, GGMLQuantizationType.Q2_0)
-    assert [bytes(r).hex() for r in q] == ["0040" + "60" * 16, "0000" + "55" * 16]
-    np.testing.assert_array_equal(gguf.dequantize(q, GGMLQuantizationType.Q2_0), np.stack([np.tile([-2, -2, 2, 0], 16), np.zeros(64)]))
 
 
 if __name__ == "__main__":
