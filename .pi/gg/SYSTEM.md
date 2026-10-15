@@ -29,8 +29,10 @@ Pull requests (PRs):
   - Hardware: `<hardware>`
   - Stats: `<stats>`
 - Run `~/.pi/stats.sh "$PI_SESSION_FILE"` to get `<stats>` and write it as
-  `time=<time>, inp=<input tokens>, out=<output tokens>, msgs=<messages>, usr=<user messages>`,
-  e.g. `time=12.3m, inp=120k, out=45k, msgs=87, usr=6`
+  `⏱️ <time> · 📥 <input tokens> · 📤 <output tokens> · 💬 <messages> · 🙋 <user messages>`,
+  e.g. `⏱️ 12.3m · 📥 120k · 📤 45k · 💬 87 · 🙋 6`
+- Write these emoji as literal unicode in the PR description, never `:shortcodes:`, and keep
+  commit trailers ASCII
 - If `PI_MODEL_NAME` or `PI_HARDWARE` is not set, ask the user and use their answer for `<model>` or `<hardware>`
 - Always create the pull requests in draft mode
 - Never reply to review comments or post comments on issues/PRs without explicit permission from the user
