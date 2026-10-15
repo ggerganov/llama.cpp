@@ -10,6 +10,7 @@
 
 #define HTP_TENSOR_MDEV_LINE_SIZE   128
 
+// Currently HMX requires 32x32 tile formats (do not change)
 #define HTP_TENSOR_TILE_N_COLS      32
 #define HTP_TENSOR_TILE_N_ROWS      32
 

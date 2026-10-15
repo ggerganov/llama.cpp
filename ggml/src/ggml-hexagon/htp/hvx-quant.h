@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "htp-tensor.h"
 #include "hvx-arith.h"
 #include "hvx-base.h"
 #include "hvx-reduce.h"
@@ -418,10 +419,6 @@ static inline void hvx_dequantize_row_flat_q6_k_f32(float * restrict dst_ptr, co
     }
 }
 
-#ifndef HTP_MM_HMX_TILE_N_COLS
-#define HTP_MM_HMX_TILE_N_COLS 32
-#endif
-
 // bytes row, row + 32, row + 64 and row + 96 of v, to bytes 0..3
 static inline HVX_Vector hvx_dequantize_gather4(HVX_Vector v, uint32_t row) {
     v = Q6_V_vror_VR(v, row);
@@ -436,7 +433,7 @@ static inline void hvx_dequantize_row_tiled_q8_0_f32(float * dst_spad, const uin
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         HVX_Vector vq = Q6_V_vzero();
         for (int group = 7; group >= 0; --group) {
@@ -460,7 +457,7 @@ static inline void hvx_dequantize_row_tiled_q4_0_f32(float * dst_spad, const uin
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         HVX_Vector vq = Q6_V_vzero();
         for (int group = 3; group >= 0; --group) {
@@ -487,7 +484,7 @@ static inline void hvx_dequantize_row_tiled_q4_k_f32(float * dst_spad, const uin
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         HVX_Vector vq = Q6_V_vzero();
         for (int group = 3; group >= 0; --group) {
@@ -517,7 +514,7 @@ static inline void hvx_dequantize_row_tiled_q5_k_f32(float * dst_spad, const uin
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         const HVX_Vector p5 = hvx_dequantize_gather4(hvx_vmem(tile + 640), row);
         HVX_Vector vq = Q6_V_vzero();
@@ -552,7 +549,7 @@ static inline void hvx_dequantize_row_tiled_q6_k_f32(float * dst_spad, const uin
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         HVX_Vector vq = Q6_V_vzero();
         for (int group = 7; group >= 0; --group) {
@@ -591,7 +588,7 @@ static inline void hvx_dequantize_row_tiled_f16_f32(float * dst_spad, const uint
 
     for (uint32_t k_tile = 0; k_tile < n_k_tiles; ++k_tile) {
         const uint8_t * tile = src_spad + k_tile * tile_stride;
-        float * dst = dst_spad + k_tile * HTP_MM_HMX_TILE_N_COLS;
+        float * dst = dst_spad + k_tile * HTP_TENSOR_TILE_N_COLS;
 
         HVX_Vector g0 = hvx_dequantize_tiled_f16_gather4(tile + 0 * VLEN, r_byte);
         HVX_Vector g1 = hvx_dequantize_tiled_f16_gather4(tile + 4 * VLEN, r_byte);

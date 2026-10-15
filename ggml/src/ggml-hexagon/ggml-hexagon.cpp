@@ -495,6 +495,9 @@ static inline bool ggml_hexagon_can_rt_repack(const struct ggml_tensor * t) {
     if (opt_rt_repack == 0 || !htp_is_tiled_weight_tensor(t)) {
         return false;
     }
+    if (t->buffer && ggml_backend_buft_is_host(t->buffer->buft)) {
+        return false;
+    }
     return opt_rt_repack > 1 || ggml_is_quantized(t->type);
 }
 
@@ -509,9 +512,6 @@ static inline bool ggml_hexagon_tensor_is_tiled(const struct ggml_tensor * t) {
 static inline bool ggml_hexagon_needs_repack(const struct ggml_tensor * t) {
     const auto * extra = (const ggml_hexagon_tensor_extra *) t->extra;
     if (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED)) {
-        return false;
-    }
-    if (ggml_backend_buft_is_host(t->buffer->buft)) {
         return false;
     }
     return ggml_hexagon_can_rt_repack(t);
@@ -5357,16 +5357,6 @@ static void ggml_hexagon_precompute_fused_mmidnx_params(
 ) {
     ggml_hexagon_precompute_matmul_params_impl(sess, src0, act, dst, 0, 0, kparams);
     kparams->n_weights = n_weights;
-}
-
-static bool ggml_hexagon_tensor_is_host(const struct ggml_hexagon_session * sess, const struct ggml_tensor * t) {
-    return t && t->buffer && ggml_backend_buft_is_host(t->buffer->buft);
-    GGML_UNUSED(sess);
-}
-
-static bool ggml_hexagon_tensor_is_non_host(const struct ggml_hexagon_session * sess, const struct ggml_tensor * t) {
-    return t && t->buffer && !ggml_backend_buft_is_host(t->buffer->buft);
-    GGML_UNUSED(sess);
 }
 
 static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * sess, const struct ggml_tensor * dst) {
