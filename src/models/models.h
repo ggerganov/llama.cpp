@@ -767,7 +767,7 @@ struct llama_model_gpt2 : public llama_model_base {
 };
 
 
-// backbone is plain qwen2, the speech tensors are loaded but have no graph yet
+// backbone is plain qwen2, only the acoustic decoder has a graph so far
 struct llama_model_vibevoice : public llama_model_qwen2 {
     llama_model_vibevoice(const struct llama_model_params & params) : llama_model_qwen2(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
@@ -838,6 +838,10 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     tok_part acoustic_enc;
     tok_part acoustic_dec;
     tok_part semantic_enc;
+
+    // acoustic latents [vae_dim, n_frames] -> waveform [n_frames * prod(dec_ratios), 1]
+    // the latents must already be unscaled with speech_scaling_factor/speech_bias_factor
+    ggml_tensor * build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents) const;
 
 private:
     struct tok_tensors;

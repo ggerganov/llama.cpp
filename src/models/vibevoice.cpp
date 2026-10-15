@@ -191,3 +191,85 @@ void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
         load_tok_part(ml, semantic_enc, semantic_enc_ids, vv.semantic.n_enc_stages, vv.semantic.enc_depths);
     }
 }
+
+//
+// acoustic decoder
+//
+
+// causal conv1d, stride 1, zero left padding. x: [T, IC], w: [K, IC, OC], returns [T, OC]
+static ggml_tensor * vv_causal_conv1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w) {
+    x = ggml_pad_ext(ctx, x, w->ne[0] - 1, 0, 0, 0, 0, 0, 0, 0);
+    ggml_tensor * y = ggml_conv_1d(ctx, w, x, 1, 0, 1);
+    return ggml_reshape_2d(ctx, y, y->ne[0], y->ne[1]);
+}
+
+// depthwise variant of vv_causal_conv1d. x: [T, C], w: [K, 1, C], returns [T, C]
+static ggml_tensor * vv_causal_conv1d_dw(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w) {
+    x = ggml_pad_ext(ctx, x, w->ne[0] - 1, 0, 0, 0, 0, 0, 0, 0);
+    ggml_tensor * y = ggml_conv_1d_dw(ctx, w, x, 1, 0, 1);
+    return ggml_reshape_2d(ctx, y, y->ne[0], y->ne[1]);
+}
+
+// causal ConvTranspose1d, the (K - stride) overlap is trimmed on the right. x: [T, IC], w: [K, OC, IC], returns [T * stride, OC]
+static ggml_tensor * vv_causal_conv_transpose1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride) {
+    GGML_ASSERT(w->ne[0] >= stride);
+    ggml_tensor * y = ggml_conv_transpose_1d(ctx, w, x, stride, 0, 1);
+    return ggml_view_2d(ctx, y, x->ne[0] * stride, y->ne[1], y->nb[1], 0);
+}
+
+// the decoder stream is [C, T], the convs run on the transposed [T, C]
+static ggml_tensor * vv_transpose(ggml_context * ctx, ggml_tensor * x) {
+    return ggml_cont(ctx, ggml_transpose(ctx, x));
+}
+
+// ConvNeXt-style Block1D: RMSNorm -> depthwise conv -> gamma -> residual, RMSNorm -> FFN -> ffn_gamma -> residual
+static ggml_tensor * vv_build_tok_block(ggml_context * ctx, ggml_tensor * x, const llama_model_vibevoice::tok_block & blk, float eps) {
+    ggml_tensor * cur = ggml_rms_norm(ctx, x, eps);
+    cur = ggml_mul(ctx, cur, blk.norm);
+    cur = vv_transpose(ctx, vv_causal_conv1d_dw(ctx, vv_transpose(ctx, cur), blk.dwconv));
+    cur = ggml_add(ctx, cur, blk.dwconv_b);
+    cur = ggml_mul(ctx, cur, blk.gamma);
+    x = ggml_add(ctx, x, cur);
+
+    cur = ggml_rms_norm(ctx, x, eps);
+    cur = ggml_mul(ctx, cur, blk.ffn_norm);
+    cur = ggml_mul_mat(ctx, blk.ffn_up, cur);
+    cur = ggml_add(ctx, cur, blk.ffn_up_b);
+    cur = ggml_gelu_erf(ctx, cur);
+    cur = ggml_mul_mat(ctx, blk.ffn_down, cur);
+    cur = ggml_add(ctx, cur, blk.ffn_down_b);
+    cur = ggml_mul(ctx, cur, blk.ffn_gamma);
+
+    return ggml_add(ctx, x, cur);
+}
+
+ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents) const {
+    const auto & hp = hparams.vibevoice.acoustic;
+
+    GGML_ASSERT(ggml_is_matrix(latents) && latents->ne[0] == hp.vae_dim);
+
+    ggml_tensor * cur = latents;
+
+    for (uint32_t s = 0; s < hp.n_dec_stages; ++s) {
+        const auto & stage = acoustic_dec.stages[s];
+
+        // the first conv is the stem, the others upsample by the decoder ratios in config order
+        ggml_tensor * x = vv_transpose(ctx, cur);
+        if (s == 0) {
+            x = vv_causal_conv1d(ctx, x, stage.conv);
+        } else {
+            x = vv_causal_conv_transpose1d(ctx, x, stage.conv, hp.dec_ratios[s - 1]);
+        }
+        cur = ggml_add(ctx, vv_transpose(ctx, x), stage.conv_b);
+
+        for (const auto & blk : stage.blocks) {
+            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps);
+        }
+    }
+
+    // disable_last_norm: there is no norm before the head
+    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), acoustic_dec.head);
+    cur = ggml_add(ctx, cur, ggml_reshape_2d(ctx, acoustic_dec.head_b, 1, acoustic_dec.head_b->ne[0]));
+
+    return cur;
+}

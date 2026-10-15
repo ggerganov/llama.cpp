@@ -252,6 +252,10 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     )
 
     llama_build(test-fusion.cpp)
+
+    # needs a VibeVoice GGUF, not registered as a test
+    llama_build(test-vibevoice-acoustic-dec.cpp)
+    target_include_directories(test-vibevoice-acoustic-dec PRIVATE ${PROJECT_SOURCE_DIR}/src)
 endif()
 
 llama_build_and_test(test-chat-peg-parser.cpp peg-parser/simple-tokenize.cpp)
