@@ -115,8 +115,8 @@ class MuseSparkModel(TextModel):
             yield self.format_tensor_name(gguf.MODEL_TENSOR.FFN_DOWN_EXP, bid), data_torch
             return
 
-        # The router scales its logits by the MetaP output multiplier before the
-        # sigmoid, fold it into the weight to keep a plain matmul
+        # The router scales its logits by the MetaP output multiplier before the sigmoid
+        # Fold it into the weight to keep a plain matmul
         if name.endswith(".mlp.gate.weight"):
             data_torch = data_torch.float() * self.hparams["output_multiplier"]
             yield from super().modify_tensors(data_torch, name, bid)
