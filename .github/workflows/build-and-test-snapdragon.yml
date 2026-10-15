@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [SM8750, SM8850, QCS9075M]
+        device: [SM8850, QCS9075M]
 
     permissions:
       actions: read
