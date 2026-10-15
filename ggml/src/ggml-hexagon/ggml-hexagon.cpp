@@ -561,6 +561,9 @@ static inline bool ggml_hexagon_needs_repack(const struct ggml_tensor * t) {
     if (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED)) {
         return false;
     }
+    if (ggml_backend_buft_is_host(t->buffer->buft)) {
+        return false;
+    }
     return ggml_hexagon_can_rt_repack(t);
 }
 
@@ -3231,7 +3234,7 @@ static size_t ggml_backend_hexagon_buffer_type_get_alignment(ggml_backend_buffer
 }
 
 static size_t ggml_backend_hexagon_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const struct ggml_tensor * t) {
-    if (ggml_hexagon_is_tiled_weight_tensor(t)) {
+    if (!ggml_backend_buft_is_host(buft) && ggml_hexagon_is_tiled_weight_tensor(t)) {
         int64_t ne0 = hex_round_up(t->ne[0], 32);
         int64_t ne1 = hex_round_up(t->ne[1], 32);
         int64_t ne2 = t->ne[2];
@@ -3240,8 +3243,6 @@ static size_t ggml_backend_hexagon_buffer_type_get_alloc_size(ggml_backend_buffe
         return std::max(tiled_size, ggml_nbytes(t));
     }
     return ggml_nbytes(t);
-
-    GGML_UNUSED(buft);
 }
 
 static size_t parse_size(const char * str, size_t default_unit = 1024 * 1024) {
