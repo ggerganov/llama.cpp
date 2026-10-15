@@ -65,7 +65,8 @@ struct llama_hparams_vv_tokenizer {
     uint32_t n_enc_stages;
     uint32_t n_dec_stages;
 
-    // each stage has one conv in front (stem or resample) and depths[i] blocks, ratios are in HF config order
+    // each stage has one conv in front (stem or resample) and depths[i] blocks; ratios/depths are in HF config order
+    // (TokenizerEncoder reverses ratios at runtime; decoder uses them as stored)
     std::array<uint32_t, LLAMA_MAX_VV_STAGES> enc_ratios;
     std::array<uint32_t, LLAMA_MAX_VV_STAGES> enc_depths;
     std::array<uint32_t, LLAMA_MAX_VV_STAGES> dec_ratios;

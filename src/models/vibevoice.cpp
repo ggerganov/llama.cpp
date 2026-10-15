@@ -196,10 +196,14 @@ void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
 // acoustic decoder
 //
 
-// causal conv1d, stride 1, zero left padding. x: [T, IC], w: [K, IC, OC], returns [T, OC]
-static ggml_tensor * vv_causal_conv1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w) {
-    x = ggml_pad_ext(ctx, x, w->ne[0] - 1, 0, 0, 0, 0, 0, 0, 0);
-    ggml_tensor * y = ggml_conv_1d(ctx, w, x, 1, 0, 1);
+// causal conv1d with optional stride, zero left padding. x: [T, IC], w: [K, IC, OC]
+// padding_total = K - stride (upstream SConv1d); caller should pass a T that needs no extra right pad
+// returns [ceil-ish T/stride, OC]; with T % stride == 0 and K == 2*stride this is exactly T/stride
+static ggml_tensor * vv_causal_conv1d(ggml_context * ctx, ggml_tensor * x, ggml_tensor * w, int stride = 1) {
+    GGML_ASSERT(stride >= 1 && w->ne[0] >= stride);
+    const int padding_total = (int) w->ne[0] - stride;
+    x = ggml_pad_ext(ctx, x, padding_total, 0, 0, 0, 0, 0, 0, 0);
+    ggml_tensor * y = ggml_conv_1d(ctx, w, x, stride, 0, 1);
     return ggml_reshape_2d(ctx, y, y->ne[0], y->ne[1]);
 }
 
@@ -270,6 +274,77 @@ ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml
     // disable_last_norm: there is no norm before the head
     cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), acoustic_dec.head);
     cur = ggml_add(ctx, cur, ggml_reshape_2d(ctx, acoustic_dec.head_b, 1, acoustic_dec.head_b->ne[0]));
+
+    return cur;
+}
+
+//
+// tokenizer encoder (semantic / acoustic) + speech connector
+//
+
+// mono waveform [T, 1] -> latents [vae_dim, T / hop]
+// encoder ratios are stored in HF config order; upstream TokenizerEncoder reverses them at build time
+static ggml_tensor * vv_build_tok_enc(
+        ggml_context * ctx,
+        ggml_tensor * wav,
+        const llama_model_vibevoice::tok_part & enc,
+        const llama_hparams_vv_tokenizer & hp) {
+    GGML_ASSERT(ggml_is_matrix(wav) && wav->ne[1] == 1);
+    GGML_ASSERT(hp.n_enc_stages > 0);
+
+    // channel-first stream like the decoder: [C, T]
+    ggml_tensor * cur = vv_transpose(ctx, wav);
+
+    const uint32_t n_ratios = hp.n_enc_stages - 1;
+
+    for (uint32_t s = 0; s < hp.n_enc_stages; ++s) {
+        const auto & stage = enc.stages[s];
+
+        ggml_tensor * x = vv_transpose(ctx, cur);
+        if (s == 0) {
+            x = vv_causal_conv1d(ctx, x, stage.conv, 1);
+        } else {
+            // reversed config ratios: first downsample uses the last config ratio
+            const uint32_t stride = hp.enc_ratios[n_ratios - s];
+            x = vv_causal_conv1d(ctx, x, stage.conv, (int) stride);
+        }
+        cur = ggml_add(ctx, vv_transpose(ctx, x), stage.conv_b);
+
+        for (const auto & blk : stage.blocks) {
+            cur = vv_build_tok_block(ctx, cur, blk, hp.f_norm_rms_eps);
+        }
+    }
+
+    // disable_last_norm: there is no norm before the head
+    cur = vv_causal_conv1d(ctx, vv_transpose(ctx, cur), enc.head, 1);
+    cur = ggml_add(ctx, cur, ggml_reshape_2d(ctx, enc.head_b, 1, enc.head_b->ne[0]));
+
+    // [T', vae_dim] -> [vae_dim, T']
+    return vv_transpose(ctx, cur);
+}
+
+ggml_tensor * llama_model_vibevoice::build_semantic_enc(ggml_context * ctx, ggml_tensor * wav) const {
+    return vv_build_tok_enc(ctx, wav, semantic_enc, hparams.vibevoice.semantic);
+}
+
+ggml_tensor * llama_model_vibevoice::build_acoustic_enc(ggml_context * ctx, ggml_tensor * wav) const {
+    return vv_build_tok_enc(ctx, wav, acoustic_enc, hparams.vibevoice.acoustic);
+}
+
+// speech connector: Linear -> RMSNorm -> Linear (no activation), matches upstream SpeechConnector
+// features [in_dim, N] -> [n_embd, N]
+ggml_tensor * llama_model_vibevoice::build_connector(ggml_context * ctx, ggml_tensor * features, const connector & conn) const {
+    GGML_ASSERT(ggml_is_matrix(features));
+    GGML_ASSERT(features->ne[0] == conn.fc1->ne[0]);
+
+    ggml_tensor * cur = ggml_mul_mat(ctx, conn.fc1, features);
+    cur = ggml_add(ctx, cur, conn.fc1_b);
+
+    cur = ggml_rms_norm(ctx, cur, hparams.f_norm_rms_eps);
+    cur = ggml_mul(ctx, cur, conn.norm);
+
+    cur = ggml_mul_mat(ctx, conn.fc2, cur);
+    cur = ggml_add(ctx, cur, conn.fc2_b);
 
     return cur;
 }

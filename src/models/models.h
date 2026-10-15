@@ -843,6 +843,18 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     // the latents must already be unscaled with speech_scaling_factor/speech_bias_factor
     ggml_tensor * build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents) const;
 
+    // mono waveform [T, 1] -> semantic latents [semantic.vae_dim, T / hop]
+    // hop is the product of the encoder ratios (reversed from HF config order at runtime)
+    // T should be a multiple of hop so no extra right-pad is needed
+    ggml_tensor * build_semantic_enc(ggml_context * ctx, ggml_tensor * wav) const;
+
+    // same layout as build_semantic_enc, using the acoustic tokenizer encoder weights
+    ggml_tensor * build_acoustic_enc(ggml_context * ctx, ggml_tensor * wav) const;
+
+    // SpeechConnector: Linear -> RMSNorm (LM eps) -> Linear, no activation
+    // features [in_dim, N] -> [n_embd, N]; pass acoustic_conn or semantic_conn
+    ggml_tensor * build_connector(ggml_context * ctx, ggml_tensor * features, const connector & conn) const;
+
     // one evaluation of the diffusion head, predicts v (v_prediction)
     // noisy [latent_size, N], cond [n_embd, N], t [N] or [1] (float timesteps, a single one is shared) -> v [latent_size, N]
     ggml_tensor * build_diffusion_head(ggml_context * ctx, ggml_tensor * noisy, ggml_tensor * cond, ggml_tensor * t) const;

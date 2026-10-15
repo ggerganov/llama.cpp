@@ -258,6 +258,8 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     target_include_directories(test-vibevoice-acoustic-dec PRIVATE ${PROJECT_SOURCE_DIR}/src)
     llama_build(test-vibevoice-diffusion-head.cpp)
     target_include_directories(test-vibevoice-diffusion-head PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    llama_build(test-vibevoice-semantic-enc.cpp)
+    target_include_directories(test-vibevoice-semantic-enc PRIVATE ${PROJECT_SOURCE_DIR}/src)
 endif()
 
 llama_build_and_test(test-chat-peg-parser.cpp peg-parser/simple-tokenize.cpp)
