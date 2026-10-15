@@ -427,6 +427,17 @@ static void test_sidecar_removal() {
     REQUIRE(!fs::exists(mtp_part));
     REQUIRE(fs::exists(cached("test/sidecar", "model-Q4_0.gguf")));
 
+    // a sidecar that only ever landed as a partial counts as removed too, so the
+    // caller knows there is nothing left to clean up
+    { std::ofstream(mtp_part) << "gguf"; }
+
+    common_download_opts mtp_only;
+    mtp_only.download_mtp = true;
+
+    REQUIRE(common_download_remove_sidecars("test/sidecar:Q4_0", mtp_only));
+    REQUIRE(!fs::exists(mtp_part));
+    REQUIRE(!common_download_remove_sidecars("test/sidecar:Q4_0", mtp_only));
+
     fs::remove_all(cache_dir / "models--test--sidecar");
     g_repos.clear();
 }
