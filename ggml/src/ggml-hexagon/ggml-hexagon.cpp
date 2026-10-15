@@ -541,35 +541,27 @@ static inline bool ggml_hexagon_tensor_is_fuseable(const struct ggml_tensor * t)
     return (extra->flags & GGML_HEXAGON_TENSOR_FUSEABLE) != 0;
 }
 
+static inline bool ggml_hexagon_can_rt_repack(const struct ggml_tensor * t) {
+    if (opt_rt_repack == 0 || !ggml_hexagon_is_tiled_weight_tensor(t)) {
+        return false;
+    }
+    return opt_rt_repack > 1 || ggml_is_quantized(t->type);
+}
+
 static inline bool ggml_hexagon_tensor_is_tiled(const struct ggml_tensor * t) {
     const auto * extra = (const ggml_hexagon_tensor_extra *) t->extra;
     if (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED)) {
         return true;
     }
-    if (opt_rt_repack == 0 || !ggml_hexagon_is_tiled_weight_tensor(t)) {
-        return false;
-    }
-    if (opt_rt_repack == 1) {
-        return ggml_is_quantized(t->type);
-    }
-    return true;
+    return ggml_hexagon_can_rt_repack(t);
 }
 
 static inline bool ggml_hexagon_needs_repack(const struct ggml_tensor * t) {
-    if (ggml_is_view(t)) {
-        return false;
-    }
-    auto extra = (const struct ggml_hexagon_tensor_extra *) t->extra;
+    const auto * extra = (const ggml_hexagon_tensor_extra *) t->extra;
     if (extra && (extra->flags & GGML_HEXAGON_TENSOR_TILED)) {
         return false;
     }
-    if (opt_rt_repack == 0) {
-        return false;
-    }
-    if (opt_rt_repack == 1 && !ggml_is_quantized(t->type)) {
-        return false;
-    }
-    return ggml_hexagon_is_tiled_weight_tensor(t);
+    return ggml_hexagon_can_rt_repack(t);
 }
 
 static inline bool ggml_hexagon_tensors_overlap(const struct ggml_tensor * a, const struct ggml_tensor * b) {
