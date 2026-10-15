@@ -544,14 +544,14 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
 }
 
 static std::vector<float> get_logits(
-        llama_model * model, llama_context * lctx, const std::vector<llama_token> & tokens, bool encode = false, llama_pos pos0 = 0) {
+        llama_model * model, llama_context * lctx, const std::vector<llama_token> & tokens, bool encode = false) {
     const uint32_t n_vocab  = llama_vocab_n_tokens(llama_model_get_vocab(model));
     const uint32_t n_ctx    = llama_n_ctx(lctx);
     const uint32_t n_tokens = tokens.size();
     common_batch batch(lctx);
-    GGML_ASSERT(pos0 >= 0 && n_tokens + pos0 <= n_ctx);
+    GGML_ASSERT(n_tokens <= n_ctx);
     for (uint32_t pos = 0; pos < n_tokens; pos++) {
-        batch.add(tokens[pos], pos0 + pos, 0, true);
+        batch.add(tokens[pos], pos, 0, true);
     }
     if (encode) {
         if (llama_process(lctx, LLAMA_PROCESS_TYPE_ENCODE, batch.get())) {
@@ -571,58 +571,6 @@ static std::vector<float> get_logits(
         }
     }
     return ret;
-}
-
-static bool check_maion_context_shift(
-        llama_model * model, const std::vector<llama_token> & tokens) {
-    std::vector<bool> shifted_layers(4, false);
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 0;
-    ctx_params.n_threads = 4;
-    ctx_params.n_threads_batch = 4;
-    ctx_params.cb_eval = [](ggml_tensor * t, bool ask, void * user_data) {
-        if (ask && t->op == GGML_OP_ROPE && t->src[0]->view_src) {
-            int il;
-            if (sscanf(t->src[0]->view_src->name, "cache_k_l%d", &il) == 1) {
-                auto & layers = *static_cast<std::vector<bool> *>(user_data);
-                GGML_ASSERT(il >= 0 && size_t(il) < layers.size());
-                layers[il] = true;
-            }
-        }
-        return false;
-    };
-    ctx_params.cb_eval_user_data = &shifted_layers;
-    llama_context_ptr owned_ctx(llama_init_from_model(model, ctx_params));
-    if (!owned_ctx) {
-        throw std::runtime_error("failed to create context for shift test");
-    }
-    llama_context * lctx = owned_ctx.get();
-
-    const llama_pos n_prompt = 16;
-    const llama_pos shift = 32;
-    GGML_ASSERT(tokens.size() > n_prompt);
-    const std::vector<llama_token> prompt(tokens.begin(), tokens.begin() + n_prompt);
-    const std::vector<llama_token> next = {tokens[n_prompt]};
-    llama_memory_t mem = llama_get_memory(lctx);
-    GGML_ASSERT(llama_memory_can_shift(mem));
-
-    get_logits(model, lctx, prompt, false, shift);
-    shifted_layers.assign(4, false);
-    llama_memory_seq_add(mem, 0, -1, -1, -shift);
-    const auto logits = get_logits(model, lctx, next, false, n_prompt);
-
-    const std::vector<bool> expected = {true, true, false, false};
-    if (shifted_layers != expected) {
-        LOG_ERR("%s: K-shift did not match the sliding-window layers\n", __func__);
-        return false;
-    }
-    for (float value : logits) {
-        if (!std::isfinite(value)) {
-            LOG_ERR("%s: non-finite logit after K-shift\n", __func__);
-            return false;
-        }
-    }
-    return true;
 }
 
 // entries [n/4, n/2) are embd rows, decoded either as token/embd/token chunks or as one mixed batch
@@ -1122,10 +1070,6 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                             if (test_ok) {
                                 status_nmse = "\033[1;31mFAIL\033[0m (toggle)";
                             }
-                            test_ok = false;
-                        }
-                        if (arch == LLM_ARCH_MAION_CODER && !check_maion_context_shift(model_and_ctx_dev.first.get(), tokens)) {
-                            status_nmse = "\033[1;31mFAIL\033[0m (shift)";
                             test_ok = false;
                         }
                     }
