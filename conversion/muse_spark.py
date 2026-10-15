@@ -52,17 +52,14 @@ class MuseSparkModel(TextModel):
         super().set_gguf_parameters()
         hparams = self.hparams
 
-        # metap resolves to two scalars: the output multiplier lands here, the
-        # attention scale rides on the synthesized QK-norm weights.
+        # MetaP resolves to two scalars, the output multiplier lands here and the
+        # attention scale rides on the synthesized QK-norm weights
         self.gguf_writer.add_logit_scale(hparams["output_multiplier"])
         self.gguf_writer.add_final_logit_softcapping(hparams["final_logit_softcapping"])
 
         self.gguf_writer.add_post_norm_eps(hparams["post_norm_eps"])
 
-        # Sliding layers carry rope, global layers run without it. Both share the
-        # same base, so the sliding one is stated explicitly. The graph derives
-        # rope from the sliding pattern, which only holds while the two lists
-        # agree and every rotated layer shares one base.
+        # Only the sliding layers carry rope, so the graph takes it from the pattern
         sliding = [t == "sliding_attention" for t in hparams["layer_types"]]
         theta = hparams["rope_parameters"]["rope_theta"]
         assert sliding == [bool(t) for t in hparams["layer_rope_theta"]]
@@ -92,8 +89,8 @@ class MuseSparkModel(TextModel):
 
             yield self.map_tensor_name(name), _unpermute_for_rope(data_torch, n_head)
 
-            # QK-norm has no weights of its own. Synthesizing them carries the metap
-            # scale, so the graph keeps the plain 1 / sqrt(head_dim).
+            # QK-norm has no weights of its own, synthesize them to carry the MetaP
+            # scale so the graph keeps the plain 1 / sqrt(head_dim)
             ones = torch.ones(head_dim, dtype=torch.float32)
             q_norm = ones * self.hparams["qk_scale_factor"]
             yield self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q_NORM, bid), q_norm
@@ -118,16 +115,15 @@ class MuseSparkModel(TextModel):
             yield self.format_tensor_name(gguf.MODEL_TENSOR.FFN_DOWN_EXP, bid), data_torch
             return
 
-        # The router scales its logits by the metap output multiplier before the
-        # sigmoid. Folding it into the weight keeps the graph a plain matmul.
+        # The router scales its logits by the MetaP output multiplier before the
+        # sigmoid, fold it into the weight to keep a plain matmul
         if name.endswith(".mlp.gate.weight"):
             data_torch = data_torch.float() * self.hparams["output_multiplier"]
             yield from super().modify_tensors(data_torch, name, bid)
             return
 
-        # The residual gate is norm preserving: the stream is scaled by alpha and
-        # the branch by beta, with alpha^2 + beta^2 = 1. Both depend on the weight
-        # alone, so they resolve here and the graph keeps a scale and an add.
+        # Norm preserving residual gate: alpha scales the stream, beta the branch,
+        # with alpha^2 + beta^2 = 1. Both follow from the weight, so resolve them here
         if name.endswith("_residual_gate.gate"):
             assert bid is not None
             attn = "post_attention" in name
