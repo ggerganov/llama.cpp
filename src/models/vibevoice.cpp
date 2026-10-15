@@ -33,6 +33,14 @@ static uint32_t vv_get_stages(llama_model_loader & ml, llm_kv kid_ratios, llm_kv
         }
     }
 
+    int64_t hop = 1;
+    for (uint32_t ratio : r) {
+        if (ratio == 0 || hop > INT64_MAX / ratio) {
+            throw std::runtime_error(format("vibevoice: invalid tokenizer ratio %u, hop must fit in int64_t", ratio));
+        }
+        hop *= ratio;
+    }
+
     ratios.fill(0);
     depths.fill(0);
     std::copy(r.begin(), r.end(), ratios.begin());
@@ -790,7 +798,11 @@ std::vector<float> llama_model_vibevoice::acoustic_dec_stream(ggml_backend_t bac
 static int64_t vv_enc_hop(const llama_hparams_vv_tokenizer & hp) {
     int64_t hop = 1;
     for (uint32_t s = 0; s + 1 < hp.n_enc_stages; ++s) {
-        hop *= hp.enc_ratios[s];
+        const uint32_t ratio = hp.enc_ratios[s];
+        if (ratio == 0 || hop > INT64_MAX / ratio) {
+            throw std::runtime_error(format("vibevoice: invalid tokenizer ratio %u, hop must fit in int64_t", ratio));
+        }
+        hop *= ratio;
     }
     return hop;
 }
@@ -799,7 +811,11 @@ static int64_t vv_enc_hop(const llama_hparams_vv_tokenizer & hp) {
 static int64_t vv_dec_hop(const llama_hparams_vv_tokenizer & hp) {
     int64_t hop = 1;
     for (uint32_t s = 0; s + 1 < hp.n_dec_stages; ++s) {
-        hop *= hp.dec_ratios[s];
+        const uint32_t ratio = hp.dec_ratios[s];
+        if (ratio == 0 || hop > INT64_MAX / ratio) {
+            throw std::runtime_error(format("vibevoice: invalid tokenizer ratio %u, hop must fit in int64_t", ratio));
+        }
+        hop *= ratio;
     }
     return hop;
 }
@@ -824,8 +840,8 @@ std::vector<float> llama_model_vibevoice::speech_feedback_stream(ggml_backend_t 
     const int64_t ac_hop = vv_dec_hop(hparams.vibevoice.acoustic);
     GGML_ASSERT(n_new > 0);
 
-    // audio_frame passes a chunk of ac_hop samples; a larger semantic hop would read past it in vv_run_stream
-    if (hop <= 0 || ac_hop <= 0 || hop > ac_hop) {
+    // feedback needs one semantic frame per acoustic frame
+    if (hop <= 0 || ac_hop <= 0 || hop != ac_hop) {
         throw std::runtime_error(format(
                 "vibevoice: semantic hop %zu is incompatible with acoustic hop %zu",
                 (size_t) hop, (size_t) ac_hop));

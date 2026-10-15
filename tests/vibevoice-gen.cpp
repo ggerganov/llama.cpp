@@ -99,7 +99,12 @@ bool vv_generator::init(llama_model * lmodel, uint32_t n_ctx) {
     n_embd = model->hparams.n_embd;
     hop    = 1;
     for (uint32_t s = 0; s + 1 < vv.acoustic.n_dec_stages; ++s) {
-        hop *= vv.acoustic.dec_ratios[s];
+        const uint32_t ratio = vv.acoustic.dec_ratios[s];
+        if (ratio == 0 || hop > INT64_MAX / ratio) {
+            fprintf(stderr, "vibevoice: invalid tokenizer ratio %u, hop must fit in int64_t\n", ratio);
+            return false;
+        }
+        hop *= ratio;
     }
 
     llama_context_params cparams = llama_context_default_params();
