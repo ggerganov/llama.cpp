@@ -491,9 +491,12 @@ llama_model_qwen4exp::graph::graph(const llama_model & model, const llm_graph_pa
         cur = build_layer_ffn(cur, il);
         cb(cur, "ffn_out", il);
 
+        cur = build_cvec(cur, il);
+        cb(cur, "l_out", il);
+
         res_hc = build_hc_combine(res_hc, cur, inject, il);
 
-        // "l_last" is the layer output name that build_cvec and imatrix look for
+        // "l_last" is the layer output name that imatrix looks for
         cb(res_hc, "l_last", il);
     }
 
