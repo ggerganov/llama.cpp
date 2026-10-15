@@ -23,7 +23,7 @@ import { conversationsStore } from '$lib/stores/conversations/index.svelte';
 import { type ModelPropsHost, ModelPropsManager } from '$lib/stores/models/props.svelte';
 import { type ModelStatusHost, ModelStatusManager } from '$lib/stores/models/status.svelte';
 import { serverStore } from '$lib/stores/server.svelte';
-import type { ModelSidecarBadge, ParsedModelId } from '$lib/types/models';
+import type { ParsedModelId } from '$lib/types/models';
 import { getConversationModel } from '$lib/utils/conversation-utils';
 import { repoOf } from '$lib/utils/model-names';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -37,24 +37,6 @@ const MAX_GROUP_OPEN_ENTRIES = 200;
  * list window and the rest of the rows fetch as they scroll near the viewport.
  */
 const HUB_WARM_LIMIT = 12;
-
-/** Union of the draft sidecar badges two sources report for one repo. */
-function mergedDraftSidecars(
-	fromListing: ModelSidecarBadge[] | undefined,
-	fromArgs: ModelSidecarBadge[]
-): ModelSidecarBadge[] {
-	if (!fromListing || fromListing.length === 0) return fromArgs;
-
-	if (fromArgs.length === 0) return fromListing;
-
-	const merged = [...fromListing];
-
-	for (const badge of fromArgs) {
-		if (!merged.some((b) => b.kind === badge.kind && b.repo === badge.repo)) merged.push(badge);
-	}
-
-	return merged;
-}
 
 /** Models kept out of the selector. */
 function loadHiddenModels(): Set<string> {
@@ -578,8 +560,6 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 			item,
 			parsed: ModelsService.parseModelId(item.id)
 		}));
-		// each cached model lists the sidecars it has on disk: pair the drafts with their repo
-		const draftSidecarsByRepo = ModelsService.draftSidecarsByRepo(response.data);
 
 		return (
 			entries
@@ -614,12 +594,7 @@ class ModelsStore implements ModelPropsHost, ModelStatusHost {
 								: undefined),
 						description: details?.description,
 						details: details?.details,
-						draftSidecars: mergedDraftSidecars(
-							draftSidecarsByRepo.get(repo),
-							// models the router serves with a draft record it in their
-							// --model-draft args instead of a listing entry
-							this._status.getDraftSidecars(repo)
-						),
+						draftSidecars: this._status.getDraftSidecars(repo),
 						id: item.id,
 						meta: item.meta ?? null,
 						modalities: this.props.buildArchitectureModalities(item.architecture),

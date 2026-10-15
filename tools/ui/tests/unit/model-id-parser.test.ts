@@ -397,15 +397,15 @@ describe('draftSidecarsByRepo', () => {
 		status: { value: status }
 	});
 
-	it('keeps one badge per kind and quant, at the quant of each model', () => {
+	it('keeps one badge per kind, at the repo that has it on disk', () => {
 		const byRepo = ModelsService.draftSidecarsByRepo([
 			entry('ggml-org/model:Q4_0', [ModelDraftSidecar.MTP]),
 			entry('ggml-org/model:Q8_0', [ModelDraftSidecar.MTP])
 		]);
 
+		// the listing reports kinds, never the draft's file: its quant stays unknown
 		expect(byRepo.get('ggml-org/model')).toEqual([
-			{ kind: ModelDraftSidecar.MTP, quant: 'Q4_0', repo: 'ggml-org/model' },
-			{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo: 'ggml-org/model' }
+			{ kind: ModelDraftSidecar.MTP, quant: null, repo: 'ggml-org/model' }
 		]);
 	});
 
@@ -417,7 +417,7 @@ describe('draftSidecarsByRepo', () => {
 		]);
 
 		expect(byRepo.get('ggml-org/model')).toEqual([
-			{ kind: ModelDraftSidecar.MTP, quant: 'Q4_0', repo: 'ggml-org/model' }
+			{ kind: ModelDraftSidecar.MTP, quant: null, repo: 'ggml-org/model' }
 		]);
 	});
 });

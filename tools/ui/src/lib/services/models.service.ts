@@ -76,8 +76,10 @@ export class ModelsService {
 	}
 
 	/**
-	 * Draft sidecar badges of the cached models, keyed by repo: each listing
-	 * entry reports the sidecar kinds it has on disk, at the entry's own quant.
+	 * Draft sidecar badges of the cached models, keyed by repo. Each listing entry
+	 * reports the sidecar kinds it has on disk, never the file: the draft's own
+	 * quant stays unknown here, and the `--model-draft` args report it once the
+	 * model is loaded.
 	 */
 	static draftSidecarsByRepo(
 		entries: { id: string; sidecars?: ModelSidecar[]; status?: { value?: unknown } }[]
@@ -93,15 +95,14 @@ export class ModelsService {
 				continue;
 
 			const repo = repoOf(id);
-			const quant = this.parseModelId(id).quantization;
 
 			for (const kind of sidecars ?? []) {
 				if (isAuxSidecar(kind)) continue;
 
 				const kinds = byRepo.get(repo) ?? [];
 
-				if (!kinds.some((b) => b.kind === kind && b.quant === quant)) {
-					kinds.push({ kind, quant, repo });
+				if (!kinds.some((b) => b.kind === kind && b.repo === repo)) {
+					kinds.push({ kind, quant: null, repo });
 				}
 
 				byRepo.set(repo, kinds);
