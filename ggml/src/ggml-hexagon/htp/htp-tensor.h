@@ -57,10 +57,6 @@ struct htp_tensor_mdev_range {
     uint32_t count;
 };
 
-static inline void * htp_tensor_data(const struct htp_tensor * t) {
-    return (void *) (uintptr_t) t->data;
-}
-
 static inline bool htp_tensor_is_extended(const struct htp_tensor * t) {
     return t && (t->data >> 32) != 0;
 }

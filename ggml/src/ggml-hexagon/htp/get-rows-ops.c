@@ -484,7 +484,7 @@ int op_get_rows(struct htp_ops_context * octx) {
 
     if (!htp_tensor_is_extended(octx->src[1]) && src1_bytes <= 128 &&
         htp_tensor_is_contiguous(octx->src[1], elem_size)) {
-        grctx.src1_data  = htp_tensor_data(octx->src[1]);
+        grctx.src1_data  = (const void *) (uintptr_t) octx->src[1]->data;
         grctx.read_index = get_rows_read_index_ddr;
     } else {
         uint8_t * vtcm_src1 = grctx.vtcm_base + grctx.vtcm_layout.off_src1;

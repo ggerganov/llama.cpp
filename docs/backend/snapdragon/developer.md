@@ -202,7 +202,7 @@ sessions.
 Common partitioning logic is factored into reusable inline helpers in
 [`htp-tensor.h`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h):
 
-1. [`htp_tensor_mdev_rows_per_chunk`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L106):
+1. [`htp_tensor_mdev_rows_per_chunk`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L104):
    Determines the minimum number of rows per chunk so that the chunk byte size is a multiple of 128 bytes:
 
    ```
@@ -213,7 +213,7 @@ Common partitioning logic is factored into reusable inline helpers in
    Returns `false` if the tensor cannot be safely row-partitioned (such as unaligned base pointer, permuted layout,
    or non-128-byte aligned outer strides).
 
-2. [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L133):
+2. [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L131):
    Calculates the per-device work range `struct htp_tensor_mdev_range { uint32_t start; uint32_t count; }` given
    `total_units`, `units_per_chunk`, `mdev_idx`, `mdev_count`, and the precomputed `mdev_count_div`.
    Handles chunk distribution across devices, assigns remainder units to the last device, and automatically triggers
@@ -252,11 +252,11 @@ if (nrows == 0) {
 For flat element-wise operations that write directly to DDR:
 - Partition total linear elements N = ne0 * ne1 * ne2 * ne3 in 128-byte cache line chunks (`elems_per_line = (elem_size == 4) ? 32 : 64`).
 - Requires strict 1D contiguity:
-  [`htp_tensor_is_contiguous(dst, elem_size)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L67)
+  [`htp_tensor_is_contiguous(dst, elem_size)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L65)
   and 128-byte aligned destination pointer
-  [`htp_tensor_mdev_data_aligned(dst)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L86).
+  [`htp_tensor_mdev_data_aligned(dst)`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L84).
 - If contiguous and aligned, pass `elems_per_line` to
-  [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L133);
+  [`htp_tensor_mdev_partition`](../../../ggml/src/ggml-hexagon/htp/htp-tensor.h#L131);
   otherwise pass 0 to trigger Device 0 fallback.
 
 ### Single-Device Fallback (Device 0)
