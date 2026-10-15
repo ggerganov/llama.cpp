@@ -12328,12 +12328,13 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
         // Destination nodes are checked against both the written/read lists. Source nodes are only
         // checked against the written list. Two nodes overlap in memory if they come from the same
         // buffer and the tensor or view ranges overlap.
-        auto const &overlaps_unsynced = [&](const ggml_tensor *node, const std::vector<const ggml_tensor *> &unsynced_nodes) -> bool {
+        // Only a write's range includes its scratch padding; a read never touches a producer's scratch.
+        auto const &overlaps_unsynced = [&](const ggml_tensor *node, bool node_is_write, const std::vector<const ggml_tensor *> &unsynced_nodes, bool other_is_write) -> bool {
             if (unsynced_nodes.size() == 0) {
                 return false;
             }
             auto n_base = vk_tensor_offset(node) + node->view_offs;
-            auto n_size = ggml_nbytes(node);
+            auto n_size = node_is_write ? ggml_vk_tensor_alloc_size(ctx->device, node) : ggml_nbytes(node);
             ggml_backend_vk_buffer_context * a_buf_ctx = (ggml_backend_vk_buffer_context *)node->buffer->context;
             vk_buffer a_buf = a_buf_ctx->dev_buffer;
             for (auto &other : unsynced_nodes) {
@@ -12341,7 +12342,7 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
                 vk_buffer o_buf = o_buf_ctx->dev_buffer;
                 if (a_buf == o_buf) {
                     auto o_base = vk_tensor_offset(other) + other->view_offs;
-                    auto o_size = ggml_nbytes(other);
+                    auto o_size = other_is_write ? ggml_vk_tensor_alloc_size(ctx->device, other) : ggml_nbytes(other);
 
                     if ((o_base <= n_base && n_base < o_base + o_size) ||
                         (n_base <= o_base && o_base < n_base + n_size)) {
@@ -12358,7 +12359,8 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
             const ggml_tensor *cur_node = cgraph->nodes[node_idx + i];
             // If the node actually writes to memory, then check if it needs to sync
             if (ctx->fused_ops_write_mask & (1 << i)) {
-                if (overlaps_unsynced(cur_node, ctx->unsynced_nodes_read) || overlaps_unsynced(cur_node, ctx->unsynced_nodes_written)) {
+                if (overlaps_unsynced(cur_node, true, ctx->unsynced_nodes_read, false) ||
+                    overlaps_unsynced(cur_node, true, ctx->unsynced_nodes_written, true)) {
                     need_sync = true;
                     break;
                 }
@@ -12367,7 +12369,7 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
                 if (!cur_node->src[j]) {
                     continue;
                 }
-                if (overlaps_unsynced(cur_node->src[j], ctx->unsynced_nodes_written)) {
+                if (overlaps_unsynced(cur_node->src[j], false, ctx->unsynced_nodes_written, true)) {
                     need_sync = true;
                     break;
                 }
@@ -13165,9 +13167,8 @@ size_t ggml_backend_vk_buffer_type_get_max_size(ggml_backend_buffer_type_t buft)
 }
 
 size_t ggml_backend_vk_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
-    return ggml_nbytes(tensor);
-
-    UNUSED(buft);
+    ggml_backend_vk_buffer_type_context * ctx = (ggml_backend_vk_buffer_type_context *) buft->context;
+    return ggml_vk_tensor_alloc_size(ctx->device, tensor);
 }
 
 ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(size_t dev_num) {
