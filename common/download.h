@@ -104,9 +104,10 @@ std::string common_docker_resolve_model(const std::string & docker);
 // Remove a cached model from disk
 // input format: "user/model" or "user/model:tag"
 // - if tag is omitted, removes the entire repo cache directory
-// - if tag is present, removes only files matching that tag (and orphaned blobs)
+// - if tag is present, removes only files matching that tag (and orphaned blobs),
+//   along with the partial files of an unfinished download of that tag
 // returns true if anything was removed
-bool common_download_remove(const std::string & hf_repo_with_tag);
+bool common_download_remove(const std::string & hf_repo_with_tag, const std::string & bearer_token = "");
 
 struct common_download_hf_plan {
     hf_cache::hf_file primary;
@@ -116,6 +117,7 @@ struct common_download_hf_plan {
     hf_cache::hf_file eagle3;
     hf_cache::hf_file dflash;
     hf_cache::hf_file dspark;
-    hf_cache::hf_file preset; // if set, only this file is downloaded
+    hf_cache::hf_file imatrix; // downloaded only, never wired into the params
+    hf_cache::hf_file preset;  // if set, only this file is downloaded
 };
 common_download_hf_plan common_download_get_hf_plan(const common_params_model & model, const common_download_opts & opts);

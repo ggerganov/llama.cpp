@@ -109,8 +109,17 @@ export type {
 	ModelDownloadFileProgress,
 	ModelDownloadProgress,
 	ModelLoadProgress,
+	ModelSidecarBadge,
 	ModalityCapabilities
 } from './models';
+
+// Models discover types
+export type {
+	ModelBitDepthRow,
+	ModelDownloadEntryState,
+	ModelQuantOption,
+	ModelSelectableFile
+} from './models-discover';
 
 // Settings types
 export type {

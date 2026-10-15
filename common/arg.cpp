@@ -677,6 +677,11 @@ void common_models_handler_apply(common_models_handler & handler, common_params 
             }
         });
     }
+    if (!plan.imatrix.local_path.empty()) {
+        tasks.emplace_back(plan.imatrix, opts, [&]() {
+            hf_cache::finalize_file(plan.imatrix);
+        });
+    }
     if (!plan.preset.local_path.empty()) {
         tasks.emplace_back(plan.preset, opts, [&]() {
             // if HF repo is a preset repo, we simply run server in router mode with the preset.ini file

@@ -2,15 +2,24 @@ import { LOCAL_BACKEND_ID, type ModalityKey } from '$lib/constants';
 import { ModelCapability, ModelGroupKind, ModelsTableGroupKind } from '$lib/enums';
 import { HuggingFaceService, ModelsService } from '$lib/services';
 import { modelsStore } from '$lib/stores';
-import type { ModelDownloadEntry, ModelDownloadProgress, ModelOption } from '$lib/types/models';
-import { detectThinkingSupport, detectToolUseSupport, repoOf } from '$lib/utils';
+import type {
+	ModelDownloadEntry,
+	ModelDownloadProgress,
+	ModelOption,
+	ModelSidecarBadge
+} from '$lib/types/models';
+import { detectThinkingSupport, detectToolUseSupport, isDraftSidecar, repoOf } from '$lib/utils';
 
 /** One repo of the table, with the rows it ships as. */
 export interface ModelQuantGroup {
 	base: ModelOption;
+	/** Draft downloads hanging off the row, in flight or paused. */
+	draftEntries?: ModelDownloadEntry[];
 	key: string;
 	kind: ModelGroupKind;
 	quants: ModelOption[];
+	/** Draft sidecars already on disk, shown as checked sub-lines. */
+	sidecarBadges?: ModelSidecarBadge[];
 }
 
 /** True when any of the manager's filters narrows the table. */
@@ -31,29 +40,71 @@ export function downloadProgressFor(repoWithTag: string): ModelDownloadProgress 
 }
 
 /**
- * One table row per tracked download, so the table lists them the way it lists
- * any other model. A paused download is already in the router's listing, so its
- * own option is reused; a fresh one stands for its tag alone.
+ * One table row per downloading repo, so the table lists them the way it lists
+ * any other model: the main weights stand for the repo and its draft downloads
+ * and on-disk sidecars hang off the row as sub-lines. A repo with no main
+ * download in flight keeps one row per draft. A paused download is already in
+ * the router's listing, so its own option is reused; a fresh one stands for
+ * its tag alone.
  */
 export function downloadGroups(
 	entries: ModelDownloadEntry[],
-	models: ModelOption[]
+	models: ModelOption[],
+	sidecarsFor: (repo: string) => ModelSidecarBadge[]
 ): ModelQuantGroup[] {
-	return entries.map((entry) => {
-		const option = models.find((candidate) => candidate.model === entry.repoWithTag) ?? {
-			backendId: LOCAL_BACKEND_ID,
-			capabilities: [],
-			id: entry.repoWithTag,
-			model: entry.repoWithTag,
-			name: entry.repoWithTag
+	const clusters = new Map<string, { drafts: ModelDownloadEntry[]; mains: ModelDownloadEntry[] }>();
+
+	for (const entry of entries) {
+		const repo = repoOf(entry.repoWithTag);
+		const cluster = clusters.get(repo) ?? { drafts: [], mains: [] };
+		const sidecar = ModelsService.parseModelId(entry.repoWithTag).sidecar;
+
+		if (sidecar && isDraftSidecar(sidecar)) cluster.drafts.push(entry);
+		else cluster.mains.push(entry);
+
+		clusters.set(repo, cluster);
+	}
+
+	return Array.from(clusters.entries()).flatMap(([repo, cluster]) => {
+		const sidecars = sidecarsFor(repo);
+		// the synthesized option carries backendId, which ModelOption drops on
+		// assignment, so the callers spread it instead of typing this as one
+		const groupOf = (repoWithTag: string) => {
+			const listed = models.find((candidate) => candidate.model === repoWithTag);
+
+			return (
+				listed ?? {
+					backendId: LOCAL_BACKEND_ID,
+					capabilities: [],
+					id: repoWithTag,
+					model: repoWithTag,
+					name: repoWithTag
+				}
+			);
 		};
 
-		return {
-			base: option,
+		if (cluster.mains.length > 0) {
+			const main = cluster.mains[0];
+
+			// the sub-lines carry the drafts, so the inline badges would repeat them
+			return [
+				{
+					base: { ...groupOf(main.repoWithTag), draftSidecars: [] },
+					draftEntries: cluster.drafts,
+					key: `download::${main.repoWithTag}`,
+					kind: ModelGroupKind.QUANTS,
+					quants: [{ ...groupOf(main.repoWithTag), draftSidecars: [] }],
+					sidecarBadges: sidecars
+				}
+			];
+		}
+
+		return cluster.drafts.map((entry) => ({
+			base: { ...groupOf(entry.repoWithTag), draftSidecars: [] },
 			key: `download::${entry.repoWithTag}`,
 			kind: ModelGroupKind.QUANTS,
-			quants: [option]
-		};
+			quants: [{ ...groupOf(entry.repoWithTag), draftSidecars: [] }]
+		}));
 	});
 }
 

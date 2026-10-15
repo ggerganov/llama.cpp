@@ -9,7 +9,7 @@ import {
 	splitHiddenQuants
 } from '$lib/components/app/models/ModelsManager/utils';
 import { LOCAL_BACKEND_ID } from '$lib/constants';
-import { ModelGroupKind, ServerModelStatus } from '$lib/enums';
+import { ModelDraftSidecar, ModelGroupKind, ServerModelStatus } from '$lib/enums';
 import { modelsStore } from '$lib/stores/models/index.svelte';
 import type { ApiModelDataEntry, ModelOption } from '$lib/types';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -84,23 +84,55 @@ describe('downloadGroups', () => {
 		const listed = option('org/Qwen3-8B:Q4_K_M');
 		const groups = downloadGroups(
 			[{ isPaused: false, progress: null, repoWithTag: 'org/Qwen3-8B:Q4_K_M' }],
-			[listed]
+			[listed],
+			() => []
 		);
 
 		expect(groups[0].key).toBe('download::org/Qwen3-8B:Q4_K_M');
-		expect(groups[0].base).toBe(listed);
+		expect(groups[0].base).toMatchObject(listed);
 	});
 
 	it('stands the download in for a row of its own when nothing is listed', () => {
 		const groups = downloadGroups(
 			[{ isPaused: true, progress: null, repoWithTag: 'org/Qwen3-8B:Q4_K_M' }],
-			[]
+			[],
+			(repo) =>
+				repo === 'org/Qwen3-8B' ? [{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo }] : []
 		);
 
+		// the sub-lines carry the drafts, so the inline badges stay empty
 		expect(groups[0].base).toMatchObject({
 			backendId: LOCAL_BACKEND_ID,
+			draftSidecars: [],
 			model: 'org/Qwen3-8B:Q4_K_M'
 		});
+		expect(groups[0].sidecarBadges).toEqual([
+			{ kind: ModelDraftSidecar.MTP, quant: 'Q8_0', repo: 'org/Qwen3-8B' }
+		]);
+	});
+
+	it('hangs the repo draft downloads off the main row', () => {
+		const main = { isPaused: false, progress: null, repoWithTag: 'org/Qwen3-8B:Q4_K_M' };
+		const draft = {
+			isPaused: false,
+			progress: { downloadedBytes: 10, files: {}, totalBytes: 100 },
+			repoWithTag: 'org/Qwen3-8B:Q4_K_M-dflash'
+		};
+		const groups = downloadGroups([main, draft], [], () => []);
+
+		expect(groups).toHaveLength(1);
+		expect(groups[0].key).toBe('download::org/Qwen3-8B:Q4_K_M');
+		expect(groups[0].base.model).toBe('org/Qwen3-8B:Q4_K_M');
+		expect(groups[0].draftEntries).toEqual([draft]);
+	});
+
+	it('keeps a row of its own for a draft with no main download', () => {
+		const draft = { isPaused: false, progress: null, repoWithTag: 'org/Qwen3-8B:Q8_0-dflash' };
+		const groups = downloadGroups([draft], [], () => []);
+
+		expect(groups).toHaveLength(1);
+		expect(groups[0].base.model).toBe('org/Qwen3-8B:Q8_0-dflash');
+		expect(groups[0].draftEntries).toBeUndefined();
 	});
 });
 

@@ -1,0 +1,275 @@
+<script lang="ts">
+	import ModelsDiscoverListItem from './ModelsDiscoverList/ModelsDiscoverListItem.svelte';
+	import { Download } from '@lucide/svelte';
+	import { ModelsSection } from '$lib/components/app';
+	import { DialogConfirmDownload } from '$lib/components/app/dialogs';
+	import {
+		ModelsDiscoverDetailsContainer,
+		ModelsDiscoverList,
+		ModelsDiscoverListSearch
+	} from '$lib/components/app/models/discover';
+	import { Button } from '$lib/components/ui/button';
+	import { MODEL_ID } from '$lib/constants';
+	import { ModelDownloadConfirmAction } from '$lib/enums';
+	import { HuggingFaceService } from '$lib/services';
+	import { modelsDiscoverStore, modelsStore, uiStore } from '$lib/stores';
+	import type { HfModelInfo } from '$lib/types';
+	import type { ModelDownloadEntry, ModelSidecarBadge } from '$lib/types';
+
+	let selectedId = $state<string | null>(null);
+	let searchQuery = $state('');
+	// running and paused downloads both lead the list; a search owns the pane, so the
+	// section steps aside while a query is active
+	let downloadEntries = $derived(modelsStore.status.getDownloadEntries());
+
+	// one item per repo: its live download when one runs, a plain row otherwise,
+	// with the repo's draft sub-lines carried inside the item - the ones on disk
+	// with a check, the ones in flight live
+	type DownloadRow =
+		| {
+				drafts: ModelDownloadEntry[];
+				entry: ModelDownloadEntry;
+				key: string;
+				kind: 'main';
+				sidecars: ModelSidecarBadge[];
+		  }
+		| {
+				drafts: ModelDownloadEntry[];
+				key: string;
+				kind: 'parent';
+				repo: string;
+				sidecars: ModelSidecarBadge[];
+		  };
+
+	let downloadRows = $derived.by(() => {
+		const rows: DownloadRow[] = [];
+
+		for (const cluster of modelsStore.status.getDownloadClusters()) {
+			// sidecars already on disk show as downloaded sub-lines
+			const sidecars = modelsStore.status.getDraftSidecars(cluster.repo);
+
+			if (cluster.mains.length > 0) {
+				rows.push({
+					drafts: cluster.drafts,
+					entry: cluster.mains[0],
+					key: cluster.mains[0].repoWithTag,
+					kind: 'main',
+					sidecars
+				});
+			} else {
+				// the repo's main weights are not downloading; the row anchors the drafts
+				rows.push({
+					drafts: cluster.drafts,
+					key: `parent:${cluster.repo}`,
+					kind: 'parent',
+					repo: cluster.repo,
+					sidecars
+				});
+			}
+		}
+
+		return rows;
+	});
+	let isSearching = $derived(searchQuery.trim().length > 0);
+
+	/** Repo id of a download tag, e.g. `org/repo:Q8_0-mtp` reports `org/repo`. */
+	function repoOf(repoWithTag: string): string {
+		return repoWithTag.split(MODEL_ID.QUANTIZATION_SEPARATOR)[0] ?? repoWithTag;
+	}
+
+	/** Hub record for a repo the list does not carry, so its row still renders. */
+	function hubRecord(id: string): HfModelInfo {
+		return {
+			_id: id,
+			downloads: 0,
+			id,
+			library_name: null,
+			likes: 0,
+			modelId: id,
+			pipeline_tag: null,
+			private: false,
+			tags: []
+		};
+	}
+
+	// Hub records of repos the list does not carry, e.g. a download started from a
+	// search hit: fetched once so the row shows the same badges and icons as a result.
+	let fetchedRecords = $state<Record<string, HfModelInfo>>({});
+
+	/** Record of a repo: what the list fetched, else its own details, else a bare one. */
+	function recordOf(repo: string): HfModelInfo {
+		return (
+			modelsDiscoverStore.models.find((model) => model.id === repo) ??
+			fetchedRecords[repo] ??
+			hubRecord(repo)
+		);
+	}
+
+	$effect(() => {
+		for (const entry of downloadEntries) {
+			const repo = repoOf(entry.repoWithTag);
+
+			if (fetchedRecords[repo] || modelsDiscoverStore.models.some((m) => m.id === repo)) continue;
+
+			void HuggingFaceService.getDetails(repo).then((details) => {
+				if (details) fetchedRecords = { ...fetchedRecords, [repo]: details };
+			});
+		}
+	});
+
+	// cancel is confirmed once, so a single dialog serves every download row
+	// The target is kept while the dialog closes so its copy stays rendered.
+	let pendingCancel = $state('');
+	let cancelOpen = $state(false);
+
+	function requestCancel(repoWithTag: string) {
+		pendingCancel = repoWithTag;
+		cancelOpen = true;
+	}
+
+	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// Detail pane state, reloaded when the selection changes.
+	// Load the sidebar list on mount (the component is mounted when the dialog opens).
+	$effect(() => {
+		void modelsDiscoverStore.fetch();
+		void modelsDiscoverStore.search('');
+	});
+
+	// Auto-select the first model.
+	$effect(() => {
+		const first = modelsDiscoverStore.firstModel;
+
+		if (!selectedId && first) {
+			selectedId = first.id;
+		}
+	});
+
+	// a caller can ask for one repo to be opened, the manager's rows do
+	$effect(() => {
+		const focus = uiStore.discoverModelFocus;
+
+		if (!focus) return;
+
+		selectedId = focus;
+		uiStore.discoverModelFocus = null;
+	});
+
+	function handleSearchInput(value: string) {
+		searchQuery = value;
+
+		if (searchTimeout) clearTimeout(searchTimeout);
+
+		searchTimeout = setTimeout(() => {
+			void modelsDiscoverStore.search(value);
+		}, 300);
+	}
+</script>
+
+{#snippet catalog()}
+	<ModelsDiscoverList
+		activeId={selectedId}
+		loading={modelsDiscoverStore.loading || modelsDiscoverStore.searching}
+		models={modelsDiscoverStore.models}
+		onSelect={(id) => (selectedId = id)}
+		showBaseModelAvatar
+	/>
+{/snippet}
+
+<aside
+	class="w-md shrink-0 self-start border-r border-border/40 bg-background overflow-y-auto md:pr-4 h-full space-y-4"
+>
+	<ModelsDiscoverListSearch bind:value={searchQuery} onSearch={handleSearchInput} />
+
+	{#if downloadEntries.length > 0 && !isSearching}
+		<ModelsSection
+			count={downloadEntries.length}
+			label="Downloading"
+			persistKey="discover-downloads"
+			sticky
+			stickyClass="sticky z-10 bg-background"
+		>
+			{#snippet icon()}
+				<Download class="h-3.5 w-3.5 shrink-0" />
+			{/snippet}
+
+			{#each downloadRows as row (row.key)}
+				{#if row.kind === 'main'}
+					{@const repo = repoOf(row.entry.repoWithTag)}
+
+					<!-- the row is the list's own, so a download opens the same details pane a
+					     result does; only the state line and the trailing control differ -->
+					<ModelsDiscoverListItem
+						active={repo === selectedId}
+						download={{
+							isPaused: row.entry.isPaused,
+							onRequestCancel: requestCancel,
+							progress: row.entry.progress,
+							repoWithTag: row.entry.repoWithTag
+						}}
+						drafts={row.drafts}
+						model={recordOf(repo)}
+						onSelect={(id) => (selectedId = id)}
+						showBaseModelAvatar
+						sidecarBadges={row.sidecars}
+					/>
+				{:else if row.kind === 'parent'}
+					<!-- the repo's main weights are not downloading; the row anchors its draft
+				     sub-lines and reads as the model they belong to -->
+					<ModelsDiscoverListItem
+						active={row.repo === selectedId}
+						drafts={row.drafts}
+						model={recordOf(row.repo)}
+						onSelect={(id) => (selectedId = id)}
+						showBaseModelAvatar
+						sidecarBadges={row.sidecars}
+					/>
+				{/if}
+			{/each}
+		</ModelsSection>
+	{/if}
+
+	<!-- One list instance, so the rows keep their state across search round trips;
+		 skeleton rows replace them while the initial catalog or a query loads. -->
+	<div>
+		{#if modelsDiscoverStore.error}
+			<div class="flex flex-col items-start gap-2 p-4">
+				<p class="text-sm text-destructive">{modelsDiscoverStore.error}</p>
+
+				<Button onclick={() => void modelsDiscoverStore.fetch()} size="sm" variant="outline">
+					Retry
+				</Button>
+			</div>
+		{:else if !modelsDiscoverStore.loading && !modelsDiscoverStore.searching && modelsDiscoverStore.models.length === 0}
+			<p class="p-4 text-sm text-muted-foreground">No models found</p>
+		{:else}
+			{#if isSearching}
+				{@render catalog()}
+			{:else}
+				<ModelsSection
+					count={modelsDiscoverStore.models.length}
+					label="Suggested models"
+					persistKey="discover-suggested"
+					sticky
+					stickyClass="sticky z-10 bg-background"
+				>
+					{@render catalog()}
+				</ModelsSection>
+			{/if}
+		{/if}
+	</div>
+</aside>
+
+<main class="overflow-y-auto">
+	{#if selectedId}
+		<ModelsDiscoverDetailsContainer modelId={selectedId} />
+	{/if}
+</main>
+
+<DialogConfirmDownload
+	action={ModelDownloadConfirmAction.CANCEL}
+	onClose={() => (cancelOpen = false)}
+	onConfirm={() => void modelsStore.status.cancelDownloadWithDrafts(pendingCancel)}
+	open={cancelOpen}
+	repoWithTag={pendingCancel}
+/>

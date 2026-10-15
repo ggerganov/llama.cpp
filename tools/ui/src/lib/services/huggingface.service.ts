@@ -98,6 +98,9 @@ export class HuggingFaceService {
 		Promise<{ org: string; name: string } | null>
 	>();
 
+	/** Hub tag marking decision models, e.g. Kev and Laya. */
+	private static readonly DECISION_MODEL_TAG = 'decision-model';
+
 	// Model details fetched this session, keyed by repo id: the Hub rate limits
 	// aggressively, so each repo costs at most one request per load. Failures stay
 	// uncached so the next mount can retry.
@@ -144,6 +147,12 @@ export class HuggingFaceService {
 		Q8_0: 8
 	};
 
+	// File trees already fetched, keyed by repo id: the discover view asks for the same
+	// repo from several places.
+	private static treeCache = new Map<string, HfModelSibling[]>();
+
+	private static treePending = new Map<string, Promise<HfModelSibling[]>>();
+
 	/** Details already fetched, for a caller that cannot await (a table sorting its rows). */
 	static cachedDetails(modelId: string): HfModelDetailInfo | null | undefined {
 		// llama.cpp model ids carry the quant tag after a colon
@@ -151,6 +160,8 @@ export class HuggingFaceService {
 
 		return HuggingFaceService.detailsCache.get(hfRepoId);
 	}
+
+	// GGUF Model Browsing
 
 	/**
 	 * Collapse split GGUF shard sets (`-00001-of-00015.gguf`, ...) to their first
@@ -189,8 +200,6 @@ export class HuggingFaceService {
 
 		return result;
 	}
-
-	// GGUF Model Browsing
 
 	/**
 	 * Extract the GGUF quantization token (e.g. `Q4_K_M`) and any sidecar type
@@ -347,6 +356,8 @@ export class HuggingFaceService {
 		return `${Math.floor(diffDays / DAYS_PER_YEAR)} ${YEARS_AGO_LABEL}`;
 	}
 
+	// Model Details & Files
+
 	/**
 	 * Format a min-max size range with one shared unit, e.g. `19.0-28.6 GB`.
 	 */
@@ -371,8 +382,6 @@ export class HuggingFaceService {
 
 		return `${fmt(min)}-${fmt(max)} ${unit}`;
 	}
-
-	// Model Details & Files
 
 	/**
 	 * Avatar URL for an author (org or user). 404s when the author does not
@@ -476,7 +485,10 @@ export class HuggingFaceService {
 
 		if (!response.ok) throw new Error(`Failed to fetch catalog: ${response.status}`);
 
-		return (await response.json()) as HfCatalogEntry[];
+		const entries = (await response.json()) as HfCatalogEntry[];
+
+		// decision models cannot run as chat models; keep them out of the catalog
+		return entries.filter((entry) => !entry.decision);
 	}
 
 	static getDetails(modelId: string): Promise<HfModelDetailInfo | null> {
@@ -538,11 +550,11 @@ export class HuggingFaceService {
 		return `${HF_BASE_URL}${PATH_SEPARATOR}${modelId}`;
 	}
 
+	// Utility Methods
+
 	static async getMostLiked(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.LIKES });
 	}
-
-	// Utility Methods
 
 	static async getNew(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.CREATED_AT });
@@ -551,6 +563,12 @@ export class HuggingFaceService {
 	static async getPopular(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.DOWNLOADS });
 	}
+
+	/**
+	 * Get repository file tree to list available GGUF variants. Recursive so
+	 * repos that keep quants in per-quant subdirectories (e.g. `UD-Q4_K_XL/`)
+	 * are included; follows cursor pagination for repos over one page.
+	 */
 
 	/**
 	 * Fetch the raw README.md for a repo, with the YAML frontmatter stripped.
@@ -576,26 +594,30 @@ export class HuggingFaceService {
 		}
 	}
 
-	/**
-	 * Get repository file tree to list available GGUF variants. Recursive so
-	 * repos that keep quants in per-quant subdirectories (e.g. `UD-Q4_K_XL/`)
-	 * are included; follows cursor pagination for repos over one page.
-	 */
-	static async getTree(modelId: string): Promise<HfModelSibling[]> {
-		if (!HuggingFaceService.isEnabled()) return [];
+	static getTree(modelId: string): Promise<HfModelSibling[]> {
+		if (!HuggingFaceService.isEnabled()) return Promise.resolve([]);
 
-		const files: HfModelSibling[] = [];
-		const firstUrl =
-			`${HF_API_MODELS_URL}${PATH_SEPARATOR}${modelId}${PATH_SEPARATOR}${HF_TREE_PATH}` +
-			`${PATH_SEPARATOR}${HF_MAIN_BRANCH}?${HF_RECURSIVE_TREE_PARAM}`;
+		const cached = HuggingFaceService.treeCache.get(modelId);
 
-		let url: string | null = firstUrl;
+		if (cached) return Promise.resolve(cached);
 
-		try {
+		const pending = HuggingFaceService.treePending.get(modelId);
+
+		if (pending) return pending;
+
+		const promise = (async () => {
+			const files: HfModelSibling[] = [];
+			const firstUrl =
+				`${HF_API_MODELS_URL}${PATH_SEPARATOR}${modelId}${PATH_SEPARATOR}${HF_TREE_PATH}` +
+				`${PATH_SEPARATOR}${HF_MAIN_BRANCH}?${HF_RECURSIVE_TREE_PARAM}`;
+
+			let url: string | null = firstUrl;
+
 			for (let page = 0; url && page < HF_TREE_MAX_PAGES; page++) {
 				const response: Response = await fetch(url);
 
-				if (!response.ok) return files;
+				if (!response.ok)
+					throw new Error(`Failed to fetch tree for ${modelId}: ${response.status}`);
 
 				const data = (await response.json()) as HfModelSibling[];
 
@@ -603,11 +625,24 @@ export class HuggingFaceService {
 
 				url = HuggingFaceService.parseNextPageUrl(response.headers.get(HF_LINK_HEADER));
 			}
-		} catch {
-			// Return whatever was fetched before the failure.
-		}
 
-		return files;
+			HuggingFaceService.treeCache.set(modelId, files);
+
+			return files;
+		})()
+			.catch((error: unknown) => {
+				// not cached: a rate limited or failed fetch should retry on the
+				// next mount; an empty tree makes the store fall back to the
+				// catalog's advertised sizes
+				console.error(`Error fetching tree for ${modelId}:`, error);
+
+				return [] as HfModelSibling[];
+			})
+			.finally(() => HuggingFaceService.treePending.delete(modelId));
+
+		HuggingFaceService.treePending.set(modelId, promise);
+
+		return promise;
 	}
 
 	static async getTrending(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
@@ -615,9 +650,22 @@ export class HuggingFaceService {
 	}
 
 	/**
-	 * True when the UI may read model metadata from the Hugging Face Hub. Off by
-	 * default: with it off, callers only see what the server's /v1/models reports
-	 * and the org avatars stay hidden.
+	 * True for decision models: they answer with calibrated probabilities instead
+	 * of generated text, so llama-ui cannot use them and they stay out of every
+	 * list the Hub data layer returns.
+	 */
+	static isDecisionModel(model: Pick<HfModelInfo, 'pipeline_tag' | 'tags'>): boolean {
+		return (
+			model.tags.includes(HuggingFaceService.DECISION_MODEL_TAG) ||
+			model.pipeline_tag === 'text-classification'
+		);
+	}
+
+	/**
+	 * True when the UI may read from the Hugging Face Hub API: model display data
+	 * (avatars, context length, chat template) and the Discover Models view. With
+	 * it off, callers only see what the server's /v1/models reports and the org
+	 * avatars stay hidden.
 	 */
 	static isEnabled(): boolean {
 		return settingsStore.config[SETTINGS_KEYS.USE_HUGGING_FACE_HUB] ?? false;
@@ -719,8 +767,10 @@ export class HuggingFaceService {
 			filter: HF_GGUF_FILTER,
 			limit: Math.min(limit, HF_MAX_LIMIT)
 		});
+		const models = await this.fetchWithRetry(url);
 
-		return this.fetchWithRetry(url);
+		// decision models cannot run as chat models; keep them out of every list
+		return models.filter((model) => !HuggingFaceService.isDecisionModel(model));
 	}
 
 	static async searchByQuery(

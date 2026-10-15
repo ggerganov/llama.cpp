@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <thread>
 #include <string>
@@ -139,7 +140,7 @@ static const std::vector<std::string> hole = {
     "dflash-model-Q8_0.gguf",
 };
 
-// unsloth-style naming with UD quants and a suffix MTP file
+// unsloth-style naming with UD quants and an uppercase infix MTP head
 static const std::vector<std::string> unsloth = {
     "model-UD-Q8_K_XL.gguf",
     "mmproj-BF16.gguf",
@@ -178,6 +179,66 @@ static const std::vector<std::string> spark = {
     "model-MXFP4.gguf",
     "dspark-model-BF16.gguf",
     "dspark-model-MXFP4.gguf",
+};
+
+// main weights plus a trailing-form mtp head, as in unsloth
+// gemma-4-E2B-it-GGUF (Model-Q4_0-mtp.gguf)
+static const std::vector<std::string> trailing = {
+    "model-BF16.gguf",
+    "model-BF16-mtp.gguf",
+};
+
+// underscore separators with the mmproj in the quant directory,
+// in the style of a-mo-yehia/Qwen3-VL-8B-Contracts-OCR-GGUF
+static const std::vector<std::string> underscore = {
+    "gguf/mmproj_f16.gguf",
+    "gguf/model_f16.gguf",
+    "gguf/model_q4_k_m.gguf",
+    "gguf/model_q8_0.gguf",
+};
+
+// a lone full model named after its embedded mtp heads,
+// in the style of pentacoxian-dev/Qwen3.8-Flash-Next-IQ3E-Q8D-MTP-GGUF
+static const std::vector<std::string> embedded = {
+    "Model-IQ3E-Q8D-MTP.gguf",
+};
+
+// every quant with its prefix-form mtp head,
+// in the style of ggml-org/gemma-4-E2B-it-GGUF
+static const std::vector<std::string> paired = {
+    "model-Q4_0.gguf",
+    "model-Q8_0.gguf",
+    "mtp-model-Q4_0.gguf",
+    "mtp-model-Q8_0.gguf",
+};
+
+// a quant-less mtp head next to quant-matched ones, in the style of
+// unsloth/gemma-4-E2B-it-GGUF (mtp-gemma-4-E2B-it.gguf)
+static const std::vector<std::string> quantless = {
+    "model-Q4_0.gguf",
+    "mtp-model-Q4_0.gguf",
+    "mtp-model-it.gguf",
+};
+
+// an imatrix with a dot separator before the only full quant in the listing
+static const std::vector<std::string> dotted = {
+    "model.imatrix.gguf",
+    "model-Q6_K.gguf",
+};
+
+// a non-GGUF file named like a sidecar next to the real one, in the style of
+// JetBrains/Qwen3.8-3.6-27B-blend-GGUF (quantization-mmproj-Q8_0.json)
+static const std::vector<std::string> manifests = {
+    "Model-IQ3_S.gguf",
+    "mmproj-Model-Q8_0.gguf",
+    "quantization-mmproj-Q8_0.json",
+};
+
+// a sidecar word inside a longer word of a model name, in the style of
+// mradermacher/Phi-2-OmniMatrix-i1-GGUF
+static const std::vector<std::string> omnimatrix = {
+    "Phi-2-OmniMatrix.i1-Q4_K_M.gguf",
+    "Phi-2-OmniMatrix.i1-Q6_K.gguf",
 };
 
 // dspark outranks dflash in the type auto-selection
@@ -223,7 +284,7 @@ static const plan_case plan_cases[] = {
     // no tag and no default match falls back to the first model in the listing
     {"unsloth fallback", unsloth, "test/repo", "", true, true,
      "model-UD-Q8_K_XL.gguf", {"model-UD-Q8_K_XL.gguf"},
-     "mmproj-BF16.gguf", "", "", "", ""},
+     "mmproj-BF16.gguf", "model-MTP-BF16.gguf", "", "", ""},
 
     // explicit hf_file picks that exact file
     {"flat hf_file", flat, "test/repo", "model-BF16.gguf", false, false,
@@ -258,10 +319,11 @@ static const plan_case plan_cases[] = {
      "model-Q4_K_M.gguf", {"model-Q4_K_M.gguf"},
      "", "mtp-model-Q4_0.gguf", "dflash-model-Q8_0.gguf", "", ""},
 
-    // the mtp- keyword is case sensitive, a suffix -MTP file is not discovered
+    // the uppercase infix MTP head is a sidecar too; it resolves at the
+    // nearest quant to the tag when the exact one does not exist
     {"unsloth suffix mtp", unsloth, "test/repo:Q8_K_XL", "", true, false,
      "model-UD-Q8_K_XL.gguf", {"model-UD-Q8_K_XL.gguf"},
-     "mmproj-BF16.gguf", "", "", "", ""},
+     "mmproj-BF16.gguf", "model-MTP-BF16.gguf", "", "", ""},
 
     // vendor prefixes and the dot quant convention both match the tag,
     // first match wins between two files at the same quant
@@ -283,6 +345,84 @@ static const plan_case plan_cases[] = {
     {"spark tag sidecar", spark, "test/repo:BF16", "", true, false,
      "", {},
      "", "", "", "", "dspark-model-BF16.gguf"},
+
+    // a `<quant>-<sidecar>` tag resolves that sidecar alone, even where the
+    // quant has a full model
+    {"paired quant-sidecar tag", paired, "test/repo:Q4_0-mtp", "", false, false,
+     "", {},
+     "", "mtp-model-Q4_0.gguf", "", "", ""},
+
+    {"hole quant-sidecar tag", hole, "test/repo:Q4_0-mtp", "", false, false,
+     "", {},
+     "", "mtp-model-Q4_0.gguf", "", "", ""},
+
+    {"spark quant-sidecar tag", spark, "test/repo:BF16-dspark", "", false, false,
+     "", {},
+     "", "", "", "", "dspark-model-BF16.gguf"},
+
+    // a bare sidecar tag resolves the sidecar at any quant when none is quant-less
+    {"hole bare sidecar tag", hole, "test/repo:mtp", "", false, false,
+     "", {},
+     "", "mtp-model-Q4_0.gguf", "", "", ""},
+
+    // a bare sidecar tag prefers the sidecar that belongs to no quant
+    {"quantless bare sidecar tag", quantless, "test/repo:mtp", "", false, false,
+     "", {},
+     "", "mtp-model-it.gguf", "", "", ""},
+
+    {"quantless quant-sidecar tag", quantless, "test/repo:Q4_0-mtp", "", false, false,
+     "", {},
+     "", "mtp-model-Q4_0.gguf", "", "", ""},
+
+    // a trailing-form sidecar resolves as the sidecar alone, never as a primary
+    {"trailing quant-sidecar tag", trailing, "test/repo:BF16-mtp", "", false, false,
+     "", {},
+     "", "model-BF16-mtp.gguf", "", "", ""},
+
+    // the plain tag resolves the plain model; the trailing-token file is skipped
+    {"trailing plain tag", trailing, "test/repo:BF16", "", false, false,
+     "model-BF16.gguf", {"model-BF16.gguf"},
+     "", "", "", "", ""},
+
+    // a short-form sidecar (`mmproj-F16.gguf`) resolves by its bare quant tag
+    {"unsloth quant-sidecar tag", unsloth, "test/repo:BF16-mmproj", "", false, false,
+     "", {},
+     "mmproj-BF16.gguf", "", "", "", ""},
+
+    // an uppercase infix sidecar resolves through the lowercase tag
+    {"unsloth uppercase infix tag", unsloth, "test/repo:BF16-mtp", "", false, false,
+     "", {},
+     "", "model-MTP-BF16.gguf", "", "", ""},
+
+    // a sidecar token in the middle of the name resolves as the sidecar alone
+    {"subdir quant-sidecar tag", subdir, "test/repo:Q8_0-mtp", "", false, false,
+     "", {},
+     "", "model-mtp-Q8_0.gguf", "", "", ""},
+
+    // an mmproj with an underscore separator stays a sidecar, never a primary
+    {"underscore mmproj", underscore, "test/repo:F16", "", true, false,
+     "gguf/model_f16.gguf", {"gguf/model_f16.gguf"},
+     "gguf/mmproj_f16.gguf", "", "", "", ""},
+
+    // a trailing token with no main weights beside it names the model itself
+    {"embedded mtp model", embedded, "test/repo", "", true, false,
+     "Model-IQ3E-Q8D-MTP.gguf", {"Model-IQ3E-Q8D-MTP.gguf"},
+     "", "", "", "", ""},
+
+    // an imatrix with a dot separator is never the fallback model
+    {"dotted imatrix", dotted, "test/repo", "", false, false,
+     "model-Q6_K.gguf", {"model-Q6_K.gguf"},
+     "", "", "", "", ""},
+
+    // only a `.gguf` file is ever a sidecar
+    {"manifest beside mmproj", manifests, "test/repo:IQ3_S", "", true, false,
+     "Model-IQ3_S.gguf", {"Model-IQ3_S.gguf"},
+     "mmproj-Model-Q8_0.gguf", "", "", "", ""},
+
+    // `imatrix` inside `OmniMatrix` is no sidecar word
+    {"sidecar word inside a name", omnimatrix, "test/repo:Q4_K_M", "", false, false,
+     "Phi-2-OmniMatrix.i1-Q4_K_M.gguf", {"Phi-2-OmniMatrix.i1-Q4_K_M.gguf"},
+     "", "", "", "", ""},
 };
 
 static void check_plan(const plan_case & c) {
@@ -482,6 +622,114 @@ static void test_task_assembly() {
     g_repos.clear();
 }
 
+//
+// cache listing and removal against the isolated LLAMA_CACHE, using the
+// same filename grammar the plan tests exercise above
+//
+
+static void cache_put(const std::string & repo, const std::string & path) {
+    namespace fs = std::filesystem;
+    auto local = fs::path(cached(repo, path));
+    fs::create_directories(local.parent_path());
+    { std::ofstream(local) << "gguf"; }
+    auto repo_dir = local.parent_path().parent_path().parent_path();
+    auto refs = repo_dir / "refs";
+    fs::create_directories(refs);
+    auto ref = refs / "main";
+    if (!fs::exists(ref)) {
+        std::ofstream(ref) << COMMIT << "\n";
+    }
+}
+
+static bool cache_lists(const std::string & repo_tag) {
+    for (const auto & e : common_list_cached_models()) {
+        if (e.to_string() == repo_tag) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_cache_listing_and_remove() {
+    namespace fs = std::filesystem;
+    const std::string repo = "test/eh";
+
+    printf("test-model-resolution: cache listing and removal\n");
+
+    g_context = "cache fixture";
+    cache_put(repo, "gemma-4-E2B-it-BF16.gguf");         // main weights
+    cache_put(repo, "gemma-4-E2B-it-Q8_0.gguf");         // main weights, other quant
+    cache_put(repo, "gemma-4-E2B-it-BF16-mtp.gguf");     // trailing-form draft head
+    cache_put(repo, "gemma-4-E2B-it-MTP-BF16.gguf");     // uppercase infix draft head
+    cache_put(repo, "mmproj-gemma-4-E2B-it-BF16.gguf");  // mmproj sidecar
+    cache_put(repo, "mmproj-F16.gguf");                  // short-form mmproj
+    cache_put(repo, "model-Q8_0.gguf");                  // main weights
+    cache_put(repo, "model-mtp-Q8_0.gguf");              // mid-name mtp sidecar
+
+    // a sidecar is listed under `<quant>-<sidecar>` in every form and case it
+    // can be named next to its main weights, which stay loadable models
+    REQUIRE(cache_lists("test/eh:BF16"));
+    REQUIRE(cache_lists("test/eh:Q8_0"));
+    REQUIRE(cache_lists("test/eh:BF16-mtp"));
+    REQUIRE(cache_lists("test/eh:BF16-mmproj"));
+    REQUIRE(cache_lists("test/eh:F16-mmproj"));
+    REQUIRE(cache_lists("test/eh:Q8_0-mtp"));
+    REQUIRE(!cache_lists("test/eh:MTP"));
+
+    // a plain quant tag removes the model files and leaves every sidecar,
+    // whatever form or case its name carries
+    g_context = "remove plain quant";
+    REQUIRE(common_download_remove("test/eh:BF16"));
+    REQUIRE(!fs::exists(cached(repo, "gemma-4-E2B-it-BF16.gguf")));
+    REQUIRE(fs::exists(cached(repo, "gemma-4-E2B-it-BF16-mtp.gguf")));
+    REQUIRE(fs::exists(cached(repo, "gemma-4-E2B-it-MTP-BF16.gguf")));
+    REQUIRE(fs::exists(cached(repo, "mmproj-gemma-4-E2B-it-BF16.gguf")));
+    REQUIRE(fs::exists(cached(repo, "mmproj-F16.gguf")));
+    REQUIRE(fs::exists(cached(repo, "model-mtp-Q8_0.gguf")));
+
+    // a `<quant>-<sidecar>` tag removes every sidecar listed under it,
+    // across forms and cases
+    g_context = "remove quant-sidecar";
+    REQUIRE(common_download_remove("test/eh:BF16-mtp"));
+    REQUIRE(!fs::exists(cached(repo, "gemma-4-E2B-it-BF16-mtp.gguf")));
+    REQUIRE(!fs::exists(cached(repo, "gemma-4-E2B-it-MTP-BF16.gguf")));
+    REQUIRE(fs::exists(cached(repo, "mmproj-gemma-4-E2B-it-BF16.gguf")));
+
+    // the short form removes by its bare quant tag
+    REQUIRE(common_download_remove("test/eh:F16-mmproj"));
+    REQUIRE(!fs::exists(cached(repo, "mmproj-F16.gguf")));
+
+    REQUIRE(common_download_remove("test/eh:Q8_0-mtp"));
+    REQUIRE(!fs::exists(cached(repo, "model-mtp-Q8_0.gguf")));
+
+    // a bare sidecar tag lists and removes the sidecar files that belong to no
+    // quant, and leaves the quant-matched ones
+    g_context = "bare sidecar";
+    cache_put(repo, "mtp-Model-Q4_0.gguf");
+    cache_put(repo, "mtp-gemma-4-E2B-it.gguf");
+    REQUIRE(cache_lists("test/eh:mtp"));
+    REQUIRE(cache_lists("test/eh:Q4_0-mtp"));
+    REQUIRE(common_download_remove("test/eh:mtp"));
+    REQUIRE(!fs::exists(cached(repo, "mtp-gemma-4-E2B-it.gguf")));
+    REQUIRE(fs::exists(cached(repo, "mtp-Model-Q4_0.gguf")));
+
+    // an unfinished download has only partial files next to its blobs, named
+    // after the oids the listing serves; its main tag removes them with the mmproj
+    g_context = "remove partials";
+    g_repos["test/partial"] = {"model-Q4_0.gguf", "mmproj-model-F16.gguf"};
+    const fs::path blobs = cache_dir / "models--test--partial" / "blobs";
+    const fs::path model_part  = blobs / "0000000000000000000000000000000000000001.downloadInProgress";
+    const fs::path mmproj_part = blobs / "0000000000000000000000000000000000000002.downloadInProgress";
+    fs::create_directories(blobs);
+    { std::ofstream(model_part)  << "gguf"; }
+    { std::ofstream(mmproj_part) << "gguf"; }
+    REQUIRE(common_download_remove("test/partial:Q4_0"));
+    REQUIRE(!fs::exists(model_part));
+    REQUIRE(!fs::exists(mmproj_part));
+    REQUIRE(!common_download_remove("test/partial:Q4_0"));
+    g_repos.erase("test/partial");
+}
+
 int main(void) {
     // unbuffered, so a crash cannot swallow the reports already printed
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -510,6 +758,7 @@ int main(void) {
 
     test_plan_resolution();
     test_task_assembly();
+    test_cache_listing_and_remove();
 
     server.stop();
     server_thread.join();
