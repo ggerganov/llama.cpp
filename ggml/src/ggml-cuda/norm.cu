@@ -177,10 +177,16 @@ static __global__ void rms_norm_f32(const float * x,
                         }
                         if constexpr (do_add) {
                             const float4 a = add4[i];
-                            r.x += a.x; r.y += a.y; r.z += a.z; r.w += a.w;
+                            r.x += a.x;
+                            r.y += a.y;
+                            r.z += a.z;
+                            r.w += a.w;
                         }
                         if constexpr (do_scale) {
-                            r.x *= scale_out; r.y *= scale_out; r.z *= scale_out; r.w *= scale_out;
+                            r.x *= scale_out;
+                            r.y *= scale_out;
+                            r.z *= scale_out;
+                            r.w *= scale_out;
                         }
                         dst4[i] = r;
                     }
@@ -459,7 +465,7 @@ static void rms_norm_f32_cuda(
 static void rms_norm_mul_f32_cuda(const ggml_tensor * x_t,
                                   const ggml_tensor * mul_t,
                                   const ggml_tensor * add_t,
-                                  float *             dst,
+                                  float             * dst,
                                   const int      ncols,
                                   const int      nrows,
                                   const int      nchannels,
