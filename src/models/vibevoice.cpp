@@ -273,3 +273,139 @@ ggml_tensor * llama_model_vibevoice::build_acoustic_dec(ggml_context * ctx, ggml
 
     return cur;
 }
+
+//
+// diffusion head
+//
+
+// x * (1 + scale) + shift
+static ggml_tensor * vv_modulate(ggml_context * ctx, ggml_tensor * x, ggml_tensor * shift, ggml_tensor * scale) {
+    return ggml_add(ctx, ggml_add(ctx, x, ggml_mul(ctx, x, scale)), shift);
+}
+
+// i-th of n equal chunks along the features, x: [n * C, N], returns [C, N]
+static ggml_tensor * vv_chunk(ggml_context * ctx, ggml_tensor * x, int n, int i) {
+    const int64_t c = x->ne[0] / n;
+    return ggml_view_2d(ctx, x, c, x->ne[1], x->nb[1], i * c * x->nb[0]);
+}
+
+ggml_tensor * llama_model_vibevoice::build_diffusion_head(ggml_context * ctx, ggml_tensor * noisy, ggml_tensor * cond, ggml_tensor * t) const {
+    const auto & vv = hparams.vibevoice;
+
+    GGML_ASSERT(ggml_is_matrix(noisy) && noisy->ne[0] == vv.diff_latent_size);
+    GGML_ASSERT(ggml_is_matrix(cond)  && cond->ne[1] == noisy->ne[1]);
+    GGML_ASSERT(ggml_is_vector(t)     && (t->ne[0] == noisy->ne[1] || t->ne[0] == 1));
+
+    // the frequency embedding size comes from fc1, it is 256 for all released checkpoints
+    ggml_tensor * t_emb = ggml_timestep_embedding(ctx, t, diff.t_embd_fc1->ne[0], 10000);
+    t_emb = ggml_mul_mat(ctx, diff.t_embd_fc1, t_emb);
+    t_emb = ggml_silu(ctx, t_emb);
+    t_emb = ggml_mul_mat(ctx, diff.t_embd_fc2, t_emb);
+
+    // every adaLN modulation starts with a SiLU of the condition
+    ggml_tensor * c = ggml_add(ctx, ggml_mul_mat(ctx, diff.cond_proj, cond), t_emb);
+    c = ggml_silu(ctx, c);
+
+    ggml_tensor * x = ggml_mul_mat(ctx, diff.noisy_proj, noisy);
+
+    for (const auto & layer : diff.layers) {
+        // shift, scale, gate
+        ggml_tensor * mod = ggml_mul_mat(ctx, layer.adaln, c);
+
+        ggml_tensor * cur = ggml_rms_norm(ctx, x, vv.diff_f_norm_rms_eps);
+        cur = ggml_mul(ctx, cur, layer.norm);
+        cur = vv_modulate(ctx, cur, vv_chunk(ctx, mod, 3, 0), vv_chunk(ctx, mod, 3, 1));
+
+        cur = ggml_swiglu_split(ctx, ggml_mul_mat(ctx, layer.ffn_gate, cur), ggml_mul_mat(ctx, layer.ffn_up, cur));
+        cur = ggml_mul_mat(ctx, layer.ffn_down, cur);
+
+        x = ggml_add(ctx, x, ggml_mul(ctx, cur, vv_chunk(ctx, mod, 3, 2)));
+    }
+
+    // shift, scale, the final norm has no weight
+    ggml_tensor * mod = ggml_mul_mat(ctx, diff.final_adaln, c);
+
+    x = ggml_rms_norm(ctx, x, vv.diff_f_norm_rms_eps);
+    x = vv_modulate(ctx, x, vv_chunk(ctx, mod, 2, 0), vv_chunk(ctx, mod, 2, 1));
+
+    return ggml_mul_mat(ctx, diff.final_proj, x);
+}
+
+// the schedule follows the float32 math of the reference scheduler, its cumprod accumulates in double
+llama_model_vibevoice::diff_sampler::diff_sampler(uint32_t n_train_steps, uint32_t n_steps) {
+    GGML_ASSERT(n_steps > 0 && n_steps <= n_train_steps);
+
+    // squaredcos_cap_v2 betas
+    const auto alpha_bar = [](double t) {
+        const double c = std::cos((t + 0.008) / 1.008 * std::acos(-1.0) / 2);
+        return c * c;
+    };
+
+    std::vector<float> sigmas_train(n_train_steps);
+    double alphas_cumprod = 1.0;
+    for (uint32_t t = 0; t < n_train_steps; ++t) {
+        const float beta = std::min(1.0 - alpha_bar((t + 1.0) / n_train_steps) / alpha_bar((double) t / n_train_steps), 0.999);
+        alphas_cumprod *= 1.0f - beta;
+        const float ac = alphas_cumprod;
+        sigmas_train[t] = std::sqrt((1.0f - ac) / ac);
+    }
+
+    // linspace(0, n_train_steps - 1, n_steps + 1) rounded half to even like numpy, descending, without the 0
+    const double dt = (double) (n_train_steps - 1) / n_steps;
+    for (uint32_t k = n_steps; k > 0; --k) {
+        const uint32_t t = k == n_steps ? n_train_steps - 1 : (uint32_t) std::nearbyint(k * dt);
+        timesteps.push_back(t);
+        sigmas.push_back(sigmas_train[t]);
+    }
+    sigmas.push_back(0.0f);
+}
+
+void llama_model_vibevoice::diff_sampler::step(const float * v, float * x, size_t n) {
+    GGML_ASSERT(i < timesteps.size());
+    GGML_ASSERT(x0_prev.empty() || x0_prev.size() == n);
+
+    const auto alpha_sigma = [](double sigma) {
+        const double alpha = 1.0 / std::sqrt(sigma * sigma + 1.0);
+        return std::make_pair(alpha, sigma * alpha);
+    };
+
+    const auto [alpha_s0, sigma_s0] = alpha_sigma(sigmas[i]);
+    const auto [alpha_t,  sigma_t]  = alpha_sigma(sigmas[i + 1]);
+
+    // v_prediction -> data prediction
+    std::vector<float> x0(n);
+    for (size_t j = 0; j < n; ++j) {
+        x0[j] = alpha_s0 * x[j] - sigma_s0 * v[j];
+    }
+
+    if (sigma_t == 0.0) {
+        // the last step is first order, with a final sigma of 0 it lands on the data prediction
+        std::copy(x0.begin(), x0.end(), x);
+    } else {
+        const double lambda_t  = std::log(alpha_t)  - std::log(sigma_t);
+        const double lambda_s0 = std::log(alpha_s0) - std::log(sigma_s0);
+        const double h = lambda_t - lambda_s0;
+
+        const double c_x  = sigma_t / sigma_s0;
+        const double c_x0 = alpha_t * (std::exp(-h) - 1.0);
+
+        if (x0_prev.empty()) {
+            // first order (DDIM) for the first step
+            for (size_t j = 0; j < n; ++j) {
+                x[j] = c_x * x[j] - c_x0 * x0[j];
+            }
+        } else {
+            const auto [alpha_s1, sigma_s1] = alpha_sigma(sigmas[i - 1]);
+            const double lambda_s1 = std::log(alpha_s1) - std::log(sigma_s1);
+            const double r0 = (lambda_s0 - lambda_s1) / h;
+
+            for (size_t j = 0; j < n; ++j) {
+                const double d1 = (x0[j] - x0_prev[j]) / r0;
+                x[j] = c_x * x[j] - c_x0 * x0[j] - 0.5 * c_x0 * d1;
+            }
+        }
+    }
+
+    x0_prev = std::move(x0);
+    i++;
+}

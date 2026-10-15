@@ -767,7 +767,7 @@ struct llama_model_gpt2 : public llama_model_base {
 };
 
 
-// backbone is plain qwen2, only the acoustic decoder has a graph so far
+// backbone is plain qwen2, only the acoustic decoder and the diffusion head have a graph so far
 struct llama_model_vibevoice : public llama_model_qwen2 {
     llama_model_vibevoice(const struct llama_model_params & params) : llama_model_qwen2(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
@@ -842,6 +842,30 @@ struct llama_model_vibevoice : public llama_model_qwen2 {
     // acoustic latents [vae_dim, n_frames] -> waveform [n_frames * prod(dec_ratios), 1]
     // the latents must already be unscaled with speech_scaling_factor/speech_bias_factor
     ggml_tensor * build_acoustic_dec(ggml_context * ctx, ggml_tensor * latents) const;
+
+    // one evaluation of the diffusion head, predicts v (v_prediction)
+    // noisy [latent_size, N], cond [n_embd, N], t [N] or [1] (float timesteps, a single one is shared) -> v [latent_size, N]
+    ggml_tensor * build_diffusion_head(ggml_context * ctx, ggml_tensor * noisy, ggml_tensor * cond, ggml_tensor * t) const;
+
+    // host side sampler for the diffusion head, DPMSolverMultistepScheduler as configured upstream:
+    // dpmsolver++, order 2, midpoint, cosine betas, linspace timesteps, final sigma 0
+    // it keeps the state of one denoising run, use a new one for each run
+    struct diff_sampler {
+        diff_sampler(uint32_t n_train_steps, uint32_t n_steps);
+
+        std::vector<float> timesteps; // head input of each step, descending
+        std::vector<float> sigmas;    // one more than timesteps, the last one is 0
+
+        // v: head output at timesteps[i] for the current sample x, x is updated in place to the next sample
+        // after the last step x holds the denoised latents
+        void step(const float * v, float * x, size_t n);
+
+    private:
+        size_t i = 0;
+
+        // data prediction of the previous step, for the second order update
+        std::vector<float> x0_prev;
+    };
 
 private:
     struct tok_tensors;
