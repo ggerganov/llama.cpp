@@ -2511,6 +2511,48 @@ struct test_get_rows_after_mul_mat : public test_case {
     }
 };
 
+// The persistent SYCL weight reorder installs on the first small-batch mul_mat; a
+// later >8-column mul_mat on the same weight goes through the fused-dequant GEMM /
+// conversion routes, which must decode the reordered layout (regression test for the
+// #29107 crash: the plain fused-dequant GEMM decoded standard layout unconditionally).
+struct test_mul_mat_reorder_then_big_batch : public test_case {
+    const ggml_type type;
+    const int n; // cols of the big batch
+    const int m; // rows
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, n, m);
+    }
+
+    test_mul_mat_reorder_then_big_batch(ggml_type type = GGML_TYPE_IQ3_S, int n = 64, int m = 64)
+        : type(type), n(n), m(m) {}
+
+    double max_nmse_err() override {
+        return 5e-4; // same as test_mul_mat
+    }
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * w = ggml_new_tensor_2d(ctx, type, 1*256, m);
+        ggml_set_name(w, "w");
+
+        ggml_tensor * x1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1*256, 1);
+        ggml_set_name(x1, "x1");
+
+        ggml_tensor * x2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1*256, n);
+        ggml_set_name(x2, "x2");
+
+        ggml_tensor * mm1 = ggml_mul_mat(ctx, w, x1);
+        ggml_set_name(mm1, "mm1");
+
+        ggml_tensor * mm2 = ggml_mul_mat(ctx, w, x2);
+        ggml_set_name(mm2, "mm2");
+
+        // mm1 is the first source of the final ADD, so the reorder-installing
+        // small-batch mul_mat is computed before the big-batch one
+        return ggml_add(ctx, ggml_repeat(ctx, mm1, mm2), mm2);
+    }
+};
+
 // GGML_OP_GET_ROWS_BACK
 struct test_get_rows_back : public test_case {
     const ggml_type type;
@@ -9844,6 +9886,9 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_get_rows(GGML_TYPE_F32, 1, 8, 2, 1, 1, false));
     for (ggml_type type : {GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ3_S}) {
         test_cases.emplace_back(new test_get_rows_after_mul_mat(type));
+    }
+    for (ggml_type type : {GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ3_S}) {
+        test_cases.emplace_back(new test_mul_mat_reorder_then_big_batch(type));
     }
     for (ggml_type type : all_types) {
         for (int b : {1, 7}) {
