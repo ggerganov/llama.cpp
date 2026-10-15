@@ -595,7 +595,8 @@ struct common_params {
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
 
-    size_t moe_cache_size = 0; // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
+    size_t   moe_cache_size = 0; // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
+    uint32_t moe_cache_topk = 0; // max active experts per token on host-cached MoE layers, 0 = model default
 
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 

@@ -2147,6 +2147,11 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     const int64_t n_tokens = cur->ne[1];
     const bool weight_before_ffn = arch == LLM_ARCH_LLAMA4; // for llama4, we apply the sigmoid-ed weights before the FFN
 
+    if (!cparams.warmup && cparams.moe_cache_topk > 0 && cparams.moe_cache_topk < n_expert_used &&
+            moe_cache != nullptr && moe_cache->get_slot_map(il, 1, 1) != nullptr) {
+        n_expert_used = cparams.moe_cache_topk;
+    }
+
     ggml_tensor * logits = nullptr;
 
     if (probs_in == nullptr) {
@@ -2463,7 +2468,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     // Use per-layer n_expert_used to bound the graph even during warmup (avoids
     // the large-add-nodes issue for uniform arches; for Puzzle the per-layer
     // value is correct). ref: https://github.com/ggml-org/llama.cpp/pull/14753
-    const uint32_t n_expert_used_il = hparams.n_expert_used(il);
+    const uint32_t n_expert_used_il = cparams.warmup ? hparams.n_expert_used(il) : std::min<uint32_t>(n_expert_used, hparams.n_expert_used(il));
     for (uint32_t i = 0; i < n_expert_used_il; ++i) {
         cur_experts[i] = ggml_view_2d(ctx0, experts, n_embd, n_tokens, experts->nb[2], i*experts->nb[1]);
 
