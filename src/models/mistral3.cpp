@@ -226,9 +226,12 @@ llama_model_mistral3::graph::graph(const llama_model & model, const llm_graph_pa
 
             if (t_cond) {
                 // ada rms norm: scale the normalized input by (1 + mlp(t_cond))
-                ggml_tensor * ada = build_lora_mm(model.layers[il].ffn_norm_ada_down, t_cond);
-                ada = ggml_gelu_erf(ctx0, ada);
-                ada = build_lora_mm(model.layers[il].ffn_norm_ada_up, ada);
+                ggml_tensor * ada = build_ffn(t_cond,
+                        model.layers[il].ffn_norm_ada_down, NULL, NULL,
+                        NULL, NULL, NULL,
+                        model.layers[il].ffn_norm_ada_up, NULL, NULL,
+                        NULL,
+                        LLM_FFN_GELU_ERF, LLM_FFN_SEQ, il);
                 cur = ggml_add(ctx0, cur, ggml_mul(ctx0, cur, ada));
                 cb(cur, "ffn_norm_ada", il);
             }

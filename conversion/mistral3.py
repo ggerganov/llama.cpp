@@ -76,8 +76,3 @@ class VoxtralRealtimeModel(LlamaModel):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_realtime_delay_tokens(self.hparams["default_num_delay_tokens"])
-
-    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None):
-        if name.startswith(("audio_tower.", "multi_modal_projector.")):
-            return
-        yield from super().modify_tensors(data_torch, name, bid)
