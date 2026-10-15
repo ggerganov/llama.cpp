@@ -145,6 +145,11 @@ bool vv_generator::audio_bos() {
            neg.decode_tokens({ llama_model_vibevoice::audio_bos_token_id });
 }
 
+void vv_generator::reset_speech_stream() {
+    dec_cache.clear();
+    sem_cache.clear();
+}
+
 bool vv_generator::audio_frame() {
     const std::vector<float> h_pos = pos.hidden(n_embd);
     const std::vector<float> h_neg = neg.hidden(n_embd);

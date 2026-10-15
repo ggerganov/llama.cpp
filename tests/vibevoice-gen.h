@@ -35,12 +35,14 @@ struct vv_branch {
     int64_t n_cached() const;
 };
 
-// branch policy of step(), per sampled token (upstream argmax loop):
-// - audio_bos: decoded into pos, neg is reset and gets a fresh audio_bos
-// - audio_token: one CFG diffusion frame from the pos/neg hidden states, the speech feedback embd goes into both
-// - other text tokens: decoded into pos only, neg only sees audio_bos and speech embds
-// - eog: nothing is decoded, the caller stops
-// the tokenizer stream caches are not reset on audio_bos, all frames are one continuous waveform
+// policy within one generator lifetime / continuous audio stream (matches upstream):
+// - audio_bos: reset only negative LM KV, then decode audio_bos into pos and neg once each
+//   keep dec_cache and sem_cache so the waveform stays causally continuous across speaker/segment markers
+// - audio_token: one CFG diffusion frame, append acoustic_dec_stream wav, then speech_feedback_stream embd into both branches
+// - other text: decode into pos only, neg skips it and sees only audio_bos + speech embds
+// - eog: stop, nothing is decoded
+// hard segment / new stream: call reset_speech_stream() for a cold acoustic start after a discontinuity
+// this clears only tokenizer stream caches, not LM KV, branch positions, wav history, counters or last-frame outputs
 struct vv_generator {
     const llama_model_vibevoice * model = nullptr;
     const llama_vocab           * vocab = nullptr;
@@ -81,6 +83,8 @@ struct vv_generator {
 
     bool audio_bos();
     bool audio_frame();
+
+    void reset_speech_stream();
 
     // samples the next token from the pos logits and runs its branch, returns LLAMA_TOKEN_NULL on error
     llama_token step(llama_sampler * smpl);

@@ -9,6 +9,7 @@
 
 // TODO: replace with #include "llama-ext.h" in the future
 #include "models/models.h"
+#include "vibevoice-gen.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -92,6 +93,101 @@ static bool compare(const char * name, const std::vector<float> & full, const st
     const bool ok = all_finite(stream) && rel <= tol;
 
     printf("%s: n = %zu, max |full| = %.6g, max diff = %.3g, rel = %.3g %s\n", name, full.size(), max_ref, max_diff, rel, ok ? "ok" : "FAIL");
+    return ok;
+}
+
+static bool check_segment_policy(llama_model * lmodel) {
+    vv_generator gen;
+    if (!gen.init(lmodel, 256) || !gen.prefill({ 1, 2, 3, 4, 5 })) {
+        return false;
+    }
+
+    const auto * model = gen.model;
+    const int64_t n_lat = model->hparams.vibevoice.diff_latent_size;
+    const int64_t n_frames = 3;
+    std::vector<float> lat(n_lat * n_frames);
+    std::vector<float> wav(gen.hop * n_frames);
+    for (size_t i = 0; i < lat.size(); ++i) {
+        lat[i] = 0.01f * sinf(0.37f * i + 0.5f);
+    }
+    for (size_t i = 0; i < wav.size(); ++i) {
+        wav[i] = 0.05f * cosf(0.11f * i) + 0.02f * sinf(0.53f * i);
+    }
+
+    const auto full_dec = run_full(gen.backend, { { { n_lat, n_frames }, lat.data() } },
+            [&](ggml_context * ctx, const std::vector<ggml_tensor *> & inp) { return model->build_acoustic_dec(ctx, inp[0]); });
+    const auto full_emb = run_full(gen.backend, { { { n_lat, n_frames }, lat.data() }, { { gen.hop * n_frames, 1 }, wav.data() } },
+            [&](ggml_context * ctx, const std::vector<ggml_tensor *> & inp) { return model->build_speech_feedback(ctx, inp[0], inp[1]); });
+    if (!all_finite(full_dec) || !all_finite(full_emb)) {
+        fprintf(stderr, "segment policy requires finite reference outputs\n");
+        return false;
+    }
+
+    std::vector<float> stream_emb;
+    for (int64_t i = 0; i < n_frames; ++i) {
+        if (i == 2) {
+            const auto dec_before = gen.dec_cache.convs;
+            const auto sem_before = gen.sem_cache.convs;
+            const int64_t pos_before = gen.pos.n_cached();
+            if (!gen.audio_bos() || gen.pos.n_cached() != pos_before + 1 || gen.neg.n_cached() != 1 || gen.neg.pos != 1 ||
+                    gen.dec_cache.convs != dec_before || gen.sem_cache.convs != sem_before) {
+                fprintf(stderr, "audio_bos must reset only negative LM KV and keep both stream caches\n");
+                return false;
+            }
+        }
+
+        // finite inputs isolate cache policy from diffusion overflow on the tiny fixture
+        gen.lat.assign(lat.begin() + i * n_lat, lat.begin() + (i + 1) * n_lat);
+        const auto chunk = model->acoustic_dec_stream(gen.backend, gen.dec_cache, gen.lat.data(), 1);
+        gen.emb = model->speech_feedback_stream(gen.backend, gen.sem_cache, gen.lat.data(), wav.data() + i * gen.hop, 1);
+        if (!all_finite(chunk) || !all_finite(gen.emb) || (int64_t) chunk.size() != gen.hop || (int64_t) gen.emb.size() != gen.n_embd) {
+            fprintf(stderr, "segment policy requires one finite waveform chunk and feedback column per frame\n");
+            return false;
+        }
+        gen.wav.insert(gen.wav.end(), chunk.begin(), chunk.end());
+        stream_emb.insert(stream_emb.end(), gen.emb.begin(), gen.emb.end());
+        gen.n_frames++;
+        if (!gen.pos.decode_embd(gen.emb.data(), gen.n_embd) || !gen.neg.decode_embd(gen.emb.data(), gen.n_embd)) {
+            return false;
+        }
+    }
+
+    bool ok = compare("audio_bos keeps continuous decoder", full_dec, gen.wav);
+    ok &= compare("audio_bos keeps continuous feedback", full_emb, stream_emb);
+
+    const auto wav_before = gen.wav;
+    const auto lat_before = gen.lat;
+    const auto emb_before = gen.emb;
+    const auto pos_before = gen.pos.pos;
+    const auto neg_before = gen.neg.pos;
+    const int64_t pos_cached = gen.pos.n_cached();
+    const int64_t neg_cached = gen.neg.n_cached();
+    const int64_t nonfinite_before = gen.n_nonfinite;
+    gen.reset_speech_stream();
+    if (!gen.dec_cache.convs.empty() || !gen.sem_cache.convs.empty() ||
+            gen.pos.pos != pos_before || gen.neg.pos != neg_before || gen.pos.n_cached() != pos_cached || gen.neg.n_cached() != neg_cached ||
+            gen.wav != wav_before || gen.lat != lat_before || gen.emb != emb_before || gen.n_frames != n_frames || gen.n_nonfinite != nonfinite_before) {
+        fprintf(stderr, "reset_speech_stream must clear only tokenizer stream caches\n");
+        return false;
+    }
+
+    const auto cold_dec = run_full(gen.backend, { { { n_lat, 1 }, gen.lat.data() } },
+            [&](ggml_context * ctx, const std::vector<ggml_tensor *> & inp) { return model->build_acoustic_dec(ctx, inp[0]); });
+    const auto cold_emb = run_full(gen.backend, { { { n_lat, 1 }, gen.lat.data() }, { { gen.hop, 1 }, wav.data() + 2 * gen.hop } },
+            [&](ggml_context * ctx, const std::vector<ggml_tensor *> & inp) { return model->build_speech_feedback(ctx, inp[0], inp[1]); });
+    const auto reset_dec = model->acoustic_dec_stream(gen.backend, gen.dec_cache, gen.lat.data(), 1);
+    const auto reset_emb = model->speech_feedback_stream(gen.backend, gen.sem_cache, gen.lat.data(), wav.data() + 2 * gen.hop, 1);
+    if (!all_finite(cold_dec) || !all_finite(cold_emb)) {
+        fprintf(stderr, "segment policy requires finite cold reference outputs\n");
+        return false;
+    }
+    ok &= compare("reset_speech_stream cold decoder", cold_dec, reset_dec);
+    ok &= compare("reset_speech_stream cold feedback", cold_emb, reset_emb);
+    if (reset_dec == std::vector<float>(gen.wav.end() - gen.hop, gen.wav.end()) || reset_emb == gen.emb) {
+        fprintf(stderr, "cold decoder and feedback must differ from the continuation after audio_bos\n");
+        ok = false;
+    }
+
     return ok;
 }
 
@@ -266,6 +362,8 @@ int main(int argc, char ** argv) {
         ok &= compare("speech feedback last frame",
                 std::vector<float>(full.end() - n_embd, full.end()), std::vector<float>(stream.end() - n_embd, stream.end()));
     }
+
+    ok &= check_segment_policy(lmodel);
 
     ggml_backend_free(backend);
     llama_model_free(lmodel);
