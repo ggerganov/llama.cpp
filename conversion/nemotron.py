@@ -179,12 +179,6 @@ class NemotronOmniVLModel(NemotronNanoV2VLModel):
         downsample_ratio = self.global_config.get("downsample_ratio", 0.5)
         self.gguf_writer.add_vision_projector_scale_factor(int(1.0 / downsample_ratio))
         patch_area = self.hparams["patch_size"] ** 2
-        video_target_num_patches = preprocessor_config.get(
-            "video_target_num_patches",
-            self.global_config["vision_config"].get("video_target_num_patches", 1024),
-        )
-        if video_target_num_patches != preprocessor_config["min_num_patches"]:
-            raise ValueError("Video target patch count must match image minimum patch count")
         self.gguf_writer.add_vision_min_pixels(preprocessor_config["min_num_patches"] * patch_area)
         self.gguf_writer.add_vision_max_pixels(preprocessor_config["max_num_patches"] * patch_area)
 

@@ -563,7 +563,6 @@ struct mtmd_context {
 
     std::unique_ptr<mtmd_audio_preprocessor> audio_preproc;
     std::unique_ptr<mtmd_image_preprocessor> image_preproc;
-    std::unique_ptr<mtmd_image_preprocessor> video_preproc;
 
     // batching
     int32_t batch_max_tokens;
@@ -670,7 +669,6 @@ struct mtmd_context {
     void init_vision() {
         GGML_ASSERT(ctx_v != nullptr);
         image_preproc.reset();
-        video_preproc.reset();
 
         projector_type proj = clip_get_projector_type(ctx_v);
 
@@ -905,7 +903,6 @@ struct mtmd_context {
                     img_beg = "<img>";
                     img_end = "</img>";
                     image_preproc = std::make_unique<mtmd_image_preprocessor_dyn_size>(ctx_v);
-                    video_preproc = std::make_unique<mtmd_image_preprocessor_nemotron_omni_video>(ctx_v);
                 } break;
             case PROJECTOR_TYPE_LFM2:
                 {
@@ -1454,12 +1451,8 @@ struct mtmd_tokenizer {
                     bmp->is_placeholder());
                 img_u8.cpy_buf(bmp->get_ro_buf());
 
-                // preprocess image or video
-                const mtmd_image_preprocessor * preprocessor = ctx->image_preproc.get();
-                if (bmp->mergeable && ctx->video_preproc) {
-                    preprocessor = ctx->video_preproc.get();
-                }
-                mtmd_image_preproc_out tmp_preproc_out = preprocessor->preprocess(img_u8);
+                // preprocess image
+                mtmd_image_preproc_out tmp_preproc_out = ctx->image_preproc->preprocess(img_u8);
 
                 // move entries and grid dimensions to the "global" preproc_out
                 for (auto & entry : tmp_preproc_out.entries) {

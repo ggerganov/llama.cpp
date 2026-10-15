@@ -300,11 +300,3 @@ struct mtmd_image_preprocessor_muse_glimmer : mtmd_image_preprocessor {
     mtmd_image_preprocessor_muse_glimmer(const clip_ctx * ctx) : mtmd_image_preprocessor(ctx) {}
     mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
 };
-
-struct mtmd_image_preprocessor_nemotron_omni_video : mtmd_image_preprocessor {
-    mtmd_image_preprocessor_nemotron_omni_video(const clip_ctx * ctx) : mtmd_image_preprocessor(ctx) {}
-
-    mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
-
-    static clip_image_size target_video_size(const clip_hparams & hparams, const clip_image_size & original_size);
-};
