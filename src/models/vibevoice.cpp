@@ -149,6 +149,22 @@ void llama_model_vibevoice::load_arch_tensors(llama_model_loader & ml) {
     load_connector(ml, acoustic_conn, LLM_TENSOR_VV_ACOUSTIC_CONN_FC1, LLM_TENSOR_VV_ACOUSTIC_CONN_NORM, LLM_TENSOR_VV_ACOUSTIC_CONN_FC2);
     load_connector(ml, semantic_conn, LLM_TENSOR_VV_SEMANTIC_CONN_FC1, LLM_TENSOR_VV_SEMANTIC_CONN_NORM, LLM_TENSOR_VV_SEMANTIC_CONN_FC2);
 
+    // create_tensor_from_file trusts the file; audio_frame decode_embd reads n_embd floats from speech feedback
+    if (acoustic_conn.fc1->ne[0] != (int64_t) vv.diff_latent_size ||
+            acoustic_conn.fc2->ne[1] != (int64_t) hparams.n_embd ||
+            acoustic_conn.fc2_b->ne[0] != (int64_t) hparams.n_embd ||
+            semantic_conn.fc1->ne[0] != (int64_t) vv.semantic.vae_dim ||
+            semantic_conn.fc2->ne[1] != (int64_t) hparams.n_embd ||
+            semantic_conn.fc2_b->ne[0] != (int64_t) hparams.n_embd) {
+        throw std::runtime_error(format(
+                "vibevoice: connector dims incompatible with latents/n_embd "
+                "(acoustic fc1.in=%lld fc2.out=%lld, semantic fc1.in=%lld fc2.out=%lld, "
+                "diff_latent=%u semantic_vae=%u n_embd=%u)",
+                (long long) acoustic_conn.fc1->ne[0], (long long) acoustic_conn.fc2->ne[1],
+                (long long) semantic_conn.fc1->ne[0], (long long) semantic_conn.fc2->ne[1],
+                vv.diff_latent_size, vv.semantic.vae_dim, hparams.n_embd));
+    }
+
     // diffusion head
     {
         diff.noisy_proj = create_tensor_from_file(ml, tn(LLM_TENSOR_VV_DIFF_NOISY_PROJ, "weight"));
