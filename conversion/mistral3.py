@@ -66,3 +66,18 @@ class Mistral3Model(TextModel):
 
     def write(self):
         self.impl.write()
+
+
+@ModelBase.register("VoxtralRealtimeForConditionalGeneration")
+@ModelBase.example("mistralai/Voxtral-Mini-4B-Realtime-2602")
+class VoxtralRealtimeModel(LlamaModel):
+    model_arch = gguf.MODEL_ARCH.MISTRAL3
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_realtime_delay_tokens(self.hparams["default_num_delay_tokens"])
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None):
+        if name.startswith(("audio_tower.", "multi_modal_projector.")):
+            return
+        yield from super().modify_tensors(data_torch, name, bid)
