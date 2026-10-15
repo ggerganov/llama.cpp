@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Check, Copy, X } from '@lucide/svelte';
 	import { SyntaxHighlightedCode } from '$lib/components/app';
+	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { COPY_FEEDBACK_RESET_MS } from '$lib/constants';
 	import { copyToClipboard } from '$lib/utils';
@@ -39,20 +40,21 @@
 		>
 			<Dialog.Title class="text-sm font-semibold">Chat template</Dialog.Title>
 
-			<button
+			<Button
 				aria-label="Copy chat template"
-				class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border/30 px-2 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted dark:border-border/20"
+				class="h-auto gap-1.5 px-2 py-1 text-xs"
 				onclick={() => void copy()}
-				type="button"
+				size="sm"
+				variant="tertiary"
 			>
 				{#if copied}
-					<Check class="h-3.5 w-3.5 text-green-500" />
+					<Check class="size-3.5 text-green-500" />
 				{:else}
-					<Copy class="h-3.5 w-3.5" />
+					<Copy class="size-3.5" />
 				{/if}
 
 				Copy
-			</button>
+			</Button>
 
 			<Dialog.Close
 				aria-label="Close"

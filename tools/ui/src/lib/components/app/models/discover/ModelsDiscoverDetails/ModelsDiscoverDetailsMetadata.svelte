@@ -2,6 +2,7 @@
 	import ModelsDiscoverChatTemplateDialog from './ModelsDiscoverChatTemplateDialog.svelte';
 	import ModelsDiscoverDetailsMetadataItem from './ModelsDiscoverDetailsMetadataItem.svelte';
 	import { MessageSquareCode } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { modelsDiscoverStore } from '$lib/stores';
 	import type { HfModelDetailInfo, HfModelGguf } from '$lib/types/huggingface';
 	import { formatParameters } from '$lib/utils';
@@ -49,14 +50,15 @@
 	{/if}
 
 	{#if gguf?.chat_template}
-		<button
-			class="inline-flex items-center gap-1.5 rounded-md border border-border/30 px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-muted dark:border-border/20"
+		<Button
+			class="h-auto gap-1.5 px-2.5 py-1 text-xs"
 			onclick={() => (chatTemplateOpen = true)}
-			type="button"
+			size="sm"
+			variant="tertiary"
 		>
-			<MessageSquareCode class="h-3 w-3" />
+			<MessageSquareCode class="size-3" />
 			Chat template
-		</button>
+		</Button>
 	{/if}
 
 	{#if licenseTag}

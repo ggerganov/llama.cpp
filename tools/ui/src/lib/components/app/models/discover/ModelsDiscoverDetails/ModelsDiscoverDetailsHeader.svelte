@@ -5,7 +5,7 @@
 	import ModelsDiscoverDetailsMetadata from './ModelsDiscoverDetailsMetadata.svelte';
 	import { ExternalLink } from '@lucide/svelte';
 	import { base } from '$app/paths';
-	import { ICON_CLASS_SM } from '$lib/constants';
+	import { Button } from '$lib/components/ui/button';
 	import { HuggingFaceService } from '$lib/services';
 	import type { HfModelDetailInfo, HfModelGguf } from '$lib/types/huggingface';
 	import { orgOf } from '$lib/utils';
@@ -74,18 +74,20 @@
 			</div>
 		</div>
 
-		<a
-			class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/30 px-2.5 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-muted dark:border-border/20"
+		<Button
+			class="h-auto gap-1.5 px-2.5 py-1.5 text-xs"
 			href={HuggingFaceService.getModelUrl(modelId)}
 			rel="noopener noreferrer"
+			size="sm"
 			target="_blank"
+			variant="tertiary"
 		>
 			<img alt="" class="h-3.5 w-3.5" src="{base}/recommended-mcp/huggingface.ico" />
 
 			View on Hugging Face
 
-			<ExternalLink class={ICON_CLASS_SM} />
-		</a>
+			<ExternalLink class="size-3.5" />
+		</Button>
 	</div>
 
 	<ModelsDiscoverDetailsHfHubStats {details} />
