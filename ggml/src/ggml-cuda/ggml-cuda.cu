@@ -14,6 +14,7 @@
 #include "ggml-cuda/col2im-1d.cuh"
 #include "ggml-cuda/concat.cuh"
 #include "ggml-cuda/conv-transpose-1d.cuh"
+#include "ggml-cuda/mailbox.cuh"
 #include "ggml-cuda/conv2d.cuh"
 #include "ggml-cuda/conv2d-dw.cuh"
 #include "ggml-cuda/conv2d-transpose.cuh"
@@ -1323,6 +1324,69 @@ ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
     return &ggml_backend_cuda_buffer_type_host;
 }
 
+// mailbox buffer type: page-locked host memory mapped into the GPU's address space (ggml-mailbox.h). The CPU reads and writes
+// tensors in it in place; the GPU reaches the same memory through the mailbox ops' device pointers
+
+static const char * ggml_backend_cuda_mailbox_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    return GGML_CUDA_NAME "_Mailbox";
+
+    GGML_UNUSED(buft);
+}
+
+static bool ggml_backend_buft_is_cuda_mailbox(ggml_backend_buffer_type_t buft) {
+    return buft->iface.get_name == ggml_backend_cuda_mailbox_buffer_type_name;
+}
+
+static void ggml_backend_cuda_mailbox_free_buffer(ggml_backend_buffer_t buffer) {
+    CUDA_CHECK(cudaFreeHost(buffer->context));
+}
+
+static ggml_backend_buffer_type_t ggml_backend_cuda_mailbox_buffer_type() {
+    static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_type_mailbox = {
+        /* .iface    = */ {
+            /* .get_name            = */ ggml_backend_cuda_mailbox_buffer_type_name,
+            /* .alloc_buffer        = */ nullptr, // only through ggml_backend_cuda_mailbox_buffer
+            /* .alloc_buffer_n      = */ nullptr,
+            /* .get_alignment       = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
+            /* .get_max_size        = */ nullptr, // defaults to SIZE_MAX
+            /* .get_alloc_size      = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
+            /* .get_alloc_size_n    = */ nullptr,
+            /* .is_host             = */ ggml_backend_cpu_buffer_type()->iface.is_host,
+        },
+        /* .device   = */ ggml_backend_reg_dev_get(ggml_backend_cuda_reg(), 0),
+        /* .context  = */ nullptr,
+    };
+
+    return &ggml_backend_cuda_buffer_type_mailbox;
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_mailbox_buffer(size_t size, void ** dev_base) {
+#if defined(GGML_USE_HIP) || defined(GGML_USE_MUSA)
+    GGML_UNUSED(size);
+    GGML_UNUSED(dev_base);
+    return nullptr;
+#else
+    void * host = nullptr;
+    void * dev  = nullptr;
+    if (cudaHostAlloc(&host, size, cudaHostAllocMapped | cudaHostAllocPortable) != cudaSuccess) {
+        (void) cudaGetLastError();
+        return nullptr;
+    }
+    if (cudaHostGetDevicePointer(&dev, host, 0) != cudaSuccess) {
+        (void) cudaGetLastError();
+        cudaFreeHost(host);
+        return nullptr;
+    }
+    memset(host, 0, size);
+
+    ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(host, size);
+    buffer->buft = ggml_backend_cuda_mailbox_buffer_type();
+    buffer->iface.free_buffer = ggml_backend_cuda_mailbox_free_buffer;
+    *dev_base = dev;
+    return buffer;
+#endif
+}
+
 //static bool ggml_backend_buffer_is_cuda_host(ggml_backend_buffer_t buffer) {
 //    return buffer->buft->iface.get_name == ggml_backend_cuda_host_buffer_type_name;
 //}
@@ -2497,6 +2561,9 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             break;
         case GGML_OP_LIGHTNING_INDEXER:
             ggml_cuda_lightning_indexer(ctx, dst);
+            break;
+        case GGML_OP_CUSTOM:
+            ggml_cuda_op_mailbox(ctx, dst);
             break;
         default:
             return false;
@@ -4466,12 +4533,14 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                 // node's output on the host-visible buffer, which the compute path
                 // handles. Allow that here, mirroring the src-tensor check below.
                 assert(node->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
-                       (integrated && ggml_backend_buft_is_cuda_host(node->buffer->buft)));
+                       (integrated && ggml_backend_buft_is_cuda_host(node->buffer->buft)) ||
+                       ggml_backend_buft_is_cuda_mailbox(node->buffer->buft));
                 for (int j = 0; j < GGML_MAX_SRC; j++) {
                     if (node->src[j] != nullptr) {
                         assert(node->src[j]->buffer);
                         assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) ||
-                               (integrated && ggml_backend_buft_is_cuda_host(node->src[j]->buffer->buft)));
+                               (integrated && ggml_backend_buft_is_cuda_host(node->src[j]->buffer->buft)) ||
+                               ggml_backend_buft_is_cuda_mailbox(node->src[j]->buffer->buft));
                     }
                 }
 #else
@@ -5746,6 +5815,8 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return true;
         case GGML_OP_LIGHTNING_INDEXER:
             return ggml_cuda_lightning_indexer_supported(dev_ctx->device, op);
+        case GGML_OP_CUSTOM:
+            return ggml_cuda_mailbox_op_supported(op);
 
         default:
             return false;
@@ -5755,7 +5826,8 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
 static bool ggml_backend_cuda_device_supports_buft(ggml_backend_dev_t dev, ggml_backend_buffer_type_t buft) {
     ggml_backend_cuda_device_context * dev_ctx = (ggml_backend_cuda_device_context *) dev->context;
     const bool integrated = ggml_cuda_info().devices[dev_ctx->device].integrated;
-    return (ggml_backend_buft_is_cuda(buft) && buft->device == dev) || (integrated && ggml_backend_buft_is_cuda_host(buft));
+    return (ggml_backend_buft_is_cuda(buft) && buft->device == dev) || (integrated && ggml_backend_buft_is_cuda_host(buft)) ||
+           ggml_backend_buft_is_cuda_mailbox(buft);
 }
 
 static int64_t get_op_batch_size(const ggml_tensor * op) {
@@ -5926,6 +5998,9 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
     }
     if (strcmp(name, "ggml_backend_get_features") == 0) {
         return (void *)ggml_backend_cuda_get_features;
+    }
+    if (strcmp(name, "ggml_backend_mailbox_buffer") == 0) {
+        return (void *)ggml_backend_cuda_mailbox_buffer;
     }
     return nullptr;
 }

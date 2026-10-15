@@ -1802,6 +1802,13 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
     return true;
 }
 
+// GGML_SCHED_PROFILE: the time of the synchronous input copies, split into the wait for the source backend (a GPU's
+// work still running) and the transfer itself; per compute, ggml_sched_profile_print
+static const bool g_sched_profile_on = getenv("GGML_SCHED_PROFILE") != nullptr;
+static double  g_sched_profile_wait_us = 0;
+static double  g_sched_profile_copy_us = 0;
+static int64_t g_sched_profile_copies  = 0;
+
 static bool ggml_backend_sched_is_host_weight(const struct ggml_tensor * t) {
     return t->buffer != NULL &&
         ggml_backend_buffer_get_usage(t->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS &&
@@ -1840,19 +1847,63 @@ static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggm
     // try async copy, but if not possible, we can still use a sync copy without synchronizing the dst backend, since we handle the synchronization here with multiple copies and events
     // TODO: add public function to facilitate this, since applications do not have direct access to the backend interface
     if (!split_backend->iface.cpy_tensor_async || !split_backend->iface.cpy_tensor_async(input_backend, split_backend, input, input_cpy)) {
+        const int64_t t0 = g_sched_profile_on ? ggml_time_us() : 0;
         ggml_backend_synchronize(input_backend);
         if (sched->events[split_backend_id][sched->cur_copy] != NULL) {
             ggml_backend_event_synchronize(sched->events[split_backend_id][sched->cur_copy]);
         } else {
             ggml_backend_synchronize(split_backend);
         }
+        const int64_t t1 = g_sched_profile_on ? ggml_time_us() : 0;
         ggml_backend_tensor_copy(input, input_cpy);
+        if (g_sched_profile_on) {
+            g_sched_profile_wait_us += t1 - t0;
+            g_sched_profile_copy_us += ggml_time_us() - t1;
+            g_sched_profile_copies++;
+        }
     }
+}
+
+// GGML_SCHED_PROFILE=1: where the time of a step goes, by graph shape (its number of splits), printed when the scheduler
+// is freed.  "in" is the time before a split starts - the input copies, and the waits on the other backend they imply;
+// "run" is graph_compute: the CPU's is the compute itself, the GPU's only enqueues (its work shows up in the next "in")
+struct ggml_sched_profile {
+    int64_t calls = 0;
+    double  total_us = 0;
+    double  in_us[2]  = {0, 0}; // [0] CPU splits, [1] the others
+    double  run_us[2] = {0, 0};
+    int64_t n_split[2] = {0, 0};
+    double  wait_us = 0;        // of "in": the synchronous copies' wait for the source backend, and the transfers
+    double  copy_us = 0;
+    int64_t copies  = 0;
+};
+static std::unordered_map<int, ggml_sched_profile> g_sched_profile;
+
+static void ggml_sched_profile_print() {
+    for (auto & [n_splits, p] : g_sched_profile) {
+        if (p.calls < 8) {
+            continue; // warmup, prompts, probes
+        }
+        const double c = 1e3*p.calls;
+        fprintf(stderr, "sched profile: %d splits, %lld steps: %.2f ms a step = CPU splits %.2f (run %.2f, in %.2f; %.1f splits) + GPU splits %.2f (run %.2f, in %.2f; %.1f splits)\n",
+                n_splits, (long long) p.calls, p.total_us/c,
+                (p.in_us[0] + p.run_us[0])/c, p.run_us[0]/c, p.in_us[0]/c, (double) p.n_split[0]/p.calls,
+                (p.in_us[1] + p.run_us[1])/c, p.run_us[1]/c, p.in_us[1]/c, (double) p.n_split[1]/p.calls);
+        fprintf(stderr, "                %.1f synchronous copies a step: waiting for the source %.2f ms, transferring %.2f ms (%.0f us a copy)\n",
+                (double) p.copies/p.calls, p.wait_us/c, p.copy_us/c, p.copies ? p.copy_us/p.copies : 0.0);
+    }
+    g_sched_profile.clear();
 }
 
 static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
     GGML_ASSERT(sched);
     struct ggml_backend_sched_split * splits = sched->splits;
+
+    const bool profile = g_sched_profile_on;
+    ggml_sched_profile * prof = profile ? &g_sched_profile[sched->n_splits] : nullptr;
+    const int64_t t_start = profile ? ggml_time_us() : 0;
+    const double  wait0 = g_sched_profile_wait_us, copy0 = g_sched_profile_copy_us;
+    const int64_t copies0 = g_sched_profile_copies;
 
     int prev_backend_id = -1;
 
@@ -1860,10 +1911,18 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
         struct ggml_backend_sched_split * split = &splits[split_id];
         int split_backend_id = split->backend_id;
         ggml_backend_t split_backend = sched->backends[split_backend_id];
+        const int64_t t_split = profile ? ggml_time_us() : 0;
+        int64_t t_run = 0;
 
         // ensure the previous split's async work has completed before we start
         // this split, the allocator may have reused buffer regions across splits
-        if (split->n_inputs == 0 && prev_backend_id >= 0 && prev_backend_id != split_backend_id) {
+        // - except for a split that reads only shared memory kept in order by flags (a mailbox): it starts at once and
+        //   polls them, while the previous split still runs
+        bool no_sync = false;
+        for (int i = 0; i < split->graph.n_nodes && split->n_inputs == 0; i++) {
+            no_sync = no_sync || (split->graph.nodes[i]->flags & GGML_TENSOR_FLAG_NO_SYNC);
+        }
+        if (split->n_inputs == 0 && !no_sync && prev_backend_id >= 0 && prev_backend_id != split_backend_id) {
             if (sched->events[prev_backend_id][sched->cur_copy] != NULL) {
                 ggml_backend_event_synchronize(sched->events[prev_backend_id][sched->cur_copy]);
             } else {
@@ -1882,6 +1941,10 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
             if (ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
                 ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
             }
+        }
+
+        if (profile) {
+            t_run = ggml_time_us();
         }
 
         if (!sched->callback_eval) {
@@ -1928,7 +1991,22 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
             ggml_backend_event_record(sched->events[split_backend_id][sched->cur_copy], split_backend);
         }
 
+        if (profile) {
+            const int k = ggml_backend_dev_type(ggml_backend_get_device(split_backend)) == GGML_BACKEND_DEVICE_TYPE_CPU ? 0 : 1;
+            prof->in_us[k]  += t_run - t_split;
+            prof->run_us[k] += ggml_time_us() - t_run;
+            prof->n_split[k]++;
+        }
+
         prev_backend_id = split_backend_id;
+    }
+
+    if (profile) {
+        prof->calls++;
+        prof->total_us += ggml_time_us() - t_start;
+        prof->wait_us += g_sched_profile_wait_us - wait0;
+        prof->copy_us += g_sched_profile_copy_us - copy0;
+        prof->copies  += g_sched_profile_copies - copies0;
     }
 
     return GGML_STATUS_SUCCESS;
@@ -2010,6 +2088,7 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
     if (sched == NULL) {
         return;
     }
+    ggml_sched_profile_print();
     for (int b = 0; b < sched->n_backends; b++) {
         for (int c = 0; c < sched->n_copies; c++) {
             ggml_backend_event_free(sched->events[b][c]);

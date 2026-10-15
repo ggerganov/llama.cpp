@@ -665,6 +665,8 @@ extern "C" {
         GGML_TENSOR_FLAG_PARAM   =  4, // ...contains trainable parameters
         GGML_TENSOR_FLAG_LOSS    =  8, // ...defines loss for numerical optimization (multiple loss tensors add up)
         GGML_TENSOR_FLAG_COMPUTE = 16, // ...must be computed
+        GGML_TENSOR_FLAG_NO_SYNC = 32, // ...is computed by a backend that reads only shared memory kept in order by flags (a
+                                       // mailbox, see ggml-mailbox.h): its split starts without waiting for the previous one
     };
 
     enum ggml_tri_type {

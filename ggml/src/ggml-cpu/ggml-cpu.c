@@ -1652,7 +1652,14 @@ static void ggml_compute_forward_mul_mat_id(
             for (int id = 0; id < n_ids; ++id) {
                 const int32_t i02 = *(const int32_t *) ((const char *) ids->data + iid1*ids->nb[1] + id*ids->nb[0]);
 
-                assert(i02 >= 0 && i02 < n_as);
+                // a negative id skips the row: no expert is read for it and its output is zero
+                // (llama.cpp's hybrid MoE cache: the experts the GPU computes are -1 on the CPU's side)
+                if (i02 < 0) {
+                    memset((char *) dst->data + id*nb1 + iid1*nb2, 0, ne0*sizeof(float));
+                    continue;
+                }
+
+                assert(i02 < n_as);
 
                 MMID_MATRIX_ROW(i02, matrix_row_counts[i02]) = (struct mmid_row_mapping) {id, iid1};
                 matrix_row_counts[i02] += 1;
@@ -1695,10 +1702,24 @@ static void ggml_compute_forward_mul_mat_id(
         // disable for NUMA
         const bool disable_chunking = ggml_is_numa();
 
+        // one token per expert (generation): a matrix-vector product per expert, small (a MoE expert is a few hundred to a
+        // few thousand rows). One slice per thread would make every expert wait for the slowest core (a hybrid CPU's
+        // efficiency cores take ~2x as long); several small chunks per thread, taken as they come, let the fast cores do more.
+        // Qwen3-Coder-Next's experts on an i7-13620H, 10 threads: 115-120 -> 92-96 us an op with 32 rows (16: 97)
+        static int mmid_rows = -1; // GGML_MMID_CHUNK: rows per chunk in that case (0 = the old one slice per thread)
+        if (mmid_rows < 0) {
+            const char * s = getenv("GGML_MMID_CHUNK");
+            mmid_rows = s ? atoi(s) : 32;
+        }
+        const bool small_chunks = nr1 == 1 && nr0 > 1 && mmid_rows > 0 && !disable_chunking;
+        if (small_chunks) {
+            chunk_size = mmid_rows;
+        }
+
         int64_t nchunk0 = (nr0 + chunk_size - 1) / chunk_size;
         int64_t nchunk1 = (nr1 + chunk_size - 1) / chunk_size;
 
-        if (nchunk0 * nchunk1 < nth * 4 || disable_chunking) {
+        if (!small_chunks && (nchunk0 * nchunk1 < nth * 4 || disable_chunking)) {
             nchunk0 = nr0 > nr1 ? nth : 1;
             nchunk1 = nr0 > nr1 ? 1 : nth;
         }
@@ -3098,9 +3119,36 @@ static int ggml_cpu_try_fuse_ops(
     return 0;
 }
 
+// GGML_CPU_OP_PROFILE=1: thread 0's time per op kind (the op and the barrier after it, so the slowest thread's), at exit
+static int     ggml_cpu_op_prof = -1;
+static int64_t ggml_cpu_op_us[GGML_OP_COUNT];
+static int64_t ggml_cpu_op_n[GGML_OP_COUNT];
+
+static void ggml_cpu_op_prof_print(void) {
+    int64_t total = 0;
+    for (int i = 0; i < GGML_OP_COUNT; i++) {
+        total += ggml_cpu_op_us[i];
+    }
+    fprintf(stderr, "cpu op profile: %.1f ms in all (thread 0, op + barrier)\n", total/1000.0);
+    for (int i = 0; i < GGML_OP_COUNT; i++) {
+        if (ggml_cpu_op_n[i] > 0) {
+            fprintf(stderr, "  %-16s %9.1f ms %8lld ops %7.2f us each %5.1f%%\n", ggml_op_name((enum ggml_op) i),
+                    ggml_cpu_op_us[i]/1000.0, (long long) ggml_cpu_op_n[i], (double) ggml_cpu_op_us[i]/ggml_cpu_op_n[i],
+                    100.0*ggml_cpu_op_us[i]/(total > 0 ? total : 1));
+        }
+    }
+}
+
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_threadpool    * tp    = state->threadpool;
+    if (state->ith == 0 && ggml_cpu_op_prof < 0) {
+        ggml_cpu_op_prof = getenv("GGML_CPU_OP_PROFILE") != NULL;
+        if (ggml_cpu_op_prof) {
+            atexit(ggml_cpu_op_prof_print);
+        }
+    }
+    const bool op_prof = state->ith == 0 && ggml_cpu_op_prof > 0;
 
     const struct ggml_cgraph * cgraph = tp->cgraph;
     const struct ggml_cplan  * cplan  = tp->cplan;
@@ -3138,6 +3186,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             continue;
         }
 
+        const int64_t t_op = op_prof ? ggml_time_us() : 0;
+        const enum ggml_op op = node->op;
+
         // TODO: move fused-op detection into ggml_graph_plan so fusion decisions are made once at planning time
         // Try fused ops, fall back to normal compute
         const int n_fused = ggml_cpu_try_fuse_ops(cgraph, node_n, &params, cplan);
@@ -3155,6 +3206,10 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         if (node_n + 1 < cgraph->n_nodes) {
             ggml_barrier(state->threadpool);
+        }
+        if (op_prof) {
+            ggml_cpu_op_us[op] += ggml_time_us() - t_op;
+            ggml_cpu_op_n[op]++;
         }
     }
 
