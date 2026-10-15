@@ -499,10 +499,8 @@ static ggml_type llama_tensor_get_type_impl(quantize_state_impl & qs, ggml_type 
     }
 
     // bumping to q8_0 is preferred since these tensors are not really big
-    // TODO: nemotron 3 super shares ffn_latent, and afmoe, bailingmoe3,
-    //       dots3note, hy-v4, kimi-k3 and laguna share attn_gate. Widening the
-    //       guard is likely a win there too, but it changes their files, so it
-    //       wants a perplexity comparison per architecture first.
+    // TODO: nemotron 3 super shares ffn_latent and afmoe, bailingmoe3, dots3note, hy-v4, kimi-k3 and laguna share attn_gate.
+    //       Widening the guard is likely a win there too, but it changes their files, so it wants a perplexity comparison per architecture first.
     if (arch == LLM_ARCH_MUSE_SPARK &&
         (category == tensor_category::FFN_LATENT || category == tensor_category::ATTENTION_GATE)) {
         auto bits_per_weight = [](ggml_type t) {
