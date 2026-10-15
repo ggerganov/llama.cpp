@@ -16,16 +16,11 @@ enum class stream_read_status {
 namespace {
 constexpr int64_t STREAM_SESSION_TTL_SECONDS         = 300;
 constexpr size_t  STREAM_SESSION_MAX_BYTES           = 4 * 1024 * 1024;
-// hard cap on the number of live sessions. the session map is keyed on the client-controlled
-// X-Conversation-Id header, so without a cap an unauthenticated client can accumulate sessions
-// without limit: each buffers up to STREAM_SESSION_MAX_BYTES and lingers STREAM_SESSION_TTL_SECONDS
-// after completion, with eviction only by the periodic GC. the cap bounds the worst-case buffered
-// memory to STREAM_SESSION_MAX_SESSIONS * STREAM_SESSION_MAX_BYTES.
+// cap live sessions: the map is keyed on the client-controlled X-Conversation-Id, so without a bound a client can grow it without limit
 constexpr size_t  STREAM_SESSION_MAX_SESSIONS        = 1024;
 constexpr int64_t STREAM_SESSION_GC_INTERVAL_SECONDS = 60;
 
-// monotonically increasing creation counter, used only to order sessions by age for cap eviction
-// (started_ts has one-second granularity, too coarse to order a burst of requests)
+// monotonic creation order for cap eviction (started_ts is one-second granularity, too coarse to order a burst)
 std::atomic<uint64_t> g_stream_session_seq{0};
 constexpr int64_t STREAM_READ_WAKE_INTERVAL_MS       = 200;
 
@@ -257,10 +252,7 @@ stream_session_ptr stream_session_manager::create_or_replace(const std::string &
             previous = it->second;
             it->second = fresh;
         } else {
-            // enforce the session cap before inserting a new conversation so the map cannot grow
-            // without bound. evict the most-stale session, preferring ones that have already
-            // completed (they only linger for the resume TTL) over still-live ones; among the same
-            // kind evict the one created earliest (smallest seq)
+            // at the cap, evict the stalest session (completed before live, then oldest seq) before inserting
             while (sessions.size() >= STREAM_SESSION_MAX_SESSIONS) {
                 auto victim = sessions.begin();
                 for (auto i = sessions.begin(); i != sessions.end(); ++i) {
