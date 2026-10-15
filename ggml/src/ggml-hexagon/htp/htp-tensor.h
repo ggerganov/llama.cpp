@@ -206,9 +206,4 @@ static inline uint32_t htp_tensor_get_row_size(int type, uint32_t ne00) {
     }
 }
 
-struct htp_context;
-void htp_flush_dirty_ranges(struct htp_context * ctx);
-void htp_tensor_flush_all(struct htp_context * ctx, const struct htp_tensor * const * tensors, uint32_t n);
-void htp_tensor_dirty_all(struct htp_context * ctx, const struct htp_tensor * const * tensors, uint32_t n);
-
 #endif // HTP_TENSOR_H
