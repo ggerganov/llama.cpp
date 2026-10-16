@@ -1379,8 +1379,8 @@ class IQ4_XS(__Quant, qtype=GGMLQuantizationType.IQ4_XS):
 
 
 class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
-    kvalues = (-17, -4, 7, 23)
-    phase = 8
+    kvalues = (-15, -4, 6, 21)
+    phase = 10
 
     @classmethod
     def dequantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:
@@ -1409,7 +1409,7 @@ class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
 
 
 class IQ3_K(__Quant, qtype=GGMLQuantizationType.IQ3_K):
-    kvalues = (-55, -37, -23, -12, -1, 10, 23, 40)
+    kvalues = (-56, -37, -23, -12, -1, 10, 23, 40)
     phase = 23
 
     @classmethod
@@ -1448,8 +1448,8 @@ class IQ3_K(__Quant, qtype=GGMLQuantizationType.IQ3_K):
 
 
 class IQ4_K(__Quant, qtype=GGMLQuantizationType.IQ4_K):
-    kvalues = (-127, -96, -77, -61, -47, -35, -23, -12, 0, 11, 23, 36, 50, 66, 85, 103)
-    phase = 19
+    kvalues = (-127, -97, -78, -62, -48, -35, -23, -12, -1, 11, 23, 36, 51, 67, 87, 105)
+    phase = 18
 
     @classmethod
     def dequantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:
@@ -1482,8 +1482,8 @@ class IQ4_K(__Quant, qtype=GGMLQuantizationType.IQ4_K):
 
 
 class IQ5_K(__Quant, qtype=GGMLQuantizationType.IQ5_K):
-    kvalues = (-115, -105, -94, -83, -74, -66, -59, -52, -45, -39, -33, -27, -22, -16, -11, -6,
-               -1, 5, 10, 15, 21, 27, 33, 39, 46, 54, 61, 69, 78, 86, 103, 111)
+    kvalues = (-115, -105, -94, -83, -73, -65, -58, -51, -45, -39, -33, -27, -22, -17, -11, -6,
+               -1, 4, 9, 15, 20, 26, 32, 39, 46, 53, 61, 69, 77, 86, 103, 111)
     phase = 15
 
     @classmethod
@@ -1521,11 +1521,11 @@ class IQ5_K(__Quant, qtype=GGMLQuantizationType.IQ5_K):
 
 
 class IQ6_K(__Quant, qtype=GGMLQuantizationType.IQ6_K):
-    kvalues = (-121, -116, -109, -103, -99, -93, -88, -84, -80, -75, -71, -67, -63, -59, -55, -52,
-               -48, -45, -42, -38, -35, -32, -29, -26, -24, -21, -18, -15, -13, -10, -7, -5,
-               -2, 1, 3, 6, 8, 11, 14, 17, 20, 22, 25, 28, 32, 35, 38, 42,
-               45, 49, 52, 56, 60, 65, 69, 74, 78, 83, 88, 94, 97, 105, 110, 115)
-    phase = 12
+    kvalues = (-120, -115, -108, -103, -99, -93, -88, -83, -79, -75, -70, -66, -62, -59, -55, -51,
+               -48, -45, -41, -38, -35, -32, -29, -26, -24, -21, -18, -15, -13, -10, -7, -5,
+               -2, 0, 3, 6, 8, 11, 14, 16, 19, 22, 25, 28, 31, 34, 38, 41,
+               44, 48, 52, 56, 60, 64, 68, 73, 77, 82, 86, 93, 97, 104, 109, 114)
+    phase = 13
 
     @classmethod
     def dequantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:
