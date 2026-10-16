@@ -5,7 +5,6 @@ import { modelsStore, uiStore } from '$lib/stores';
 import type { ModelOption } from '$lib/types/models';
 import { repoOf } from '$lib/utils';
 
-/** Row actions follow the app's dropdown pattern: icon, label, separators, variants. */
 export function modelRowActions(
 	option: ModelOption,
 	favorite: boolean,

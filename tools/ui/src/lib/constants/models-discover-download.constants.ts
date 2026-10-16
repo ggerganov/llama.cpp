@@ -1,10 +1,6 @@
 /**
- * Models Discover - download options constants.
- *
- * Shared values backing the download-options area of the details pane: the
- * serve `--spec-type` mapping, the bit-depth buckets, and the standalone
- * command builder. Kept here (not component-local) so they sit with the rest
- * of the discover domain constants.
+ * Models Discover - download options constants: the serve `--spec-type` mapping,
+ * the bit-depth buckets, and the standalone command builder.
  */
 
 import { ModelDraftSidecar } from '$lib/enums';
@@ -22,7 +18,6 @@ export const SPEC_TYPE: Record<ModelDraftSidecar, string> = {
 /** Bit-depth bucket for files that carry no quant token; rendered as "Other". */
 export const OTHER_BIT_DEPTH = 99;
 
-/** Label for the OTHER_BIT_DEPTH bucket. */
 export const OTHER_BIT_DEPTH_LABEL = 'Other';
 
 /** Suffix appended after a bit-depth number to label a row, e.g. `4-bit`. */
@@ -34,9 +29,7 @@ export const BIT_DEPTH_LABEL_SUFFIX = '-bit';
  */
 export const SERVE_COMMAND = {
 	BIN: 'llama',
-	/** Main model repo:tag argument. */
 	MODEL_FLAG: '-hf',
-	/** Speculative-decoding type argument for the draft. */
 	SPEC_TYPE_FLAG: '--spec-type',
 	SUBCOMMAND: 'serve'
 } as const;

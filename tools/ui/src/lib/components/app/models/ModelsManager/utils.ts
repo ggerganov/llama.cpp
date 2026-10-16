@@ -38,10 +38,9 @@ export function downloadProgressFor(repoWithTag: string): ModelDownloadProgress 
 }
 
 /**
- * One table row per tracked download, so the table lists them the way it lists
- * any other model: one download per model tag, its on-disk sidecars hanging off
- * the row as sub-lines. A paused download is already in the router's listing,
- * so its own option is reused; a fresh one stands for its tag alone.
+ * One table row per tracked download, listed like any other model. A paused download
+ * is already in the router's listing, so its own option is reused; a fresh one is
+ * synthesized for its tag alone.
  */
 export function downloadGroups(
 	entries: ModelDownloadEntry[],

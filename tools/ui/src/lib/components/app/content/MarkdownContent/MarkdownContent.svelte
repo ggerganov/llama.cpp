@@ -129,11 +129,6 @@
 	let pendingMarkdown: string | null = null;
 	let isProcessing = false;
 
-	// Raw HTML in model cards renders after sanitization with an explicit allow
-	// list: no scripts, event handlers, forms, iframes or style blocks pass.
-	// Covers the tags model cards use plus the KaTeX output (spans with inline
-	// styles and MathML).
-
 	// Per-instance transform cache, avoids re-transforming stable blocks during streaming
 	// Garbage collected when component is destroyed (on conversation change)
 	const CACHE_KEY_PLAIN = 'plain';

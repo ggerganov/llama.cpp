@@ -64,8 +64,8 @@
 		}
 	});
 
-	// cancel is confirmed once, so a single dialog serves every download row
-	// The target is kept while the dialog closes so its copy stays rendered.
+	// cancel is confirmed once, so a single dialog serves every download row; the
+	// target is kept while the dialog closes so its copy stays rendered
 	let pendingCancel = $state('');
 	let cancelOpen = $state(false);
 
@@ -76,10 +76,9 @@
 
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// Detail pane state, reloaded when the selection changes.
-	// Load the sidebar list on mount (the component is mounted when the dialog opens).
-	// untrack: fetch() toggles its loading flag synchronously, and tracking it would
-	// re-run the effect on every toggle - an endless retry while a repo stays failed.
+	// load the list on mount; untrack because fetch() toggles its loading flag
+	// synchronously, and tracking it would re-run the effect on every toggle - an
+	// endless retry while a repo stays failed
 	$effect(() => {
 		untrack(() => {
 			void modelsDiscoverStore.fetch();
@@ -87,7 +86,6 @@
 		});
 	});
 
-	// Auto-select the first model.
 	$effect(() => {
 		const first = modelsDiscoverStore.firstModel;
 

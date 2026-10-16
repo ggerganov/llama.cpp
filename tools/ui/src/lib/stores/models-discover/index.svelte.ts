@@ -1,10 +1,9 @@
 /**
  * modelsDiscoverStore - Models Discover browse state
  *
- * Owns the HuggingFace GGUF model list shown in the discover sidebar
- * (the Discover tab of DialogManageModels). By default the list is the curated catalog set;
- * search replaces it with matches across all of HuggingFace. Both paths fetch
- * the same fields, so a row renders the same badges and sizes either way.
+ * Owns the HuggingFace GGUF list shown in the discover sidebar. The default list is
+ * the curated catalog set; a search replaces it with matches across all of HuggingFace.
+ * Both paths fetch the same fields, so a row renders the same either way.
  */
 
 import { MODELS_DISCOVER_CATALOG_BATCH } from '$lib/constants';
@@ -51,10 +50,7 @@ class ModelsDiscoverStore {
 		return this.catalogSizeRanges.get(modelId);
 	}
 
-	/**
-	 * Catalog family description for a repo id, or undefined when the repo is
-	 * not part of the catalog (e.g. a search result outside the curated list).
-	 */
+	/** Catalog family description; undefined for a repo outside the curated catalog. */
 	descriptionFor(modelId: string): string | undefined {
 		return this.catalog.find((entry) =>
 			entry.sizes.some((size) => size.builds.some((build) => build.repo === modelId))
@@ -62,11 +58,9 @@ class ModelsDiscoverStore {
 	}
 
 	/**
-	 * Fetch the default list from the llama.app catalog, one repo per catalog
-	 * size in display order (newest family first). Every repo is fetched by ID
-	 * with its file tree, so the rows carry chat-template capabilities, context
-	 * length and a real size range - the same data a search result gets.
-	 * No-op when already loaded or in flight.
+	 * Fill the list from the llama.app catalog, one repo per catalog size. Every repo
+	 * is fetched with its file tree, so a catalog row carries the same data a search
+	 * result does. No-op when already loaded or in flight.
 	 */
 	async fetch(): Promise<void> {
 		if (this.loading || this.fetched) return;
@@ -159,9 +153,8 @@ class ModelsDiscoverStore {
 	}
 
 	/**
-	 * Size range for a repo not measured yet - a search result, or a catalog
-	 * repo whose tree came back empty. Fetches the file tree once per repo and
-	 * caches it, so remounting a row (scrolling, searching back) is free.
+	 * Size range for a repo not measured yet, fetched once and cached: a search result
+	 * never goes through fetch(), and a row can be remounted while scrolling.
 	 */
 	sizeRange(modelId: string): Promise<ModelsDiscoverSizeRange | undefined> {
 		const cached = this.catalogSizeRanges.get(modelId);
@@ -189,9 +182,8 @@ class ModelsDiscoverStore {
 	}
 
 	/**
-	 * Bytes of every quant the catalog lists under this repo, parsed from the
-	 * `size` strings when a build carries no `sizeBytes`. Never empty: an
-	 * unparsable entry contributes the build's own size.
+	 * Sizes the catalog lists under this repo. Never empty: an entry with no parsable
+	 * size contributes the build's own.
 	 */
 	private buildSizeBytes(build: HfCatalogBuild): number[] {
 		const sizes = this.catalog
@@ -204,10 +196,8 @@ class ModelsDiscoverStore {
 	}
 
 	/**
-	 * One build per catalog size, newest family first (by release date).
-	 * Prefers the official ggml-org repo, falling back to the first build so
-	 * families published only by other orgs (mistralai, unsloth) still show up.
-	 * Returns an empty array when the catalog is empty.
+	 * One build per catalog size, newest family first. Prefers the official ggml-org
+	 * repo, else the first build, so repos of other orgs are covered too.
 	 */
 	private catalogBuilds(): HfCatalogBuild[] {
 		return [...this.catalog]
@@ -236,10 +226,8 @@ class ModelsDiscoverStore {
 	}
 
 	/**
-	 * Size range of one catalog build: every quant in the repo's file tree, plus
-	 * the draft sidecars those files carry (mtp, dflash, ...) so the downloaded
-	 * model fits within the range. Falls back to the catalog `size` / `sizeBytes`
-	 * strings when the tree yielded nothing (partial fetch, sharded-only repo).
+	 * Size range of one catalog build, draft sidecars included so the range covers what
+	 * gets downloaded. Falls back to the catalog's own sizes when the tree yielded nothing.
 	 */
 	private sizeRangeFor(build: HfCatalogBuild, tree: HfModelSibling[]): ModelsDiscoverSizeRange {
 		const quantSizes = this.quantSizesOf(tree);
@@ -266,10 +254,7 @@ class ModelsDiscoverStore {
 		};
 	}
 
-	/**
-	 * Size range across the main-model quants of a file tree, draft sidecars
-	 * excluded (they only widen the range when a row advertises them).
-	 */
+	/** Size range across the main-model quants of a tree, draft sidecars excluded. */
 	private sizeRangeOfMainQuants(tree: HfModelSibling[]): ModelsDiscoverSizeRange | undefined {
 		const sizes = this.quantSizesOf(tree);
 

@@ -68,7 +68,6 @@ function buildPipeline({
 		proc = proc.use(remarkLiteralHtml);
 	}
 
-	// Convert Markdown AST to rehype. Keep raw HTML as-is when allowHtml is set.
 	proc = proc.use(remarkRehype, allowHtml ? { allowDangerousHtml: true } : undefined);
 
 	if (!disableMath) {

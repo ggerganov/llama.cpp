@@ -47,9 +47,8 @@ export enum ModelSelectableFileKind {
 }
 
 /**
- * Why an in-flight download is being stopped, so the terminal `download_failed`
- * feed event can be attributed: a user pause (resumable) or a user cancel
- * (discard). Distinguishes these from a genuine download failure.
+ * Why an in-flight download is being stopped, so the terminal `download_failed` feed
+ * event can be attributed: a user pause (resumable) or a user cancel (discard).
  */
 export enum ModelDownloadStopRequest {
 	CANCEL = 'cancel',

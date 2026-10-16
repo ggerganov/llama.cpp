@@ -94,7 +94,6 @@
 	// Reasoning support from the chat template, matching the details view.
 	let supportsThinking = $derived(detectThinkingSupport(model.gguf?.chat_template ?? ''));
 
-	// Tool use support from the chat template.
 	let supportsToolUse = $derived(detectToolUseSupport(model.gguf?.chat_template ?? ''));
 
 	// Modalities derived from HF metadata: vision from an mmproj sidecar or a

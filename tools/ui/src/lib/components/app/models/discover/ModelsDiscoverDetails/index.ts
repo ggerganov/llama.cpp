@@ -7,75 +7,31 @@
  *
  */
 
-/**
- * **ModelsDiscoverDetails** - Model detail view
- *
- * Detail pane for the selected model. Loads its own data (details + GGUF file
- * list) from HuggingFaceService based on the `modelId` route param.
- */
+/** Detail pane of the selected model; fetches its own details and GGUF file list. */
 export { default as ModelsDiscoverDetails } from './ModelsDiscoverDetails.svelte';
 
-/**
- * **ModelsDiscoverDetailsContainer** - Self-fetching detail view
- *
- * Loads the details, files and readme for one repo and renders
- * ModelsDiscoverDetails, so hosts outside the Discover view can show the
- * details without owning the fetching.
- */
+/** Fetches one repo's details, files and readme for hosts outside Discover. */
 export { default as ModelsDiscoverDetailsContainer } from './ModelsDiscoverDetailsContainer.svelte';
 
-/**
- * **ModelsDiscoverDetailsHeader** - Detail view header
- *
- * Shows the model avatar (base org + quant org corner badge), name, base model
- * info, stats, metadata chips and capability badges.
- */
+/** Header of the detail pane. */
 export { default as ModelsDiscoverDetailsHeader } from './ModelsDiscoverDetailsHeader.svelte';
 
-/**
- * **ModelsDiscoverDetailsHfHubStats** - HuggingFace Hub stats row
- *
- * Downloads, likes and last-updated for the viewed model, formatted the way
- * the Hub shows them.
- */
+/** Downloads, likes and last updated, formatted the way the Hub shows them. */
 export { default as ModelsDiscoverDetailsHfHubStats } from './ModelsDiscoverDetailsHfHubStats.svelte';
 
-/**
- * **ModelsDiscoverDetailsSkeleton** - Detail view loading skeleton
- *
- * Static placeholder matching the detail layout: header with avatar and name,
- * metadata chips, the download options box and readme text lines.
- */
+/** Static placeholder matching the detail layout. */
 export { default as ModelsDiscoverDetailsSkeleton } from './ModelsDiscoverDetailsSkeleton.svelte';
 
-/**
- * **ModelsDiscoverDetailsReadme** - Detail view README
- *
- * Renders the model card README as markdown.
- */
+/** Model card README as markdown. */
 export { default as ModelsDiscoverDetailsReadme } from './ModelsDiscoverDetailsReadme.svelte';
 
-/**
- * **ModelsDiscoverDetailsMetadata** - Detail view metadata row
- *
- * The detail view's metadata chips (model size, context, architecture, license,
- * chat template).
- */
+/** Metadata chips: size, context, architecture, license, chat template. */
 export { default as ModelsDiscoverDetailsMetadata } from './ModelsDiscoverDetailsMetadata.svelte';
 
-/**
- * **ModelsDiscoverDetailsMetadataItem** - Single metadata chip
- *
- * One label | value chip of the detail view's metadata row (model size,
- * context, architecture, license).
- */
+/** One label | value chip of the metadata row. */
 export { default as ModelsDiscoverDetailsMetadataItem } from './ModelsDiscoverDetailsMetadataItem.svelte';
 
-/**
- * **ModelsDiscoverChatTemplateDialog** - Chat template viewer
- *
- * Shows the model's chat template in a scrollable dialog with a copy button.
- */
+/** Chat template in a scrollable dialog with a copy button. */
 export { default as ModelsDiscoverChatTemplateDialog } from './ModelsDiscoverChatTemplateDialog.svelte';
 
 export * from './ModelsDiscoverDetailsDownloadOptions';

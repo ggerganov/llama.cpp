@@ -9,7 +9,6 @@ import type { HfModelSibling } from '$lib/types/huggingface';
 export interface ModelQuantOption {
 	/** Quant token, or the file name when the file carries no quant (e.g. BF16). */
 	label: string;
-	/** Repo-relative file path the option stands for. */
 	path: string;
 }
 
@@ -41,9 +40,7 @@ export interface ModelCompanionDraft {
 	onDisk: boolean;
 	/** Quant of the draft file itself; null when its name carries none. */
 	quant: string | null;
-	/** Repo-relative path of the draft file, e.g. `dflash-model-Q8_0.gguf`. */
 	path: string;
-	/** Size of the draft file in bytes, for the total and the memory hint. */
 	size: number;
 }
 

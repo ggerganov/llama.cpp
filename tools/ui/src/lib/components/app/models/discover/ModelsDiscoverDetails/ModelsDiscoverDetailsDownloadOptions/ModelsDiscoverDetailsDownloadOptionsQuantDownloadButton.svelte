@@ -19,7 +19,6 @@
 
 	let { file, onRequestCancel, onRequestDelete }: Props = $props();
 
-	/** The download is one unit per quant: the chip's state covers its drafts too. */
 	let entry = $derived(file.state);
 
 	// one source, so the idle, in-flight and downloaded chip states stay identical
@@ -72,7 +71,6 @@
 						: `Download ${downloadLabel}`
 	);
 
-	/** Bytes the chip downloads: the quant file and, when it rides along, its draft. */
 	let downloadBytes = $derived(
 		(file.size ?? 0) + (showsCompanion && companion ? companion.size : 0)
 	);

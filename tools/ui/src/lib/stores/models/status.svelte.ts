@@ -208,10 +208,9 @@ export class ModelStatusManager {
 	private stopRequests = new SvelteMap<string, ModelDownloadStopRequest>();
 
 	/**
-	 * Cancel an in-flight download, or remove a downloaded/failed model from the
-	 * cache (ROUTER mode only). The option of a sidecar of a cached model removes
-	 * only that sidecar; any other option removes the whole model with the
-	 * partial files of its download.
+	 * Cancel an in-flight download, or remove a downloaded/failed model from the cache
+	 * (ROUTER mode only). A sidecar option removes that sidecar alone; anything else
+	 * removes the model along with the partial files of its download.
 	 */
 	async cancelDownload(repoWithTag: string): Promise<boolean> {
 		if (!serverStore.isRouterMode) {
@@ -287,11 +286,10 @@ export class ModelStatusManager {
 	}
 
 	/**
-	 * POST /models starts the download in the background; the feed reports
-	 * progress, and models_reload refreshes the list once it finishes. The
-	 * option of a sidecar posts its model with that sidecar, along with the mmproj
-	 * and the sidecars the model already pulls, so the server keeps the files on
-	 * disk and adds the missing ones; re-posting a paused model resumes it.
+	 * POST /models starts the download in the background; the feed reports progress and
+	 * models_reload refreshes the list once it finishes. A sidecar option posts its model
+	 * with that sidecar on top of the ones it already pulls, so the server keeps what is
+	 * on disk and adds the rest; re-posting a paused model resumes it.
 	 */
 	async downloadModel(repoWithTag: string, extraSidecars: ModelSidecar[] = []): Promise<void> {
 		if (!serverStore.isRouterMode) {

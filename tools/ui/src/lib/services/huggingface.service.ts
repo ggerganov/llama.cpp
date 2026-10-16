@@ -486,7 +486,6 @@ export class HuggingFaceService {
 
 		const entries = (await response.json()) as HfCatalogEntry[];
 
-		// decision models cannot run as chat models; keep them out of the catalog
 		return entries.filter((entry) => !entry.decision);
 	}
 
@@ -562,12 +561,6 @@ export class HuggingFaceService {
 	static async getPopular(limit: number = HF_DEFAULT_LIMIT): Promise<HfModelInfo[]> {
 		return this.search({ limit, sort: HfModelSort.DOWNLOADS });
 	}
-
-	/**
-	 * Get repository file tree to list available GGUF variants. Recursive so
-	 * repos that keep quants in per-quant subdirectories (e.g. `UD-Q4_K_XL/`)
-	 * are included; follows cursor pagination for repos over one page.
-	 */
 
 	/**
 	 * Fetch the raw README.md for a repo, with the YAML frontmatter stripped.
@@ -767,7 +760,6 @@ export class HuggingFaceService {
 		});
 		const models = await this.fetchWithRetry(url);
 
-		// decision models cannot run as chat models; keep them out of every list
 		return models.filter((model) => !HuggingFaceService.isDecisionModel(model));
 	}
 

@@ -100,7 +100,6 @@
 	/** One kind leaves the pick nothing to choose: it reads as the value it holds. */
 	let draftKindReadonly = $derived(draftKinds.length < 2);
 
-	/** The pick names the kind the way the badges do: upper case. */
 	let draftKindLabel = $derived(draftKind?.toUpperCase() ?? '');
 
 	/** Bits of a file's quant, 0 when its name carries none, as the server reads it. */
@@ -127,8 +126,6 @@
 			(candidate) =>
 				candidate.kind === ModelSelectableFileKind.DRAFT &&
 				draftBadgeOf(candidate) === draftKind &&
-				// the two rules the server's own lookup applies: the token it scans
-				// for, and the same directory as the weights
 				isServerSidecarFile(candidate.path, draftKind) &&
 				directoryOf(candidate.path) === directory
 		);
@@ -163,7 +160,6 @@
 		};
 	}
 
-	/** Rows for the row component: one chip per main quant, its draft joined to it. */
 	let rows = $derived.by(() =>
 		bitDepthRows.map((row) => ({
 			bitDepth: row.bitDepth,
