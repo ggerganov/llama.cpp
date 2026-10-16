@@ -4,9 +4,6 @@ size_t ggml_vk_scratch_offset(const vk_device & device, size_t nbytes) {
     return ggml_vk_align_size(nbytes, device->properties.limits.minStorageBufferOffsetAlignment);
 }
 
-// Decide whether FA dequants K/V once into an f16 (or raw reordered) scratch.
-// Only reads device + Q/K/V shapes, types and strides, so it is identical in
-// get_alloc_size and in the op.
 vk_fa_dequant_kv ggml_vk_fa_dequant_kv(const vk_device & device, const ggml_tensor * q, const ggml_tensor * k, const ggml_tensor * v) {
     auto is_dense_kv_cache = [](const ggml_tensor * t) {
         return t->nb[0] == ggml_type_size(t->type) &&
@@ -62,14 +59,12 @@ size_t ggml_vk_op_scratch_size(const vk_device & device, const ggml_tensor * dst
             break;
     }
     if (scratch != 0 &&
-        ggml_vk_scratch_offset(device, ggml_nbytes(dst)) + scratch > device->suballocation_block_size) {
+        ggml_vk_scratch_offset(device, ggml_nbytes(dst)) + scratch > device->max_memory_allocation_size) {
         return 0;
     }
     return scratch;
 }
 
-// Total allocation span of a node output, including its dst scratch padding.
-// Equals ggml_nbytes(dst) when the op has no scratch or dst is a view.
 size_t ggml_vk_tensor_alloc_size(const vk_device & device, const ggml_tensor * dst) {
     const size_t nbytes = ggml_nbytes(dst);
     if (dst->view_src != nullptr) {

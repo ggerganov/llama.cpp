@@ -8130,8 +8130,7 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
 
     const bool f32acc = !ctx->device->fp16 || dst->op_params[3] == GGML_PREC_F32 || k->type == GGML_TYPE_BF16;
 
-    // dequant K/V once into an f16 scratch, reordered KV layout so FA can read without a stride.
-    // Scratch lives in the dst allocation padding, so it must fit (ggml_vk_scratch_available).
+    // dequant K/V once into an f16 scratch, reordered KV layout so FA can read without a stride
     const vk_fa_dequant_kv dkv = ggml_vk_fa_dequant_kv(ctx->device, q, k, v);
     const bool   kv_raw_strided = dkv.raw_strided;
     const size_t kv_scratch_ts  = dkv.scratch_ts;
@@ -12291,7 +12290,6 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
         // Destination nodes are checked against both the written/read lists. Source nodes are only
         // checked against the written list. Two nodes overlap in memory if they come from the same
         // buffer and the tensor or view ranges overlap.
-        // Only a write's range includes its scratch padding; a read never touches a producer's scratch.
         auto const &overlaps_unsynced = [&](const ggml_tensor *node, bool node_is_write, const std::vector<const ggml_tensor *> &unsynced_nodes, bool other_is_write) -> bool {
             if (unsynced_nodes.size() == 0) {
                 return false;
