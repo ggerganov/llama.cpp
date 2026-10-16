@@ -975,9 +975,13 @@ enum common_decision_type {
 
 common_decision_type common_get_decision_type(const struct llama_model * model);
 
+// true if the decision model also does text generation, see "<arch>.decision.chat"
+bool common_get_decision_chat(const struct llama_model * model);
+
 // metadata of a GGUF file, read without loading the model
 struct common_gguf_info {
     common_decision_type decision_type = COMMON_DECISION_TYPE_UNKNOWN; // UNKNOWN if the file is missing, unreadable, or invalid
+    bool                 decision_chat = false;                        // see common_get_decision_chat()
     uint32_t             n_ctx_train   = 0;                            // 0 if unknown
 };
 

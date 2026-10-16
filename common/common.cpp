@@ -1198,6 +1198,15 @@ common_decision_type common_get_decision_type(const struct llama_model * model) 
     return common_decision_type_from_string(buf);
 }
 
+bool common_get_decision_chat(const struct llama_model * model) {
+    char buf[64];
+    if (llama_model_meta_val_str(model, "general.architecture", buf, sizeof(buf)) < 0) {
+        return false;
+    }
+    const std::string key = std::string(buf) + ".decision.chat";
+    return llama_model_meta_val_str(model, key.c_str(), buf, sizeof(buf)) >= 0 && std::string(buf) == "true";
+}
+
 common_gguf_info common_get_gguf_info(const std::string & fname) {
     common_gguf_info info;
 
@@ -1225,6 +1234,11 @@ common_gguf_info common_get_gguf_info(const std::string & fname) {
         info.decision_type = COMMON_DECISION_TYPE_NONE;
     } else if (gguf_get_kv_type(gguf_ctx.get(), type_id) == GGUF_TYPE_STRING) {
         info.decision_type = common_decision_type_from_string(gguf_get_val_str(gguf_ctx.get(), type_id));
+    }
+
+    const int64_t chat_id = gguf_find_key(gguf_ctx.get(), (arch + ".decision.chat").c_str());
+    if (chat_id >= 0 && gguf_get_kv_type(gguf_ctx.get(), chat_id) == GGUF_TYPE_BOOL) {
+        info.decision_chat = gguf_get_val_bool(gguf_ctx.get(), chat_id);
     }
 
     // same key and type as the model loader
