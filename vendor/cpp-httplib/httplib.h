@@ -8,8 +8,8 @@
 #ifndef CPPHTTPLIB_HTTPLIB_H
 #define CPPHTTPLIB_HTTPLIB_H
 
-#define CPPHTTPLIB_VERSION "0.57.1"
-#define CPPHTTPLIB_VERSION_NUM "0x003901"
+#define CPPHTTPLIB_VERSION "0.61.0"
+#define CPPHTTPLIB_VERSION_NUM "0x003d00"
 
 #ifdef _WIN32
 #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
@@ -831,12 +831,19 @@ inline from_chars_result<double> from_chars(const char *first, const char *last,
   return {p, std::errc{}};
 }
 
-inline bool parse_port(const char *s, size_t len, int &port) {
+inline bool parse_int_in_range(const char *s, size_t len, int lo, int hi,
+                               int &out) {
   int val = 0;
   auto r = from_chars(s, s + len, val);
-  if (r.ec != std::errc{} || val < 1 || val > 65535) { return false; }
-  port = val;
+  if (r.ec != std::errc{} || r.ptr != s + len || val < lo || val > hi) {
+    return false;
+  }
+  out = val;
   return true;
+}
+
+inline bool parse_port(const char *s, size_t len, int &port) {
+  return parse_int_in_range(s, len, 1, 65535, port);
 }
 
 inline bool parse_port(const std::string &s, int &port) {
@@ -937,6 +944,48 @@ inline bool parse_url(const std::string &url, UrlComponents &uc) {
   }
 
   return true;
+}
+
+// Resolves a relative-path or query-only Location value against the path of
+// the request being redirected (RFC 3986 section 5.2). Absolute URIs and
+// references starting with '/' are returned unchanged.
+inline std::string resolve_relative_location(const std::string &location,
+                                             const std::string &base) {
+  if (location.empty() || location[0] == '/') { return location; }
+
+  // A ':' in the first segment means the value has a scheme.
+  if (location.find(':') < location.find_first_of("/?#")) { return location; }
+
+  if (location[0] == '#') { return base.substr(0, base.find('#')) + location; }
+
+  auto base_path = base.substr(0, base.find_first_of("?#"));
+  if (location[0] == '?') { return base_path + location; }
+
+  if (base_path.empty() || base_path[0] != '/') { base_path = "/"; }
+  auto merged = base_path.substr(0, base_path.rfind('/') + 1) + location;
+
+  // Remove "." and ".." segments from the merged path.
+  auto path_end = (std::min)(merged.find_first_of("?#"), merged.size());
+  std::string path;
+  size_t i = 0;
+  while (i < path_end) {
+    auto next = (std::min)(merged.find('/', i + 1), path_end);
+    auto segment = merged.substr(i + 1, next - i - 1);
+    auto is_last = next == path_end;
+    if (segment == "." || segment == "..") {
+      if (segment == "..") {
+        path.erase((std::min)(path.rfind('/'), path.size()));
+      }
+      if (is_last) { path += '/'; }
+    } else {
+      path += '/';
+      path += segment;
+    }
+    i = next;
+  }
+  if (path.empty()) { path = "/"; }
+
+  return path + merged.substr(path_end);
 }
 
 } // namespace detail
@@ -1092,8 +1141,7 @@ private:
     pointer operator->() const { return data_ + idx_; }
 
     iterator_t &operator++() {
-      // Saturating, so that advancing past the last entry of a key (which
-      // get_multimap_value() does when asked for an out-of-range id) stays at
+      // Saturating, so that advancing past the last entry of a key stays at
       // end() instead of running off the container.
       if (idx_ >= size_) { return *this; }
       ++idx_;
@@ -1842,6 +1890,7 @@ struct Response {
   ContentProvider content_provider_;
   ContentProviderResourceReleaser content_provider_resource_releaser_;
   bool is_chunked_content_provider_ = false;
+  bool is_file_content_provider_ = false;
   bool content_provider_success_ = false;
   std::string file_content_path_;
   std::string file_content_content_type_;
@@ -2986,7 +3035,7 @@ private:
   bool read_response_line(Stream &strm, const Request &req, Response &res,
                           bool skip_100_continue = true) const;
   bool write_request(Stream &strm, Request &req, bool close_connection,
-                     Error &error, bool skip_body = false);
+                     Error &error, bool skip_body, bool &rejected_locally);
   bool write_request_body(Stream &strm, Request &req, Error &error);
   void prepare_default_headers(Request &r, bool for_stream,
                                const std::string &ct);
@@ -3399,6 +3448,9 @@ private:
 
 #ifdef CPPHTTPLIB_WINDOWS_AUTOMATIC_ROOT_CERTIFICATES_UPDATE
   bool enable_windows_cert_verification_ = true;
+  // Like ca_cert_store_set_, tracks what ctx_ cannot report back: whether
+  // set_server_certificate_verifier() installed a verifier.
+  bool server_certificate_verifier_set_ = false;
 #endif
 
   friend class ClientImpl;
@@ -3424,13 +3476,20 @@ inline bool is_numeric(const std::string &str) {
   return !str.empty() && std::all_of(str.cbegin(), str.cend(), is_ascii_digit);
 }
 
+// std::ranges::next(first, n, last) for C++11
+template <typename It> inline It bounded_next(It first, size_t n, It last) {
+  for (; n > 0 && first != last; --n) {
+    ++first;
+  }
+  return first;
+}
+
 inline size_t get_header_value_u64(const Headers &headers,
                                    const std::string &key, size_t def,
                                    size_t id, bool &is_invalid_value) {
   is_invalid_value = false;
   auto rng = headers.equal_range(key);
-  auto it = rng.first;
-  std::advance(it, static_cast<ssize_t>(id));
+  auto it = bounded_next(rng.first, id, rng.second);
   if (it != rng.second) {
     if (is_numeric(it->second)) {
       // Parse at size_t width so an out-of-range Content-Length is reported
@@ -3914,6 +3973,8 @@ bool is_field_vchar(char c);
 bool is_field_content(const std::string &s);
 bool is_field_value(const std::string &s);
 bool is_field_valid(const std::string &name, const std::string &value);
+bool is_request_target(const std::string &s);
+bool is_host(const std::string &s);
 
 } // namespace fields
 } // namespace detail
@@ -4322,7 +4383,8 @@ public:
   void stop();
 
 private:
-  bool parse_sse_line(const std::string &line, SSEMessage &msg, int &retry_ms);
+  bool parse_sse_line(const std::string &line, SSEMessage &msg, int &retry_ms,
+                      bool &has_data, bool &has_id);
   void run_event_loop();
   void dispatch_event(const SSEMessage &msg);
   bool should_reconnect(int count) const;
@@ -4356,6 +4418,8 @@ private:
 } // namespace sse
 
 namespace ws {
+
+class WebSocketClient;
 
 enum class Opcode : uint8_t {
   Continuation = 0x0,
@@ -4458,7 +4522,7 @@ public:
 
 private:
   friend class httplib::Server;
-  friend class WebSocketClient;
+  friend class httplib::ws::WebSocketClient;
 
   WebSocket(
       Stream &strm, const Request &req, bool is_server,

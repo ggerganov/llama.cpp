@@ -20,6 +20,8 @@ bool llama_model_saver_supports_arch(llm_arch arch) {
         case LLM_ARCH_T5:
         case LLM_ARCH_APERTUS:
         case LLM_ARCH_STEP35:
+        case LLM_ARCH_CLEF: // the head tensors are not saved
+        case LLM_ARCH_VLLM_DECISION2:
             return false;
         default:
             return true;
@@ -193,6 +195,19 @@ void llama_model_saver::add_kv_from_model() {
     // add_kv(LLM_KV_GENERAL_SAMPLING_MIROSTAT_TAU,     ???);
     // add_kv(LLM_KV_GENERAL_SAMPLING_MIROSTAT_ETA,     ???);
     add_kv(LLM_KV_GENERAL_NAME,                      model->name);
+
+    if (!model->prec_policy.prec_src1.empty()) {
+        std::vector<std::string> tensor_names;
+        std::vector<int8_t> values;
+        tensor_names.reserve(model->prec_policy.prec_src1.size());
+        values.reserve(model->prec_policy.prec_src1.size());
+        for (const auto & [w, prec] : model->prec_policy.prec_src1) {
+            tensor_names.push_back(ggml_get_name(w));
+            values.push_back(prec == GGML_PREC_Q8 ? 0 : 1);
+        }
+        add_kv(LLM_KV_GENERAL_TENSOR_EXTRA_NAME, tensor_names);
+        gguf_set_arr_data(gguf_ctx, llm_kv(LLM_KV_GENERAL_TENSOR_EXTRA_PREC_A4).c_str(), GGUF_TYPE_BOOL, values.data(), values.size());
+    }
     // add_kv(LLM_KV_GENERAL_AUTHOR,                    ???);
     // add_kv(LLM_KV_GENERAL_VERSION,                   ???);
     // add_kv(LLM_KV_GENERAL_URL,                       ???);
@@ -210,8 +225,9 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_BLOCK_COUNT,                       hparams.n_layer_all);
     add_kv(LLM_KV_LEADING_DENSE_BLOCK_COUNT,         hparams.n_layer_dense_lead);
     add_kv(LLM_KV_FEED_FORWARD_LENGTH,               hparams.n_ff_arr, true);
-    add_kv(LLM_KV_EXPERT_FEED_FORWARD_LENGTH,        hparams.n_ff_exp());
+    add_kv(LLM_KV_EXPERT_FEED_FORWARD_LENGTH,        hparams.n_ff_exp_arr, true);
     add_kv(LLM_KV_EXPERT_LATENT_LENGTH,              hparams.n_expert_latent);
+    add_kv(LLM_KV_MOE_LATENT_SIZE,                   hparams.moe_latent_size);
     add_kv(LLM_KV_EXPERT_SHARED_FEED_FORWARD_LENGTH, hparams.n_ff_shexp);
     add_kv(LLM_KV_EXPERT_CHUNK_FEED_FORWARD_LENGTH,  hparams.n_ff_chexp);
     add_kv(LLM_KV_SWIGLU_CLAMP_EXP, std::vector<float>(
@@ -263,8 +279,11 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_ATTENTION_VALUE_LENGTH,            hparams.n_embd_head_v_full);
     add_kv(LLM_KV_ATTENTION_LAYERNORM_EPS,           hparams.f_norm_eps);
     add_kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,       hparams.f_norm_rms_eps);
+    add_kv(LLM_KV_POST_NORM_EPS,                     hparams.f_post_norm_eps);
     add_kv(LLM_KV_ATTENTION_GROUPNORM_EPS,           hparams.f_norm_group_eps);
     add_kv(LLM_KV_ATTENTION_GROUPNORM_GROUPS,        hparams.n_norm_groups);
+    add_kv(LLM_KV_ATTENTION_VALUE_EXPERT_COUNT,      hparams.n_value_expert);
+    add_kv(LLM_KV_ATTENTION_VALUE_EXPERT_USED_COUNT, hparams.n_value_expert_used);
     add_kv(LLM_KV_ATTENTION_CAUSAL,                  hparams.causal_attn);
     add_kv(LLM_KV_ATTENTION_Q_LORA_RANK,             hparams.n_lora_q);
     add_kv(LLM_KV_ATTENTION_KV_LORA_RANK,            hparams.n_lora_kv);
@@ -296,6 +315,8 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_ATTENTION_INDEXER_KEY_LENGTH,      hparams.indexer_head_size);
     add_kv(LLM_KV_ATTENTION_INDEXER_TOP_K,           hparams.indexer_top_k);
     add_kv(LLM_KV_ATTENTION_INDEXER_BLOCK_SIZE,      hparams.indexer_block_size);
+    add_kv(LLM_KV_ATTENTION_INDEXER_KPOOL,           hparams.indexer_kpool);
+    add_kv(LLM_KV_ATTENTION_INDEXER_KPOOL_SELECT_TAIL, hparams.indexer_kpool_select_tail);
     add_kv(LLM_KV_ATTENTION_INDEXER_LOCAL_BLOCKS,    hparams.indexer_local_blocks);
     add_kv(LLM_KV_ATTENTION_INDEXER_TYPES,           hparams.is_indexer_full_impl, true);
     add_kv(LLM_KV_ATTENTION_RECURRENT_LAYERS,        hparams.is_recr_impl, true);
@@ -347,6 +368,7 @@ void llama_model_saver::add_kv_from_model() {
     add_kv(LLM_KV_ROPE_DIMENSION_COUNT,              hparams.n_rot_full);
     add_kv(LLM_KV_ROPE_DIMENSION_COUNT_SWA,          hparams.n_rot_swa);
     add_kv(LLM_KV_ROPE_DIMENSION_SECTIONS,           hparams.rope_sections);
+    add_kv(LLM_KV_ROPE_SECTION_ORDER,                llama_rope_section_order_name(hparams.rope_section_order));
     add_kv(LLM_KV_ROPE_FREQ_BASE,                    hparams.rope_freq_base_train);
     add_kv(LLM_KV_ROPE_FREQ_BASE_SWA,                hparams.rope_freq_base_train_swa);
     // add_kv(LLM_KV_ROPE_SCALE_LINEAR,                 rope_scaling_factor); // old name

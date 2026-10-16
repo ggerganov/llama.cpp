@@ -360,6 +360,38 @@ static void test_loops(testing & t) {
         "1x1y2x2y"
     );
 
+    test_template(t, "loop assignments do not persist between iterations",
+        "{% for i in [1, 2] %}{% if i == 1 %}{% set x = 7 %}{% endif %}{{ x is defined }};{% endfor %}",
+        json::object(),
+        "True;False;"
+    );
+
+    test_template(t, "loop assignments shadow outer variables",
+        "{% set x = 9 %}{% for i in [1, 2] %}{% if i == 1 %}{% set x = 7 %}{% endif %}{{ x }};{% endfor %}{{ x }}",
+        json::object(),
+        "7;9;9"
+    );
+
+    test_template(t, "nested loop assignments do not persist between iterations",
+        "{% for i in [1, 2] %}{% for j in [1, 2] %}{% if j == 1 %}{% set x = i %}{% endif %}{{ x is defined }};{% endfor %}{% endfor %}",
+        json::object(),
+        "True;False;True;False;"
+    );
+
+    test_template(t, "reasoning is local to each message",
+        "{% for m in messages %}{% if m.reasoning_content is string %}{% set reasoning_content = m.reasoning_content %}{% elif '</think>' in m.content %}{% set reasoning_content = m.content.split('</think>')[0].split('<think>')[-1] %}{% endif %}[{{ reasoning_content is defined }}:{{ reasoning_content if reasoning_content is defined else '' }}]{% endfor %}",
+        {{"messages", json::array({
+            {{"reasoning_content", "first"}, {"content", "answer"}},
+            {{"content", "answer"}},
+            {{"reasoning_content", nullptr}, {"content", "answer"}},
+            {{"reasoning_content", 1}, {"content", "answer"}},
+            {{"reasoning_content", ""}, {"content", "answer"}},
+            {{"content", "<think>embedded</think>answer"}},
+            {{"content", "answer"}}
+        })}},
+        "[True:first][False:][False:][False:][True:][True:embedded][False:]"
+    );
+
     test_template(t, "for with range",
         "{% for i in range(3) %}{{ i }}{% endfor %}",
         json::object(),
@@ -452,10 +484,65 @@ static void test_expressions(testing & t) {
         "c"
     );
 
+    test_template(t, "array bool access",
+        "{{ items[true] }}",
+        {{"items", json::array({"a", "b", "c"})}},
+        "b"
+    );
+
+    test_template(t, "array non-index access",
+        "{{ items[1.0] is undefined }}",
+        {{"items", json::array({"a", "b", "c"})}},
+        "True"
+    );
+
     test_template(t, "array slice",
         "{{ items[1:-1]|string }}",
         {{"items", json::array({"a", "b", "c"})}},
         "['b']"
+    );
+
+    test_template(t, "array slice negative variable",
+        "{{ items[:-n]|string }}",
+        {{"items", json::array({"a", "b", "c"})}, {"n", 1}},
+        "['a', 'b']"
+    );
+
+    test_template(t, "array slice negative variable indent",
+        "{{ indent[:-indent_factor] }}",
+        {{"indent", "    "}, {"indent_factor", 2}},
+        "  "
+    );
+
+    test_template(t, "unary minus variable",
+        "{{ -n }}",
+        {{"n", 3}},
+        "-3"
+    );
+
+    test_template(t, "unary plus variable",
+        "{{ +n }}",
+        {{"n", -3}},
+        "-3"
+    );
+
+    test_template(t, "unary plus float",
+        "{{ +x }}",
+        {{"x", -1.5}},
+        "-1.5"
+    );
+
+    // Unary binds tighter than filter: -n|abs == (-n)|abs, not -(n|abs)
+    test_template(t, "unary minus then abs filter",
+        "{{ -n|abs }}",
+        {{"n", -3}},
+        "3"
+    );
+
+    test_template(t, "unary minus then number test",
+        "{{ -n is number }}",
+        {{"n", 3}},
+        "True"
     );
 
     test_template(t, "array slice step",
@@ -688,6 +775,16 @@ static void test_filters(testing & t) {
             json::array({3, "z"}),
             json::array({1, "x"}),
             json::array({2, "y"}),
+        })}},
+        "xyz"
+    );
+
+    test_template(t, "sort with numeric-like attribute",
+        "{{ items|sort(attribute='01')|join(attribute=1) }}",
+        {{"items", json::array({
+            json::array({1, "z"}),
+            json::array({2, "x"}),
+            json::array({3, "y"}),
         })}},
         "xyz"
     );
@@ -961,6 +1058,38 @@ static void test_literals(testing & t) {
         "3.14"
     );
 
+    // Python writes the shortest digits that read back as the same value
+    test_template(t, "tojson floats",
+        "{{ data|tojson }}",
+        {{"data", json::array({0.1, 1.0, 100.0, 8.3, 123456789.0, 48.858844, 0.30000000000000004, -0.0, 5.960464477539063e-08})}},
+        "[0.1, 1.0, 100.0, 8.3, 123456789.0, 48.858844, 0.30000000000000004, -0.0, 5.960464477539063e-08]"
+    );
+
+    test_template(t, "tojson floats, exponent",
+        "{{ data|tojson }}",
+        {{"data", json::array({1e15, 1e16, 0.0001, 0.00001, 1.5e10, -2.5e-7, 5e-324, 1.7976931348623157e308})}},
+        "[1000000000000000.0, 1e+16, 0.0001, 1e-05, 15000000000.0, -2.5e-07, 5e-324, 1.7976931348623157e+308]"
+    );
+
+    test_template(t, "tojson floats, nested with indent=2",
+        "{{ data|tojson(indent=2) }}",
+        {{"data", {{"total", 20.0}, {"items", json::array({{{"price", 9.99}, {"qty", 2}}})}}}},
+        "{\n  \"total\": 20.0,\n  \"items\": [\n    {\n      \"price\": 9.99,\n      \"qty\": 2\n    }\n  ]\n}"
+    );
+
+    test_template(t, "float|string",
+        "{{ a|string }} {{ b|string }} {{ (b * 10)|string }}",
+        {{"a", 1.0}, {"b", 1e308}},
+        "1.0 1e+308 inf"
+    );
+
+    // json.dumps writes NaN and Infinity, str() writes nan and inf
+    test_template(t, "nan and inf",
+        "{{ [p|float, n|float, q|float]|tojson }} {{ {p|float: 1}|tojson }} {{ p|float|string }} {{ n|float|string }} {{ q|float|safe }}",
+        {{"p", "inf"}, {"n", "-inf"}, {"q", "nan"}},
+        "[Infinity, -Infinity, NaN] {\"Infinity\": 1} inf -inf nan"
+    );
+
     test_template(t, "string|tojson",
         "{{ 'hello' | tojson }}",
         json::object(),
@@ -1110,7 +1239,7 @@ static void test_tests(testing & t) {
     );
 
     test_template(t, "is not equalto",
-        "{{ 'yes' if 3 is not equalto(4) }}",
+        "{{ 'yes' if 3 is not equalto 4 }}",
         json::object(),
         "yes"
     );
@@ -1122,7 +1251,7 @@ static void test_tests(testing & t) {
     );
 
     test_template(t, "is gt",
-        "{{ 'yes' if 3 is gt(2) }}",
+        "{{ 'yes' if 3 is gt 2 }}",
         json::object(),
         "yes"
     );
@@ -1134,7 +1263,7 @@ static void test_tests(testing & t) {
     );
 
     test_template(t, "is lt",
-        "{{ 'yes' if 2 is lt(3) }}",
+        "{{ 'yes' if 2 is lt 3 }}",
         json::object(),
         "yes"
     );
@@ -1151,6 +1280,12 @@ static void test_tests(testing & t) {
         "yes"
     );
 
+    test_template(t, "is lt and gt",
+        "{{ 'yes' if x is lt 3 and x is gt 1 }}",
+        {{"x", 2}},
+        "yes"
+    );
+
     test_template(t, "is lower",
         "{{ 'yes' if 'lowercase' is lower }}",
         json::object(),
@@ -1163,10 +1298,34 @@ static void test_tests(testing & t) {
         "yes"
     );
 
-    test_template(t, "is sameas",
+    test_template(t, "is sameas boolean",
         "{{ 'yes' if x is sameas(false) }}",
         {{"x", false}},
         "yes"
+    );
+
+    test_template(t, "is sameas integer",
+        "{{ 'yes' if x is sameas(1) }}",
+        {{"x", 1}},
+        "yes"
+    );
+
+    test_template(t, "is sameas object",
+        "{{ 'yes' if x is sameas(x) }}",
+        {{"x", {{"y", false}}}},
+        "yes"
+    );
+
+    test_template(t, "is sameas ref object",
+        "{% set y = x.y %}{{ 'yes' if x.y is sameas(y) and x.y is not sameas(x.z) }}",
+        {{"x", {{"y", {{"z", 1}}}, {"z", {{"z", 1}}}}}},
+        "yes"
+    );
+
+    test_template(t, "is sameas undefined",
+        "{{ 'yes' if x is sameas(x) else 'no' }}",
+        json::object(),
+        "no"
     );
 
     test_template(t, "is boolean",
@@ -1202,6 +1361,12 @@ static void test_tests(testing & t) {
     test_template(t, "is integer",
         "{{ 'yes' if x is integer }}",
         {{"x", 1}},
+        "yes"
+    );
+
+    test_template(t, "is integer or float",
+        "{{ 'yes' if x.y is integer or x.y is float else 'no' }}",
+        {{"x", {{"y", 1.1}}}},
         "yes"
     );
 
@@ -1511,6 +1676,16 @@ static void test_array_methods(testing & t) {
         "b c "
     );
 
+    test_template(t, "array|selectattr numeric-like with operator",
+        "{% for item in items|selectattr('0', 'gt', 1) %}{{ item.1 }} {% endfor %}",
+        {{"items", json::array({
+            json::array({3, "z"}),
+            json::array({1, "x"}),
+            json::array({2, "y"}),
+        })}},
+        "z y "
+    );
+
     test_template(t, "array|tojson",
         "{{ arr|tojson }}",
         {{"arr", json::array({1, 2, 3})}},
@@ -1575,6 +1750,12 @@ static void test_array_methods(testing & t) {
         "123"
     );
 
+    test_template(t, "array|join numeric-like attribute",
+        "{{ arr|join(attribute='0') }}",
+        {{"arr", json::array({json::array({1}), json::array({2}), json::array({3})})}},
+        "123"
+    );
+
     test_template(t, "array.pop() last",
         "{{ arr.pop() }}-{{ arr|join(',') }}",
         {{"arr", json::array({"a", "b", "c"})}},
@@ -1633,6 +1814,16 @@ static void test_array_methods(testing & t) {
         "10 20 30 "
     );
 
+    test_template(t, "array|map with numeric-like attribute",
+        "{% for v in arr|map(attribute='1') %}{{ v }} {% endfor %}",
+        {{"arr", json::array({
+            json::array({10, "x"}),
+            json::array({20, "y"}),
+            json::array({30, "z"}),
+        })}},
+        "x y z "
+    );
+
     test_template(t, "array|map with negative attribute",
         "{% for v in arr|map(attribute=-1) %}{{ v }} {% endfor %}",
         {{"arr", json::array({
@@ -1662,21 +1853,21 @@ static void test_array_methods(testing & t) {
     );
 
     test_template(t, "array|min attribute",
-        "{{ items|min(attribute='x') }}",
+        "{{ items|min(attribute='x')|tojson }}",
         {{"items", json::array({
             json({{"x", 2}}),
             json({{"x", 1}}),
         })}},
-        "{'x': 1}"
+        "{\"x\": 1}"
     );
 
     test_template(t, "array|max attribute",
-        "{{ items|max(attribute='x') }}",
+        "{{ items|max(attribute='x')|tojson }}",
         {{"items", json::array({
             json({{"x", 2}}),
             json({{"x", 1}}),
         })}},
-        "{'x': 2}"
+        "{\"x\": 2}"
     );
 
     // not used by any chat templates
@@ -1896,6 +2087,30 @@ static void test_object_methods(testing & t) {
         "{{ arr|items|join }}",
         json::object(),
         ""
+    );
+
+    test_template(t, "dict from dict",
+        "{% set o = dict({'a': 3, 'b': 1, 'c': 2}) %}{{ o|tojson }}",
+        json::object(),
+        "{\"a\": 3, \"b\": 1, \"c\": 2}"
+    );
+
+    test_template(t, "dict from kwargs",
+        "{% set o = dict(a=3, b=1, c=2) %}{{ o|tojson }}",
+        json::object(),
+        "{\"a\": 3, \"b\": 1, \"c\": 2}"
+    );
+
+    test_template(t, "dict from tuples",
+        "{% set o = dict((obj | items | list)) %}{{ o|tojson }}",
+        {{"obj", {{"a", 3}, {"b", 1}, {"c", 2}}}},
+        "{\"a\": 3, \"b\": 1, \"c\": 2}"
+    );
+
+    test_template(t, "dict from tuples and kwargs",
+        "{% set o = dict((obj | items | list), c=2) %}{{ o|tojson }}",
+        {{"obj", {{"a", 3}, {"b", 1}}}},
+        "{\"a\": 3, \"b\": 1, \"c\": 2}"
     );
 }
 

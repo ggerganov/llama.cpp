@@ -361,7 +361,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
                 htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_FA_K_PREP, ir);
                 for (uint32_t r = 0; r < current_block_size; ++r) {
                     __fp16 * row_k = (__fp16 *)(k_base + r * factx->size_k_row_padded);
-                    hvx_dequantize_row_q8_0_f16(row_k, row_k, DK);
+                    hvx_dequantize_row_flat_q8_0_f16(row_k, row_k, DK);
                 }
                 htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_FA_K_PREP, ir);
             }
@@ -369,7 +369,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
                 htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_FA_V_PREP, ir);
                 for (uint32_t r = 0; r < current_block_size; ++r) {
                     __fp16 * row_v = (__fp16 *)(v_base + r * factx->size_v_row_padded);
-                    hvx_dequantize_row_q8_0_f16(row_v, row_v, DV);
+                    hvx_dequantize_row_flat_q8_0_f16(row_v, row_v, DV);
                 }
                 htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_FA_V_PREP, ir);
             }
@@ -625,7 +625,7 @@ static void fa_k_interleave_thread(unsigned int n, unsigned int i, void * data) 
     if (factx->k->type == HTP_TYPE_Q8_0) {
         for (uint32_t r = start; r < end; ++r) {
             __fp16 * row_k = (__fp16 *)((char *)args->curr_k + r * args->src_stride * sizeof(__fp16));
-            hvx_dequantize_row_q8_0_f16(row_k, row_k, factx->DK);
+            hvx_dequantize_row_flat_q8_0_f16(row_k, row_k, factx->DK);
         }
     }
     hmx_interleave_rows_to_tiles(factx->vtcm_k_tiles[args->buf_idx], (const __fp16 *) args->curr_k, total_rows, factx->DK_pad,
@@ -679,7 +679,7 @@ static void fa_v_interleave_thread(unsigned int n, unsigned int i, void * data) 
     if (factx->v->type == HTP_TYPE_Q8_0) {
         for (uint32_t r = start; r < end; ++r) {
             __fp16 * row_v = (__fp16 *)((char *)args->v_src + r * args->src_stride * sizeof(__fp16));
-            hvx_dequantize_row_q8_0_f16(row_v, row_v, factx->DV);
+            hvx_dequantize_row_flat_q8_0_f16(row_v, row_v, factx->DV);
         }
     }
     hmx_interleave_cols_to_tiles(v_tiles_dst, (const __fp16 *) args->v_src, total_rows, factx->DV_pad,
@@ -755,40 +755,11 @@ static void fa_q_load_thread(unsigned int n, unsigned int i, void * data) {
         const size_t m_start       = i * m_bytes_per_t;
         const size_t m_end         = hex_smin(m_start + m_bytes_per_t, col_vec_bytes);
 
-        if (factx->sinks) {
-            const float * sinks_data = factx->vtcm_sinks;
-            float *       m_vec      = (float *) factx->vtcm_m_vec;
-            const size_t  r_start    = l_start / sizeof(float);
-            const size_t  r_end      = l_end / sizeof(float);
-            const float   scale_factor = EXP_LOG2E_F;
-
-            const HVX_Vector v_scale = hvx_vec_splat_f32(scale_factor);
-
-            for (size_t r = r_start; r < r_end; r += 32) {
-                HVX_VectorAlias local_m;
-                for (size_t j = 0; j < 32; ++j) {
-                    size_t curr_r = r + j;
-                    if (curr_r < n_rows_g) {
-                        const size_t h_idx = fastmodulo(curr_r, G, &factx->div_G);
-                        const size_t head  = args->kv_head * G + h_idx;
-                        local_m.fp32[j] = sinks_data[head];
-                    } else {
-                        local_m.fp32[j] = HTP_FA_M_INITIAL_VAL;
-                    }
-                }
-                HVX_Vector v_scaled = HVX_OP_MUL_F32(local_m.v, v_scale);
-                *(HVX_Vector *) (m_vec + r) = v_scaled;
-            }
-            if (l_start < col_vec_bytes) {
-                hvx_splat_u8_a((char *) factx->vtcm_l_vec + l_start, 0, l_end - l_start);
-            }
-        } else {
-            if (l_start < col_vec_bytes) {
-                hvx_splat_u8_a((char *) factx->vtcm_l_vec + l_start, 0, l_end - l_start);
-            }
-            if (m_start < col_vec_bytes) {
-                hvx_splat_f32_a((char *) factx->vtcm_m_vec + m_start, HTP_FA_M_INITIAL_VAL, (m_end - m_start) / sizeof(float));
-            }
+        if (l_start < col_vec_bytes) {
+            hvx_splat_u8_a((char *) factx->vtcm_l_vec + l_start, 0, l_end - l_start);
+        }
+        if (m_start < col_vec_bytes) {
+            hvx_splat_f32_a((char *) factx->vtcm_m_vec + m_start, HTP_FA_M_INITIAL_VAL, (m_end - m_start) / sizeof(float));
         }
 
         // Zero the whole rescale region: vtcm_d_tiles[0], the optional vtcm_d_tiles[1]
@@ -1447,21 +1418,10 @@ static inline void fa_softmax_impl(
         HVX_Vector     v_rowsum_acc_f32_0 = Q6_V_lo_W(rowsum_acc_pair);
         HVX_Vector     v_rowsum_acc_f32_1 = Q6_V_hi_W(rowsum_acc_pair);
 
-        HVX_Vector v_l_curr0;
-        HVX_Vector v_l_curr1;
-        if (args->kv_start == 0 && factx->sinks != NULL) {
-            // First KV block with sinks: m_prev holds the seeded sink value (not -inf),
-            // so exp_m_diff = exp2(sink - m_curr) is the sink's contribution to the
-            // denominator. l_prev is 0 here, so add exp_m_diff directly instead of
-            // multiplying the (uninitialized) l_prev term.
-            v_l_curr0 = HVX_OP_ADD_F32(exp_m_diff0, v_rowsum_acc_f32_0);
-            v_l_curr1 = HVX_OP_ADD_F32(exp_m_diff1, v_rowsum_acc_f32_1);
-        } else {
-            HVX_Vector l_prev_v0 = factx->vtcm_l_vec[r_vec_idx * 2 + 0];
-            HVX_Vector l_prev_v1 = factx->vtcm_l_vec[r_vec_idx * 2 + 1];
-            v_l_curr0 = HVX_OP_ADD_F32(HVX_OP_MUL_F32(l_prev_v0, exp_m_diff0), v_rowsum_acc_f32_0);
-            v_l_curr1 = HVX_OP_ADD_F32(HVX_OP_MUL_F32(l_prev_v1, exp_m_diff1), v_rowsum_acc_f32_1);
-        }
+        HVX_Vector l_prev_v0 = factx->vtcm_l_vec[r_vec_idx * 2 + 0];
+        HVX_Vector l_prev_v1 = factx->vtcm_l_vec[r_vec_idx * 2 + 1];
+        HVX_Vector v_l_curr0 = HVX_OP_ADD_F32(HVX_OP_MUL_F32(l_prev_v0, exp_m_diff0), v_rowsum_acc_f32_0);
+        HVX_Vector v_l_curr1 = HVX_OP_ADD_F32(HVX_OP_MUL_F32(l_prev_v1, exp_m_diff1), v_rowsum_acc_f32_1);
 
         factx->vtcm_m_vec[r_vec_idx * 2 + 0] = v_m_curr0;
         factx->vtcm_m_vec[r_vec_idx * 2 + 1] = v_m_curr1;
@@ -1532,9 +1492,66 @@ static void fa_softmax_thread(unsigned int n, unsigned int i, void * data) {
     fa_softmax_impl(n, i, data, has_mask, mask_broadcast, is_g1, has_alibi, has_softcap);
 }
 
+static inline HVX_Vector hvx_fa_load_sinks(const float * sinks_data, size_t idx, size_t count) {
+    const HVX_Vector * v_src    = (const HVX_Vector *) sinks_data + (idx >> 5);
+    const size_t       lane_off = idx & 31;
+    const size_t       byte_off = lane_off * sizeof(float);
+    return (lane_off + count > 32)
+        ? Q6_V_valign_VVR(v_src[1], v_src[0], byte_off)
+        : Q6_V_vror_VR(v_src[0], byte_off);
+}
+
 static __attribute__((noinline)) void fa_build_d_diag_inv_l(struct hmx_fa_context * factx,
                                                             size_t                  n_row_tiles,
-                                                            size_t                  n_row_tiles_g_br) {
+                                                            size_t                  n_row_tiles_g_br,
+                                                            uint32_t                kv_head,
+                                                            size_t                  n_rows_g) {
+    (void) n_row_tiles_g_br;
+
+    // sinks: l += exp(sink - m * ln2) in f32, m and l are in the log2 domain
+    if (factx->sinks) {
+        const float *    sinks_data   = factx->vtcm_sinks;
+        const size_t     G            = factx->G;
+        const size_t     head_base    = (size_t) kv_head * G;
+        const HVX_Vector v_ln2        = Q6_V_vsplat_R(EXP_LOGN2);
+        const HVX_Vector v_head_sinks = (G <= 32) ? hvx_fa_load_sinks(sinks_data, head_base, G) : Q6_V_vzero();
+        HVX_Vector       v_sink       = Q6_V_vzero();
+        size_t           g_prev       = SIZE_MAX;
+
+        for (size_t i = 0; i < n_row_tiles; ++i) {
+            // the sink pattern of a tile only depends on (i * 32) % G, rebuild it when that changes
+            const size_t r0 = i * 32;
+            const size_t g0 = fastmodulo(r0, G, &factx->div_G);
+            if (g0 != g_prev) {
+                const size_t rem_g = G - g0;
+                if (G <= 32) {
+                    const HVX_Vector v_lo = Q6_V_vror_VR(v_head_sinks, g0 * sizeof(float));
+                    const HVX_Vector v_hi = Q6_V_vror_VR(v_head_sinks, 128 - rem_g * sizeof(float));
+                    v_sink = Q6_V_vmux_QVV(Q6_Q_vsetq2_R(rem_g * sizeof(float)), v_lo, v_hi);
+                    for (size_t len = G; len < 32; len <<= 1) {
+                        const HVX_VectorPred q_keep    = Q6_Q_vsetq_R(len * sizeof(float));
+                        const HVX_Vector     v_shifted = Q6_V_vror_VR(v_sink, 128 - len * sizeof(float));
+                        v_sink = Q6_V_vmux_QVV(q_keep, v_sink, v_shifted);
+                    }
+                } else if (rem_g >= 32) {
+                    v_sink = hvx_fa_load_sinks(sinks_data, head_base + g0, 32);
+                } else {
+                    const HVX_Vector v_lo = hvx_fa_load_sinks(sinks_data, head_base + g0, rem_g);
+                    const HVX_Vector v_hi = hvx_fa_load_sinks(sinks_data, head_base, 32 - rem_g);
+                    v_sink = Q6_V_vmux_QVV(Q6_Q_vsetq_R(rem_g * sizeof(float)), v_lo, Q6_V_vror_VR(v_hi, 128 - rem_g * sizeof(float)));
+                }
+                g_prev = g0;
+            }
+
+            HVX_Vector v_d = HVX_OP_SUB_F32(v_sink, HVX_OP_MUL_F32(factx->vtcm_m_vec[i], v_ln2));
+            if (r0 + 32 > n_rows_g) {
+                const HVX_VectorPred q_valid = Q6_Q_vsetq_R((n_rows_g - r0) * sizeof(float));
+                v_d = Q6_V_vmux_QVV(q_valid, v_d, Q6_V_vzero());
+            }
+            factx->vtcm_l_vec[i] = HVX_OP_ADD_F32(factx->vtcm_l_vec[i], hvx_vec_exp_f32(v_d));
+        }
+    }
+
     const HVX_Vector     v_offsets = *(const HVX_Vector *) d_tile_scatter_offsets;
     const HVX_VectorPred q_32_mask = Q6_Q_vsetq_R(32 * sizeof(__fp16));
     const HVX_Vector     one       = hvx_vec_splat_f32(1.0f);
@@ -1869,8 +1886,8 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
     factx.Bc             = kparams->Bc;
     factx.g_br           = kparams->u.hmx.g_br;
     factx.n_kv_blocks    = kparams->n_kv_blocks;
-    factx.is_q_fp32      = (kparams->is_q_fp32 != 0);
-    factx.is_dst_fp32    = (kparams->is_dst_fp32 != 0);
+    factx.is_q_fp32      = (q->type == HTP_TYPE_F32);
+    factx.is_dst_fp32    = (dst->type == HTP_TYPE_F32);
     factx.pipeline       = (kparams->u.hmx.pipeline != 0);
     factx.mask_broadcast = (kparams->u.hmx.mask_broadcast != 0);
     if (mask) {
@@ -1879,13 +1896,12 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
     }
 
     factx.has_softcap   = (kparams->logit_softcap != 0.0f);
-    if (!factx.has_softcap) {
-        factx.scale = (__fp16) (kparams->scale * EXP_LOG2E_F);  // log2(e)
-    } else {
-        factx.scale = (__fp16) kparams->scale;
-    }
+    factx.scale         = (__fp16) kparams->scale;
     factx.max_bias      = kparams->max_bias;
-    factx.logit_softcap = factx.has_softcap ? (__fp16) (kparams->logit_softcap * EXP_LOG2E_F) : 0;
+    factx.logit_softcap = 0;
+    if (factx.has_softcap) {
+        factx.logit_softcap = (__fp16) kparams->logit_softcap;
+    }
 
     factx.n_head_log2 = kparams->n_head_log2;
     factx.m0          = kparams->m0;
@@ -1898,22 +1914,36 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
     const uint32_t n_threads = factx.n_threads;
     const uint32_t G = factx.G;
 
-    // Multi-device: split Q blocks across devices
+    // Multi-device: prefer head-parallel partitioning (each core owns a disjoint head
+    // shard), falling back to Q-block (token) split when heads don't divide evenly.
     const uint32_t n_q_blocks = (neq1 + Br - 1) / Br;
-    uint32_t q_start_min = 0;
-    uint32_t q_start_max = neq1;
+    uint32_t q_start_min  = 0;
+    uint32_t q_start_max  = neq1;
+    uint32_t kv_head_min  = 0;
+    uint32_t kv_head_max  = n_kv_heads;
 
     if (octx->ctx->mdev.count > 1) {
-        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(n_q_blocks, htp_tensor_mdev_data_aligned(dst) ? 1 : 0, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
-        const uint32_t block_start = range.start;
-        const uint32_t block_end   = range.start + range.count;
+        const uint32_t mdev_count = octx->ctx->mdev.count;
+        const uint32_t mdev_idx   = octx->ctx->mdev.idx;
+        const uint32_t dst_e_size = (dst->type == HTP_TYPE_F32) ? sizeof(float) : sizeof(__fp16);
+        const bool can_split      = htp_tensor_can_row_partition(dst, dst_e_size);
 
-        if (block_start >= block_end) {
-            return HTP_STATUS_OK;
+        if (kparams->head_split && can_split && n_kv_heads >= mdev_count && n_kv_heads % mdev_count == 0) {
+            const uint32_t kv_per_core = n_kv_heads / mdev_count;
+            kv_head_min = mdev_idx * kv_per_core;
+            kv_head_max = kv_head_min + kv_per_core;
+        } else {
+            const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(n_q_blocks, can_split ? 1 : 0, mdev_idx, mdev_count, &octx->ctx->mdev.count_div);
+            const uint32_t block_start = range.start;
+            const uint32_t block_end   = range.start + range.count;
+
+            if (block_start >= block_end) {
+                return HTP_STATUS_OK;
+            }
+
+            q_start_min = block_start * Br;
+            q_start_max = MIN(block_end * Br, neq1);
         }
-
-        q_start_min = block_start * Br;
-        q_start_max = MIN(block_end * Br, neq1);
     }
 
     // ======== VTCM allocation (GQA-aware) ========
@@ -1997,7 +2027,10 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
     // ======== Initialize HMX output scales ========
     hmx_init_column_scales(factx.vtcm_hmx_scales_id, Q6_V_vsplat_R(0x3c00)); // 1.0
-    hmx_init_column_scales(factx.vtcm_hmx_scales_qk, hvx_vec_splat_f16(factx.scale));
+    {
+        union { __fp16 f; uint16_t u; } sc = { .f = factx.scale };
+        hmx_init_column_scales(factx.vtcm_hmx_scales_qk, Q6_V_vsplat_R(sc.u));
+    }
 
     // ======== DMA setup ========
     dma_queue * const dma_q = ctx->dma[0];
@@ -2032,7 +2065,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
             const size_t   g_br_actual = hex_align_up(n_rows_g, HMX_FP16_TILE_N_ROWS);
             const size_t   n_row_tiles = g_br_actual / HMX_FP16_TILE_N_ROWS;
 
-            for (uint32_t kv_head = 0; kv_head < n_kv_heads; ++kv_head) {
+            for (uint32_t kv_head = kv_head_min; kv_head < kv_head_max; ++kv_head) {
                 const uint32_t ik2 = kv_head;
                 const uint32_t ik3 = fastdiv(ib3, &kparams->broadcast_rk3);
                 const uint32_t iv2 = kv_head;
@@ -2040,7 +2073,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
                 // 1. Push Q and KV DMAs for the very first iteration.
                 // Subsequent iterations are enqueued early at the end of the previous iteration.
-                if (ib3 == 0 && q_start == q_start_min && kv_head == 0) {
+                if (ib3 == 0 && q_start == q_start_min && kv_head == kv_head_min) {
                     const dma_addr_t q_ptr = q->data + q_start * q->nb[1] +
                                             (kv_head * factx.G) * q->nb[2] + ib3 * q->nb[3];
                     const size_t q_row_bytes = q_transposed ? n_rows_q * q_row_bytes_trans_factor : q_row_bytes_untransposed;
@@ -2237,7 +2270,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
                         // Overlapped: run HVX build diag inv L while HMX is busy executing the update
                         htp_trace_event_start(tr_hvx, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) q_start);
-                        fa_build_d_diag_inv_l(&factx, n_row_tiles, n_row_tiles_g_br);
+                        fa_build_d_diag_inv_l(&factx, n_row_tiles, n_row_tiles_g_br, kv_head, n_rows_g);
                         htp_trace_event_stop(tr_hvx, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) q_start);
                         hmx_queue_pop(hmx_q);
 
@@ -2342,7 +2375,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
                             if (kv_blk + 1 == factx.n_kv_blocks) {
                                 // Overlapped: run HVX build diag inv L while HMX is busy executing the update
                                 htp_trace_event_start(tr_hvx, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) q_start);
-                                fa_build_d_diag_inv_l(&factx, n_row_tiles, n_row_tiles_g_br);
+                                fa_build_d_diag_inv_l(&factx, n_row_tiles, n_row_tiles_g_br, kv_head, n_rows_g);
                                 htp_trace_event_stop(tr_hvx, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) q_start);
                             }
                             hmx_queue_pop(ctx->hmx_queue);
@@ -2358,8 +2391,8 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
                 uint32_t next_kv_head = kv_head + 1;
                 uint32_t next_q_start = q_start;
                 uint32_t next_ib3     = ib3;
-                if (next_kv_head >= n_kv_heads) {
-                    next_kv_head = 0;
+                if (next_kv_head >= kv_head_max) {
+                    next_kv_head = kv_head_min;
                     next_q_start = q_start + Br;
                     if (next_q_start >= q_start_max) {
                         next_q_start = q_start_min;
@@ -2478,7 +2511,7 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
         factx.src3_div3 = kparams->src3_div3;
     }
 
-    factx.is_q_fp32 = (kparams->is_q_fp32 != 0);
+    factx.is_q_fp32 = (q->type == HTP_TYPE_F32);
     factx.size_q_row_padded = kparams->u.hvx.size_q_row_padded;
     factx.size_k_row_padded = kparams->u.hvx.size_k_row_padded;
     factx.size_v_row_padded = kparams->u.hvx.size_v_row_padded;
@@ -2488,7 +2521,10 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
     factx.scale = kparams->scale;
     factx.max_bias = kparams->max_bias;
     factx.has_softcap = (kparams->logit_softcap != 0.0f);
-    factx.logit_softcap = factx.has_softcap ? (__fp16) kparams->logit_softcap : 0;
+    factx.logit_softcap = 0;
+    if (factx.has_softcap) {
+        factx.logit_softcap = (__fp16) kparams->logit_softcap;
+    }
 
     factx.n_head_log2 = kparams->n_head_log2;
     factx.m0          = kparams->m0;
@@ -2512,10 +2548,25 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
     uint32_t qrows      = total_qrows;
 
     if (octx->ctx->mdev.count > 1) {
-        const bool can_split = htp_tensor_mdev_data_aligned(dst) && ((dst->nb[1] & (HTP_TENSOR_MDEV_LINE_SIZE - 1)) == 0);
-        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(total_qrows, can_split ? 1 : 0, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
-        qrow_start = range.start;
-        qrows      = range.count;
+        const uint32_t mdev_count = octx->ctx->mdev.count;
+        const uint32_t mdev_idx   = octx->ctx->mdev.idx;
+        const uint32_t n_kv_heads = k->ne[2];
+        const uint32_t dst_e_size = (dst->type == HTP_TYPE_F32) ? sizeof(float) : sizeof(__fp16);
+        const bool can_split      = htp_tensor_can_row_partition(dst, dst_e_size);
+
+        // head range is contiguous in flat row space only when neq3 == 1
+        if (kparams->head_split && can_split && neq3 == 1 && n_kv_heads >= mdev_count && n_kv_heads % mdev_count == 0) {
+            const uint32_t G              = kparams->G;
+            const uint32_t kv_per_core    = n_kv_heads / mdev_count;
+            const uint32_t heads_per_core = kv_per_core * G;
+            const uint32_t head_start     = mdev_idx * heads_per_core;
+            qrow_start = head_start * neq1;
+            qrows      = heads_per_core * neq1;
+        } else {
+            const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(total_qrows, can_split ? 1 : 0, mdev_idx, mdev_count, &octx->ctx->mdev.count_div);
+            qrow_start = range.start;
+            qrows      = range.count;
+        }
     }
 
     if (qrows == 0) {
