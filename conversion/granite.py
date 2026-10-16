@@ -286,7 +286,6 @@ class GraniteSwitchModel(GraniteMoeModel):
         self.gguf_writer.add_adapter_token_ids_substitute(self.hparams["adapter_substitute_token_ids"])
         if self._has_decision_adapter():
             self.gguf_writer.add_decision_type(gguf.DecisionType.GRANITE_SWITCH)
-            self.gguf_writer.add_decision_chat(True)
         router_gain = float(self.hparams.get("control_token_gain", 15.0))
         self.gguf_writer.add_adapter_router_gain(router_gain)
         logger.info("gguf: (graniteswitch) num_adapters=%s max_lora_rank=%s n_slots=%s router_gain=%s", self._n_adapters, self._max_lora_rank, self._n_slots, router_gain)

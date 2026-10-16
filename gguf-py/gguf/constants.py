@@ -339,7 +339,6 @@ class Keys:
 
     class Decision:
         TYPE               = "{arch}.decision.type"
-        CHAT               = "{arch}.decision.chat"  # bool, the model also does text generation
         # note: single-use-case keys can be hard-coded in cpp code
         BLOCK_COUNT        = "{arch}.decision.block_count"
         ROUTING_BLOCK_COUNT = "{arch}.decision.routing_block_count"
