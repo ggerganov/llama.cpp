@@ -970,13 +970,17 @@ std::string common_download_resolve_path(const std::string & hf_repo_with_tag, c
 
 // remove the partial files a download of `hf_repo_with_tag` with `opts` leaves
 // next to their blobs, resolved through the same plan the download follows
-static bool remove_partial_files(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
+static bool remove_partial_files(const std::string & hf_repo_with_tag, const common_download_opts & opts, bool with_model) {
     common_params_model model;
     model.hf_repo = hf_repo_with_tag;
 
     auto plan = common_download_get_hf_plan(model, opts);
 
-    hf_cache::hf_files planned = plan.model_files;
+    hf_cache::hf_files planned;
+
+    if (with_model) {
+        planned = plan.model_files;
+    }
     for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
         if (!f.local_path.empty()) {
             planned.push_back(f);
@@ -1059,7 +1063,7 @@ bool common_download_remove(const std::string & hf_repo_with_tag, const common_d
     }
 
     // an unfinished download has no snapshot entry, only partial files
-    bool removed = remove_partial_files(hf_repo_with_tag, opts);
+    bool removed = remove_partial_files(hf_repo_with_tag, opts, true);
 
     std::string tag_upper = tag;
     for (char & c : tag_upper) {
@@ -1098,7 +1102,7 @@ bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const
 
     // the partials a sidecar download left in blobs/, resolved the way the download
     // resolves them; the snapshot entries alone would leave those behind
-    bool removed = remove_partial_files(hf_repo_with_tag, opts);
+    bool removed = remove_partial_files(hf_repo_with_tag, opts, false);
 
     std::vector<std::filesystem::path> to_remove;
     for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {

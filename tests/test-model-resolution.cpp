@@ -439,6 +439,30 @@ static void test_sidecar_removal() {
     REQUIRE(!common_download_remove_sidecars("test/sidecar:Q4_0", mtp_only));
 
     fs::remove_all(cache_dir / "models--test--sidecar");
+
+    // a paused model download lives only as a partial next to its blob,
+    // with no snapshot entry yet: dropping the sidecars must leave that progress alone
+    g_repos["test/paused"] = { "model-Q4_0.gguf", "dflash-model-Q4_0.gguf", "mtp-model-Q4_0.gguf" };
+    cache_put("test/paused", "dflash-model-Q4_0.gguf");
+
+    const fs::path paused_blobs = cache_dir / "models--test--paused" / "blobs";
+    const fs::path model_part = paused_blobs / "0000000000000000000000000000000000000001.downloadInProgress";
+    const fs::path paused_mtp = paused_blobs / "0000000000000000000000000000000000000003.downloadInProgress";
+    fs::create_directories(paused_blobs);
+    for (const auto & p : { model_part, paused_mtp }) {
+        std::ofstream(p) << "gguf";
+    }
+
+    common_download_opts paused_opts;
+    paused_opts.download_dflash = true;
+    paused_opts.download_mtp    = true;
+
+    REQUIRE(common_download_remove_sidecars("test/paused:Q4_0", paused_opts));
+    REQUIRE(!fs::exists(cached("test/paused", "dflash-model-Q4_0.gguf")));
+    REQUIRE(!fs::exists(paused_mtp));
+    REQUIRE(fs::exists(model_part));
+
+    fs::remove_all(cache_dir / "models--test--paused");
     g_repos.clear();
 }
 
