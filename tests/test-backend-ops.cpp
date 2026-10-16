@@ -11784,6 +11784,23 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {16, 1},  1025,  64, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 2, 1, 3}));
     test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {16, 1}, 16384,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
 
+    // hsk = hsv = 128 and 256 decode with quantized K/V: GQA ratios 2, 4, 6, 8 with one KV tile (kv 256) and several (512 / 1024),
+    // sinks, nb 2, nr3 2, mixed and one-sided quantization, permuted K/V, ALiBi + logit softcap
+    for (int hs : {128, 256}) {
+        for (int nr2 : {2, 4, 6, 8}) {
+            test_cases.emplace_back(new test_flash_attn_ext(hs, hs, 2, {nr2, 1},  256, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
+            test_cases.emplace_back(new test_flash_attn_ext(hs, hs, 2, {nr2, 1},  512, 1, true, true,  0,  0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
+        }
+        test_cases.emplace_back(new test_flash_attn_ext(hs, hs, 2, {8, 2},  512, 2, true, true,  0,  0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
+        test_cases.emplace_back(new test_flash_attn_ext(hs, hs, 2, {6, 2},  512, 2, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
+    }
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1},  512, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q4_0));
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1},  512, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q8_0));
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1},  512, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_F16));
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1},  512, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_F16,  GGML_TYPE_Q4_0));
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1}, 1024, 1, true, false, 0,  0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 2, 1, 3}));
+    test_cases.emplace_back(new test_flash_attn_ext(256, 256, 2, {8, 1},  512, 1, true, false, 8, 30, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
+
     // MLA shape: the V cache is a sub-view of the K cache, with quantized KV
     test_cases.emplace_back(new test_flash_attn_ext(576, 512, 1, {8, 1},  113,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 1, 2, 3}, true, true));
     test_cases.emplace_back(new test_flash_attn_ext(576, 512, 1, {8, 1}, 1024,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0, {0, 1, 2, 3}, true, true));
