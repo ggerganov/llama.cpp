@@ -38,8 +38,6 @@ class ServerConfig:
 
     def headers(self, session_id: Optional[str] = None) -> Dict[str, str]:
         headers = auth_headers(self.api_key)
-        # opencode groups the turns of one conversation by this header; every
-        # task gets its own id so episodes never share a session.
         if session_id and self.is_opencode():
             headers["x-opencode-session"] = session_id
         return headers
@@ -53,12 +51,8 @@ def auth_headers(api_key: Optional[str]) -> Dict[str, str]:
     return headers
 
 
-# Status of a case the server failed to answer, as opposed to one it answered
-# wrongly. Kept out of the accuracy denominator and re-run by --resume.
 SERVER_ERROR = "server_error"
 
-# Client-side HTTP statuses that are still worth resending; any other 4xx is a
-# problem with the request itself and would fail the same way every time.
 RETRYABLE_HTTP = {408, 409, 425, 429}
 
 
@@ -226,16 +220,11 @@ any imports the class needs. Do not include tests, example usage, or explanation
 }
 
 # Suites graded by running the generated code instead of matching its text.
-# The venv is provisioned from the dataset's own import inventory, so it only
-# ever carries what the suite actually needs.
 CODE_SUITES = {"humaneval", "classeval", "agentic"}
 
-# Suites where the model drives its own multi-turn tool loop rather than
-# answering a single prompt. The Processor hands the whole episode over.
 AGENTIC_SUITES = {"agentic"}
 
-# Import name -> pip name, for the cases where they differ. Anything not listed
-# is assumed to install under the name it imports as.
+# Import name -> pip name, for the cases where they differ. Anything not listed is assumed to install under the name it imports as.
 PIP_NAMES = {
     "bs4": "beautifulsoup4",
     "PIL": "pillow",
@@ -253,8 +242,6 @@ PIP_NAMES = {
     "Crypto": "pycryptodome",
 }
 
-# Overridden by --dataset-source; lets a suite be pointed at a patched copy
-# (local .jsonl or a HuggingFace repo) without touching the loader.
 DATASET_SOURCE: Optional[str] = None
 
 # Extra construction options for the agentic suite, set from the CLI.
@@ -263,10 +250,6 @@ AGENTIC_OPTS: Dict[str, Any] = {}
 
 class BaseDataset(ABC):
     questions: List[Dict]
-
-    # -- agentic hooks ----------------------------------------------------
-    # A suite that drives its own multi-turn tool conversation sets this, and
-    # the Processor hands it the whole episode instead of making one request.
 
     is_agentic: bool = False
 
@@ -281,12 +264,6 @@ class BaseDataset(ABC):
         """Drive one episode to completion and return its scored result."""
         raise NotImplementedError(
             f"{type(self).__name__} does not drive its own conversation")
-
-    # -- code-suite hooks -------------------------------------------------
-    # Only consulted when the exec grader is active. They let a suite own how
-    # its generated code is assembled and scored, which differs a lot: one
-    # HumanEval problem is a single function judged by one assert, whereas one
-    # ClassEval task is a whole class judged by many independent test methods.
 
     def required_packages(self) -> List[str]:
         """Third-party pip packages the suite's tests need."""
@@ -1247,10 +1224,6 @@ FENCE_RE = re.compile(r"```[ \t]*([A-Za-z0-9_+-]*)[ \t]*\n(.*?)(?:```|\Z)", re.D
 
 RESULT_MARKER = "__LLAMA_EVAL__"
 
-# gensim publishes no wheel past cp313 and its Cython-generated C no longer
-# compiles (it still uses PyLongObject.ob_digit, removed in 3.12). ClassEval
-# touches exactly two gensim APIs, both pure Python upstream, so on 3.14+ they
-# are provided directly rather than losing the two tasks that need them.
 GENSIM_SHIM = {
     "__init__.py": (
         '"""Minimal stand-in for the two gensim entry points ClassEval uses."""\n'
@@ -1275,18 +1248,11 @@ GENSIM_SHIM = {
     ),
 }
 
-# Runs before the suite's test code. Some tasks end with the usual
-# `if __name__ == "__main__": unittest.main()`, and unittest.main() exits the
-# process -- which would kill the reporting harness appended after it.
 UNITTEST_PROLOGUE = '''
 import unittest as _ut_pre
 _ut_pre.main = lambda *a, **k: None
 '''
 
-# Appended to suites whose tasks are judged by many independent unit tests, so
-# a partially-correct answer can be scored as such instead of just pass/fail.
-# Discovers TestCase subclasses from the module namespace rather than trusting a
-# dataset field to name them.
 UNITTEST_RUNNER = f'''
 
 if True:
@@ -1349,7 +1315,6 @@ def extract_code(response: str, entry_point: Optional[str] = None,
                 return defining[-1].strip("\n")
         return candidates[0].strip("\n")
 
-    # No fence at all: some models just emit bare code.
     return response.strip("\n")
 
 
@@ -1372,16 +1337,11 @@ def build_program(question: Dict, completion: str, seed: Optional[int] = 0) -> s
     entry_point = question["entry_point"]
     code = completion
 
-    # If the model returned only a body (no signature), graft it onto the stub.
     if not re.search(rf"^\s*(?:async\s+)?def\s+{re.escape(entry_point)}\s*\(", code, re.M):
         body = completion if completion.startswith((" ", "\t")) else \
             "\n".join("    " + ln for ln in completion.splitlines())
         code = question["prompt"] + "\n" + body
 
-    # HumanEval/38, /50 and /53 draw their test inputs from the *global* unseeded
-    # RNG. A correct solution always passes, but a subtly wrong one can flip
-    # between runs -- which makes A/B comparisons of two models noisy. Seeding
-    # here fixes the inputs without changing what the model is asked to compute.
     prologue = f"import random; random.seed({seed})" if seed is not None else ""
 
     return "\n\n".join(part for part in [
@@ -1464,8 +1424,6 @@ class HumanEvalDataset(BaseDataset):
         return question["prompt"]
 
     def get_answer(self, question: Dict) -> str:
-        # The "gold answer" for a code suite is the harness that judges it.
-        # Carried as JSON so it survives the state file and --resume.
         return json.dumps({
             "task_id": question["task_id"],
             "entry_point": question["entry_point"],
@@ -1515,23 +1473,14 @@ class ClassEvalDataset(BaseDataset):
                     f"{self.source}: record {row.get('task_id', '?')} is missing {sorted(missing)}"
                 )
             row["dataset_type"] = "classeval"
-            # Denominator for the method-level score when the program dies
-            # before the runner can report (syntax error, bad import, timeout).
             row["n_tests"] = _count_test_methods(row["test"])
             self.questions.append(row)
 
         print(f"ClassEval dataset loaded: {len(self.questions)} classes, "
               f"{sum(q['n_tests'] for q in self.questions)} test methods")
 
-    # Dependencies that no import statement mentions, so scanning the source
-    # cannot find them. They must be declared or the suite silently loses tests.
     EXTRA_PACKAGES = [
-        # ClassEval_44 selects the parser by *string*: BeautifulSoup(html,
-        # 'lxml'). Without it bs4 raises FeatureNotFound and that task drops
-        # from 23/23 to 7/23. It happens to arrive via python-docx today, but
-        # relying on someone else's transitive dependency is not a plan.
         "lxml",
-        # Hard requirement of gensim, listed explicitly for the same reason.
         "scipy",
     ]
 
@@ -1559,11 +1508,6 @@ class ClassEvalDataset(BaseDataset):
             found.discard("gensim")
         return sorted(found)
 
-    # Exactly what the suite's nltk tasks need, ~33 MB. These are the current
-    # names: the dataset asks for 'punkt' and 'averaged_perceptron_tagger',
-    # which nltk has since renamed. Seeding the legacy names as well is not
-    # harmless -- with a network available nltk treats them as satisfied and
-    # then re-fetches the modern ones anyway, tripling the download.
     NLTK_CORPORA = ("punkt_tab", "averaged_perceptron_tagger_eng", "wordnet")
 
     def provision_steps(self) -> List[str]:
@@ -1571,7 +1515,6 @@ class ClassEvalDataset(BaseDataset):
 
         if any("nltk" in _as_text(q.get("skeleton")) + _as_text(q.get("test"))
                for q in self.questions):
-            # Pre-seed the corpora so test time never needs the network.
             steps.append(
                 "import os, nltk\n"
                 "target = os.path.join(os.environ['SANDBOX_VENV'], 'nltk_data')\n"
@@ -1588,26 +1531,18 @@ class ClassEvalDataset(BaseDataset):
                 f"files = {GENSIM_SHIM!r}\n"
                 "for name, body in files.items():\n"
                 "    open(os.path.join(pkg, name), 'w').write(body)\n"
-                "import gensim.utils, gensim.matutils\n"  # fail loudly if broken
+                "import gensim.utils, gensim.matutils\n"
             )
 
         return steps
 
     def sandbox_env(self) -> Dict[str, str]:
-        # $HOME is a tmpfs under the strongest isolation tier, so the corpora
-        # have to be found inside the venv, which stays mounted.
         return {"NLTK_DATA": "{venv}/nltk_data"}
 
     def preferred_python(self) -> Optional[str]:
-        # gensim has no wheel for 3.14 and its generated C no longer compiles
-        # there (it still uses PyLongObject.ob_digit). 3.13 is the newest
-        # interpreter that takes the whole dependency set.
         return "3.13"
 
     def default_exec_timeout(self) -> float:
-        # These tasks do real work -- the slowest reference solution takes ~6 s
-        # (a BFS puzzle solver), and importing pandas or loading an nltk corpus
-        # costs seconds on its own.
         return 30.0
 
     def extract(self, response: str, question: Dict) -> str:
@@ -1626,14 +1561,10 @@ class ClassEvalDataset(BaseDataset):
         ] if part)
 
     def interpret(self, result: Any, question: Dict) -> Tuple[bool, Dict[str, Any]]:
-        # The denominator is what the task *should* run, taken from the dataset.
-        # Using the observed count would let a class that fails to even import
-        # score 0/0 and quietly shrink the total, inflating the method rate.
         expected = question.get("n_tests", 0)
 
         report = parse_test_report(result.stdout)
         if report is None:
-            # never reached the runner -- syntax error, bad import or timeout
             return False, {
                 "status": result.status if result.status != "ok" else "no-report",
                 "reason": result.summary(),
@@ -1688,7 +1619,7 @@ class AgenticDataset(BaseDataset):
 
     HF_REPO = "ilintar/SACB"
     is_agentic = True
-    ae: Any  # the agentic_eval module, set in _load_dataset
+    ae: Any
 
     def __init__(self, source: Optional[str] = None, lang: Optional[str] = None,
                  max_turns: int = 50, context_limit: Optional[int] = None,
@@ -1702,8 +1633,6 @@ class AgenticDataset(BaseDataset):
         self._load_dataset()
 
     def _load_dataset(self):
-        # imported here rather than at module scope so the other suites never
-        # pay for it, in import time or in dependencies
         import agentic_eval as ae
         self.ae = ae
 
@@ -1728,8 +1657,6 @@ class AgenticDataset(BaseDataset):
         print(f"Agentic dataset loaded: {len(self.tasks)} tasks "
               f"({', '.join(self.languages)})")
 
-    # -- BaseDataset surface --------------------------------------------
-
     def __len__(self) -> int:
         return len(self.tasks)
 
@@ -1752,9 +1679,7 @@ class AgenticDataset(BaseDataset):
         return 90.0
 
     def required_packages(self) -> List[str]:
-        return []          # provisioned per language instead, see prepare()
-
-    # -- agentic surface -------------------------------------------------
+        return []
 
     def prepare(self, base_python: Optional[str] = None, force: bool = False):
         """Provision one sandbox per language present in the selected tasks."""
@@ -1840,7 +1765,6 @@ class Grader:
         self.exec_seed = exec_seed
         self.dataset = dataset
         self.pattern = self._get_pattern()
-        # grading runs on the worker pool, so per-run exec detail is per-thread
         self._local = threading.local()
 
     @property
@@ -2075,8 +1999,6 @@ class Processor:
             problem_idx=problem_idx,
         )
 
-        # One session per task: an agentic episode keeps the same id across all
-        # of its turns, while separate tasks never collide.
         session_id = new_session_id(task_id)
 
         if eval_state.loaded_dataset.is_agentic:
@@ -2104,8 +2026,6 @@ class Processor:
                 eval_state.dump()
                 return task_state
 
-            # Text graders only ever look at the tail of a reply, but the exec
-            # grader needs the whole thing -- the code block is not at the end.
             if self.grader.grader_type == "exec":
                 graded_text = result
             else:
@@ -2161,8 +2081,6 @@ class Processor:
                 "tools": tools,
                 "tool_choice": "auto",
             }
-            # Uncapped unless asked: a cap cuts reasoning models off mid-thought
-            # and the truncated turn then scores as a model failure.
             per_turn = getattr(eval_state.dataset, "max_tokens", None)
             if self.n_predict and self.n_predict > 0:
                 data["max_tokens"] = self.n_predict
@@ -2186,10 +2104,6 @@ class Processor:
             result = eval_state.loaded_dataset.run(
                 i, self._agentic_chat(server_config, eval_state, session_id))
         except Exception as e:
-            # Record the failure rather than only marking the in-memory state.
-            # Without this the case is persisted as "pending" and the summary
-            # quietly counts a smaller denominator, so a run where most
-            # episodes crashed reports a high score over the few that survived.
             task_state.status = f"error: {type(e).__name__}: {e}"
             eval_state.add_result(
                 task_id, task_state.prompt, task_state.expected,
@@ -2202,14 +2116,10 @@ class Processor:
             return task_state
 
         episode = result.get("episode", {})
-        # The message history never goes into the state file, which it would
-        # grow by megabytes per task; it is written out on its own if asked.
         messages = result.pop("messages", None)
         if messages is not None and self.transcript_dir is not None:
             self._save_transcript(eval_state, task_id, messages, result)
 
-        # The episode was cut short by the server, not by the model, so the
-        # half-finished tree it left says nothing about the model's ability.
         if episode.get("stop_reason") in ("request_failed", "no_choices"):
             task_state.status = SERVER_ERROR
             task_state.grader_log = result
@@ -2272,7 +2182,6 @@ class Processor:
         except OSError as e:
             print(f"Warning: could not write transcript for {task_id}: {e}")
             return
-        # Relative to the report, so the HTML link survives moving both together.
         base = Path(eval_state.output_file).resolve().parent
         result["transcript"] = os.path.relpath(path.resolve(), base)
 
@@ -2434,12 +2343,6 @@ def print_pass_at_k(eval_state: "EvalState"):
         lo, hi = wilson_interval(solved, n_problems)
         print(f"  {solved}/{n_problems} solved   95% CI [{lo:.4f}, {hi:.4f}]")
 
-    # Suites judged by many unit tests per task also get a partial-credit score,
-    # which separates "generated nothing usable" from "got most of it right".
-    # A case that never reached the grader (truncated generation, HTTP error)
-    # still owes its tests to the denominator, so fall back to the count the
-    # dataset recorded in the gold blob -- otherwise those tests silently
-    # disappear and the rate is computed against a smaller total.
     t_total = t_passed = 0
     for case in cases.values():
         log = case.get("grader_log") or {}
@@ -2697,7 +2600,6 @@ def main():
         "max_tokens": args.agentic_max_tokens,
     }
 
-    # Code suites are graded by execution; everything else keeps the llm default.
     if args.grader_type is None:
         args.grader_type = "exec" if args.dataset in CODE_SUITES else "llm"
 
@@ -2723,8 +2625,6 @@ def main():
     else:
         server_names = server_urls  # fallback to URLs
 
-    # One key shared by every server is the common case; a comma-separated list
-    # covers a mixed run where each endpoint has its own credentials.
     api_key_arg = args.api_key if args.api_key is not None else os.environ.get("LLAMA_API_KEY")
     if api_key_arg:
         api_keys = [k.strip() for k in api_key_arg.split(",")]
@@ -2742,8 +2642,6 @@ def main():
         for url, threads, name, key in zip(server_urls, thread_counts, server_names, api_keys)
     ]
 
-    # The grader usually runs on one of the eval servers, so it inherits that
-    # server's key unless it was given one of its own.
     if args.grader_api_key is not None:
         grader_api_key = args.grader_api_key
     else:
@@ -2847,13 +2745,10 @@ def main():
 
         eval_state.print_all_tasks()
 
-    # The execution venv is derived from the dataset, so it is built only once
-    # the dataset is known -- true on both the fresh and the resume path.
     if args.grader_type == "exec":
         dataset = eval_state.loaded_dataset
 
         if dataset.is_agentic:
-            # One venv per language in the selected tasks, not one per suite
             dataset.prepare(base_python=args.sandbox_python,
                             force=args.rebuild_sandbox)
         else:

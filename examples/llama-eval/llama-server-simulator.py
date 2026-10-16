@@ -13,9 +13,6 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
-# `datasets` is imported lazily by the loaders that need it, so a suite backed
-# by a local .jsonl works without the HuggingFace stack installed.
-
 # Set cache directory for HuggingFace datasets
 cache_dir = Path.home() / ".cache" / "huggingface" / "datasets"
 cache_dir.mkdir(parents=True, exist_ok=True)
@@ -207,8 +204,6 @@ class CodeDataset:
         return question[self._stub_field()]
 
     def find_question(self, request_text: str) -> Optional[Dict]:
-        # The prompt template embeds the stub verbatim, so an exact containment
-        # test is enough and avoids fuzzy mismatches.
         for question in self.questions:
             stub = question[self._stub_field()].rstrip()
             if stub and stub in request_text:
@@ -259,7 +254,6 @@ class Simulator:
             response_text = self._generate_wrong_answer(question)
 
         if self.dataset_type in ("humaneval", "classeval"):
-            # dress it up the way a chat model would actually answer
             response_text = (
                 f"Here is the implementation:\n\n```python\n{response_text}\n```\n\n"
                 "Let me know if you want it optimised further."
@@ -299,11 +293,9 @@ class Simulator:
         expected_answer = self.dataset.get_answer(question)
 
         if self.dataset_type == "classeval":
-            # keep the class, gut the methods -- a plausible wrong answer
             return re.sub(r"(\n\s+def [^\n]+:\n)", r"\1        return None\n",
                           question["skeleton"])
         if self.dataset_type == "humaneval":
-            # keep the signature, replace the body -- a plausible wrong answer
             return question["prompt"] + "    return None\n"
 
         if expected_answer.isdigit():

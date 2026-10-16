@@ -35,17 +35,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-# Tool output caps. These bound context growth without hiding anything the
-# model asked for precisely: a narrowed read is never truncated, only a lazy
-# whole-file read of something large.
 MAX_READ_LINES = 400
 MAX_TOOL_CHARS = 12000
 MAX_SEARCH_HITS = 60
 
-
-# --------------------------------------------------------------------------
-# languages
-# --------------------------------------------------------------------------
 
 @dataclass
 class LangSpec:
@@ -60,8 +53,6 @@ class LangSpec:
     packages: Tuple[str, ...] = ()
     provision: Tuple[str, ...] = ()
     env: Dict[str, str] = field(default_factory=dict)
-    # Passed straight to Sandbox. Only raised where a runtime reserves a large
-    # virtual address space it never commits.
     address_space_limit: Optional[int] = 4 * 1024 * 1024 * 1024
 
     def source_files(self, root: Path) -> List[Path]:
@@ -72,21 +63,12 @@ class LangSpec:
 PYTHON = LangSpec(
     name="python",
     exts=(".py",),
-    # ruff catches syntax and obvious defects, mypy the type errors. Both are
-    # pure-wheel installs, so the venv builds in seconds and needs no compiler.
     packages=("ruff==0.14.2", "mypy==1.18.2"),
 )
 
 TYPESCRIPT = LangSpec(
     name="typescript",
     exts=(".ts",),
-    # tsc is the linter and the type checker at once. Tests run on node's own
-    # runner against stripped types, so there is no build step, no bundler and
-    # no test framework to install.
-    # node strips types through a WebAssembly module, and each WASM instance
-    # reserves gigabytes of address space up front. At the default 4 GiB cap it
-    # aborts with an out-of-memory error that reads like a fault in the code
-    # under test rather than a sandbox limit.
     address_space_limit=16 * 1024 * 1024 * 1024,
     provision=(
         "import os, subprocess, shutil, sys\n"
@@ -103,10 +85,6 @@ TYPESCRIPT = LangSpec(
 
 LANGS: Dict[str, LangSpec] = {"python": PYTHON, "typescript": TYPESCRIPT}
 
-
-# --------------------------------------------------------------------------
-# workspace
-# --------------------------------------------------------------------------
 
 class PathEscape(Exception):
     """A tool was handed a path outside the repository."""
@@ -128,12 +106,6 @@ class Workspace:
         if rel is None or not str(rel).strip():
             raise PathEscape("no path given")
         raw = Path(str(rel))
-        # An absolute path is honoured when it genuinely points inside the
-        # workspace, because models emit them routinely and rejecting them
-        # would measure path formatting rather than coding. What it must never
-        # do is get silently reinterpreted as relative: stripping the leading
-        # slash turns /etc/passwd into <repo>/etc/passwd, which is a different
-        # file than the one asked for and fails for a misleading reason.
         base = raw if raw.is_absolute() else (self.root / raw)
         candidate = base.resolve()
         if candidate != self.root and self.root not in candidate.parents:
@@ -168,10 +140,6 @@ def _numbered(lines: Sequence[str], start: int) -> str:
     width = len(str(start + len(lines) - 1))
     return "\n".join(f"{start + i:>{width}}\t{ln}" for i, ln in enumerate(lines))
 
-
-# --------------------------------------------------------------------------
-# tools
-# --------------------------------------------------------------------------
 
 def tool_schemas() -> List[Dict[str, Any]]:
     """OpenAI-format function schemas for the whole tool set."""
@@ -267,14 +235,9 @@ class ToolBox:
                 result = f"Error: missing required argument {e}."
             except Exception as e:
                 result = f"Error: {type(e).__name__}: {e}"
-        # One counting point for every failure, raised or returned -- a tool
-        # that rejects an edit is just as much a failed call as one that
-        # throws, and the two must not be tallied differently.
         if result.startswith("Error:"):
             self.errors += 1
         return _clip(result)
-
-    # -- read-only -------------------------------------------------------
 
     def _t_list_files(self, a):
         base = self.ws.resolve(a.get("path") or ".")
@@ -332,8 +295,6 @@ class ToolBox:
             return f"No matches for {a['pattern']!r} in {scanned} file(s)."
         return "\n".join(hits)
 
-    # -- mutating --------------------------------------------------------
-
     def _t_edit_lines(self, a):
         path = self.ws.resolve(a["path"])
         if not path.is_file():
@@ -383,14 +344,12 @@ class ToolBox:
         self.edits += 1
         return f"{'Overwrote' if existed else 'Created'} {a['path']}."
 
-    # -- feedback --------------------------------------------------------
-
     def _t_lint(self, a):
         if self.linter is None:
             return "Error: no linter is configured for this task."
         target = a.get("path")
         if target:
-            self.ws.resolve(target)  # confinement check only
+            self.ws.resolve(target)
         return self.linter(target)
 
     def _t_finish(self, a):
@@ -399,13 +358,6 @@ class ToolBox:
         return "Task marked complete."
 
 
-# --------------------------------------------------------------------------
-# linting and testing
-# --------------------------------------------------------------------------
-
-# Emits per-test outcomes rather than a pass/fail exit code, so a partly
-# correct change earns partial credit and a regression can be told apart from
-# a fix that simply did not go far enough.
 PY_TEST_RUNNER = r'''
 import json, os, random, sys, unittest
 sys.path.insert(0, os.getcwd())
@@ -476,8 +428,6 @@ class Runner:
         node = shutil.which("node")
         return {"PATH": f"{Path(node).parent}:/usr/bin:/bin"} if node else {}
 
-    # -- lint ------------------------------------------------------------
-
     def lint(self, workdir: Path, target: Optional[str] = None) -> str:
         if self.lang.name == "python":
             return self._lint_python(workdir, target)
@@ -491,9 +441,6 @@ class Runner:
             [str(venv / "bin" / "ruff"), "check", "--no-cache",
              "--output-format", "concise", tgt],
             workdir, timeout=self.timeout)
-        # ruff announces success on stdout; that is not a diagnostic, and
-        # passing it through would tell the model it has findings when it does
-        # not.
         text = (r.stdout or r.stderr).strip()
         if text and "All checks passed" not in text:
             chunks.append(text)
@@ -516,8 +463,6 @@ class Runner:
                      or t in (workdir / f).resolve().parents]
         if not files:
             return "No TypeScript files to check."
-        # Flags are passed explicitly rather than read from a tsconfig in the
-        # tree, so the checking strictness cannot be weakened by editing it.
         r = self.sandbox.run_argv(
             ["node", str(tsc), "--noEmit", "--strict", "--target", "es2022",
              "--module", "esnext", "--moduleResolution", "bundler",
@@ -525,8 +470,6 @@ class Runner:
             workdir, timeout=self.timeout, env=self._env(), ro_binds=self._binds())
         out = (r.stdout or "") + (r.stderr or "")
         return out.strip() or "No problems found."
-
-    # -- tests -----------------------------------------------------------
 
     def test(self, workdir: Path) -> Dict[str, Any]:
         if self.lang.name == "python":
@@ -579,8 +522,6 @@ class Runner:
             if name.endswith(" # SKIP") or " # SKIP" in name:
                 outcomes[name.split(" # ")[0]] = "skip"
                 continue
-            # node reports each file as a test too; keep the worst outcome so a
-            # failing file cannot be masked by its own passing summary line
             verdict = "fail" if m.group(1) else "pass"
             if outcomes.get(name) != "fail":
                 outcomes[name] = verdict
@@ -589,10 +530,6 @@ class Runner:
                     "error": f"no TAP output: {text.strip()[-400:]}"}
         return {"tests": outcomes}
 
-
-# --------------------------------------------------------------------------
-# tasks and episodes
-# --------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are an expert {lang} engineer working in an existing repository.
 
@@ -623,7 +560,7 @@ Keep calling tools until the change is complete, then call `finish`."""
 class AgenticTask:
     task_id: str
     lang: str
-    category: str            # syntax | type | logic | feature
+    category: str
     difficulty: int
     instruction: str
     files: Dict[str, str]
@@ -696,10 +633,6 @@ class EpisodeResult:
     error: Optional[str] = None
 
 
-# Sent when a turn arrives with no tool calls and no `finish`. Models routinely
-# narrate their analysis in prose mid-task; treating that as "done" would end
-# the episode with no edits and score a reasoning failure that never happened.
-# Deliberately neutral: it points at the protocol, never at the defect.
 NUDGE = ("Your last reply contained no tool call, so nothing happened. There is "
          "no human in this session to respond to text. If your change is "
          "complete, call `finish`. Otherwise continue working by calling the "
@@ -746,10 +679,6 @@ def run_episode(task: AgenticTask, toolbox: ToolBox, chat,
             res.truncated_turns += 1
         calls = msg.get("tool_calls") or []
 
-        # Echo the assistant turn back verbatim; the server needs the exact
-        # tool_call ids to match the results that follow. The reasoning goes
-        # back too: whether past-turn thinking is kept is the chat template's
-        # call, and models trained on interleaved thinking degrade without it.
         reasoning = msg.get("reasoning_content")
         messages.append({
             "role": "assistant",
@@ -779,9 +708,6 @@ def run_episode(task: AgenticTask, toolbox: ToolBox, chat,
                 try:
                     args = json.loads(raw or "{}")
                 except (json.JSONDecodeError, TypeError):
-                    # Small models routinely emit unparseable arguments. That is
-                    # a real failure mode worth counting rather than hiding, so
-                    # it is reported back like any other tool error.
                     res.bad_tool_json += 1
                     args = None
             output = (toolbox.dispatch(name, args) if args is not None else
@@ -807,10 +733,6 @@ def run_episode(task: AgenticTask, toolbox: ToolBox, chat,
     res.per_tool = dict(toolbox.per_tool)
     return res, messages
 
-
-# --------------------------------------------------------------------------
-# grading
-# --------------------------------------------------------------------------
 
 def run_tests_against(files: Dict[str, str], task: AgenticTask, runner: Runner,
                       workroot: Path, label: str) -> Dict[str, str]:
@@ -899,10 +821,6 @@ def run_task(task: AgenticTask, chat, sandbox, workroot: Optional[Path] = None,
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
-
-# --------------------------------------------------------------------------
-# transcripts
-# --------------------------------------------------------------------------
 
 TRANSCRIPT_CSS = """
 body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #fff; color: #222; max-width: 1100px; }

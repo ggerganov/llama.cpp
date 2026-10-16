@@ -32,9 +32,8 @@ DEFAULT_CACHE_ROOT = Path(
     os.environ.get("LLAMA_EVAL_CACHE", Path.home() / ".cache" / "llama-eval")
 )
 
-# rlimits applied to every candidate program
-LIMIT_AS_BYTES = 4 * 1024 * 1024 * 1024  # 4 GiB address space
-LIMIT_CPU_SECONDS_SLACK = 5              # cpu limit = wall timeout + slack
+LIMIT_AS_BYTES = 4 * 1024 * 1024 * 1024
+LIMIT_CPU_SECONDS_SLACK = 5
 LIMIT_NPROC = 256
 LIMIT_FSIZE_BYTES = 64 * 1024 * 1024
 
@@ -42,7 +41,7 @@ LIMIT_FSIZE_BYTES = 64 * 1024 * 1024
 @dataclass
 class ExecResult:
     passed: bool
-    status: str           # "ok" | "failed" | "timeout" | "error"
+    status: str
     stdout: str = ""
     stderr: str = ""
     returncode: Optional[int] = None
@@ -58,7 +57,6 @@ class ExecResult:
         if not tail:
             return f"{self.status} (rc={self.returncode})"
         lines = [ln for ln in tail.splitlines() if ln.strip()]
-        # the last line of a traceback is the actual exception
         reason = lines[-1] if lines else tail
         return reason[:max_chars]
 
@@ -77,10 +75,6 @@ def resolve_python(spec: Optional[str]) -> Optional[str]:
     if candidate.exists() and candidate.is_file():
         return str(candidate)
 
-    # For a bare version, ask uv before searching PATH. A `pythonX.Y` on PATH is
-    # often a shim into wherever it happened to be installed -- including a
-    # scratch directory that will be deleted -- whereas uv reports its own
-    # managed install, which is stable.
     uv = shutil.which("uv")
     if uv and re.fullmatch(r"\d+\.\d+(\.\d+)?", spec):
         try:
@@ -122,10 +116,6 @@ def _detect_isolation(probe_python: Optional[str] = None,
             pass
 
     if shutil.which("unshare"):
-        # Prefer the form that keeps the caller's uid. With `unshare -r` the
-        # program runs as root inside the namespace, which silently changes
-        # behaviour: root bypasses file permission bits, so a test asserting
-        # that a write to a chmod 0444 file fails would instead see it succeed.
         for tier, argv in (
             ("unshare", ["unshare", "--user", "--map-current-user", "--net"]),
             ("unshare-root", ["unshare", "-rn"]),
@@ -164,16 +154,8 @@ def _bwrap_argv(workdir: Path, inner: Sequence[str],
         "--proc", "/proc",
         "--tmpfs", "/tmp",
     ]
-    # Hide the real home so candidate code cannot read the user's files. The
-    # venv usually lives under ~/.cache, so bind it back afterwards -- bwrap
-    # applies these in order, and a later bind wins over the earlier tmpfs.
     if home and home != "/":
         argv += ["--tmpfs", home]
-    # Only paths the tmpfs just hid need restoring. Re-binding anything else is
-    # not merely redundant: bwrap cannot mount onto a symlink, so a bind whose
-    # destination is one (version-manager alias directories usually are) fails
-    # outright. Under the tmpfs the destination is recreated as a real
-    # directory, which is exactly why the same bind works there.
     for path in ro_binds:
         if _under(path, home):
             argv += ["--ro-bind", str(path), str(path)]
@@ -211,18 +193,8 @@ def _apply_rlimits(timeout: float, with_nproc: bool,
             (resource.RLIMIT_FSIZE, (LIMIT_FSIZE_BYTES, LIMIT_FSIZE_BYTES)),
             (resource.RLIMIT_CORE, (0, 0)),
         ]
-        # RLIMIT_AS caps reserved address space, not resident memory, so it is
-        # the wrong instrument for any runtime that reserves a large region up
-        # front and commits little of it. Node's TypeScript type-stripping goes
-        # through WebAssembly, which reserves multiple gigabytes per instance
-        # and dies at 4 GiB with an out-of-memory error that looks like a bug
-        # in the code under test. Suites needing such a runtime raise or drop
-        # it; the wall-clock timeout and RLIMIT_FSIZE still bound a runaway.
         if as_bytes:
             limits.append((resource.RLIMIT_AS, (as_bytes, as_bytes)))
-        # Only in the no-namespace fallback: with bwrap/unshare the PID
-        # namespace already contains a fork bomb, and clamping NPROC there
-        # makes clone(CLONE_NEWUSER) fail outright with EAGAIN.
         if with_nproc:
             ceiling = _nproc_ceiling()
             limits.append((resource.RLIMIT_NPROC, (ceiling, ceiling)))
@@ -250,14 +222,7 @@ class Sandbox:
     ):
         self.name = name
         self.packages = sorted(set(packages or []))
-        # Python snippets run once at build time, while the network is still
-        # reachable -- this is how a suite that would otherwise download data at
-        # test time (nltk corpora, tokenizer models) gets to run offline later.
         self.provision = list(provision or [])
-        # Extra environment for every run. Values may contain the literal token
-        # {venv}, replaced with the venv path -- data downloaded at provisioning
-        # time must live inside the venv, because $HOME is a tmpfs in the
-        # strongest isolation tier and anything under it disappears.
         self.env = dict(env or {})
         # None drops the RLIMIT_AS cap entirely -- see _apply_rlimits
         self.address_space_limit = address_space_limit
@@ -267,8 +232,6 @@ class Sandbox:
         self._python: Optional[Path] = None
         self._isolation = isolation
         self._base_prefix: List[Path] = []
-
-    # -- provisioning ----------------------------------------------------
 
     @property
     def python(self) -> Path:
@@ -283,8 +246,6 @@ class Sandbox:
                 py = str(self._python)
                 roots = [self.venv_dir, *(self._base_prefix or [])]
             else:
-                # probed before the venv exists: still bind the interpreter's
-                # own tree, or the probe fails for the wrong reason
                 py = sys.executable
                 roots = self._detect_base_prefix(Path(py))
             self._isolation = _detect_isolation(py, roots)
@@ -364,8 +325,6 @@ class Sandbox:
         for i, snippet in enumerate(self.provision, 1):
             if not quiet:
                 print(f"[sandbox] provisioning step {i}/{len(self.provision)}")
-            # deliberately unsandboxed: this is the one point where the suite is
-            # allowed network access, so that test time never needs it
             prov_env = dict(os.environ)
             prov_env["SANDBOX_VENV"] = str(self.venv_dir)
             prov_env.update(self._resolved_env())
@@ -428,17 +387,12 @@ class Sandbox:
         except Exception:
             pass
 
-        # a base prefix of /usr is already covered by the read-only root bind
         return [p for p in roots if str(p) not in ("/", "/usr", "/usr/local")]
-
-    # -- execution -------------------------------------------------------
 
     def _isolate(self, argv: Sequence[str], workdir: Path,
                  ro_binds: Sequence[Path] = ()) -> List[str]:
         """Wrap a command in the strongest isolation tier this host supports."""
         if self.isolation == "bwrap":
-            # the venv, and the base interpreter tree it symlinks into, must
-            # stay visible through the tmpfs that hides $HOME
             return _bwrap_argv(
                 workdir, argv,
                 ro_binds=[self.venv_dir, *(self._base_prefix or []), *ro_binds],
@@ -491,7 +445,7 @@ class Sandbox:
                                           with_nproc=self.isolation == "rlimit",
                                           as_bytes=self.address_space_limit),
             )
-        except Exception as e:  # sandbox itself misbehaved
+        except Exception as e:
             return ExecResult(False, "error", "", f"{type(e).__name__}: {e}")
 
         try:
@@ -516,7 +470,7 @@ class Sandbox:
             prog.write_text(code)
             return self.run_argv([str(self.python), "-I", "-B", str(prog)],
                                  workdir, timeout=timeout, env=env)
-        except Exception as e:  # sandbox itself misbehaved
+        except Exception as e:
             return ExecResult(False, "error", "", f"{type(e).__name__}: {e}")
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
