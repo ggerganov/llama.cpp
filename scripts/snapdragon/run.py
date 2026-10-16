@@ -27,6 +27,7 @@ MANAGED_ENV_NAMES = (
     "GGML_HEXAGON_OPPOLL",
     "GGML_HEXAGON_OPFILTER",
     "GGML_HEXAGON_OPFUSION",
+    "GGML_HEXAGON_RT_REPACK",
     "GGML_HEXAGON_VMEM",
     "GGML_HEXAGON_MBUF",
     "GGML_HEXAGON_MM_SELECT",
@@ -159,6 +160,7 @@ def main():
     parser.add_argument("--hex-profile", help="Enable NPU/Hexagon profiling and performance metrics print (GGML_HEXAGON_PROFILE)")
     parser.add_argument("--hex-nhvx", help="Number of HVX units to use (GGML_HEXAGON_NHVX)")
     parser.add_argument("--hex-nhmx", help="Number of HMX units to use. 0 disables HMX power-up (GGML_HEXAGON_NHMX)")
+    parser.add_argument("--hex-power-mode", help="HTP DCVS/HMX power mode: low_power_saver, power_saver, high_power_saver, low_balanced, balanced, high_performance, sustained_high_performance, burst (GGML_HEXAGON_POWER_MODE)")
     parser.add_argument("--hex-hostbuf", help="Enable host buffers (GGML_HEXAGON_HOSTBUF)")
     parser.add_argument("--hex-dma64", nargs="?", const="1", help="Enable (1) or disable (0) 64-bit DMA for model weights (GGML_HEXAGON_DMA64)")
     parser.add_argument("--hex-opbatch", help="Maximum number of operations to batch into a single HTP execution (GGML_HEXAGON_OPBATCH)")
@@ -166,6 +168,7 @@ def main():
     parser.add_argument("--hex-oppoll", default="1", help="Enable (1) or Disable (0) polling for NPU opbatch completion (GGML_HEXAGON_OPPOLL) (default: 1)")
     parser.add_argument("--hex-opfilter", help="Regex pattern to filter/select which operators are offloaded to NPU (GGML_HEXAGON_OPFILTER)")
     parser.add_argument("--hex-opfusion", help="NPU graph node fusion optimization level (0: disabled, 1: enabled) (GGML_HEXAGON_OPFUSION)")
+    parser.add_argument("--hex-rt-repack", help="Runtime weight repacking mode (0: disabled, 1: quantized only, 2: always) (GGML_HEXAGON_RT_REPACK)")
     parser.add_argument("--hex-vmem", help="Maximum NPU VMEM size limit in MB to allocate (GGML_HEXAGON_VMEM)")
     parser.add_argument("--hex-mbuf", help="Host buffer size limits in MB (supports K/M/G suffix): <dyn>[,<static>[,<total>]] (default: 512,1024,0) (GGML_HEXAGON_MBUF)")
     parser.add_argument("--hex-mm-select", help="Select MUL_MAT and MUL_MAT_ID kernel (GGML_HEXAGON_MM_SELECT) 2:HMX,1:HVX,0:disable")
@@ -302,6 +305,7 @@ def main():
     # Other Hexagon environment variables
     set_env("GGML_HEXAGON_NHVX", args.hex_nhvx)
     set_env("GGML_HEXAGON_NHMX", args.hex_nhmx)
+    set_env("GGML_HEXAGON_POWER_MODE", args.hex_power_mode)
     set_env("GGML_HEXAGON_HOSTBUF", args.hex_hostbuf)
     set_env("GGML_HEXAGON_DMA64", args.hex_dma64)
     set_env("GGML_HEXAGON_OPBATCH", args.hex_opbatch)
@@ -309,6 +313,7 @@ def main():
     set_env("GGML_HEXAGON_OPPOLL", args.hex_oppoll)
     set_env("GGML_HEXAGON_OPFILTER", args.hex_opfilter)
     set_env("GGML_HEXAGON_OPFUSION", args.hex_opfusion)
+    set_env("GGML_HEXAGON_RT_REPACK", args.hex_rt_repack)
     set_env("GGML_HEXAGON_VMEM", args.hex_vmem)
     set_env("GGML_HEXAGON_MBUF", args.hex_mbuf)
     set_env("GGML_HEXAGON_MM_SELECT", args.hex_mm_select)
