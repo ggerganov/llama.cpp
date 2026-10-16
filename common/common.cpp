@@ -1170,8 +1170,12 @@ static const std::map<common_decision_type, std::string> COMMON_DECISION_TYPE_NA
     { COMMON_DECISION_TYPE_LAYA,           "laya"          },
     { COMMON_DECISION_TYPE_CLEF,           "clef"          },
     { COMMON_DECISION_TYPE_PPLX_DECIDER,   "pplx-decider"  },
+    { COMMON_DECISION_TYPE_VLLM_DECISION2, "vllm-decision2" },
+    { COMMON_DECISION_TYPE_VLLM_D3,        "vllm-d3"        },
     { COMMON_DECISION_TYPE_LFM2_D1,        "lfm2-d1"       },
     { COMMON_DECISION_TYPE_LFM2_D1_OMNI,   "lfm2-d1-omni"  },
+    { COMMON_DECISION_TYPE_GRANITE_SWITCH, "granite-switch"},
+    // for future models, ALWAYS add org name prefix to avoid name collisions, e.g. "orgname-modelname"
 };
 
 static common_decision_type common_decision_type_from_string(const std::string & str) {
@@ -1289,7 +1293,7 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
     // TODO: maybe improve this in the future
     const auto decision_type = common_get_decision_type(model);
     if (decision_type == COMMON_DECISION_TYPE_LAYA || decision_type == COMMON_DECISION_TYPE_KEV || decision_type == COMMON_DECISION_TYPE_CLEF ||
-        decision_type == COMMON_DECISION_TYPE_LFM2_D1_OMNI) {
+        decision_type == COMMON_DECISION_TYPE_LFM2_D1_OMNI || decision_type == COMMON_DECISION_TYPE_VLLM_DECISION2) {
         params.embedding    = true;
         params.pooling_type = LLAMA_POOLING_TYPE_NONE;
 
@@ -1403,6 +1407,14 @@ std::vector<llama_adapter_lora_ptr> & common_init_result::lora() {
     return pimpl->lora;
 }
 
+// only for warmup and probe decodes, fill zeros as dummy input
+static void common_batch_set_zero_state(common_batch & batch, const llama_model * model, std::vector<float> & zeros) {
+    zeros.assign(llama_model_n_embd_out(model), 0.0f);
+    for (int32_t i = 0; i < batch.size(); ++i) {
+        batch.set_embd_state(i, { zeros.data(), 1, zeros.size() });
+    }
+}
+
 common_init_result_ptr common_init_from_params(common_params & params, bool model_only) {
     common_init_result_ptr res(new common_init_result(params, model_only));
 
@@ -1509,6 +1521,8 @@ common_init_result_ptr common_init_from_params(common_params & params, bool mode
         if (llama_model_has_decoder(model)) {
             tmp.resize(std::min(tmp.size(), (size_t) params.n_batch));
             common_batch batch = common_batch_get_one(lctx, tmp);
+            std::vector<float> zeros;
+            common_batch_set_zero_state(batch, model, zeros);
             llama_process(lctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
         }
         llama_memory_clear(llama_get_memory(lctx), true);
@@ -1576,6 +1590,8 @@ common_context_seq_rm_type common_context_can_seq_rm(llama_context * ctx) {
     int ret;
     {
         common_batch batch = common_batch_get_one(ctx, tmp);
+        std::vector<float> zeros;
+        common_batch_set_zero_state(batch, llama_get_model(ctx), zeros);
         ret = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
     }
     if (ret != 0) {
@@ -2161,7 +2177,7 @@ void common_batch::clear() {
 }
 
 int32_t common_batch::add(llama_token id, llama_pos pos, llama_seq_id seq_id, bool output) {
-    tokens.push_back({ id, { pos, 0, 0, 0 }, seq_id, output, { nullptr, 0, 0 }, {} });
+    tokens.push_back({ id, { pos, 0, 0, 0 }, seq_id, output, { nullptr, 0, 0 }, { nullptr, 0, 0 }, {} });
     return size() - 1;
 }
 
@@ -2199,8 +2215,16 @@ bool common_batch::set_embd(int32_t idx, llama_embd embd) {
     return true;
 }
 
+bool common_batch::set_embd_state(int32_t idx, llama_embd state) {
+    if (idx < 0 || idx >= size() || tokens[idx].state.data != nullptr) {
+        return false;
+    }
+    tokens[idx].state = state;
+    return true;
+}
+
 int32_t common_batch::add_embd(llama_embd embd, const llama_pos * pos, llama_seq_id seq_id, bool output) {
-    token t = { LLAMA_TOKEN_NULL, { 0, 0, 0, 0 }, seq_id, output, embd, {} };
+    token t = { LLAMA_TOKEN_NULL, { 0, 0, 0, 0 }, seq_id, output, embd, { nullptr, 0, 0 }, {} };
     for (int32_t j = 0; j < n_pos; ++j) {
         t.pos[j] = pos[j];
     }
@@ -2244,6 +2268,9 @@ llama_batch_ext * common_batch::get_sub_batch(int32_t off, int32_t n) {
         }
         if (t.output) {
             llama_batch_ext_set_output_logits(res, idx, true);
+        }
+        if (t.state.data) {
+            llama_batch_ext_set_embd_state(res, idx, t.state); // contexts without a state input ignore it
         }
         if (t.decision_order != 0) {
             llama_batch_ext_set_decision_order(res, idx, (llama_decision_order) t.decision_order);
