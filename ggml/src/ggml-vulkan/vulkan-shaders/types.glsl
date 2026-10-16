@@ -2052,7 +2052,7 @@ i32vec2 iq4nl_to_i8x8(uint32_t vui) {
 #endif
 #endif
 
-#define IQ2K_PHASE 10
+#define IQ2K_PHASE 5
 #define IQ3K_PHASE 23
 #define IQ4K_PHASE 18
 #define IQ5K_PHASE 15
@@ -2060,7 +2060,7 @@ i32vec2 iq4nl_to_i8x8(uint32_t vui) {
 
 #if defined(DATA_A_IQ2_K)
 const int8_t kvalues_iq2k_const[4] = {
-    int8_t(-15), int8_t(-4), int8_t(6), int8_t(21)
+    int8_t(-31), int8_t(-14), int8_t(-2), int8_t(10)
 };
 
 shared FLOAT_TYPE kvalues_iq2k[4];
