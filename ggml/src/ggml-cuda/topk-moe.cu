@@ -220,18 +220,16 @@ __global__ void topk_moe_cuda(const float *         logits,
         }
     }
 
+#if !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
     // without bias, masking wt is safe: the matcher ensures the kept groups hold all used experts
     if (config.n_groups > 0) {
-#if defined(GGML_USE_HIP) && !__HIP_ARCH_HAS_WARP_BALLOT__
-        GGML_ABORT("expert groups fusion is not supported on this HIP version");
-#else
         if constexpr (has_bias) {
             group_mask_warp_inplace<n_experts>(selection_wt, config.n_groups, config.n_group_used, threadIdx.x);
         } else {
             group_mask_warp_inplace<n_experts>(wt, config.n_groups, config.n_group_used, threadIdx.x);
         }
-#endif // defined(GGML_USE_HIP) && !__HIP_ARCH_HAS_WARP_BALLOT__
     }
+#endif // !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
 
     //at this point, each thread holds either a portion of the softmax distribution
     //or the raw logits. We do the argmax reduce over n_expert_used, each time marking
@@ -358,6 +356,10 @@ static void launch_topk_moe_cuda(ggml_backend_cuda_context & ctx,
     dim3         block_dims(WARP_SIZE, rows_per_block, 1);
     cudaStream_t stream = ctx.stream();
     const ggml_cuda_kernel_launch_params launch_params = ggml_cuda_kernel_launch_params(grid_dims, block_dims, 0, stream);
+
+#if defined(GGML_USE_HIP) && !defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+    GGML_ASSERT(config.n_groups == 0 && "expert groups fusion is not supported on this HIP version");
+#endif
 
     switch (n_expert) {
         case 1:
