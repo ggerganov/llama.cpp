@@ -211,6 +211,27 @@ static void test_dry(
     tester.check();
 }
 
+static void test_no_repeat_ngram(
+    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & probs_expected, int32_t ngram_size, int32_t ngram_window
+) {
+    GGML_ASSERT(probs.size() == probs_expected.size());
+
+    sampler_tester tester(probs, probs_expected);
+
+    auto * sampler = llama_sampler_init_no_repeat_ngram(ngram_size, ngram_window);
+
+    for (size_t i = 0; i < last_tokens.size(); i++) {
+        llama_sampler_accept(sampler, last_tokens[i]);
+    }
+
+    DUMP(&tester.cur_p);
+    tester.apply(sampler);
+    tester.apply(llama_sampler_init_dist(0));
+    DUMP(&tester.cur_p);
+    tester.check();
+}
+
 static void test_top_n_sigma(const std::vector<float> & probs, const std::vector<float> & probs_expected, int n) {
     sampler_tester tester(probs, probs_expected);
 
@@ -391,6 +412,20 @@ int main(void) {
     test_dry({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 3, 4, 0, 1}, {0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, 1.0f, 1.1f, 2, 6, {{3}});
     test_dry({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 1}, {0.241818f, 0.241818f, 0.032727f, 0.241818f, 0.241818f}, 2.0f, 1.1f, 2, 5, {});
     test_dry({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 3, 4, 0, 1}, {0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, 1.0f, 1.1f, 4, 7, {});
+
+    printf("no-repeat n-gram should ban the tokens that would extend a repeated n-gram:\n");
+    // ngram_size < 2 disables the sampler
+    test_no_repeat_ngram({0.1f, 0.2f, 0.3f, 0.4f}, {1, 2, 3, 1, 2}, {0.1f, 0.2f, 0.3f, 0.4f}, 1, 0);
+    // the 3-gram [1,2,3] already occurred -> token 3 is banned
+    test_no_repeat_ngram({0.1f, 0.2f, 0.3f, 0.4f}, {1, 2, 3, 4, 1, 2}, {0.1f/0.6f, 0.2f/0.6f, 0.3f/0.6f, 0.0f}, 3, 0);
+    // with ngram_window = 3 the earlier occurrence has fallen out of the window -> nothing is banned
+    test_no_repeat_ngram({0.1f, 0.2f, 0.3f, 0.4f}, {1, 2, 3, 4, 1, 2}, {0.1f, 0.2f, 0.3f, 0.4f}, 3, 3);
+    // ngram_size = 2 bans every successor seen for the last token
+    test_no_repeat_ngram({0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.25f}, {1, 4, 1, 5, 1}, {0.1f, 0.2f, 0.3f, 0.4f, 0.0f, 0.0f}, 2, 0);
+    // a repeating block [2,3,4,5,6] must not be able to start its third iteration:
+    // the history ends with [6,2,3], so the 4-gram [6,2,3,4] is already present and token 4 is banned
+    test_no_repeat_ngram({0.05f, 0.10f, 0.10f, 0.15f, 0.20f, 0.20f, 0.20f}, {2, 3, 4, 5, 6, 2, 3, 4, 5, 6, 2, 3},
+                         {0.05f/0.80f, 0.10f/0.80f, 0.10f/0.80f, 0.15f/0.80f, 0.0f, 0.20f/0.80f, 0.20f/0.80f}, 4, 0);
 
     test_top_n_sigma({0.1f, 0.2f, 0.3f, 0.4f}, {0.0f, 0.0f, 0.428571f, 0.571429f}, 1.00f);
     test_top_n_sigma({0.1f, 0.2f, 0.3f, 0.4f}, {0.1f, 0.2f, 0.3f, 0.4f}, 0.00f); // top_n_sigma == 0 now represents a no-op rather than greedy decoding as of PR#13345
