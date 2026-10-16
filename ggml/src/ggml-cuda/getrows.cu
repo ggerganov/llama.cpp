@@ -426,7 +426,6 @@ static void ggml_cuda_get_rows_switch_src0_type(
             break;
         default:
             GGML_ABORT("%s: unsupported src0 type: %s\n", __func__, ggml_type_name(src0_type));
-            break;
     }
 }
 
@@ -455,7 +454,6 @@ void get_rows_cuda(
             break;
         default:
             GGML_ABORT("%s: unsupported dst type: %s\n", __func__, ggml_type_name(dst_type));
-            break;
     }
 }
 
