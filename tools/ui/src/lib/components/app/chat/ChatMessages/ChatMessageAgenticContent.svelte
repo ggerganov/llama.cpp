@@ -34,6 +34,7 @@
 	let expandedStates: Record<number, boolean> = $state({});
 
 	const showThoughtInProgress = $derived(Boolean(settingsStore.config.showThoughtInProgress));
+	const showToolCallInProgress = $derived(Boolean(settingsStore.config.showToolCallInProgress));
 	const alwaysShowToolCallContent = $derived(
 		Boolean(settingsStore.config.alwaysShowToolCallContent)
 	);
@@ -133,11 +134,20 @@
 	});
 
 	function getDefaultExpanded(section: AgenticSection): boolean {
+		// In flight (args still streaming, or call dispatched and result not
+		// back yet): the "in progress" setting expands it, exactly like the
+		// reasoning block does while the thought is being generated. A manual
+		// toggle wins over this default - see isExpanded().
 		if (
-			section.type === AgenticSectionType.TOOL_CALL ||
 			section.type === AgenticSectionType.TOOL_CALL_PENDING ||
 			section.type === AgenticSectionType.TOOL_CALL_STREAMING
 		) {
+			return showToolCallInProgress || alwaysShowToolCallContent;
+		}
+
+		// Terminal state: only "always show" keeps a finished call open, so the
+		// block folds back on its own when the result lands.
+		if (section.type === AgenticSectionType.TOOL_CALL) {
 			return alwaysShowToolCallContent;
 		}
 
