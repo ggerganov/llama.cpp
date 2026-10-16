@@ -27,8 +27,8 @@ byteswap_tensors: dict[gguf.GGMLQuantizationType, tuple[int, ...]] = {
     gguf.GGMLQuantizationType.Q4_K:  (0, 2),  # d, dmin
     gguf.GGMLQuantizationType.Q6_K:  (208,),  # d
     gguf.GGMLQuantizationType.TQ2_0: (64,),   # d
-    gguf.GGMLQuantizationType.MXFP4: (),
-    gguf.GGMLQuantizationType.NVFP4: (),
+    gguf.GGMLQuantizationType.MXFP4: (),      # noop
+    gguf.GGMLQuantizationType.NVFP4: (),      # noop
 }
 
 
