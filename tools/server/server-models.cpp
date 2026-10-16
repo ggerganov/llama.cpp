@@ -894,7 +894,10 @@ void server_models::unfinished_downloads_remove(const std::string & name) {
     if (mapping.find(name) != mapping.end()) {
         throw std::invalid_argument("model '" + name + "' is downloading");
     }
-    unfinished_downloads.remove(name);
+    // a name with no record is no model: its files belong to the cached tags of the repo
+    if (!unfinished_downloads.remove(name)) {
+        throw std::runtime_error("model name=" + name + " is not found");
+    }
     bool ok = common_download_remove(name);
     SRV_INF("removing unfinished download name=%s (%s)\n", name.c_str(), ok ? "succeeded" : "nothing cached");
 }
@@ -1361,7 +1364,8 @@ void server_models::load(const std::string & name) {
 }
 
 void server_models::load(const std::string & name, const load_options & opts) {
-    if (debug_fake_timing) {
+    // the fake load time of a model; a download worker loads none
+    if (debug_fake_timing && opts.mode == SERVER_CHILD_MODE_NORMAL) {
         // do not hold the mutex here, other requests must keep making progress
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
@@ -1377,6 +1381,27 @@ void server_models::load(const std::string & name, const load_options & opts) {
     // edge case: block until any in-progress reload has finished so we always load
     // against the freshest preset and a consistent mapping state
     cv.wait(lk, [this]() { return !is_reloading; });
+
+    // a download over an existing entry is decided under the lock, so a load of the
+    // same model cannot start in between: a paused download or an idle cached model
+    // is downloaded again with its files kept, a download on its way and a running
+    // model are refused, and a preset or local model is not a download
+    if (opts.mode == SERVER_CHILD_MODE_DOWNLOAD) {
+        auto it = mapping.find(name);
+        if (it != mapping.end()) {
+            const auto & cur = it->second.meta;
+            if (cur.status == SERVER_MODEL_STATUS_DOWNLOADING) {
+                throw std::invalid_argument("model '" + name + "' is already downloading");
+            }
+            if (cur.is_running()) {
+                throw std::invalid_argument("model '" + name + "' is running, unload it first");
+            }
+            if (cur.source != SERVER_MODEL_SOURCE_CACHE) {
+                throw std::invalid_argument("model '" + name + "' already exists");
+            }
+            SRV_INF("resuming download for model '%s'\n", name.c_str());
+        }
+    }
 
     auto meta = opts.custom_meta.has_value() ? *opts.custom_meta : mapping[name].meta;
     if (meta.status != SERVER_MODEL_STATUS_UNLOADED) {
@@ -2500,37 +2525,7 @@ void server_models_routes::init_routes() {
             throw std::invalid_argument("model '" + name + "' resolves no file to download");
         }
 
-        // a model that exists is downloaded again when it is not running: a paused
-        // download parks its entry as DOWNLOADED until the next reload, and a cached
-        // model gets the sidecars it lacks; the files on disk are kept either way
-        if (models.has_model(name)) {
-            auto existing = models.get_meta(name);
-
-            if (existing.has_value()) {
-                // a download on its way is not started again, and a running model
-                // holds its files, so it goes only once it is unloaded
-                if (existing->status == SERVER_MODEL_STATUS_DOWNLOADING) {
-                    throw std::invalid_argument("model '" + name + "' is already downloading");
-                }
-                if (existing->is_running()) {
-                    throw std::invalid_argument("model '" + name + "' is running, unload it first");
-                }
-            }
-
-            // the entry can disappear here: get_meta() triggers the reload that
-            // erases a finished download, which is the resume case as well
-            const bool resumable = existing.has_value() &&
-                (existing->status == SERVER_MODEL_STATUS_DOWNLOADED ||
-                 (existing->source == SERVER_MODEL_SOURCE_CACHE && existing->status == SERVER_MODEL_STATUS_UNLOADED));
-
-            if (existing.has_value() && !resumable) {
-                throw std::invalid_argument("model '" + name + "' already exists");
-            }
-
-            SRV_INF("resuming download for model '%s'\n", name.c_str());
-        }
-
-        // then, proceed with the actual download
+        // then, proceed with the actual download; load() decides over an existing entry
         SRV_INF("starting download for model '%s'\n", name.c_str());
         {
             server_models::load_options load_opts;

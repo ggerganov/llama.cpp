@@ -707,6 +707,26 @@ def test_router_download_conflicts():
     assert "is running, unload it first" in res.body["error"]["message"]
 
 
+def test_router_delete_unknown_name():
+    """A name that is neither a model nor a recorded download is not found, and the
+    cached tags of its repo keep their files."""
+    global server
+    server.llama_cache = _own_cache("cache_delete_unknown_name")
+    server.start()
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": []})
+    assert res.status_code == 200
+    _wait_for_model_status(MODEL_DOWNLOAD_ID, {"downloaded", "unloaded"}, timeout=MODEL_DOWNLOAD_TIMEOUT)
+
+    repo = MODEL_DOWNLOAD_ID.split(":")[0]
+    res = server.make_request("DELETE", f"/models?model={repo}")
+    assert res.status_code != 200
+    assert "is not found" in res.body["error"]["message"]
+    assert MODEL_DOWNLOAD_ID in _get_model_ids(is_reload=True)
+
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
+
+
 def test_router_preset_model_sidecars():
     """A preset model reports the sidecars its files have on disk, like a cached one."""
     global server

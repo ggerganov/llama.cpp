@@ -306,7 +306,8 @@ public:
     // downloads that never finished, with their sidecar kinds (thread-safe)
     std::vector<server_unfinished_download> unfinished_downloads_get();
 
-    // drop a download that will never be resumed, its record and its partial files (thread-safe)
+    // drop a download that will never be resumed, its record and its partial files;
+    // throws for a name that is not recorded (thread-safe)
     void unfinished_downloads_remove(const std::string & name);
 
     // remove the sidecar `kind` of a model that is not in use, its files and partials (thread-safe)
