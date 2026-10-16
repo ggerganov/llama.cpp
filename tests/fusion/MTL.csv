@@ -193,6 +193,8 @@ mistral4            ,0   ,any     ,RMS_NORM+MUL                ,      9
 mpt                 ,0   ,any     ,NORM+MUL+ADD                ,      5
 muse-glimmer        ,0   ,any     ,RMS_NORM+MUL                ,     10
 muse-glimmer        ,0   ,any     ,RMS_NORM+MUL+ADD            ,      3
+muse-spark          ,0   ,any     ,MUL+ADD                     ,      4
+muse-spark          ,0   ,any     ,RMS_NORM+MUL                ,     14
 nanbeige            ,0   ,any     ,RMS_NORM+MUL                ,      5
 nemotron            ,0   ,any     ,NORM+MUL+ADD                ,      5
 nemotron_h          ,0   ,any     ,RMS_NORM+MUL                ,      5
