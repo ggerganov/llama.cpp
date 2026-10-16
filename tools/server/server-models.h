@@ -128,7 +128,8 @@ struct server_unfinished_downloads {
     // read the record an earlier run left
     void load();
 
-    // record a download that starts, replacing an earlier record of the same model
+    // record a download that starts, replacing an earlier record of the same model,
+    // and delete the partials of that record the new plan no longer writes
     void add(const server_unfinished_download & download);
 
     // forget a download whose files are complete

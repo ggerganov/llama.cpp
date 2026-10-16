@@ -748,3 +748,43 @@ def test_router_local_preset_listing():
     finally:
         os.remove(preset_path)
         os.remove(model_path)
+
+
+def test_router_download_unresolved_tag():
+    """A tag that resolves no file of the repo is refused before anything starts."""
+    global server
+    server.start()
+
+    model = MODEL_DOWNLOAD_ID.split(":")[0] + ":Q9_Z"
+    res = server.make_request("POST", "/models", data={"model": model})
+    assert res.status_code == 400
+    assert "resolves no file to download" in res.body["error"]["message"]
+    assert model not in _get_model_ids(is_reload=False)
+
+
+def test_router_download_drops_stale_partials():
+    """Posting a recorded download again deletes the partials its new plan no longer writes."""
+    global server
+
+    cache_dir = os.environ.get("LLAMA_CACHE", TMP_DIR)
+    os.makedirs(cache_dir, exist_ok=True)
+    stale_path = os.path.abspath(os.path.join(cache_dir, "test-stale.gguf.downloadInProgress"))
+    record_path = os.path.join(cache_dir, "unfinished-downloads.json")
+
+    with open(stale_path, "w") as f:
+        f.write("stale")
+    with open(record_path, "w") as f:
+        json.dump({"downloads": [{
+            "model":    MODEL_DOWNLOAD_ID,
+            "sidecars": ["mtp"],
+            "partials": [{"kind": "mtp", "path": stale_path}],
+        }]}, f)
+
+    server.start()
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": []})
+    assert res.status_code == 200
+    assert not os.path.exists(stale_path), "the stale partial survived the new record"
+
+    _wait_for_model_status(MODEL_DOWNLOAD_ID, {"downloaded", "unloaded"}, timeout=MODEL_DOWNLOAD_TIMEOUT)
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")

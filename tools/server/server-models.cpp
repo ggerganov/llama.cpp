@@ -824,13 +824,16 @@ void server_unfinished_downloads::delete_partials(const std::vector<common_downl
 
 void server_unfinished_downloads::add(const server_unfinished_download & download) {
     std::lock_guard<std::mutex> lk(mutex);
+    std::vector<common_download_partial> stale;
     auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == download.model; });
     if (it != downloads.end()) {
+        stale = std::move(it->partials);
         *it = download;
     } else {
         downloads.push_back(download);
     }
     save();
+    delete_partials(stale);
 }
 
 void server_unfinished_downloads::forget(const std::string & model) {
@@ -1696,27 +1699,14 @@ bool server_models::remove(const std::string & name) {
             || meta.status == SERVER_MODEL_STATUS_DOWNLOADED;
     });
 
-    // re-find after wait - load_models() may have erased the entry during the wait;
-    // the files go under the lock, so a download of the same tag cannot start meanwhile
-    it = mapping.find(name);
-    if (it == mapping.end()) {
-        // load_models() already erased the entry; we just need to clean up the cached files on disk
-        unfinished_downloads.remove(name);
-        bool ok = common_download_remove(name);
-        SRV_INF("removing model name=%s from cache (%s)\n", name.c_str(), ok ? "succeeded" : "partial");
-        notify_sse("model_remove", name, {});
-        return true;
-    }
-
+    // load_models() may have erased the entry during the wait; the files go under the
+    // lock, so a download of the same tag cannot start meanwhile
     mapping.erase(name);
     unfinished_downloads.remove(name);
 
-    // remove from disk (best-effort: cancelled downloads may have no cached files)
+    // best-effort: a cancelled download may have no cached files
     bool ok = common_download_remove(name);
-    if (!ok) {
-        SRV_WRN("removing model name=%s from disk returned false (no cached files?)\n", name.c_str());
-    }
-    SRV_INF("removing model name=%s from cache (%s)\n", name.c_str(), ok ? "succeeded" : "partial");
+    SRV_INF("removing model name=%s from cache (%s)\n", name.c_str(), ok ? "succeeded" : "nothing cached");
     notify_sse("model_remove", name, {});
     return true;
 }
@@ -2497,18 +2487,17 @@ void server_models_routes::init_routes() {
 
         // validate by fetching metadata, through the plan the download follows
         common_download_hf_plan plan;
-        bool ok = false;
         try {
             plan = common_download_get_hf_plan(model, sidecar_download_opts(params, sidecars));
-            ok = true;
         } catch (...) {
             SRV_ERR("unknown error while validating model '%s'\n", name.c_str());
             // other exceptions will be handled by the outer ex_wrapper()
             throw;
         }
 
-        if (!ok) {
-            throw std::invalid_argument("model validation failed, unable to download");
+        // a tag that resolves no file has nothing to download
+        if (plan.preset.path.empty() && plan.primary.path.empty() && common_download_plan_sidecars(plan).empty()) {
+            throw std::invalid_argument("model '" + name + "' resolves no file to download");
         }
 
         // a model that exists is downloaded again when it is not running: a paused
