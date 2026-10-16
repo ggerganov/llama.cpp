@@ -196,6 +196,19 @@ struct llama_model_maincoder : public llama_model_base {
 };
 
 
+struct llama_model_maion_coder : public llama_model_base {
+    llama_model_maion_coder(const struct llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+
 struct llama_model_talkie : public llama_model_base {
     llama_model_talkie(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
@@ -453,6 +466,11 @@ struct llama_model_mellum : public llama_model_base {
         graph(const llama_model & model, const llm_graph_params & params);
     };
 
+    template <bool iswa>
+    struct graph_mtp : public llm_graph_context {
+        graph_mtp(const llama_model & model, const llm_graph_params & params);
+    };
+
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
 };
 
@@ -583,6 +601,44 @@ struct llama_model_qwen3 : public llama_model_base {
 
     struct graph : public llm_graph_context {
         graph(const llama_model & model, const llm_graph_params & params);
+    protected:
+        // the helpers alone, a derived graph builds its own body
+        struct no_build {};
+        graph(const llm_graph_params & params, no_build) : llm_graph_context(params) {}
+
+        // the layers and the final norm: [n_embd, n_outputs]
+        ggml_tensor * build_backbone(const llama_model & model);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+// Qwen3 with the decision head of vllm-sr Decision 2.0: one score per option
+struct llama_model_vllm_decision2 : public llama_model_qwen3 {
+    llama_model_vllm_decision2(const struct llama_model_params & params) : llama_model_qwen3(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    ggml_tensor * option_norm     = nullptr;
+    ggml_tensor * option_norm_b   = nullptr;
+    ggml_tensor * query_norm      = nullptr;
+    ggml_tensor * query_norm_b    = nullptr;
+    ggml_tensor * key             = nullptr;
+    ggml_tensor * query           = nullptr;
+    ggml_tensor * option_mlp      = nullptr;
+    ggml_tensor * option_mlp_b    = nullptr;
+    ggml_tensor * query_mlp       = nullptr;
+    ggml_tensor * scorer_out      = nullptr;
+
+    class input_decision;
+
+    struct graph : public llama_model_qwen3::graph {
+        graph(const llama_model & model, const llm_graph_params & params);
+    private:
+        // hidden: [n_embd, n_outputs], returns one score per option: [1, n_options]
+        ggml_tensor * build_head(ggml_tensor * hidden, input_decision * inp);
+
+        const llama_model_vllm_decision2 & model;
     };
 
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
@@ -1092,6 +1148,19 @@ struct llama_model_olmo2 : public llama_model_base {
 
 struct llama_model_olmoe : public llama_model_base {
     llama_model_olmoe(const struct llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+
+struct llama_model_muse_spark : public llama_model_base {
+    llama_model_muse_spark(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
     void load_arch_tensors(llama_model_loader & ml) override;
 
@@ -1972,6 +2041,19 @@ struct llama_model_afmoe : public llama_model_base {
 };
 
 
+struct llama_model_beam : public llama_model_base {
+    llama_model_beam(const struct llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+
 struct llama_model_laguna : public llama_model_base {
     llama_model_laguna(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
@@ -2679,6 +2761,8 @@ struct llama_model_mistral3 : public llama_model_base {
     llama_model_mistral3(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
     void load_arch_tensors(llama_model_loader & ml) override;
+
+    class input_t_cond; // voxtral realtime: time conditioning of the ada rms norm
 
     struct graph : public llm_graph_context {
         graph(const llama_model & model, const llm_graph_params & params);
