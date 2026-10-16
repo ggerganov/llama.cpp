@@ -80,7 +80,7 @@ __device__ void sqrt_softplus_warp_inplace(float (&vals)[experts_per_thread], co
     }
 }
 
-#if !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+#if !defined(GGML_USE_HIP) || HIP_VERSION >= 60300000
 // Set -inf for experts outside the top n_group_used groups. Group score is the sum of its top-2 experts (DeepSeek V3).
 template <int n_experts, int experts_per_thread>
 __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const int n_groups, const int n_group_used, const int lane) {
@@ -125,7 +125,7 @@ __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const
         }
     }
 }
-#endif // !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+#endif // !defined(GGML_USE_HIP) || HIP_VERSION >= 60300000
 
 /*
     This kernel does the following:
@@ -220,7 +220,7 @@ __global__ void topk_moe_cuda(const float *         logits,
         }
     }
 
-#if !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+#if !defined(GGML_USE_HIP) || HIP_VERSION >= 60300000
     // without bias, masking wt is safe: the matcher ensures the kept groups hold all used experts
     if (config.n_groups > 0) {
         if constexpr (has_bias) {
@@ -229,7 +229,7 @@ __global__ void topk_moe_cuda(const float *         logits,
             group_mask_warp_inplace<n_experts>(wt, config.n_groups, config.n_group_used, threadIdx.x);
         }
     }
-#endif // !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+#endif // !defined(GGML_USE_HIP) || HIP_VERSION >= 60300000
 
     //at this point, each thread holds either a portion of the softmax distribution
     //or the raw logits. We do the argmax reduce over n_expert_used, each time marking
@@ -357,7 +357,7 @@ static void launch_topk_moe_cuda(ggml_backend_cuda_context & ctx,
     cudaStream_t stream = ctx.stream();
     const ggml_cuda_kernel_launch_params launch_params = ggml_cuda_kernel_launch_params(grid_dims, block_dims, 0, stream);
 
-#if defined(GGML_USE_HIP) && !defined(__HIP_ARCH_HAS_WARP_BALLOT__)
+#if defined(GGML_USE_HIP) && HIP_VERSION < 60300000
     GGML_ASSERT(config.n_groups == 0 && "expert groups fusion is not supported on this HIP version");
 #endif
 
