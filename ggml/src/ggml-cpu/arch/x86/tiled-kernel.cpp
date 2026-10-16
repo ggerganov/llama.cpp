@@ -288,14 +288,18 @@ static void tiled_run_microtile_avx2(const tiled_tile_src0 & src0, const tiled_t
                 }
             }
 
-            // OPTIMIZATION 2: Vectorized Epilogue with FMA3 gating
-            // Reduce accumulators into a 256-bit vector across 8 columns
-            alignas(32) int32_t s1_vals[GROUP];
-            #pragma GCC unroll 8
-            for (int t = 0; t < GROUP; t++) {
-                s1_vals[t] = hsum256_epi32(acc[t]);
-            }
-            __m256i s1_vec = _mm256_load_si256((const __m256i *) s1_vals);
+            // Reduce the eight accumulators to column sums in acc[0]..acc[7] order, with additions modulo 2^32.
+            const __m256i ab = _mm256_hadd_epi32(acc[0], acc[1]);
+            const __m256i cd = _mm256_hadd_epi32(acc[2], acc[3]);
+            const __m256i ef = _mm256_hadd_epi32(acc[4], acc[5]);
+            const __m256i gh = _mm256_hadd_epi32(acc[6], acc[7]);
+
+            // Each 128-bit half now holds four column sums over input lanes 0..3 or 4..7.
+            const __m256i abcd = _mm256_hadd_epi32(ab, cd);
+            const __m256i efgh = _mm256_hadd_epi32(ef, gh);
+            const __m256i lo = _mm256_permute2x128_si256(abcd, efgh, 0x20);
+            const __m256i hi = _mm256_permute2x128_si256(abcd, efgh, 0x31);
+            __m256i s1_vec = _mm256_add_epi32(lo, hi);
 
             if constexpr (BIAS != 0 && ACTBIAS) {
                 // act-bias correction: raw = desired + 128*sum_s scales[s]*w_bsum[s]; corr precomputed in repack_src0

@@ -14,8 +14,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tiled-unpk.h"
-
 #define TILED_TILE_K    256 // one QK_K block
 #define TILED_TILE_ROWS 256 // max window rows, ragged at edges
 #define TILED_MICRO     16  // microtile edge (also the bsums code-sum granularity)

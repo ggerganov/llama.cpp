@@ -1,6 +1,5 @@
 // mulmat microtile kernels: generic scalar reference implementation
 
-#include "ggml.h"
 #include "tiled-kernel.h"
 
 #include <cstring>
