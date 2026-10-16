@@ -28261,7 +28261,7 @@ static void ggml_cl_mul_mat_id(ggml_backend_t backend, const ggml_tensor * src0,
                         : (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X2E);
                     // dot prod has to be available
                     use_moe_dp4a = backend_ctx->has_integer_dot && use_moe_dp4a;
-                    // bin kernel takes precedence, dp4a bin kernel has higher priority than normal bin kernel.
+                    // bin kernel takes precedence, dp4a bin kernel has higher priority than normal bin kernel
                     // ldck dp4a bin kernel (X1) has the same priority as normal bin kernel (X2/A8x), they are not expected to coexist.
                     const bool use_moe_dp4a_ldck = backend_ctx->has_integer_dot &&
                         (!mxfp4_moe_dp4a_env || atoi(mxfp4_moe_dp4a_env) != 0) &&
