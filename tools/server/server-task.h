@@ -191,6 +191,11 @@ struct server_task {
             for (const int32_t marker : markers) {
                 pos = pos < 0 ? marker : std::min(pos, marker);
             }
+            for (size_t i = 0; i < order.size(); i++) {
+                if (order[i] != 0) {
+                    return pos < 0 ? (int32_t) i : std::min(pos, (int32_t) i);
+                }
+            }
             return pos;
         }
 
@@ -294,6 +299,11 @@ struct server_task {
 
     bool is_child() const {
         return id_parent != -1;
+    }
+
+    // embedding and rerank tasks always process their whole prompt, their state is never reused
+    bool is_stateless() const {
+        return type == SERVER_TASK_TYPE_EMBEDDING || type == SERVER_TASK_TYPE_RERANK;
     }
 };
 
