@@ -110,7 +110,7 @@ const char * get_media_marker();
 //
 
 // output modalities for architecture.output_modalities in GET /models
-std::vector<std::string> server_model_output_modalities(common_decision_type decision_type, bool decision_chat);
+std::vector<std::string> server_model_output_modalities(common_decision_type decision_type);
 
 // architecture object of GET /models; shared by the direct server and the router
 json server_model_architecture_json(

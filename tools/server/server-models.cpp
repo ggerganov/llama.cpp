@@ -569,7 +569,7 @@ void server_model_meta::update_caps(const common_params & base) {
     std::vector<std::string> output_modalities = {"text"};
     if (!params.model.path.empty()) {
         const common_gguf_info info = common_get_gguf_info(params.model.path);
-        output_modalities = server_model_output_modalities(info.decision_type, info.decision_chat);
+        output_modalities = server_model_output_modalities(info.decision_type);
         n_ctx_train       = info.n_ctx_train;
     }
 
