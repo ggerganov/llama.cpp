@@ -189,6 +189,12 @@ static bool common_pull_file(httplib::Client & cli,
         [&](const httplib::Response &response) {
             if (p.downloaded > 0 && response.status != 206) {
                 LOG_WRN("%s: server did not respond with 206 Partial Content for a resume request. Status: %d\n", func, response.status);
+                if (response.status == 416) {
+                    // the kept partial cannot be resumed (complete or stale): drop it,
+                    // so the next attempt starts over instead of wedging on the same 416
+                    ofs.close();
+                    remove(path_tmp.c_str());
+                }
                 return false;
             }
             if (p.downloaded == 0 && response.status != 200) {
