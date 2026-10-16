@@ -1,3 +1,4 @@
+import shutil
 import threading
 import pytest
 from utils import *
@@ -546,6 +547,15 @@ def _wait_for_sse_event(collected: list, event_type: str, model: str, timeout: i
     return False
 
 
+def _own_cache(name: str) -> str:
+    """An empty model cache for one test: the workers run in parallel, and a download
+    test must not see the files or the record another test writes in the shared cache."""
+    path = os.path.join(TMP_DIR, name)
+    shutil.rmtree(path, ignore_errors=True)
+    os.makedirs(path)
+    return path
+
+
 def test_router_download_model():
     """Case 1: download a model at the model limit, verify SSE events and GET /models."""
     global server
@@ -631,6 +641,7 @@ def test_router_delete_model():
 def test_router_download_sidecars():
     """Case 3: sidecars are a parameter of the download, never models of their own."""
     global server
+    server.llama_cache = _own_cache("cache_download_sidecars")
     server.start()
 
     server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
@@ -671,6 +682,7 @@ def test_router_download_conflicts():
     """A download is refused over one on its way, and over a model that is running."""
     global server
     server.models_max = 2
+    server.llama_cache = _own_cache("cache_download_conflicts")
     server.start()
 
     server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
@@ -766,8 +778,7 @@ def test_router_download_drops_stale_partials():
     """Posting a recorded download again deletes the partials its new plan no longer writes."""
     global server
 
-    cache_dir = os.environ.get("LLAMA_CACHE", TMP_DIR)
-    os.makedirs(cache_dir, exist_ok=True)
+    cache_dir = _own_cache("cache_download_drops_stale_partials")
     stale_path = os.path.abspath(os.path.join(cache_dir, "test-stale.gguf.downloadInProgress"))
     record_path = os.path.join(cache_dir, "unfinished-downloads.json")
 
@@ -780,6 +791,7 @@ def test_router_download_drops_stale_partials():
             "partials": [{"kind": "mtp", "path": stale_path}],
         }]}, f)
 
+    server.llama_cache = cache_dir
     server.start()
 
     res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": []})
