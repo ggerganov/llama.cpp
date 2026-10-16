@@ -3478,9 +3478,10 @@ static bool ggml_hexagon_flash_attn_is_hmx_eligible(
     const uint32_t n_kv_heads = k->ne[2];
     const uint32_t G = n_kv_heads > 0 ? n_head / n_kv_heads : 1;
     const uint32_t S = k->ne[1];
+    const uint32_t total_threads = sess->n_threads * sess->mdev.count;
 
     // Compute-bound head dim (for DK == 256 decode, HVX is faster when KV heads span all threads)
-    if (DK > 256 || (DK == 256 && (DV > 256 || n_kv_heads < sess->n_threads))) {
+    if (DK > 256 || (DK == 256 && (DV > 256 || n_kv_heads < total_threads))) {
         return true;
     }
 
