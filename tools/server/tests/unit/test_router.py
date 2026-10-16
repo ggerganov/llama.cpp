@@ -721,3 +721,30 @@ def test_router_preset_model_sidecars():
         assert entries["preset-sidecars"]["sidecars"] == ["mmproj"]
     finally:
         os.remove(preset_path)
+
+
+def test_router_local_preset_listing():
+    """A preset on a local file resolves from no HF repo: it lists without sidecars."""
+    global server
+
+    model_path = os.path.join(TMP_DIR, "test_local_preset.gguf")
+    preset_path = os.path.join(TMP_DIR, "test_local_preset.ini")
+
+    with open(model_path, "w") as f:
+        f.write("GGUF")
+    with open(preset_path, "w") as f:
+        f.write(f"[local]\nmodel = {model_path}\n")
+
+    server.models_preset = preset_path
+    server.start()
+
+    try:
+        res = server.make_request("GET", "/models")
+        assert res.status_code == 200
+        entries = {item["id"]: item for item in res.body.get("data", [])}
+
+        assert entries["local"]["source"] == "preset"
+        assert "sidecars" not in entries["local"]
+    finally:
+        os.remove(preset_path)
+        os.remove(model_path)

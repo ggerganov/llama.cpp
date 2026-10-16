@@ -718,18 +718,20 @@ static common_download_opts sidecar_download_opts(const common_params & params, 
     return opts;
 }
 
-// the sidecar kinds of a model present on disk, as the offline plan resolves them;
-// a preset can name its repo apart from the name it is listed under
-static json cached_sidecars(const server_model_meta & meta) {
-    std::string name = meta.name;
-
+// the HF repo a model resolves from: a preset names its own, a cached model is
+// listed under it, and a local file or a models dir entry has none
+static std::string model_hf_repo(const server_model_meta & meta) {
     std::string hf_repo;
     if (meta.preset.get_option("LLAMA_ARG_HF_REPO", hf_repo) && !hf_repo.empty()) {
-        name = hf_repo;
+        return hf_repo;
     }
+    return meta.source == SERVER_MODEL_SOURCE_CACHE ? meta.name : "";
+}
 
+// the sidecar kinds of a HF repo present on disk, as the offline plan resolves them
+static json cached_sidecars(const std::string & hf_repo) {
     common_params_model model;
-    model.hf_repo = name;
+    model.hf_repo = hf_repo;
 
     common_download_opts opts;
     opts.offline         = true;
@@ -2296,15 +2298,16 @@ void server_models_routes::init_routes() {
                 model_info["context_length"] = meta.n_ctx_train;
             }
 
-            // the sidecars a model has on disk, resolved as -hf would load them: a
-            // preset names a repo as well, while a models dir holds plain files. A
-            // download on its way reports the kinds it pulls, as an unfinished one does
+            // the sidecars a model has on disk, resolved as -hf would load them, for a
+            // model that resolves from a HF repo. A download on its way reports the
+            // kinds it pulls, as an unfinished one does
             const auto it_unfinished = unfinished.find(meta.name);
+            const std::string hf_repo = model_hf_repo(meta);
 
             if (it_unfinished != unfinished.end() && meta.status == SERVER_MODEL_STATUS_DOWNLOADING) {
                 model_info["sidecars"] = it_unfinished->second;
-            } else if (meta.source != SERVER_MODEL_SOURCE_MODELS_DIR) {
-                model_info["sidecars"] = cached_sidecars(meta);
+            } else if (!hf_repo.empty()) {
+                model_info["sidecars"] = cached_sidecars(hf_repo);
             }
 
             // merge with loaded_info from the child process if available
