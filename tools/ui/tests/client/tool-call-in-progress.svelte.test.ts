@@ -2,10 +2,10 @@
 // a tool call block.
 //
 // "Show tool call in progress" mirrors "Show thought in progress": a call is
-// expanded by default only while it is in flight (dispatched, result not back
-// yet) and folds back on its own once the result lands. "Always show tool call
-// content" is the one that keeps finished calls open and wins on its own.
-// A manual toggle always overrides the default, in both directions.
+// expanded by default only while it is in flight and folds back on its own once
+// the result lands. "Always show tool call content" is the one that keeps
+// finished calls open and wins on its own. A manual toggle always overrides the
+// default, in both directions.
 
 import ChatMessageAgenticContent from '$lib/components/app/chat/ChatMessages/ChatMessageAgenticContent.svelte';
 import { SETTINGS_KEYS } from '$lib/constants';
@@ -68,6 +68,15 @@ function textOf(container: Element): string {
 	return container.textContent ?? '';
 }
 
+async function collapseBlock(screen: { container: Element }): Promise<void> {
+	const trigger = screen.container.querySelector(TRIGGER_SELECTOR);
+
+	if (!(trigger instanceof HTMLButtonElement)) throw new Error('trigger not found');
+
+	await userEvent.click(trigger);
+	await tick();
+}
+
 describe('Show tool call in progress', () => {
 	beforeEach(() => {
 		setSettings({ alwaysShow: false, inProgress: false });
@@ -88,8 +97,6 @@ describe('Show tool call in progress', () => {
 	});
 
 	it('keeps the call collapsed while executing when the setting is off', async () => {
-		setSettings({ alwaysShow: false, inProgress: false });
-
 		const { container } = render(ChatMessageAgenticContent, {
 			isStreaming: true,
 			message: assistantMessage(),
@@ -103,19 +110,56 @@ describe('Show tool call in progress', () => {
 		expect(textOf(container)).not.toContain(PENDING_BODY);
 	});
 
-	it('folds the call back once its result is in', async () => {
+	it('folds the call back when its result arrives', async () => {
 		setSettings({ alwaysShow: false, inProgress: true });
 
-		const { container } = render(ChatMessageAgenticContent, {
+		const screen = render(ChatMessageAgenticContent, {
 			isStreaming: true,
 			message: assistantMessage(),
-			toolMessages: [toolResultMessage()]
+			toolMessages: []
 		});
 
 		await tick();
 
-		expect(textOf(container)).toContain(TOOL_NAME);
-		expect(textOf(container)).not.toContain(RESULT_BODY);
+		// Open while it waits for the result.
+		expect(textOf(screen.container)).toContain(PENDING_BODY);
+
+		// Same block, now finished: it must close on its own, no toggle given.
+		screen.rerender({
+			isStreaming: true,
+			message: assistantMessage(),
+			toolMessages: [toolResultMessage()]
+		});
+		await tick();
+
+		expect(textOf(screen.container)).toContain(TOOL_NAME);
+		expect(textOf(screen.container)).not.toContain(PENDING_BODY);
+		expect(textOf(screen.container)).not.toContain(RESULT_BODY);
+	});
+
+	it('keeps the manual choice once the result arrives', async () => {
+		setSettings({ alwaysShow: false, inProgress: true });
+
+		const screen = render(ChatMessageAgenticContent, {
+			isStreaming: true,
+			message: assistantMessage(),
+			toolMessages: []
+		});
+
+		await tick();
+
+		// Collapsed by hand while running, so the result must not reopen it.
+		await collapseBlock(screen);
+
+		screen.rerender({
+			isStreaming: true,
+			message: assistantMessage(),
+			toolMessages: [toolResultMessage()]
+		});
+		await tick();
+
+		expect(textOf(screen.container)).toContain(TOOL_NAME);
+		expect(textOf(screen.container)).not.toContain(RESULT_BODY);
 	});
 
 	it('still expands a finished call when "always show" is on', async () => {
@@ -135,7 +179,7 @@ describe('Show tool call in progress', () => {
 	it('lets a manual collapse win over the in-progress default', async () => {
 		setSettings({ alwaysShow: false, inProgress: true });
 
-		const { container } = render(ChatMessageAgenticContent, {
+		const screen = render(ChatMessageAgenticContent, {
 			isStreaming: true,
 			message: assistantMessage(),
 			toolMessages: []
@@ -143,22 +187,15 @@ describe('Show tool call in progress', () => {
 
 		await tick();
 
-		expect(textOf(container)).toContain(PENDING_BODY);
+		expect(textOf(screen.container)).toContain(PENDING_BODY);
 
-		const trigger = container.querySelector(TRIGGER_SELECTOR);
+		await collapseBlock(screen);
 
-		if (!(trigger instanceof HTMLButtonElement)) throw new Error('trigger not found');
-
-		await userEvent.click(trigger);
-		await tick();
-
-		expect(textOf(container)).not.toContain(PENDING_BODY);
+		expect(textOf(screen.container)).not.toContain(PENDING_BODY);
 	});
 
 	it('lets a manual expand win over the collapsed default', async () => {
-		setSettings({ alwaysShow: false, inProgress: false });
-
-		const { container } = render(ChatMessageAgenticContent, {
+		const screen = render(ChatMessageAgenticContent, {
 			isStreaming: true,
 			message: assistantMessage(),
 			toolMessages: []
@@ -166,15 +203,10 @@ describe('Show tool call in progress', () => {
 
 		await tick();
 
-		expect(textOf(container)).not.toContain(PENDING_BODY);
+		expect(textOf(screen.container)).not.toContain(PENDING_BODY);
 
-		const trigger = container.querySelector(TRIGGER_SELECTOR);
+		await collapseBlock(screen);
 
-		if (!(trigger instanceof HTMLButtonElement)) throw new Error('trigger not found');
-
-		await userEvent.click(trigger);
-		await tick();
-
-		expect(textOf(container)).toContain(PENDING_BODY);
+		expect(textOf(screen.container)).toContain(PENDING_BODY);
 	});
 });

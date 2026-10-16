@@ -15,7 +15,7 @@
 		ChatMessageAgenticTurnStats,
 		DatabaseMessage
 	} from '$lib/types';
-	import { deriveAgenticSections } from '$lib/utils';
+	import { deriveAgenticSections, isSectionExpandedByDefault } from '$lib/utils';
 
 	interface Props {
 		message: DatabaseMessage;
@@ -133,37 +133,17 @@
 		return groups;
 	});
 
-	function getDefaultExpanded(section: AgenticSection): boolean {
-		// In flight (args still streaming, or call dispatched and result not
-		// back yet): the "in progress" setting expands it, exactly like the
-		// reasoning block does while the thought is being generated. A manual
-		// toggle wins over this default - see isExpanded().
-		if (
-			section.type === AgenticSectionType.TOOL_CALL_PENDING ||
-			section.type === AgenticSectionType.TOOL_CALL_STREAMING
-		) {
-			return showToolCallInProgress || alwaysShowToolCallContent;
-		}
-
-		// Terminal state: only "always show" keeps a finished call open, so the
-		// block folds back on its own when the result lands.
-		if (section.type === AgenticSectionType.TOOL_CALL) {
-			return alwaysShowToolCallContent;
-		}
-
-		if (section.type === AgenticSectionType.REASONING_PENDING) {
-			return showThoughtInProgress;
-		}
-
-		return false;
-	}
-
 	function isExpanded(index: number, section: AgenticSection): boolean {
 		if (expandedStates[index] !== undefined) {
 			return expandedStates[index];
 		}
 
-		return getDefaultExpanded(section);
+		return isSectionExpandedByDefault(section, {
+			alwaysShowToolCallContent,
+			executingToolCallId: currentlyExecutingToolCallId,
+			showThoughtInProgress,
+			showToolCallInProgress
+		});
 	}
 
 	function toggleExpanded(index: number, section: AgenticSection) {
