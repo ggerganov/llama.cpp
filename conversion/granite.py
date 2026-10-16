@@ -301,44 +301,15 @@ class GraniteSwitchModel(GraniteMoeModel):
             self.gguf_writer.add_chat_template([{"name": "systemone", "template": systemone_template}])
 
     def _systemone_template(self) -> str:
-        # The model can support up to 255 classes, but we need single-token option markers for each slot which will be
-        # model-specific. We attempt to find 255 unique (semantically meaningful) single-token option markers using the
-        # model's tokenizer, falling back to the simple 62-character letters + numbers sequence
-        option_markers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-        try:
-            from transformers import AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained(self.dir_model)
-
-            plain_letters = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-            need = 256
-            pool, seen = [], set()
-            cand = list(plain_letters)
-            # extend with digits + letter pairs if we ever need >26 (CLINC-style); kept simple here
-            cand += [c for c in "0123456789"] + [a + b for a in plain_letters for b in plain_letters]
-            for lab in cand:
-                if len(pool) >= need:
-                    break
-                ids = tokenizer(lab, add_special_tokens=False)["input_ids"]
-                if len(ids) == 1 and ids[0] not in seen:
-                    pool.append((lab, ids[0]))
-                    seen.add(ids[0])
-            if len(pool) < need:
-                raise ValueError(f"could only build {len(pool)} single-token labels, need {need}")
-            option_markers = [label for label, _ in pool]
-
-        except (ImportError, OSError, ValueError) as err:
-            logger.warning("Unable to parse model tokenizer: %s. Falling back to standard 62 markers", err)
-
         # prompt of the decision aLoRA: a state turn, then a question turn that opens with the control token
         # (it replaces the first token of "### DECISION"), the answer is the label token that comes next
         description = jinja_str_or_json("o.description")
         option = (
-            "{% if type != 'noul' %}{{ option_markers[loop.index0] }}: {% if o.description %}" + description + "{% endif %}"
+            "{% if type != 'noul' %}{{ o.label }}: {% if o.description %}" + description + "{% endif %}"
             "{% elif o.key == 'true' %}A: {% if o.description %}" + description + "{% else %}The statement is true.{% endif %}"
             "{% else %}B: {% if o.description %}" + description + "{% else %}The statement is false.{% endif %}{% endif %}"
         )
         return (
-            "{% set option_markers = " + str(option_markers) + " %}"
             "<|start_of_role|>user<|end_of_role|>State:\n" + jinja_str_or_json("state") + "<|end_of_text|>\n"
             "<|start_of_role|>user<|end_of_role|><|decision|> DECISION\nQuestion:\n" + jinja_str_or_json("instructions")
             + "{% if type == 'score' %} Rate along the ordered levels below (lowest first).{% endif %}"
