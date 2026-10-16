@@ -694,14 +694,24 @@ static bool has_sidecar(const std::vector<std::string> & sidecars, const std::st
 
 // reject a sidecar kind no download can pull
 static void check_sidecar(const std::string & kind) {
-    const auto & kinds = common_download_sidecar_kinds();
+    std::vector<std::string> kinds;
+    for (const auto & s : common_download_sidecars()) {
+        kinds.emplace_back(s.name);
+    }
     if (!has_sidecar(kinds, kind)) {
         throw std::invalid_argument("unknown sidecar '" + kind + "', expected one of " + string_join(kinds, ", "));
     }
 }
 
+// the sidecars a download asks for; by default the ones -hf pulls without a draft type
 static std::vector<std::string> parse_sidecars(const json & body) {
-    std::vector<std::string> sidecars = json_value(body, "sidecars", std::vector<std::string>{ "mmproj" });
+    std::vector<std::string> defaults;
+    for (const auto & s : common_download_sidecars()) {
+        if (!s.draft) {
+            defaults.emplace_back(s.name);
+        }
+    }
+    std::vector<std::string> sidecars = json_value(body, "sidecars", defaults);
     for (const auto & kind : sidecars) {
         check_sidecar(kind);
     }
@@ -735,8 +745,8 @@ static json cached_sidecars(const std::string & hf_repo) {
 
     common_download_opts opts;
     opts.offline = true;
-    for (const auto & kind : common_download_sidecar_kinds()) {
-        common_download_opts_add_sidecar(opts, kind);
+    for (const auto & s : common_download_sidecars()) {
+        opts.*s.opt = true;
     }
 
     return common_download_plan_sidecars(common_download_get_hf_plan(model, opts));
@@ -765,9 +775,14 @@ void server_unfinished_downloads::load() {
     try {
         json data = json::parse(raw);
         for (const auto & d : data.value("downloads", json::array())) {
-            std::string model = json_value(d, "model", std::string());
-            if (!model.empty()) {
-                downloads.push_back({ model, json_value(d, "sidecars", std::vector<std::string>()) });
+            server_unfinished_download download;
+            download.model    = json_value(d, "model", std::string());
+            download.sidecars = json_value(d, "sidecars", std::vector<std::string>());
+            for (const auto & p : d.value("partials", json::array())) {
+                download.partials.push_back({ json_value(p, "kind", std::string()), json_value(p, "path", std::string()) });
+            }
+            if (!download.model.empty()) {
+                downloads.push_back(std::move(download));
             }
         }
     } catch (const std::exception & e) {
@@ -779,7 +794,11 @@ void server_unfinished_downloads::save() {
     json data;
     data["downloads"] = json::array();
     for (const auto & d : downloads) {
-        data["downloads"].push_back({ {"model", d.model}, {"sidecars", d.sidecars} });
+        json partials = json::array();
+        for (const auto & p : d.partials) {
+            partials.push_back({ {"kind", p.kind}, {"path", p.path} });
+        }
+        data["downloads"].push_back({ {"model", d.model}, {"sidecars", d.sidecars}, {"partials", partials} });
     }
     try {
         fs_write_atomic(std::filesystem::u8path(unfinished_downloads_path()), data.dump());
@@ -788,27 +807,73 @@ void server_unfinished_downloads::save() {
     }
 }
 
-void server_unfinished_downloads::add(const std::string & model, const std::vector<std::string> & sidecars) {
+void server_unfinished_downloads::delete_partials(const std::vector<common_download_partial> & parts) {
+    for (const auto & p : parts) {
+        const bool shared = std::any_of(downloads.begin(), downloads.end(), [&](const server_unfinished_download & d) {
+            return std::any_of(d.partials.begin(), d.partials.end(), [&](const common_download_partial & q) {
+                return q.path == p.path;
+            });
+        });
+        if (shared) {
+            continue;
+        }
+        std::error_code ec;
+        std::filesystem::remove(std::filesystem::u8path(p.path), ec);
+    }
+}
+
+void server_unfinished_downloads::add(const server_unfinished_download & download) {
     std::lock_guard<std::mutex> lk(mutex);
-    auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == model; });
+    auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == download.model; });
     if (it != downloads.end()) {
-        it->sidecars = sidecars;
+        *it = download;
     } else {
-        downloads.push_back({ model, sidecars });
+        downloads.push_back(download);
     }
     save();
 }
 
-std::vector<std::string> server_unfinished_downloads::take(const std::string & model) {
+void server_unfinished_downloads::forget(const std::string & model) {
+    std::lock_guard<std::mutex> lk(mutex);
+    auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == model; });
+    if (it != downloads.end()) {
+        downloads.erase(it);
+        save();
+    }
+}
+
+bool server_unfinished_downloads::remove(const std::string & model) {
     std::lock_guard<std::mutex> lk(mutex);
     auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == model; });
     if (it == downloads.end()) {
-        return {};
+        return false;
     }
-    std::vector<std::string> sidecars = std::move(it->sidecars);
+    auto partials = std::move(it->partials);
     downloads.erase(it);
     save();
-    return sidecars;
+    delete_partials(partials);
+    return true;
+}
+
+bool server_unfinished_downloads::remove_sidecar(const std::string & model, const std::string & kind) {
+    std::lock_guard<std::mutex> lk(mutex);
+    auto it = std::find_if(downloads.begin(), downloads.end(), [&](const auto & d) { return d.model == model; });
+    if (it == downloads.end() || !has_sidecar(it->sidecars, kind)) {
+        return false;
+    }
+    it->sidecars.erase(std::remove(it->sidecars.begin(), it->sidecars.end(), kind), it->sidecars.end());
+
+    std::vector<common_download_partial> dropped;
+    auto & partials = it->partials;
+    auto pos = std::stable_partition(partials.begin(), partials.end(), [&](const common_download_partial & p) {
+        return p.kind != kind;
+    });
+    dropped.assign(pos, partials.end());
+    partials.erase(pos, partials.end());
+
+    save();
+    delete_partials(dropped);
+    return true;
 }
 
 std::vector<server_unfinished_download> server_unfinished_downloads::get_all() {
@@ -821,9 +886,27 @@ std::vector<server_unfinished_download> server_models::unfinished_downloads_get(
 }
 
 void server_models::unfinished_downloads_remove(const std::string & name) {
-    auto sidecars = unfinished_downloads.take(name);
-    bool ok = common_download_remove(name, sidecar_download_opts(base_params, sidecars));
-    SRV_INF("removing unfinished download name=%s (%s)\n", name.c_str(), ok ? "succeeded" : "nothing on disk");
+    // under the lock, so a download of the same tag cannot start while its files go
+    std::lock_guard<std::mutex> lk(mutex);
+    if (mapping.find(name) != mapping.end()) {
+        throw std::invalid_argument("model '" + name + "' is downloading");
+    }
+    unfinished_downloads.remove(name);
+    bool ok = common_download_remove(name);
+    SRV_INF("removing unfinished download name=%s (%s)\n", name.c_str(), ok ? "succeeded" : "nothing cached");
+}
+
+bool server_models::remove_sidecar(const std::string & name, const std::string & kind) {
+    std::lock_guard<std::mutex> lk(mutex);
+    auto it = mapping.find(name);
+    if (it != mapping.end() && (it->second.meta.is_running() || it->second.meta.status == SERVER_MODEL_STATUS_DOWNLOADING)) {
+        throw std::invalid_argument("model '" + name + "' is in use, unload it first");
+    }
+    // a sidecar that only ever landed as a partial is still something removed
+    bool ok = unfinished_downloads.remove_sidecar(name, kind);
+    ok = common_download_remove_sidecars(name, sidecar_download_opts(base_params, { kind })) || ok;
+    SRV_INF("removing sidecar %s of model name=%s (%s)\n", kind.c_str(), name.c_str(), ok ? "succeeded" : "nothing cached");
+    return ok;
 }
 
 void server_models::notify_sse(const std::string & event, const std::string & model_id, const json & data) {
@@ -1315,11 +1398,6 @@ void server_models::load(const std::string & name, const load_options & opts) {
         }
     }
 
-    // remember the tag and its sidecars: the partial files carry a content hash, not the name
-    if (opts.mode == SERVER_CHILD_MODE_DOWNLOAD) {
-        unfinished_downloads.add(name, opts.sidecars);
-    }
-
     // prepare new instance info
     instance_t inst;
     inst.meta             = meta;
@@ -1347,14 +1425,21 @@ void server_models::load(const std::string & name, const load_options & opts) {
             child_env.push_back("LLAMA_SERVER_CHILD_MODE=download");
             child_env.push_back("LLAMA_ARG_HF_REPO=" + name);
 
-            // the sidecars as -hf would pull them: the mmproj switch and the draft types
+            // the sidecars as -hf would pull them: the draft types, and the mmproj switch
+            // for the one that is not a draft
+            bool        mmproj = false;
             std::string spec_types;
-            for (const auto & kind : opts.sidecars) {
-                if (kind != "mmproj") {
-                    spec_types += (spec_types.empty() ? "" : ",") + std::string("draft-") + kind;
+            for (const auto & s : common_download_sidecars()) {
+                if (!has_sidecar(opts.sidecars, s.name)) {
+                    continue;
+                }
+                if (s.draft) {
+                    spec_types += (spec_types.empty() ? "" : ",") + std::string("draft-") + s.name;
+                } else {
+                    mmproj = true;
                 }
             }
-            set_child_env(child_env, "LLAMA_ARG_MMPROJ_AUTO", has_sidecar(opts.sidecars, "mmproj") ? "1" : "0");
+            set_child_env(child_env, "LLAMA_ARG_MMPROJ_AUTO", mmproj ? "1" : "0");
             set_child_env(child_env, "LLAMA_ARG_SPEC_TYPE", spec_types.empty() ? "none" : spec_types);
         }
 
@@ -1369,6 +1454,11 @@ void server_models::load(const std::string & name, const load_options & opts) {
         if (!inst.subproc->sproc.create(child_args, options, child_env)) {
             throw std::runtime_error("failed to spawn server instance");
         }
+    }
+
+    // remember the download: the partial files carry a content hash, not the name
+    if (opts.mode == SERVER_CHILD_MODE_DOWNLOAD) {
+        unfinished_downloads.add({ name, opts.sidecars, opts.partials });
     }
 
     // old process should have exited already, but just in case, we clean it up here
@@ -1549,7 +1639,7 @@ void server_models::update_download_progress(const std::string & name, const com
                 // a download that failed keeps its tag: its partial files are still
                 // there and re-posting the tag resumes them
                 if (ok) {
-                    unfinished_downloads.take(name);
+                    unfinished_downloads.forget(name);
                 }
             } else {
                 json & info = it->second.meta.loaded_info;
@@ -1606,24 +1696,23 @@ bool server_models::remove(const std::string & name) {
             || meta.status == SERVER_MODEL_STATUS_DOWNLOADED;
     });
 
-    // re-find after wait - load_models() may have erased the entry during the wait
+    // re-find after wait - load_models() may have erased the entry during the wait;
+    // the files go under the lock, so a download of the same tag cannot start meanwhile
     it = mapping.find(name);
     if (it == mapping.end()) {
         // load_models() already erased the entry; we just need to clean up the cached files on disk
-        auto sidecars = unfinished_downloads.take(name);
-        lk.unlock();
-        bool ok = common_download_remove(name, sidecar_download_opts(base_params, sidecars));
+        unfinished_downloads.remove(name);
+        bool ok = common_download_remove(name);
         SRV_INF("removing model name=%s from cache (%s)\n", name.c_str(), ok ? "succeeded" : "partial");
         notify_sse("model_remove", name, {});
         return true;
     }
 
     mapping.erase(name);
-    auto sidecars = unfinished_downloads.take(name);
-    lk.unlock();
+    unfinished_downloads.remove(name);
 
     // remove from disk (best-effort: cancelled downloads may have no cached files)
-    bool ok = common_download_remove(name, sidecar_download_opts(base_params, sidecars));
+    bool ok = common_download_remove(name);
     if (!ok) {
         SRV_WRN("removing model name=%s from disk returned false (no cached files?)\n", name.c_str());
     }
@@ -2403,14 +2492,14 @@ void server_models_routes::init_routes() {
         }
         const auto sidecars = parse_sidecars(body);
 
-        common_params p;
-        p.model.hf_repo  = name;
-        p.hf_token       = params.hf_token;
+        common_params_model model;
+        model.hf_repo = name;
 
-        // validate by fetching metadata
+        // validate by fetching metadata, through the plan the download follows
+        common_download_hf_plan plan;
         bool ok = false;
         try {
-            common_models_handler_init(p, LLAMA_EXAMPLE_SERVER);
+            plan = common_download_get_hf_plan(model, sidecar_download_opts(params, sidecars));
             ok = true;
         } catch (...) {
             SRV_ERR("unknown error while validating model '%s'\n", name.c_str());
@@ -2461,6 +2550,7 @@ void server_models_routes::init_routes() {
             load_opts.custom_meta->source = SERVER_MODEL_SOURCE_CACHE;
             load_opts.custom_meta->name   = name;
             load_opts.sidecars            = sidecars;
+            load_opts.partials            = common_download_plan_partials(plan);
             models.load(name, load_opts);
         }
 
@@ -2480,13 +2570,7 @@ void server_models_routes::init_routes() {
         std::string sidecar = req.get_param("sidecar");
         if (!sidecar.empty()) {
             check_sidecar(sidecar);
-            auto meta = models.get_meta(name);
-            if (meta.has_value() && (meta->is_running() || meta->status == SERVER_MODEL_STATUS_DOWNLOADING)) {
-                throw std::invalid_argument("model '" + name + "' is in use, unload it first");
-            }
-            bool ok = common_download_remove_sidecars(name, sidecar_download_opts(params, { sidecar }));
-            SRV_INF("removing sidecar %s of model name=%s (%s)\n", sidecar.c_str(), name.c_str(), ok ? "succeeded" : "nothing on disk");
-            res_ok(res, {{"success", ok}});
+            res_ok(res, {{"success", models.remove_sidecar(name, sidecar)}});
             return res;
         }
 

@@ -39,6 +39,9 @@
 // downloader
 //
 
+// the suffix of the file a download writes until it completes
+static const std::string PARTIAL_SUFFIX = ".downloadInProgress";
+
 static void write_etag(const std::string & path, const std::string & etag) {
     const std::string etag_path = path + ".etag";
     fs_write_atomic(std::filesystem::u8path(etag_path), etag);
@@ -331,7 +334,7 @@ static int common_download_file_single_online(const std::string & url,
     }
 
     bool success = false;
-    const std::string path_temporary = path + ".downloadInProgress";
+    const std::string path_temporary = path + PARTIAL_SUFFIX;
     int delay = retry_delay_seconds;
 
     if (opts.callback) {
@@ -592,33 +595,65 @@ static hf_cache::hf_file find_best_sibling(const hf_cache::hf_files & files,
     return best;
 }
 
-static hf_cache::hf_file find_best_mmproj(const hf_cache::hf_files & files,
-                                          const std::string        & model) {
-    return find_best_sibling(files, model, "mmproj");
+static const std::vector<common_download_sidecar> sidecars = {
+    { "mmproj", "mmproj",  false, &common_download_opts::download_mmproj, &common_download_hf_plan::mmproj },
+    { "mtp",    "mtp-",    true,  &common_download_opts::download_mtp,    &common_download_hf_plan::mtp    },
+    { "dflash", "dflash-", true,  &common_download_opts::download_dflash, &common_download_hf_plan::dflash },
+    { "eagle3", "eagle3-", true,  &common_download_opts::download_eagle3, &common_download_hf_plan::eagle3 },
+    { "dspark", "dspark-", true,  &common_download_opts::download_dspark, &common_download_hf_plan::dspark },
+};
+
+const std::vector<common_download_sidecar> & common_download_sidecars() {
+    return sidecars;
 }
 
-static hf_cache::hf_file find_best_mtp(const hf_cache::hf_files & files,
-                                       const std::string        & model,
-                                       const std::string        & tag = "") {
-    return find_best_sibling(files, model, "mtp-", tag);
+bool common_download_opts_add_sidecar(common_download_opts & opts, const std::string & kind) {
+    for (const auto & s : sidecars) {
+        if (kind == s.name) {
+            opts.*s.opt = true;
+            return true;
+        }
+    }
+    return false;
 }
 
-static hf_cache::hf_file find_best_eagle3(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "eagle3-", tag);
+std::vector<std::string> common_download_plan_sidecars(const common_download_hf_plan & plan) {
+    std::vector<std::string> out;
+    for (const auto & s : sidecars) {
+        if (!(plan.*s.file).path.empty()) {
+            out.emplace_back(s.name);
+        }
+    }
+    return out;
 }
 
-static hf_cache::hf_file find_best_dflash(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dflash-", tag);
+std::vector<common_download_partial> common_download_plan_partials(const common_download_hf_plan & plan) {
+    std::vector<common_download_partial> out;
+
+    // a file in the cache resolves to its snapshot entry, a file still to download to its blob
+    auto add = [&](const std::string & kind, const hf_cache::hf_file & f) {
+        if (!f.local_path.empty() && f.local_path != f.final_path) {
+            out.push_back({ kind, f.local_path + PARTIAL_SUFFIX });
+        }
+    };
+
+    for (const auto & f : plan.model_files) {
+        add("", f);
+    }
+    for (const auto & s : sidecars) {
+        add(s.name, plan.*s.file);
+    }
+    return out;
 }
 
-static hf_cache::hf_file find_best_dspark(const hf_cache::hf_files & files,
-                                          const std::string        & model,
-                                          const std::string        & tag = "") {
-    return find_best_sibling(files, model, "dspark-", tag);
+// true when `name` carries the keyword of a sidecar kind
+static bool name_is_sidecar(const std::string & name) {
+    for (const auto & s : sidecars) {
+        if (name.find(s.keyword) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static bool gguf_filename_is_model(const std::string & filepath) {
@@ -631,12 +666,7 @@ static bool gguf_filename_is_model(const std::string & filepath) {
         filename = filename.substr(pos + 1);
     }
 
-    return filename.find("mmproj")  == std::string::npos &&
-           filename.find("imatrix") == std::string::npos &&
-           filename.find("mtp-")    == std::string::npos &&
-           filename.find("eagle3-") == std::string::npos &&
-           filename.find("dflash-") == std::string::npos &&
-           filename.find("dspark-") == std::string::npos;
+    return filename.find("imatrix") == std::string::npos && !name_is_sidecar(filename);
 }
 
 static hf_cache::hf_file find_best_model(const hf_cache::hf_files & files,
@@ -728,8 +758,11 @@ common_download_hf_plan common_download_get_hf_plan(const common_params_model & 
         }
     } else {
         primary = find_best_model(all, tag);
-        // a requested sidecar can resolve on its own, without a full model of the same tag
-        if (primary.path.empty() && !opts.download_mtp && !opts.download_dflash && !opts.download_eagle3 && !opts.download_dspark) {
+        // a requested draft can resolve on its own, without a full model of the same tag
+        const bool want_draft = std::any_of(sidecars.begin(), sidecars.end(), [&](const common_download_sidecar & s) {
+            return s.draft && opts.*s.opt;
+        });
+        if (primary.path.empty() && !want_draft) {
             LOG_ERR("%s: no GGUF files found in repository %s\n", __func__, repo.c_str());
             list_available_gguf_files(all);
             return plan;
@@ -741,24 +774,22 @@ common_download_hf_plan common_download_get_hf_plan(const common_params_model & 
         plan.model_files = get_split_files(all, primary);
     }
 
-    if (opts.download_mmproj && !primary.path.empty()) {
-        plan.mmproj = find_best_mmproj(all, primary.path);
-    }
-    if (opts.download_mtp) {
-        plan.mtp = find_best_mtp(all, primary.path, tag);
-    }
-    if (opts.download_dflash) {
-        plan.dflash = find_best_dflash(all, primary.path, tag);
-    }
-    if (opts.download_eagle3) {
-        plan.eagle3 = find_best_eagle3(all, primary.path, tag);
-    }
-    if (opts.download_dspark) {
-        plan.dspark = find_best_dspark(all, primary.path, tag);
+    // a draft resolves at the tag, the mmproj pairs with the model
+    for (const auto & s : sidecars) {
+        if (!(opts.*s.opt)) {
+            continue;
+        }
+        if (s.draft) {
+            plan.*s.file = find_best_sibling(all, primary.path, s.keyword, tag);
+        } else if (!primary.path.empty()) {
+            plan.*s.file = find_best_sibling(all, primary.path, s.keyword);
+        }
     }
 
-    if (primary.path.empty() &&
-        plan.mtp.local_path.empty() && plan.dflash.local_path.empty() && plan.eagle3.local_path.empty() && plan.dspark.local_path.empty()) {
+    const bool has_draft = std::any_of(sidecars.begin(), sidecars.end(), [&](const common_download_sidecar & s) {
+        return s.draft && !(plan.*s.file).local_path.empty();
+    });
+    if (primary.path.empty() && !has_draft) {
         LOG_ERR("%s: no GGUF files found in repository %s\n", __func__, repo.c_str());
         list_available_gguf_files(all);
     }
@@ -924,6 +955,11 @@ std::string common_docker_resolve_model(const std::string & docker) {
     }
 }
 
+// a cached file that lists a model under its tag: the first split of a model, not a sidecar
+static bool is_listed_model(const gguf_split_info & split) {
+    return split.index == 1 && !split.tag.empty() && !name_is_sidecar(split.prefix);
+}
+
 std::vector<common_cached_model_info> common_list_cached_models() {
     std::unordered_set<std::string> seen;
     std::vector<common_cached_model_info> result;
@@ -932,12 +968,7 @@ std::vector<common_cached_model_info> common_list_cached_models() {
 
     for (const auto & f : files) {
         auto split = get_gguf_split_info(f.path);
-        if (split.index != 1 || split.tag.empty() ||
-            split.prefix.find("mmproj")  != std::string::npos ||
-            split.prefix.find("mtp-")    != std::string::npos ||
-            split.prefix.find("eagle3-") != std::string::npos ||
-            split.prefix.find("dflash-") != std::string::npos ||
-            split.prefix.find("dspark-") != std::string::npos) {
+        if (!is_listed_model(split)) {
             continue;
         }
         if (seen.insert(f.repo_id + ":" + split.tag).second) {
@@ -968,80 +999,79 @@ std::string common_download_resolve_path(const std::string & hf_repo_with_tag, c
     return find_best_model(files, tag).local_path;
 }
 
-// each sidecar kind with the option that requests it and the plan file it resolves to
-struct common_download_sidecar {
-    const char * name;
-    bool common_download_opts::* opt;
-    hf_cache::hf_file common_download_hf_plan::* file;
-};
+// the files -hf loads from the cache, the model with every sidecar, for each cached
+// tag of `repo_id` other than `tag`
+static std::unordered_set<std::string> files_in_use(const std::string & repo_id, const std::string & tag) {
+    common_download_opts opts;
+    opts.offline = true;
+    for (const auto & s : sidecars) {
+        opts.*s.opt = true;
+    }
 
-static const common_download_sidecar sidecars[] = {
-    { "mmproj", &common_download_opts::download_mmproj, &common_download_hf_plan::mmproj },
-    { "mtp",    &common_download_opts::download_mtp,    &common_download_hf_plan::mtp    },
-    { "dflash", &common_download_opts::download_dflash, &common_download_hf_plan::dflash },
-    { "eagle3", &common_download_opts::download_eagle3, &common_download_hf_plan::eagle3 },
-    { "dspark", &common_download_opts::download_dspark, &common_download_hf_plan::dspark },
-};
+    std::unordered_set<std::string> tags;
+    std::unordered_set<std::string> used;
 
-const std::vector<std::string> & common_download_sidecar_kinds() {
-    static const std::vector<std::string> kinds = [] {
-        std::vector<std::string> out;
+    for (const auto & f : hf_cache::get_cached_files(repo_id)) {
+        auto split = get_gguf_split_info(f.path);
+        if (!is_listed_model(split) || split.tag == tag || !tags.insert(split.tag).second) {
+            continue;
+        }
+
+        common_params_model model;
+        model.hf_repo = repo_id + ":" + split.tag;
+
+        auto plan = common_download_get_hf_plan(model, opts);
+
+        for (const auto & m : plan.model_files) {
+            used.insert(m.local_path);
+        }
         for (const auto & s : sidecars) {
-            out.emplace_back(s.name);
+            const auto & sf = plan.*s.file;
+            if (!sf.local_path.empty()) {
+                used.insert(sf.local_path);
+            }
         }
-        return out;
-    }();
-    return kinds;
+    }
+    return used;
 }
 
-bool common_download_opts_add_sidecar(common_download_opts & opts, const std::string & kind) {
-    for (const auto & s : sidecars) {
-        if (kind == s.name) {
-            opts.*s.opt = true;
-            return true;
-        }
+static bool remove_snapshot_entries(const std::string & repo_id, const std::vector<std::filesystem::path> & to_remove);
+
+bool common_download_remove(const std::string & hf_repo_with_tag) {
+    namespace fs = std::filesystem;
+
+    auto [repo_id, tag] = common_download_split_repo_tag(hf_repo_with_tag);
+
+    if (tag.empty()) {
+        return hf_cache::remove_cached_repo(repo_id);
     }
-    return false;
-}
 
-std::vector<std::string> common_download_plan_sidecars(const common_download_hf_plan & plan) {
-    std::vector<std::string> out;
-    for (const auto & s : sidecars) {
-        if (!(plan.*s.file).path.empty()) {
-            out.emplace_back(s.name);
-        }
+    std::string tag_upper = tag;
+    for (char & c : tag_upper) {
+        c = (char) std::toupper((unsigned char) c);
     }
-    return out;
-}
 
-// remove the partial files a download of `hf_repo_with_tag` with `opts` leaves
-// next to their blobs, resolved through the same plan the download follows
-static bool remove_partial_files(const std::string & hf_repo_with_tag, const common_download_opts & opts, bool with_model) {
-    common_params_model model;
-    model.hf_repo = hf_repo_with_tag;
-
-    auto plan = common_download_get_hf_plan(model, opts);
-
-    hf_cache::hf_files planned;
-
-    if (with_model) {
-        planned = plan.model_files;
+    auto files = hf_cache::get_cached_files(repo_id);
+    if (files.empty()) {
+        return false;
     }
-    for (const auto & s : sidecars) {
-        const auto & f = plan.*s.file;
-        if (!f.local_path.empty()) {
-            planned.push_back(f);
+
+    // collect snapshot entries whose tag matches, but a file another tag loads stays
+    const auto used = files_in_use(repo_id, tag_upper);
+
+    std::vector<fs::path> to_remove;
+    for (const auto & f : files) {
+        auto split = get_gguf_split_info(f.path);
+        if (split.tag == tag_upper && used.find(f.local_path) == used.end()) {
+            to_remove.emplace_back(f.local_path);
         }
     }
 
-    bool removed = false;
-    for (const auto & f : planned) {
-        std::error_code ec;
-        if (std::filesystem::remove(std::filesystem::u8path(f.local_path + ".downloadInProgress"), ec)) {
-            removed = true;
-        }
+    if (to_remove.empty()) {
+        return false;
     }
-    return removed;
+
+    return remove_snapshot_entries(repo_id, to_remove);
 }
 
 // remove snapshot entries of `repo_id`, then the blobs no remaining entry references
@@ -1100,44 +1130,6 @@ static bool remove_snapshot_entries(const std::string & repo_id, const std::vect
     return true;
 }
 
-bool common_download_remove(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
-    namespace fs = std::filesystem;
-
-    auto [repo_id, tag] = common_download_split_repo_tag(hf_repo_with_tag);
-
-    if (tag.empty()) {
-        return hf_cache::remove_cached_repo(repo_id);
-    }
-
-    // an unfinished download has no snapshot entry, only partial files
-    bool removed = remove_partial_files(hf_repo_with_tag, opts, true);
-
-    std::string tag_upper = tag;
-    for (char & c : tag_upper) {
-        c = (char) std::toupper((unsigned char) c);
-    }
-
-    auto files = hf_cache::get_cached_files(repo_id);
-    if (files.empty()) {
-        return removed;
-    }
-
-    // collect snapshot entries whose tag matches
-    std::vector<fs::path> to_remove;
-    for (const auto & f : files) {
-        auto split = get_gguf_split_info(f.path);
-        if (split.tag == tag_upper) {
-            to_remove.emplace_back(f.local_path);
-        }
-    }
-
-    if (to_remove.empty()) {
-        return removed;
-    }
-
-    return remove_snapshot_entries(repo_id, to_remove);
-}
-
 bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const common_download_opts & opts) {
     common_params_model model;
     model.hf_repo = hf_repo_with_tag;
@@ -1147,10 +1139,6 @@ bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const
 
     auto plan = common_download_get_hf_plan(model, cached);
 
-    // the partials a sidecar download left in blobs/, resolved the way the download
-    // resolves them; the snapshot entries alone would leave those behind
-    bool removed = remove_partial_files(hf_repo_with_tag, opts, false);
-
     std::vector<std::filesystem::path> to_remove;
     for (const auto & s : sidecars) {
         const auto & f = plan.*s.file;
@@ -1159,8 +1147,7 @@ bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const
         }
     }
     if (to_remove.empty()) {
-        // a sidecar that only ever landed as a partial is still something removed
-        return removed;
+        return false;
     }
 
     return remove_snapshot_entries(common_download_split_repo_tag(hf_repo_with_tag).first, to_remove);

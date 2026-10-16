@@ -111,25 +111,35 @@ struct server_model_meta {
     void update_caps(const common_params & base);
 };
 
-// a download that never finished: the tag it was asked under and the sidecar kinds it pulls
+// a download that never finished: the tag it was asked under, the sidecar kinds it
+// pulls and the partial files its plan writes
 struct server_unfinished_download {
-    std::string              model;
-    std::vector<std::string> sidecars;
+    std::string                          model;
+    std::vector<std::string>             sidecars;
+    std::vector<common_download_partial> partials;
 };
 
 // the downloads that never finished, recorded next to the model cache. The cache names
 // partial files after their content hash, so this record is the only trace of what is
 // still incomplete: it lets a restarted router list, resume or remove them
+// a partial another recorded download also writes is never deleted
 // these functions are thread-safe
 struct server_unfinished_downloads {
     // read the record an earlier run left
     void load();
 
-    // record a download that starts, with the sidecar kinds it pulls
-    void add(const std::string & model, const std::vector<std::string> & sidecars);
+    // record a download that starts, replacing an earlier record of the same model
+    void add(const server_unfinished_download & download);
 
-    // forget a download and return its sidecar kinds, none when it is not recorded
-    std::vector<std::string> take(const std::string & model);
+    // forget a download whose files are complete
+    void forget(const std::string & model);
+
+    // forget a download and delete its partials; returns false when it is not recorded
+    bool remove(const std::string & model);
+
+    // drop the sidecar `kind` from a download and delete its partials; returns false
+    // when the download is not recorded with that kind
+    bool remove_sidecar(const std::string & model, const std::string & kind);
 
     // every recorded download
     std::vector<server_unfinished_download> get_all();
@@ -140,6 +150,9 @@ private:
 
     // write the record back; callers hold the mutex
     void save();
+
+    // delete the partials of `parts` no recorded download writes; callers hold the mutex
+    void delete_partials(const std::vector<common_download_partial> & parts);
 };
 
 struct server_models_routes;
@@ -295,6 +308,9 @@ public:
     // drop a download that will never be resumed, its record and its partial files (thread-safe)
     void unfinished_downloads_remove(const std::string & name);
 
+    // remove the sidecar `kind` of a model that is not in use, its files and partials (thread-safe)
+    bool remove_sidecar(const std::string & name, const std::string & kind);
+
     // return a copy of model metadata (thread-safe)
     std::optional<server_model_meta> get_meta(const std::string & name);
 
@@ -305,8 +321,10 @@ public:
         server_child_mode mode = SERVER_CHILD_MODE_NORMAL;
         // used for spawning a downloading child process
         std::optional<server_model_meta> custom_meta = std::nullopt;
-        // download mode: the sidecar kinds pulled with the model, as -hf would
-        std::vector<std::string> sidecars;
+        // download mode: the sidecar kinds pulled with the model, as -hf would, and
+        // the partial files the download plan writes
+        std::vector<std::string>             sidecars;
+        std::vector<common_download_partial> partials;
     };
 
     // load and unload model instances

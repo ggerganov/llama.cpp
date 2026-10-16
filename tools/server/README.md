@@ -2288,6 +2288,8 @@ Model name must be passed via query param: `?model={name}`
 
 To remove one sidecar of a cached model and keep the model, add `&sidecar={kind}` (`mmproj`, `mtp`, `dflash`, `eagle3` or `dspark`); the model must not be running.
 
+Deleting a model keeps the files another cached quant of the repo still loads, such as an mmproj named after the deleted quant, and the partial files another download still writes. A sidecar deleted on its own goes for every quant that shares it.
+
 If delete success, it will send an SSE event of type `model_remove`
 
 Response:
