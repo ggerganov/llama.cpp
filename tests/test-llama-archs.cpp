@@ -53,16 +53,12 @@ struct tensor_data_params {
     float  stdev;
 };
 
-// a generator keyed on a name, so that tensors which share a draw ask for the same key
-static std::mt19937 tensor_gen(const std::string & key, const tensor_data_params & params) {
-    return std::mt19937(params.seed ^ std::hash<std::string>{}(key));
-}
-
 // fills the values of one tensor, the name carries whatever the property needs
 typedef void (*tensor_filler)(std::vector<float> & dst, const char * name, const tensor_data_params & params);
 
-static void fill_normal(std::vector<float> & dst, const char * name, const tensor_data_params & params) {
-    std::mt19937 gen = tensor_gen(name, params);
+// a normal draw keyed on a name, so that tensors which share a draw ask for the same key
+static void fill_normal(std::vector<float> & dst, const char * key, const tensor_data_params & params) {
+    std::mt19937 gen(params.seed ^ std::hash<std::string>{}(key));
     std::normal_distribution<float> dis(0.0f, params.stdev);
     for (float & v : dst) {
         v = dis(gen);
@@ -71,10 +67,9 @@ static void fill_normal(std::vector<float> & dst, const char * name, const tenso
 
 // Mamba A must be negative (state decay)
 static void fill_ssm_a(std::vector<float> & dst, const char * name, const tensor_data_params & params) {
-    std::mt19937 gen = tensor_gen(name, params);
-    std::normal_distribution<float> dis(0.0f, params.stdev);
+    fill_normal(dst, name, params);
     for (float & v : dst) {
-        v = -fabsf(dis(gen));
+        v = -fabsf(v);
     }
 }
 
@@ -82,11 +77,10 @@ static void fill_ssm_a(std::vector<float> & dst, const char * name, const tensor
 // the alpha and the beta of a block share that weight, so the key drops the suffix and keeps the block
 static void fill_resid_gate(std::vector<float> & dst, const char * name, const tensor_data_params & params) {
     const char * suffix = strstr(name, "_resid_");
-    const bool is_beta = strncmp(suffix, "_resid_beta", 11) == 0;
-    std::mt19937 gen = tensor_gen(std::string(name, suffix - name), params);
-    std::normal_distribution<float> dis(0.0f, params.stdev);
+    const bool is_beta = strstr(suffix, "_resid_beta") != nullptr;
+    fill_normal(dst, std::string(name, suffix - name).c_str(), params);
     for (float & v : dst) {
-        const float beta = 1.0f / (1.0f + expf(-dis(gen)));
+        const float beta = 1.0f / (1.0f + expf(-v));
         v = is_beta ? beta : sqrtf(1.0f - beta*beta);
     }
 }
