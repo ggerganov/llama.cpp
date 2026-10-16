@@ -329,7 +329,6 @@ class GraniteSwitchModel(GraniteMoeModel):
         except (ImportError, OSError, ValueError) as err:
             logger.warning("Unable to parse model tokenizer: %s. Falling back to standard 62 markers", err)
 
-
         # prompt of the decision aLoRA: a state turn, then a question turn that opens with the control token
         # (it replaces the first token of "### DECISION"), the answer is the label token that comes next
         description = jinja_str_or_json("o.description")
