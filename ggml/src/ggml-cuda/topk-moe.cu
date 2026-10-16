@@ -80,6 +80,7 @@ __device__ void sqrt_softplus_warp_inplace(float (&vals)[experts_per_thread], co
     }
 }
 
+#if !defined(GGML_USE_HIP) || __HIP_ARCH_HAS_WARP_BALLOT__
 // Set -inf for experts outside the top n_group_used groups. Group score is the sum of its top-2 experts (DeepSeek V3).
 template <int n_experts, int experts_per_thread>
 __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const int n_groups, const int n_group_used, const int lane) {
@@ -114,7 +115,7 @@ __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const
         const float other = __shfl_sync(0xFFFFFFFF, score, g, WARP_SIZE);
         rank += other > score || (other == score && g < lane);
     }
-    const uint32_t keep = __ballot_sync(0xFFFFFFFF, lane < n_groups && rank < n_group_used);
+    const auto keep = __ballot_sync(0xFFFFFFFFULL, lane < n_groups && rank < n_group_used);
 
 #pragma unroll
     for (int i = 0; i < experts_per_thread; i++) {
@@ -124,6 +125,7 @@ __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const
         }
     }
 }
+#endif // !defined(GGML_USE_HIP) || __HIP_ARCH_HAS_WARP_BALLOT__
 
 /*
     This kernel does the following:
@@ -220,11 +222,15 @@ __global__ void topk_moe_cuda(const float *         logits,
 
     // without bias, masking wt is safe: the matcher ensures the kept groups hold all used experts
     if (config.n_groups > 0) {
+#if defined(GGML_USE_HIP) && !__HIP_ARCH_HAS_WARP_BALLOT__
+        GGML_ABORT("expert groups fusion is not supported on this HIP version");
+#else
         if constexpr (has_bias) {
             group_mask_warp_inplace<n_experts>(selection_wt, config.n_groups, config.n_group_used, threadIdx.x);
         } else {
             group_mask_warp_inplace<n_experts>(wt, config.n_groups, config.n_group_used, threadIdx.x);
         }
+#endif // defined(GGML_USE_HIP) && !__HIP_ARCH_HAS_WARP_BALLOT__
     }
 
     //at this point, each thread holds either a portion of the softmax distribution
