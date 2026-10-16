@@ -68,6 +68,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_starcoder(params);
         case LLM_ARCH_REFACT:
             return new llama_model_refact(params);
+        case LLM_ARCH_GLINER2:
+            return new llama_model_gliner2(params);
         case LLM_ARCH_BERT:
             return new llama_model_bert(params);
         case LLM_ARCH_JINA_BERT_V2:
@@ -2768,6 +2770,7 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
     switch (arch) {
         // Models that need specific instantiation should be handled in the
         // switch statement
+        case LLM_ARCH_GLINER2:
         case LLM_ARCH_BERT:
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_JINA_BERT_V3:
@@ -3459,6 +3462,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_MAMBA:
         case LLM_ARCH_MAMBA2:
         case LLM_ARCH_JAMBA:
+        case LLM_ARCH_GLINER2:
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_T5:
         case LLM_ARCH_T5ENCODER:

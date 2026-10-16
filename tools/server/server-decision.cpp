@@ -1,4 +1,5 @@
 #include "server-decision.h"
+#include "../../src/unicode.h"
 
 #include "../../src/llama-ext.h" // staging API: llama_decision_order
 
@@ -142,6 +143,13 @@ void server_decision_context::init(const llama_model * model) {
         if (max_head_tokens == 0) {
             throw std::runtime_error("decision model has no valid max_head_tokens");
         }
+        n_options_max = 255;
+    } else if (model_type == COMMON_DECISION_TYPE_GLINER) {
+        const auto toks = common_tokenize(vocab, "[L]", false, true);
+        if (toks.size() != 1) {
+            throw std::runtime_error("GLiNER model has no [L] token");
+        }
+        token_marker = toks[0];
         n_options_max = 255;
     } else if (model_type == COMMON_DECISION_TYPE_CLEF) {
         n_options_max   = 255;
@@ -973,14 +981,62 @@ void server_decision_context::fill_task_d1omni(
 }
 
 //
-// joint prompt (clef)
+// joint prompt
 //
 
-// given to the template: text between the pieces of the prompt, and at the start of the span of a question or of an option
-static const std::string CLEF_MARKER        = "<<clef:";
-static const std::string CLEF_SEP           = "<<clef:sep>>";
-static const std::string CLEF_MARK_QUESTION = "<<clef:question>>";
-static const std::string CLEF_MARK_OPTION   = "<<clef:option>>";
+static std::string decision_gliner_lower(const std::string & word) {
+    const auto cpts = unicode_cpts_from_utf8(word);
+    std::string out;
+    for (size_t i = 0; i < cpts.size(); ++i) {
+        uint32_t cpt = cpts[i];
+        if (cpt == 0x130) {
+            out += "i\xCC\x87";
+            continue;
+        }
+        if (cpt == 0x3A3) {
+            size_t before = i, after = i + 1;
+            while (before && unicode_cpt_flags_from_cpt(cpts[before - 1]).is_accent_mark) {
+                --before;
+            }
+            while (after < cpts.size() && unicode_cpt_flags_from_cpt(cpts[after]).is_accent_mark) {
+                ++after;
+            }
+            auto cased = [](uint32_t cp) {
+                const auto flags = unicode_cpt_flags_from_cpt(cp);
+                return flags.is_lowercase || flags.is_uppercase;
+            };
+            cpt = before && cased(cpts[before - 1]) && (after == cpts.size() || !cased(cpts[after])) ? 0x3C2 : 0x3C3;
+        }
+        out += unicode_cpt_to_utf8(unicode_tolower(cpt));
+    }
+    return out;
+}
+
+static bool decision_gliner_space(uint32_t cpt) {
+    return unicode_cpt_flags_from_cpt(cpt).is_whitespace && !(cpt >= 0x1C && cpt <= 0x1F);
+}
+
+// The HF normalizer merges whitespace runs, keeps single non-ASCII spaces and strips the right side.
+static std::string decision_gliner_segment(const std::string & text) {
+    const auto cpts = unicode_cpts_from_utf8(text);
+    size_t end = cpts.size();
+    while (end && decision_gliner_space(cpts[end - 1])) {
+        --end;
+    }
+    std::string out;
+    for (size_t i = 0; i < end;) {
+        size_t next = i + 1;
+        if (decision_gliner_space(cpts[i])) {
+            while (next < end && decision_gliner_space(cpts[next])) {
+                ++next;
+            }
+        }
+        const uint32_t cpt = next > i + 1 || cpts[i] == '\n' || cpts[i] == '\r' || cpts[i] == '\t' ? ' ' : cpts[i];
+        out += unicode_cpt_to_utf8(cpt);
+        i = next;
+    }
+    return out;
+}
 
 void server_decision_context::fill_task_joint(
         const json & state,
@@ -989,10 +1045,19 @@ void server_decision_context::fill_task_joint(
         mtmd_context * mctx,
         const mtmd_helper_init_opt & init_opt,
         server_task & task) const {
+    const bool is_gliner = type == COMMON_DECISION_TYPE_GLINER;
+    const std::string marker        = is_gliner ? "<<gliner:" : "<<clef:";
+    const std::string separator     = marker + "sep>>";
+    const std::string mark_question = marker + "question>>";
+    const std::string mark_option   = marker + "option>>";
+
     json inp_questions = json::array();
     for (const auto & question : questions) {
         json options = json::array();
         for (const auto & opt : question.options) {
+            if (is_gliner && (opt.key == "[SEP_TEXT]" || opt.key == "[SEP_STRUCT]")) {
+                throw std::invalid_argument("GLiNER option names cannot be schema separators");
+            }
             options.push_back(json{
                 {"key",         opt.key},
                 {"description", opt.description},
@@ -1006,12 +1071,29 @@ void server_decision_context::fill_task_joint(
         });
     }
 
-    // the template is given raw JSON values with sorted keys, and no marker in the input
     json inp = json{
         {"state",     state},
         {"questions", inp_questions},
     };
-    inp = decision_replace_text(decision_sort_keys(inp), CLEF_MARKER, "<<clef ");
+    if (is_gliner) {
+        std::string text = state.is_string() ? state.get<std::string>() : state.dump();
+        if (text.empty() || (text.back() != '.' && text.back() != '!' && text.back() != '?')) {
+            text += '.';
+        }
+        const std::vector<std::string> patterns = {
+            "(?:[hH][tT][tT][pP][sS]?://[^\\s]+|[wW][wW][wW]\\.[^\\s]+)|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}|@[a-zA-Z0-9_]+|[\\p{L}\\p{N}_]+(?:[-_][\\p{L}\\p{N}_]+)*|\\S",
+        };
+        inp["words"] = json::array();
+        for (const auto & word : unicode_regex_split(text, patterns, false)) {
+            const auto cpts = unicode_cpts_from_utf8(word);
+            if (!cpts.empty() && !unicode_cpt_flags_from_cpt(cpts[0]).is_whitespace) {
+                inp["words"].push_back(decision_gliner_lower(word));
+            }
+        }
+    } else {
+        inp = decision_sort_keys(inp);
+    }
+    inp = decision_replace_text(inp, marker, marker.substr(0, marker.size() - 1) + " ");
 
     // the template puts one media marker per image
     json images = json::array();
@@ -1022,9 +1104,9 @@ void server_decision_context::fill_task_joint(
         }
     }
     inp["images"]        = images;
-    inp["sep"]           = CLEF_SEP;
-    inp["mark_question"] = CLEF_MARK_QUESTION;
-    inp["mark_option"]   = CLEF_MARK_OPTION;
+    inp["sep"]           = separator;
+    inp["mark_question"] = mark_question;
+    inp["mark_option"]   = mark_option;
 
     jinja::context ctx(tmpl->source());
     jinja::global_from_json(ctx, inp, false);
@@ -1035,7 +1117,7 @@ void server_decision_context::fill_task_joint(
     const auto invalid = std::runtime_error("unexpected layout of the decision prompt");
 
     // the model was trained with the pieces tokenized one by one
-    const std::vector<std::string> pieces = string_split(prompt, CLEF_SEP);
+    const std::vector<std::string> pieces = string_split(prompt, separator);
     size_t i_piece = 0;
 
     task.tokens = server_tokens(llama_tokens(), false);
@@ -1045,7 +1127,7 @@ void server_decision_context::fill_task_joint(
         while (i_piece < pieces.size() && head.find(get_media_marker()) == std::string::npos) {
             head += pieces[i_piece++];
         }
-        if (head.find(get_media_marker()) == std::string::npos || head.find(CLEF_MARKER) != std::string::npos) {
+        if (head.find(get_media_marker()) == std::string::npos || head.find(marker) != std::string::npos) {
             throw invalid;
         }
         task.tokens = process_mtmd_prompt(mctx, head, files, init_opt);
@@ -1056,8 +1138,9 @@ void server_decision_context::fill_task_joint(
     for (; i_piece < pieces.size(); i_piece++) {
         std::string piece = pieces[i_piece];
         int32_t order = LLAMA_DECISION_ORDER_NONE;
-        if (string_starts_with(piece, CLEF_MARK_QUESTION)) {
-            piece = piece.substr(CLEF_MARK_QUESTION.size());
+        const bool is_option = string_starts_with(piece, mark_option);
+        if (!is_gliner && string_starts_with(piece, mark_question)) {
+            piece = piece.substr(mark_question.size());
             if (i_question >= questions.size()) {
                 throw invalid;
             }
@@ -1066,27 +1149,37 @@ void server_decision_context::fill_task_joint(
                 case SERVER_DECISION_QUESTION_CHOICE: order = LLAMA_DECISION_ORDER_QUESTION_CHOICE; break;
                 case SERVER_DECISION_QUESTION_SCORE:  order = LLAMA_DECISION_ORDER_QUESTION_SCORE;  break;
             }
-        } else if (string_starts_with(piece, CLEF_MARK_OPTION)) {
-            piece = piece.substr(CLEF_MARK_OPTION.size());
-            order = LLAMA_DECISION_ORDER_OPTION;
-            task.decision.n_scores++;
+        } else if (is_option) {
+            piece = piece.substr(mark_option.size());
+            if (is_gliner) {
+                task.decision.markers.push_back(task.tokens.size());
+            } else {
+                order = LLAMA_DECISION_ORDER_OPTION;
+                task.decision.n_scores++;
+            }
         }
 
-        const llama_tokens piece_tokens = common_tokenize(vocab, piece, false, true);
+        const llama_tokens piece_tokens = common_tokenize(vocab, is_gliner ? decision_gliner_segment(piece) : piece, false, true);
+        if (is_gliner && is_option && (piece_tokens.empty() || piece_tokens[0] != token_marker)) {
+            throw std::runtime_error("GLiNER option marker is not a single token");
+        }
         if (order != LLAMA_DECISION_ORDER_NONE && piece_tokens.empty()) {
             throw std::invalid_argument("the instructions and the options of a question must not be empty");
         }
         for (const llama_token token : piece_tokens) {
             task.tokens.push_back(token);
         }
-        task.decision.order.resize(task.tokens.size(), order);
+        if (!is_gliner) {
+            task.decision.order.resize(task.tokens.size(), order);
+        }
     }
 
     size_t n_options = 0;
     for (const auto & question : questions) {
         n_options += question.options.size();
     }
-    if (i_question != questions.size() || (size_t) task.decision.n_scores != n_options) {
+    const size_t n_scores = is_gliner ? task.decision.markers.size() : task.decision.n_scores;
+    if ((!is_gliner && i_question != questions.size()) || n_scores != n_options) {
         throw invalid;
     }
 }

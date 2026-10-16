@@ -202,6 +202,7 @@ class Keys:
         ICLR_LORA_RANK               = "{arch}.attention.iclr_lora_rank"
         VALUE_RESIDUAL_MIX_LORA_RANK = "{arch}.attention.value_residual_mix_lora_rank"
         GATE_LORA_RANK               = "{arch}.attention.gate_lora_rank"
+        REL_MAX_DISTANCE             = "{arch}.attention.relative_max_distance"
         REL_BUCKETS_COUNT            = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW               = "{arch}.attention.sliding_window"
         SCALE                        = "{arch}.attention.scale"
@@ -555,6 +556,7 @@ class MODEL_ARCH(IntEnum):
     MPT              = auto()
     STARCODER        = auto()
     REFACT           = auto()
+    GLINER2          = auto()
     BERT             = auto()
     MODERN_BERT      = auto()
     NOMIC_BERT       = auto()
@@ -1370,6 +1372,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MPT:              "mpt",
     MODEL_ARCH.STARCODER:        "starcoder",
     MODEL_ARCH.REFACT:           "refact",
+    MODEL_ARCH.GLINER2:          "gliner2",
     MODEL_ARCH.BERT:             "bert",
     MODEL_ARCH.MODERN_BERT:      "modern-bert",
     MODEL_ARCH.NOMIC_BERT:       "nomic-bert",
@@ -2617,6 +2620,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GLINER2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
+        MODEL_TENSOR.CLS,
+        MODEL_TENSOR.CLS_OUT,
     ],
     MODEL_ARCH.BERT: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -6267,6 +6285,7 @@ class GGUFValueType(IntEnum):
 
 
 class DecisionType:
+    GLINER  = "gliner"   # classifier on contextual label markers
     LAYA    = "laya"     # head blocks + scorer on the hidden state of one marker token per option
     OPENJEV = "openjev"  # logits of one label token per option
     LEV     = "lev"      # same as openjev, noul is read from a rating scale

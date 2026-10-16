@@ -1026,6 +1026,9 @@ class GGUFWriter:
     def add_gate_lora_rank(self, length: int) -> None:
         self.add_uint32(Keys.Attention.GATE_LORA_RANK.format(arch=self.arch), length)
 
+    def add_relative_attn_max_distance(self, value: int) -> None:
+        self.add_uint32(Keys.Attention.REL_MAX_DISTANCE.format(arch=self.arch), value)
+
     def add_relative_attn_buckets_count(self, value: int) -> None:
         self.add_uint32(Keys.Attention.REL_BUCKETS_COUNT.format(arch=self.arch), value)
 

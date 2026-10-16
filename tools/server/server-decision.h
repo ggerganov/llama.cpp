@@ -53,7 +53,7 @@ struct server_decision_context {
 
     // true if all the questions of a request go in one prompt, see fill_task_joint()
     bool is_joint() const {
-        return type == COMMON_DECISION_TYPE_CLEF;
+        return type == COMMON_DECISION_TYPE_CLEF || type == COMMON_DECISION_TYPE_GLINER;
     }
 
     // true if the prompt of the model has a place for images
