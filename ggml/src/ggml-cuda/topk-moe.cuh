@@ -14,10 +14,7 @@ struct ggml_cuda_topk_moe_args {
     bool prob_bias{};
     bool norm{};
     bool scale{};
-    bool grouped_experts{};
-
-    int  n_expert_groups{};
-    int  n_exp_per_group{};
+    int  n_groups{};     // > 0: pick experts only from the top n_group_used expert groups
     int  n_group_used{};
 };
 

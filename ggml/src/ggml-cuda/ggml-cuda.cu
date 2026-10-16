@@ -3029,258 +3029,57 @@ static int ggml_cuda_try_ssm_scan_cache_fusion(
     return skip;
 }
 
-static bool ggml_cuda_topk_moe_grouped_experts(
-        const struct ggml_cgraph * cgraph,
-        int &                      node_idx,
-        const ggml_tensor *        selection_src,
-        const ggml_tensor *        probs_reshaped,
-        ggml_cuda_topk_moe_args &  args) {
-    const int n_nodes = cgraph->n_nodes;
-    ggml_tensor ** nodes = cgraph->nodes;
+// expert group selection from build_moe_ffn (n_expert_groups > 1)
+// src0/src1 index into this table, -1 is the (biased) probs, -2 is not checked
+static const struct {
+    ggml_op op;
+    int     src0;
+    int     src1;
+} topk_moe_group_pattern[] = {
+    { GGML_OP_RESHAPE,  -1, -2 }, //  0: [n_exp_per_group, n_expert_groups, n_tokens]
+    { GGML_OP_RESHAPE,   0, -2 }, //  1: [1, n_exp_per_group, n_expert_groups, n_tokens]
+    { GGML_OP_ARGSORT,   0, -2 }, //  2
+    { GGML_OP_VIEW,      2, -2 }, //  3: top-2 per group
+    { GGML_OP_GET_ROWS,  1,  3 }, //  4
+    { GGML_OP_RESHAPE,   4, -2 }, //  5
+    { GGML_OP_SUM_ROWS,  5, -2 }, //  6: group scores
+    { GGML_OP_RESHAPE,   6, -2 }, //  7
+    { GGML_OP_ARGSORT,   7, -2 }, //  8
+    { GGML_OP_VIEW,      8, -2 }, //  9: top n_group_used groups
+    { GGML_OP_GET_ROWS,  0,  9 }, // 10
+    { GGML_OP_FILL,      0, -2 }, // 11
+    { GGML_OP_SET_ROWS, 10,  9 }, // 12: unused groups -> -inf
+    { GGML_OP_RESHAPE,  12, -2 }, // 13: [n_expert, n_tokens]
+};
 
-    // group reshape: [n_exp_per_group, n_expert_groups, n_tokens]
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_RESHAPE ||
-            nodes[node_idx]->src[0] != selection_src) {
+static bool ggml_cuda_topk_moe_group_fusion(const struct ggml_cgraph * cgraph, int node_idx, const ggml_tensor * selection, ggml_cuda_topk_moe_args & args) {
+    const int n_ops = (int) std::size(topk_moe_group_pattern);
+    if (node_idx + n_ops > cgraph->n_nodes) {
         return false;
     }
 
-    const ggml_tensor * gr = nodes[node_idx];
+    ggml_tensor ** nodes = cgraph->nodes + node_idx;
+    auto src_ok = [&](const ggml_tensor * src, int idx) {
+        return idx == -2 || src == (idx == -1 ? selection : nodes[idx]);
+    };
 
-    const int64_t E = probs_reshaped->ne[1];
-    const int64_t P = gr->ne[0];
-    const int64_t G = gr->ne[1];
-    const int64_t T = gr->ne[2];
+    for (int i = 0; i < n_ops; i++) {
+        const auto & p = topk_moe_group_pattern[i];
+        if (nodes[i]->op != p.op || !src_ok(nodes[i]->src[0], p.src0) || !src_ok(nodes[i]->src[1], p.src1)) {
+            return false;
+        }
+    }
 
-    if (probs_reshaped->ne[0] != 1 ||
-            probs_reshaped->ne[2] != T ||
-            probs_reshaped->ne[3] != 1) {
+    const int n_groups     = nodes[0]->ne[1];
+    const int n_group_used = nodes[9]->ne[0];
+
+    if (nodes[3]->ne[0] != 2 || nodes[12]->src[2] != nodes[11] || ggml_get_op_params_f32(nodes[11], 0) != -INFINITY ||
+            n_groups > WARP_SIZE) {
         return false;
     }
 
-    if (P <= 0 || G <= 1 || T <= 0 || E <= 0 || P * G != E) {
-        return false;
-    }
-
-    // The current kernel assigns one thread per group.
-    if (G > WARP_SIZE) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // reshape to [1, n_exp_per_group, n_expert_groups, n_tokens]
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_RESHAPE ||
-            nodes[node_idx]->src[0] != gr) {
-        return false;
-    }
-
-    const ggml_tensor * r4 = nodes[node_idx];
-
-    if (r4->ne[0] != 1 || r4->ne[1] != P || r4->ne[2] != G || r4->ne[3] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // argsort over experts within groups
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_ARGSORT ||
-            nodes[node_idx]->src[0] != gr) {
-        return false;
-    }
-
-    const ggml_tensor * ga_arg = nodes[node_idx];
-    ++node_idx;
-
-    // view top-2 per group
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_VIEW ||
-            nodes[node_idx]->src[0] != ga_arg) {
-        return false;
-    }
-
-    const ggml_tensor * g2 = nodes[node_idx];
-
-    if (g2->ne[0] != 2 ||
-            g2->ne[1] != G || g2->ne[2] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // gather top-k expert values per group
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_GET_ROWS) {
-        return false;
-    }
-
-    const ggml_tensor * get1 = nodes[node_idx];
-
-    if (get1->src[0] != r4 || get1->src[1] != g2) {
-        return false;
-    }
-
-    if (get1->ne[0] != 1 ||
-            get1->ne[1] != 2 ||
-            get1->ne[2] != G ||
-            get1->ne[3] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // reshape to [2, n_expert_groups, n_tokens]
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_RESHAPE ||
-            nodes[node_idx]->src[0] != get1) {
-        return false;
-    }
-
-    const ggml_tensor * r5 = nodes[node_idx];
-
-    if (r5->ne[0] != 2 || r5->ne[1] != G || r5->ne[2] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // sum top-k expert values per group
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_SUM_ROWS ||
-            nodes[node_idx]->src[0] != r5) {
-        return false;
-    }
-
-    const ggml_tensor * sum = nodes[node_idx];
-
-    if (sum->ne[0] != 1 || sum->ne[1] != G || sum->ne[2] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // reshape group scores to [n_expert_groups, n_tokens]
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_RESHAPE ||
-            nodes[node_idx]->src[0] != sum) {
-        return false;
-    }
-
-    const ggml_tensor * r6 = nodes[node_idx];
-
-    if (r6->ne[0] != G || r6->ne[1] != T || r6->ne[2] != 1) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // argsort groups
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_ARGSORT ||
-            nodes[node_idx]->src[0] != r6) {
-        return false;
-    }
-
-    const ggml_tensor * earg = nodes[node_idx];
-    ++node_idx;
-
-    // view top n_group_used groups
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_VIEW ||
-            nodes[node_idx]->src[0] != earg) {
-        return false;
-    }
-
-    const ggml_tensor * eg = nodes[node_idx];
-
-    if (eg->ne[0] < 1 || eg->ne[0] > G || eg->ne[1] != T) {
-        return false;
-    }
-
-    const int n_group_used = (int) eg->ne[0];
-
-    ++node_idx;
-
-    // gather selected expert-group rows
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_GET_ROWS) {
-        return false;
-    }
-
-    const ggml_tensor * get2 = nodes[node_idx];
-
-    if (get2->src[0] != gr || get2->src[1] != eg) {
-        return false;
-    }
-
-    if (get2->ne[0] != P ||
-            get2->ne[1] != n_group_used ||
-            get2->ne[2] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_FILL ||
-            nodes[node_idx]->src[0] != gr) {
-        return false;
-    }
-
-    const ggml_tensor * fill = nodes[node_idx];
-
-    if (fill->ne[0] != P || fill->ne[1] != G || fill->ne[2] != T) {
-        return false;
-    }
-
-    if (ggml_get_op_params_f32(fill, 0) != -INFINITY) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // keep selected groups, -INFINITY elsewhere
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_SET_ROWS) {
-        return false;
-    }
-
-    const ggml_tensor * sel = nodes[node_idx];
-
-    if (sel->src[0] != get2 ||
-            sel->src[1] != eg ||
-            sel->src[2] != fill) {
-        return false;
-    }
-
-    if (sel->ne[0] != P || sel->ne[1] != G || sel->ne[2] != T) {
-        return false;
-    }
-
-    ++node_idx;
-
-    // reshape masked scores back to [n_expert, n_tokens]
-    if (node_idx >= n_nodes ||
-            nodes[node_idx]->op != GGML_OP_RESHAPE ||
-            nodes[node_idx]->src[0] != sel) {
-        return false;
-    }
-
-    const ggml_tensor * r7 = nodes[node_idx];
-
-    if (r7->ne[0] != E || r7->ne[1] != T || r7->ne[2] != 1) {
-        return false;
-    }
-
-    ++node_idx;
-
-    args.grouped_experts = true;
-    args.n_expert_groups = (int) G;
-    args.n_exp_per_group = (int) P;
+    args.n_groups     = n_groups;
     args.n_group_used = n_group_used;
-
     return true;
 }
 
@@ -3291,7 +3090,8 @@ static bool ggml_cuda_topk_moe_fusion(const struct ggml_cgraph * cgraph, int nod
     args.delayed_softmax = false;
     args.prob_bias       = false;
     args.norm            = false;
-    args.grouped_experts = false;
+    args.n_groups        = 0;
+    args.n_group_used    = 0;
 
     const int      n_nodes = cgraph->n_nodes;
     ggml_tensor ** nodes   = cgraph->nodes;
@@ -3334,45 +3134,21 @@ static bool ggml_cuda_topk_moe_fusion(const struct ggml_cgraph * cgraph, int nod
         }
 
         // src of bias add is the unreshaped probs (-2 instead of -1)
-        if (nodes[node_idx]->op == GGML_OP_ADD && nodes[node_idx]->src[0] == nodes[node_idx - 2]) {
+        const ggml_tensor * selection = nodes[node_idx - 2];
+        if (nodes[node_idx]->op == GGML_OP_ADD && nodes[node_idx]->src[0] == selection) {
             args.prob_bias = true;
+            selection = nodes[node_idx];
             node_idx++;
         }
 
-        const ggml_tensor * selection_src = args.prob_bias ? nodes[node_idx - 1] : nodes[node_idx - 2];
-
-        bool grouped_experts = false;
-
-        if (node_idx < n_nodes &&
-                nodes[node_idx]->op == GGML_OP_RESHAPE &&
-                nodes[node_idx]->src[0] == selection_src) {
-            const int saved_node_idx = node_idx;
-
-            grouped_experts = ggml_cuda_topk_moe_grouped_experts(cgraph, node_idx, selection_src, probs_reshaped, args);
-
-            if (!grouped_experts) {
-                node_idx = saved_node_idx;
-            }
+        if (ggml_cuda_topk_moe_group_fusion(cgraph, node_idx, selection, args)) {
+            node_idx += (int) std::size(topk_moe_group_pattern);
+            selection = nodes[node_idx - 1];
         }
 
-        if (!grouped_experts) {
-            // RESHAPE/ADD -> ARGSORT
-            if (node_idx >= n_nodes || nodes[node_idx]->op != GGML_OP_ARGSORT) {
-                return false;
-            }
-
-            if (args.prob_bias && nodes[node_idx]->src[0] != nodes[node_idx - 1]) {
-                return false;
-            } else if (!args.prob_bias && nodes[node_idx]->src[0] != nodes[node_idx - 2]) {
-                return false;
-            }
-        } else {
-            // grouped path leaves node_idx at the final expert ARGSORT
-            if (node_idx >= n_nodes ||
-                    nodes[node_idx]->op != GGML_OP_ARGSORT ||
-                    nodes[node_idx]->src[0] != nodes[node_idx - 1]) {
-                return false;
-            }
+        // RESHAPE/ADD/group mask -> ARGSORT
+        if (node_idx >= n_nodes || nodes[node_idx]->op != GGML_OP_ARGSORT || nodes[node_idx]->src[0] != selection) {
+            return false;
         }
 
         node_idx++;
@@ -3380,6 +3156,11 @@ static bool ggml_cuda_topk_moe_fusion(const struct ggml_cgraph * cgraph, int nod
         // ARGSORT-> VIEW
         if (node_idx >= n_nodes || nodes[node_idx]->op != GGML_OP_VIEW ||
                 nodes[node_idx]->src[0] != nodes[node_idx - 1]) {
+            return false;
+        }
+
+        // kept groups must hold all used experts
+        if (args.n_groups > 0 && nodes[node_idx]->ne[0] > args.n_group_used * (probs_reshaped->ne[1] / args.n_groups)) {
             return false;
         }
         node_idx++;
@@ -4036,55 +3817,18 @@ static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph 
                 } else {
                     ops.insert(ops.end(), { GGML_OP_SOFT_MAX });
                 }
-                const int i_probs = i + (int) ops.size() - 1;  // last node of the gating activation
-
-                if (args.grouped_experts) {
-                    // weights reshape: [1, n_expert, n_tokens]
-                    ops.push_back(GGML_OP_RESHAPE);
-
-                    if (args.prob_bias) {
-                        ops.push_back(GGML_OP_ADD);
-                        bias = cgraph->nodes[i + (int) ops.size() - 1]->src[1];
-                    }
-
-                    // grouped top-k sequence
-                    ops.insert(ops.end(), {
-                        GGML_OP_RESHAPE,   // selection_groups
-                        GGML_OP_RESHAPE,   // 4d rows for get_rows
-                        GGML_OP_ARGSORT,   // top-2 per group
-                        GGML_OP_VIEW,      // top-2 per group view
-                        GGML_OP_GET_ROWS,  // gather top-2 per group values
-                        GGML_OP_RESHAPE,   // [2, n_groups, n_tokens]
-                        GGML_OP_SUM_ROWS,  // group score
-                        GGML_OP_RESHAPE,   // [n_groups, n_tokens]
-                        GGML_OP_ARGSORT,   // top groups
-                        GGML_OP_VIEW,      // top groups view
-                        GGML_OP_GET_ROWS,  // gather selected group rows
-                        GGML_OP_FILL,      // -INFINITY template
-                        GGML_OP_SET_ROWS,  // mask unselected groups
-                        GGML_OP_RESHAPE    // [n_expert, n_tokens]
-                    });
-
-                    // final expert top-k
-                    ops.push_back(GGML_OP_ARGSORT);
-
-                    const int view_idx = i + (int) ops.size();
-
-                    ops.push_back(GGML_OP_VIEW);
-                    ops.push_back(GGML_OP_GET_ROWS);
-
-                    out_nodes[0] = view_idx;
-                } else {
-                    if (args.prob_bias) {
-                        bias = cgraph->nodes[i_probs + 2]->src[1];
-                        ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ADD, GGML_OP_ARGSORT, GGML_OP_VIEW,
-                                                GGML_OP_GET_ROWS });
-                        out_nodes[0] = i_probs + 4;
-                    } else {
-                        ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ARGSORT, GGML_OP_VIEW, GGML_OP_GET_ROWS });
-                        out_nodes[0] = i_probs + 3;
+                ops.push_back(GGML_OP_RESHAPE);
+                if (args.prob_bias) {
+                    ops.push_back(GGML_OP_ADD);
+                    bias = cgraph->nodes[i + ops.size() - 1]->src[1];
+                }
+                if (args.n_groups > 0) {
+                    for (const auto & p : topk_moe_group_pattern) {
+                        ops.push_back(p.op);
                     }
                 }
+                ops.insert(ops.end(), { GGML_OP_ARGSORT, GGML_OP_VIEW, GGML_OP_GET_ROWS });
+                out_nodes[0] = i + ops.size() - 2;
                 ids = cgraph->nodes[out_nodes[0]];
 
                 if (args.norm) {
@@ -5175,50 +4919,13 @@ static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph
                         }
                         const int i_probs = i + (int) ops.size() - 1;  // last node of the gating activation
 
-                        if (args.grouped_experts) {
-                            // weights reshape: [1, n_expert, n_tokens]
-                            ops.push_back(GGML_OP_RESHAPE);
-
-                            if (args.prob_bias) {
-                                ops.push_back(GGML_OP_ADD);
-                            }
-
-                            // grouped top-k sequence
-                            ops.insert(ops.end(), {
-                                GGML_OP_RESHAPE,   // selection_groups
-                                GGML_OP_RESHAPE,   // 4d rows for get_rows
-                                GGML_OP_ARGSORT,   // top-2 per group
-                                GGML_OP_VIEW,      // top-2 per group view
-                                GGML_OP_GET_ROWS,  // gather top-2 per group values
-                                GGML_OP_RESHAPE,   // [2, n_groups, n_tokens]
-                                GGML_OP_SUM_ROWS,  // group score
-                                GGML_OP_RESHAPE,   // [n_groups, n_tokens]
-                                GGML_OP_ARGSORT,   // top groups
-                                GGML_OP_VIEW,      // top groups view
-                                GGML_OP_GET_ROWS,  // gather selected group rows
-                                GGML_OP_FILL,      // -INFINITY template
-                                GGML_OP_SET_ROWS,  // mask unselected groups
-                                GGML_OP_RESHAPE    // [n_expert, n_tokens]
-                            });
-
-                            // final expert top-k
-                            ops.push_back(GGML_OP_ARGSORT);
-
-                            const int view_idx = i + (int) ops.size();
-
-                            ops.push_back(GGML_OP_VIEW);
-                            ops.push_back(GGML_OP_GET_ROWS);
-
-                            out_nodes[0] = view_idx;
+                        if (args.prob_bias) {
+                            ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ADD, GGML_OP_ARGSORT, GGML_OP_VIEW,
+                                                    GGML_OP_GET_ROWS });
+                            out_nodes[0] = i_probs + 4;
                         } else {
-                            if (args.prob_bias) {
-                                ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ADD, GGML_OP_ARGSORT, GGML_OP_VIEW,
-                                                        GGML_OP_GET_ROWS });
-                                out_nodes[0] = i_probs + 4;
-                            } else {
-                                ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ARGSORT, GGML_OP_VIEW, GGML_OP_GET_ROWS });
-                                out_nodes[0] = i_probs + 3;
-                            }
+                            ops.insert(ops.end(), { GGML_OP_RESHAPE, GGML_OP_ARGSORT, GGML_OP_VIEW, GGML_OP_GET_ROWS });
+                            out_nodes[0] = i_probs + 3;
                         }
                         ids = cgraph->nodes[out_nodes[0]];
 
