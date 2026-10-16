@@ -2120,6 +2120,14 @@ Cached models and incomplete downloads carry the sidecar kinds they have on disk
 "sidecars": ["mmproj", "mtp"]
 ```
 
+A cached model whose download of more sidecars never finished also lists the kinds not on
+disk yet: posting the model with them resumes them, and `DELETE /models` with `&sidecar={kind}`
+drops their partial files.
+
+```json
+"incomplete_sidecars": ["mtp"]
+```
+
 ### POST `/models/load`: Load a model
 
 Load a model

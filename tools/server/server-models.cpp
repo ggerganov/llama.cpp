@@ -2414,7 +2414,23 @@ void server_models_routes::init_routes() {
             if (it_unfinished != unfinished.end() && meta.status == SERVER_MODEL_STATUS_DOWNLOADING) {
                 model_info["sidecars"] = it_unfinished->sidecars;
             } else if (!hf_repo.empty()) {
-                model_info["sidecars"] = cached_sidecars(hf_repo);
+                const json cached = cached_sidecars(hf_repo);
+                model_info["sidecars"] = cached;
+
+                // the sidecars of an unfinished download of this model that are not on
+                // disk yet: a POST with the kind resumes one, a DELETE with it drops it
+                if (it_unfinished != unfinished.end()) {
+                    std::vector<std::string> incomplete;
+                    for (const auto & p : it_unfinished->partials) {
+                        if (!p.kind.empty() && !has_sidecar(incomplete, p.kind) &&
+                            std::find(cached.begin(), cached.end(), p.kind) == cached.end()) {
+                            incomplete.push_back(p.kind);
+                        }
+                    }
+                    if (!incomplete.empty()) {
+                        model_info["incomplete_sidecars"] = incomplete;
+                    }
+                }
             }
 
             // merge with loaded_info from the child process if available

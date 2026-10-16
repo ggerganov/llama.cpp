@@ -727,6 +727,49 @@ def test_router_delete_unknown_name():
     server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
 
 
+def test_router_incomplete_sidecars():
+    """A cached model lists the sidecars its unfinished download has not written yet, until
+    they are dropped."""
+    global server
+    cache_dir = _own_cache("cache_incomplete_sidecars")
+    server.llama_cache = cache_dir
+    server.start()
+
+    res = server.make_request("POST", "/models", data={"model": MODEL_DOWNLOAD_ID, "sidecars": []})
+    assert res.status_code == 200
+    _wait_for_model_status(MODEL_DOWNLOAD_ID, {"downloaded", "unloaded"}, timeout=MODEL_DOWNLOAD_TIMEOUT)
+    server.stop()
+
+    # a paused mtp of the cached model, as the record of an earlier run holds it
+    partial_path = os.path.abspath(os.path.join(cache_dir, "test-mtp.gguf.downloadInProgress"))
+    with open(partial_path, "w") as f:
+        f.write("partial")
+    with open(os.path.join(cache_dir, "unfinished-downloads.json"), "w") as f:
+        json.dump({"downloads": [{
+            "model":    MODEL_DOWNLOAD_ID,
+            "sidecars": ["mtp"],
+            "partials": [{"kind": "mtp", "path": partial_path}],
+        }]}, f)
+
+    server.start()
+
+    def entry() -> dict:
+        res = server.make_request("GET", "/models")
+        assert res.status_code == 200
+        return {item["id"]: item for item in res.body.get("data", [])}[MODEL_DOWNLOAD_ID]
+
+    assert entry()["sidecars"] == []
+    assert entry()["incomplete_sidecars"] == ["mtp"]
+
+    res = server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}&sidecar=mtp")
+    assert res.status_code == 200
+    assert res.body.get("success") is True
+    assert not os.path.exists(partial_path)
+    assert "incomplete_sidecars" not in entry()
+
+    server.make_request("DELETE", f"/models?model={MODEL_DOWNLOAD_ID}")
+
+
 def test_router_preset_model_sidecars():
     """A preset model reports the sidecars its files have on disk, like a cached one."""
     global server
