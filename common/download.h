@@ -125,3 +125,13 @@ struct common_download_hf_plan {
     hf_cache::hf_file preset; // if set, only this file is downloaded
 };
 common_download_hf_plan common_download_get_hf_plan(const common_params_model & model, const common_download_opts & opts);
+
+// the sidecar kinds a download can pull next to its model, by name: mmproj, and the
+// draft heads of --spec-type draft-<kind>
+const std::vector<std::string> & common_download_sidecar_kinds();
+
+// select the sidecar `kind` in `opts`; returns false for an unknown kind
+bool common_download_opts_add_sidecar(common_download_opts & opts, const std::string & kind);
+
+// the sidecar kinds `plan` resolves a file for
+std::vector<std::string> common_download_plan_sidecars(const common_download_hf_plan & plan);

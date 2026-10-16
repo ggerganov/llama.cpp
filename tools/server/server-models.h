@@ -16,6 +16,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /**
  * state diagram:
@@ -110,6 +111,37 @@ struct server_model_meta {
     void update_caps(const common_params & base);
 };
 
+// a download that never finished: the tag it was asked under and the sidecar kinds it pulls
+struct server_unfinished_download {
+    std::string              model;
+    std::vector<std::string> sidecars;
+};
+
+// the downloads that never finished, recorded next to the model cache. The cache names
+// partial files after their content hash, so this record is the only trace of what is
+// still incomplete: it lets a restarted router list, resume or remove them
+// these functions are thread-safe
+struct server_unfinished_downloads {
+    // read the record an earlier run left
+    void load();
+
+    // record a download that starts, with the sidecar kinds it pulls
+    void add(const std::string & model, const std::vector<std::string> & sidecars);
+
+    // forget a download and return its sidecar kinds, none when it is not recorded
+    std::vector<std::string> take(const std::string & model);
+
+    // every recorded download
+    std::vector<server_unfinished_download> get_all();
+
+private:
+    std::mutex mutex;
+    std::vector<server_unfinished_download> downloads;
+
+    // write the record back; callers hold the mutex
+    void save();
+};
+
 struct server_models_routes;
 struct server_lru_sched; // defined in server-models.cpp
 struct server_monitor;   // defined in server-models.cpp
@@ -136,10 +168,8 @@ private:
     // models asked to stop, still counted as running until the monitor records their exit
     std::set<std::string> stopping_models;
 
-    // downloads that never finished, each tag with the sidecar kinds it pulls. The cache
-    // names partial files after their content hash, so this is the only record of what is
-    // still incomplete: it lets a restarted router list, resume or remove them
-    std::map<std::string, std::vector<std::string>> unfinished_downloads;
+    // downloads that never finished, with the sidecar kinds they pull
+    server_unfinished_downloads unfinished_downloads;
 
     // set to true while load_models() is executing a reload; load() will wait until clear
     bool is_reloading = false;
@@ -259,20 +289,11 @@ public:
     // check if a model instance exists (thread-safe)
     bool has_model(const std::string & name);
 
-    // read the unfinished downloads recorded by an earlier run
-    void load_unfinished_downloads();
+    // downloads that never finished, with their sidecar kinds (thread-safe)
+    std::vector<server_unfinished_download> unfinished_downloads_get();
 
-    // write them back; callers hold the mutex
-    void save_unfinished_downloads();
-
-    // forget an unfinished download and return its sidecar kinds; callers hold the mutex
-    std::vector<std::string> take_unfinished_download(const std::string & name);
-
-    // unfinished downloads with their sidecar kinds (thread-safe)
-    std::map<std::string, std::vector<std::string>> get_unfinished_downloads();
-
-    // drop a download that will never be resumed, its tag and its partial files (thread-safe)
-    void remove_unfinished_download(const std::string & name);
+    // drop a download that will never be resumed, its record and its partial files (thread-safe)
+    void unfinished_downloads_remove(const std::string & name);
 
     // return a copy of model metadata (thread-safe)
     std::optional<server_model_meta> get_meta(const std::string & name);

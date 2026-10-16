@@ -968,6 +968,52 @@ std::string common_download_resolve_path(const std::string & hf_repo_with_tag, c
     return find_best_model(files, tag).local_path;
 }
 
+// each sidecar kind with the option that requests it and the plan file it resolves to
+struct common_download_sidecar {
+    const char * name;
+    bool common_download_opts::* opt;
+    hf_cache::hf_file common_download_hf_plan::* file;
+};
+
+static const common_download_sidecar sidecars[] = {
+    { "mmproj", &common_download_opts::download_mmproj, &common_download_hf_plan::mmproj },
+    { "mtp",    &common_download_opts::download_mtp,    &common_download_hf_plan::mtp    },
+    { "dflash", &common_download_opts::download_dflash, &common_download_hf_plan::dflash },
+    { "eagle3", &common_download_opts::download_eagle3, &common_download_hf_plan::eagle3 },
+    { "dspark", &common_download_opts::download_dspark, &common_download_hf_plan::dspark },
+};
+
+const std::vector<std::string> & common_download_sidecar_kinds() {
+    static const std::vector<std::string> kinds = [] {
+        std::vector<std::string> out;
+        for (const auto & s : sidecars) {
+            out.emplace_back(s.name);
+        }
+        return out;
+    }();
+    return kinds;
+}
+
+bool common_download_opts_add_sidecar(common_download_opts & opts, const std::string & kind) {
+    for (const auto & s : sidecars) {
+        if (kind == s.name) {
+            opts.*s.opt = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<std::string> common_download_plan_sidecars(const common_download_hf_plan & plan) {
+    std::vector<std::string> out;
+    for (const auto & s : sidecars) {
+        if (!(plan.*s.file).path.empty()) {
+            out.emplace_back(s.name);
+        }
+    }
+    return out;
+}
+
 // remove the partial files a download of `hf_repo_with_tag` with `opts` leaves
 // next to their blobs, resolved through the same plan the download follows
 static bool remove_partial_files(const std::string & hf_repo_with_tag, const common_download_opts & opts, bool with_model) {
@@ -981,7 +1027,8 @@ static bool remove_partial_files(const std::string & hf_repo_with_tag, const com
     if (with_model) {
         planned = plan.model_files;
     }
-    for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
+    for (const auto & s : sidecars) {
+        const auto & f = plan.*s.file;
         if (!f.local_path.empty()) {
             planned.push_back(f);
         }
@@ -1105,7 +1152,8 @@ bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const
     bool removed = remove_partial_files(hf_repo_with_tag, opts, false);
 
     std::vector<std::filesystem::path> to_remove;
-    for (const auto & f : { plan.mmproj, plan.mtp, plan.eagle3, plan.dflash, plan.dspark }) {
+    for (const auto & s : sidecars) {
+        const auto & f = plan.*s.file;
         if (!f.local_path.empty()) {
             to_remove.emplace_back(std::filesystem::u8path(f.local_path));
         }
