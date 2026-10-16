@@ -2162,6 +2162,26 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_sampling());
     add_opt(common_arg(
+        {"--no-repeat-ngram-size"}, "N",
+        string_format("hard-ban n-grams of this length that already occurred in the last --no-repeat-ngram-window tokens (default: %d, < 2 = disabled, 35 is a good value)", params.sampling.no_repeat_ngram_size),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::runtime_error(string_format("error: invalid no-repeat-ngram-size = %d\n", value));
+            }
+            params.sampling.no_repeat_ngram_size = value;
+        }
+    ).set_sampling());
+    add_opt(common_arg(
+        {"--no-repeat-ngram-window"}, "N",
+        string_format("how many recent tokens to search for repeated n-grams (default: %d, 0 = entire context)", params.sampling.no_repeat_ngram_window),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::runtime_error(string_format("error: invalid no-repeat-ngram-window = %d\n", value));
+            }
+            params.sampling.no_repeat_ngram_window = value;
+        }
+    ).set_sampling());
+    add_opt(common_arg(
         {"--dry-sequence-breaker"}, "STRING",
         string_format("add sequence breaker for DRY sampling, clearing out default breakers (%s) in the process; use \"none\" to not use any sequence breakers\n",
             params.sampling.dry_sequence_breakers.empty() ? "none" :

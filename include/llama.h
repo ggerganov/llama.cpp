@@ -1564,6 +1564,25 @@ extern "C" {
                                float   penalty_freq,     // must be finite, 0.0 = disabled
                                float   penalty_present); // must be finite, 0.0 = disabled
 
+    /// no-repeat n-gram: ban any token that would recreate an n-gram of length `ngram_size`
+    /// which has already occurred within the last `ngram_window` tokens.
+    ///
+    /// unlike the penalties and dry samplers (which are soft, additive penalties), this is a
+    /// hard constraint: the logits of the banned tokens are set to -inf. that makes it able to
+    /// break the degenerate repetition loops that some models fall into, where no reasonable
+    /// penalty strength is enough, e.g. OCR models emitting `<det>` coordinate tokens forever.
+    ///
+    /// this matches the widely used `no_repeat_ngram_size` option of HF transformers and the
+    /// `NGramPerReqLogitsProcessor` that the official DeepSeek-OCR / Unlimited-OCR vLLM recipe
+    /// enables with `ngram_size = 35, window_size = 128`.
+    ///
+    /// @param ngram_size   length of the n-grams to ban (values < 2 disable the sampler)
+    /// @param ngram_window how many recent tokens to search (0 = the entire context)
+    ///
+    LLAMA_API struct llama_sampler * llama_sampler_init_no_repeat_ngram(
+                             int32_t   ngram_size,
+                             int32_t   ngram_window);
+
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
     LLAMA_API struct llama_sampler * llama_sampler_init_dry(
             const struct llama_vocab *  vocab,

@@ -247,6 +247,8 @@ struct common_params_sampling {
     float   dry_base           = 1.75f;  // 0.0 = disabled;      multiplier * base ^ (length of sequence before token - allowed length)
     int32_t dry_allowed_length = 2;      // tokens extending repetitions beyond this receive penalty
     int32_t dry_penalty_last_n = 64;     // how many tokens to scan for repetitions (0 = disable penalty)
+    int32_t no_repeat_ngram_size   = 0;  // 0 = disabled; ban n-grams of this length that already occurred (35 is a good value)
+    int32_t no_repeat_ngram_window = 0;  // how many recent tokens to search for repeated n-grams (0 = entire context)
     float   adaptive_target    = -1.0f;  // select tokens near this probability (valid range 0.0 to 1.0; negative = disabled)
     float   adaptive_decay     = 0.90f;  // EMA decay for adaptation; history ≈ 1/(1-decay) tokens (0.0 - 0.99)
     int32_t mirostat           = 0;      // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0

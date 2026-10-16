@@ -173,15 +173,17 @@ struct common_sampler {
 };
 
 std::string common_params_sampling::print() const {
-    char result[1024];
+    char result[1536];
 
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
             "\tdry_multiplier = %.3f, dry_base = %.3f, dry_allowed_length = %d, dry_penalty_last_n = %d\n"
+            "\tno_repeat_ngram_size = %d, no_repeat_ngram_window = %d\n"
             "\ttop_k = %d, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, top_n_sigma = %.3f, temp = %.3f\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f, adaptive_target = %.3f, adaptive_decay = %.3f",
             penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
             dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n,
+            no_repeat_ngram_size, no_repeat_ngram_window,
             top_k, top_p, min_p, xtc_probability, xtc_threshold, typ_p, top_n_sigma, temp,
             mirostat, mirostat_eta, mirostat_tau, adaptive_target, adaptive_decay);
 
@@ -339,6 +341,12 @@ struct common_sampler * common_sampler_init(
         if (!merged.empty()) {
             samplers.push_back(llama_sampler_init_logit_bias(llama_vocab_n_tokens(vocab), merged.size(), merged.data()));
         }
+    }
+
+    // hard ban of repeated n-grams - equivalent to the NGramPerReqLogitsProcessor
+    // that the official DeepSeek-OCR / Unlimited-OCR vLLM recipe enables
+    if (params.no_repeat_ngram_size >= 2) {
+        samplers.push_back(llama_sampler_init_no_repeat_ngram(params.no_repeat_ngram_size, params.no_repeat_ngram_window));
     }
 
     if (params.mirostat == 0) {

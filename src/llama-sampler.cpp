@@ -3230,6 +3230,145 @@ struct llama_sampler * llama_sampler_init_penalties(
     );
 }
 
+// no-repeat n-gram
+//
+// bans any token that would recreate an n-gram of length `ngram_size` which has already
+// occurred within the last `ngram_window` accepted tokens. with ngram_window == 0 the whole
+// context is searched.
+//
+// this is the llama.cpp equivalent of `no_repeat_ngram_size` from HF transformers and of the
+// `NGramPerReqLogitsProcessor` enabled by the official DeepSeek-OCR / Unlimited-OCR recipe:
+//     https://github.com/baidu/Unlimited-OCR
+// with `ngram_size = 35, window_size = 128`. unlike the soft penalties/dry samplers, the tokens
+// that would extend a repeated n-gram are hard-banned (logit = -INFINITY), which is what makes it
+// able to break long degenerate repetition loops.
+
+struct llama_sampler_no_repeat_ngram {
+    const int32_t ngram_size;
+    const int32_t ngram_window; // 0 = unlimited
+
+    // the last `ngram_window` accepted tokens (the entire context if ngram_window == 0)
+    std::vector<llama_token> hist;
+
+    llama_sampler_no_repeat_ngram(int32_t ngram_size, int32_t ngram_window)
+        : ngram_size(ngram_size), ngram_window(ngram_window) {
+        if (ngram_window > 0) {
+            hist.reserve(ngram_window);
+        }
+    }
+
+    static bool is_disabled(int32_t ngram_size) {
+        return ngram_size < 2;
+    }
+
+    void accept(llama_token token) {
+        hist.push_back(token);
+
+        if (ngram_window > 0 && (int32_t) hist.size() > ngram_window) {
+            hist.erase(hist.begin());
+        }
+    }
+
+    void reset() {
+        hist.clear();
+    }
+};
+
+static const char * llama_sampler_no_repeat_ngram_name(const struct llama_sampler * /*smpl*/) {
+    return "no-repeat-ngram";
+}
+
+static void llama_sampler_no_repeat_ngram_accept(struct llama_sampler * smpl, llama_token token) {
+    auto * ctx = (llama_sampler_no_repeat_ngram *) smpl->ctx;
+
+    ctx->accept(token);
+}
+
+static void llama_sampler_no_repeat_ngram_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    const auto * ctx = (const llama_sampler_no_repeat_ngram *) smpl->ctx;
+
+    const int32_t n = ctx->ngram_size;
+    const size_t  m = ctx->hist.size();
+
+    if (m < (size_t) n) {
+        return;
+    }
+
+    // the (n-1)-token suffix that the sampled token would extend into a full n-gram
+    const llama_token * suffix = ctx->hist.data() + (m - (size_t) (n - 1));
+
+    // ban every token that followed an earlier occurrence of that suffix
+    for (size_t i = 0; i + (size_t) n <= m; ++i) {
+        if (ctx->hist[i] != suffix[0]) {
+            continue; // cheap pre-check before the full comparison
+        }
+
+        if (n > 2 && memcmp(ctx->hist.data() + i + 1, suffix + 1, (size_t) (n - 2) * sizeof(llama_token)) != 0) {
+            continue;
+        }
+
+        const llama_token banned = ctx->hist[i + n - 1];
+
+        for (size_t j = 0; j < cur_p->size; ++j) {
+            if (cur_p->data[j].id == banned) {
+                cur_p->data[j].logit = -INFINITY;
+                break;
+            }
+        }
+    }
+}
+
+static void llama_sampler_no_repeat_ngram_reset(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_no_repeat_ngram *) smpl->ctx;
+
+    ctx->reset();
+}
+
+static struct llama_sampler * llama_sampler_no_repeat_ngram_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (const llama_sampler_no_repeat_ngram *) smpl->ctx;
+
+    auto * result = llama_sampler_init_no_repeat_ngram(ctx->ngram_size, ctx->ngram_window);
+
+    // copy the state
+    ((llama_sampler_no_repeat_ngram *) result->ctx)->hist = ctx->hist;
+
+    return result;
+}
+
+static void llama_sampler_no_repeat_ngram_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_no_repeat_ngram *) smpl->ctx;
+}
+
+static struct llama_sampler_i llama_sampler_no_repeat_ngram_i = {
+    /* .name              = */ llama_sampler_no_repeat_ngram_name,
+    /* .accept            = */ llama_sampler_no_repeat_ngram_accept,
+    /* .apply             = */ llama_sampler_no_repeat_ngram_apply,
+    /* .reset             = */ llama_sampler_no_repeat_ngram_reset,
+    /* .clone             = */ llama_sampler_no_repeat_ngram_clone,
+    /* .free              = */ llama_sampler_no_repeat_ngram_free,
+    /* .backend_init      = */ nullptr,
+    /* .backend_accept    = */ nullptr,
+    /* .backend_apply     = */ nullptr,
+    /* .backend_set_input = */ nullptr,
+    /* .backend_reset     = */ nullptr,
+    /* .copy_state        = */ nullptr,
+};
+
+struct llama_sampler * llama_sampler_init_no_repeat_ngram(
+        int32_t ngram_size,
+        int32_t ngram_window) {
+    if (llama_sampler_no_repeat_ngram::is_disabled(ngram_size)) {
+        return llama_sampler_init_empty("?no-repeat-ngram");
+    }
+
+    ngram_window = std::max(ngram_window, 0);
+
+    return llama_sampler_init(
+        /* .iface = */ &llama_sampler_no_repeat_ngram_i,
+        /* .ctx   = */ new llama_sampler_no_repeat_ngram(ngram_size, ngram_window)
+    );
+}
+
 // top-n-sigma
 
 struct llama_sampler_top_n_sigma {

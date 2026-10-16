@@ -557,6 +557,10 @@ These words will not be included in the completion, so make sure to add them to 
 
 `dry_penalty_last_n`: How many tokens to scan for repetitions. Default: `64`, where `0` is disabled.
 
+`no_repeat_ngram_size`: Ban any n-gram of this length that has already occurred in the last `no_repeat_ngram_window` tokens. Unlike `repeat_penalty`/`dry_multiplier` this is a hard constraint (the logits of the banned tokens are set to `-inf`), which is what makes it able to stop degenerate repetition loops. Equivalent to the `NGramPerReqLogitsProcessor` that the official DeepSeek-OCR / Unlimited-OCR vLLM recipe enables with `35`. Default: `0`, where `< 2` is disabled.
+
+`no_repeat_ngram_window`: How many recent tokens to search for repeated n-grams for `no_repeat_ngram_size`. The DeepSeek-OCR / Unlimited-OCR recipe uses `128` (use a larger window, e.g. `1024`, for long multi-page documents). Default: `0`, where `0` means the entire context.
+
 `dry_sequence_breakers`: Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted. Default: `['\n', ':', '"', '*']`
 
 `xtc_probability`: Set the chance for token removal via XTC sampler. Default: `0.0`, which is disabled.

@@ -154,6 +154,14 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
         ->set_hard_limits(0, INT32_MAX)
         ->set_desc("How many tokens to scan for repetitions (0 = disabled)"));
 
+    add((new field_num("no_repeat_ngram_size", params.sampling.no_repeat_ngram_size))
+        ->set_hard_limits(0, INT32_MAX)
+        ->set_desc("Ban any n-gram of this length that already occurred in the last `no_repeat_ngram_window` tokens (< 2 = disabled, 35 is a good value)"));
+
+    add((new field_num("no_repeat_ngram_window", params.sampling.no_repeat_ngram_window))
+        ->set_hard_limits(0, INT32_MAX)
+        ->set_desc("How many recent tokens to search for repeated n-grams for `no_repeat_ngram_size` (0 = entire context)"));
+
     add((new field_num("mirostat", params.sampling.mirostat))
         ->set_limits(0, 2)
         ->set_desc("Enable Mirostat sampling, controlling perplexity during text generation (0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)"));
