@@ -1386,6 +1386,9 @@ class GGUFWriter:
     def add_decision_type(self, value: str) -> None:
         self.add_string(Keys.Decision.TYPE.format(arch=self.arch), value)
 
+    def add_decision_chat(self, value: bool) -> None:
+        self.add_bool(Keys.Decision.CHAT.format(arch=self.arch), value)
+
     def add_decision_block_count(self, value: int) -> None:
         self.add_uint32(Keys.Decision.BLOCK_COUNT.format(arch=self.arch), value)
 
