@@ -1492,30 +1492,62 @@ static void fa_softmax_thread(unsigned int n, unsigned int i, void * data) {
     fa_softmax_impl(n, i, data, has_mask, mask_broadcast, is_g1, has_alibi, has_softcap);
 }
 
+static inline HVX_Vector hvx_fa_load_sinks(const float * sinks_data, size_t idx, size_t count) {
+    const HVX_Vector * v_src    = (const HVX_Vector *) sinks_data + (idx >> 5);
+    const size_t       lane_off = idx & 31;
+    const size_t       byte_off = lane_off * sizeof(float);
+    return (lane_off + count > 32)
+        ? Q6_V_valign_VVR(v_src[1], v_src[0], byte_off)
+        : Q6_V_vror_VR(v_src[0], byte_off);
+}
+
 static __attribute__((noinline)) void fa_build_d_diag_inv_l(struct hmx_fa_context * factx,
                                                             size_t                  n_row_tiles,
                                                             size_t                  n_row_tiles_g_br,
                                                             uint32_t                kv_head,
                                                             size_t                  n_rows_g) {
-    // sinks: l += exp(sink - m) in f32, m and l are in the log2 domain
+    (void) n_row_tiles_g_br;
+
+    // sinks: l += exp(sink - m * ln2) in f32, m and l are in the log2 domain
     if (factx->sinks) {
-        const float *    sinks_data = factx->vtcm_sinks;
-        const size_t     G          = factx->G;
-        const HVX_Vector v_ln2      = Q6_V_vsplat_R(EXP_LOGN2);
-        HVX_VectorAlias  v_sink;
-        size_t           g_prev     = SIZE_MAX;
+        const float *    sinks_data   = factx->vtcm_sinks;
+        const size_t     G            = factx->G;
+        const size_t     head_base    = (size_t) kv_head * G;
+        const HVX_Vector v_ln2        = Q6_V_vsplat_R(EXP_LOGN2);
+        const HVX_Vector v_head_sinks = (G <= 32) ? hvx_fa_load_sinks(sinks_data, head_base, G) : Q6_V_vzero();
+        HVX_Vector       v_sink       = Q6_V_vzero();
+        size_t           g_prev       = SIZE_MAX;
+
         for (size_t i = 0; i < n_row_tiles; ++i) {
-            // the sink pattern of a tile only depends on (i * 32) % G, rebuild it when that changes or for a partial tile
+            // the sink pattern of a tile only depends on (i * 32) % G, rebuild it when that changes
             const size_t r0 = i * 32;
             const size_t g0 = fastmodulo(r0, G, &factx->div_G);
-            if (g0 != g_prev || r0 + 32 > n_rows_g) {
-                for (size_t j = 0; j < 32; ++j) {
-                    const size_t r = r0 + j;
-                    v_sink.fp32[j] = (r < n_rows_g) ? sinks_data[kv_head * G + fastmodulo(r, G, &factx->div_G)] * EXP_LOG2E_F : HTP_FA_M_INITIAL_VAL;
+            if (g0 != g_prev) {
+                const size_t rem_g = G - g0;
+                if (G <= 32) {
+                    const HVX_Vector v_lo = Q6_V_vror_VR(v_head_sinks, g0 * sizeof(float));
+                    const HVX_Vector v_hi = Q6_V_vror_VR(v_head_sinks, 128 - rem_g * sizeof(float));
+                    v_sink = Q6_V_vmux_QVV(Q6_Q_vsetq2_R(rem_g * sizeof(float)), v_lo, v_hi);
+                    for (size_t len = G; len < 32; len <<= 1) {
+                        const HVX_VectorPred q_keep    = Q6_Q_vsetq_R(len * sizeof(float));
+                        const HVX_Vector     v_shifted = Q6_V_vror_VR(v_sink, 128 - len * sizeof(float));
+                        v_sink = Q6_V_vmux_QVV(q_keep, v_sink, v_shifted);
+                    }
+                } else if (rem_g >= 32) {
+                    v_sink = hvx_fa_load_sinks(sinks_data, head_base + g0, 32);
+                } else {
+                    const HVX_Vector v_lo = hvx_fa_load_sinks(sinks_data, head_base + g0, rem_g);
+                    const HVX_Vector v_hi = hvx_fa_load_sinks(sinks_data, head_base, 32 - rem_g);
+                    v_sink = Q6_V_vmux_QVV(Q6_Q_vsetq_R(rem_g * sizeof(float)), v_lo, Q6_V_vror_VR(v_hi, 128 - rem_g * sizeof(float)));
                 }
-                g_prev = (r0 + 32 > n_rows_g) ? SIZE_MAX : g0;
+                g_prev = g0;
             }
-            const HVX_Vector v_d = HVX_OP_MUL_F32(HVX_OP_SUB_F32(v_sink.v, factx->vtcm_m_vec[i]), v_ln2);
+
+            HVX_Vector v_d = HVX_OP_SUB_F32(v_sink, HVX_OP_MUL_F32(factx->vtcm_m_vec[i], v_ln2));
+            if (r0 + 32 > n_rows_g) {
+                const HVX_VectorPred q_valid = Q6_Q_vsetq_R((n_rows_g - r0) * sizeof(float));
+                v_d = Q6_V_vmux_QVV(q_valid, v_d, Q6_V_vzero());
+            }
             factx->vtcm_l_vec[i] = HVX_OP_ADD_F32(factx->vtcm_l_vec[i], hvx_vec_exp_f32(v_d));
         }
     }
@@ -1996,8 +2028,8 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
     // ======== Initialize HMX output scales ========
     hmx_init_column_scales(factx.vtcm_hmx_scales_id, Q6_V_vsplat_R(0x3c00)); // 1.0
     {
-        const __fp16 sc = factx.scale;
-        hmx_init_column_scales(factx.vtcm_hmx_scales_qk, Q6_V_vsplat_R(*(const uint16_t *) &sc));
+        union { __fp16 f; uint16_t u; } sc = { .f = factx.scale };
+        hmx_init_column_scales(factx.vtcm_hmx_scales_qk, Q6_V_vsplat_R(sc.u));
     }
 
     // ======== DMA setup ========
