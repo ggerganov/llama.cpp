@@ -19,16 +19,27 @@ import gguf
 logger = logging.getLogger("gguf-convert-endian")
 
 
-# byte offsets of the f16 fields in each block, all other fields are single bytes
-byteswap_tensors: dict[gguf.GGMLQuantizationType, tuple[int, ...]] = {
-    gguf.GGMLQuantizationType.Q1_0:  (0,),    # d
-    gguf.GGMLQuantizationType.Q4_0:  (0,),    # d
-    gguf.GGMLQuantizationType.Q8_0:  (0,),    # d
-    gguf.GGMLQuantizationType.Q4_K:  (0, 2),  # d, dmin
-    gguf.GGMLQuantizationType.Q6_K:  (208,),  # d
-    gguf.GGMLQuantizationType.TQ2_0: (64,),   # d
-    gguf.GGMLQuantizationType.MXFP4: (),      # noop
-    gguf.GGMLQuantizationType.NVFP4: (),      # noop
+# byte offset and type of the multi-byte fields in each block, all other fields are single bytes
+# use the width ggml reads the field with, e.g. Q5_0 qh is uint8_t[4] but read as uint32_t
+byteswap_tensors: dict[gguf.GGMLQuantizationType, tuple[tuple[int, type[np.unsignedinteger]], ...]] = {
+    gguf.GGMLQuantizationType.Q1_0:   ((0,   np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.Q2_0:   ((0,   np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.Q4_0:   ((0,   np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.Q4_1:   ((0,   np.uint16), (2, np.uint16)),                  # d, m
+    gguf.GGMLQuantizationType.Q5_0:   ((0,   np.uint16), (2, np.uint32)),                  # d, qh
+    gguf.GGMLQuantizationType.Q5_1:   ((0,   np.uint16), (2, np.uint16), (4, np.uint32)),  # d, m, qh
+    gguf.GGMLQuantizationType.Q8_0:   ((0,   np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.Q2_K:   ((80,  np.uint16), (82, np.uint16)),                 # d, dmin
+    gguf.GGMLQuantizationType.Q3_K:   ((108, np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.Q4_K:   ((0,   np.uint16), (2, np.uint16)),                  # d, dmin
+    gguf.GGMLQuantizationType.Q5_K:   ((0,   np.uint16), (2, np.uint16)),                  # d, dmin
+    gguf.GGMLQuantizationType.Q6_K:   ((208, np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.IQ4_NL: ((0,   np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.IQ4_XS: ((0,   np.uint16), (2, np.uint16)),                  # d, scales_h
+    gguf.GGMLQuantizationType.TQ1_0:  ((52,  np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.TQ2_0:  ((64,  np.uint16),),                                 # d
+    gguf.GGMLQuantizationType.MXFP4:  (),                                                  # noop
+    gguf.GGMLQuantizationType.NVFP4:  (),                                                  # noop
 }
 
 
@@ -85,11 +96,12 @@ def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None
 
         # Byte-swap tensor data if necessary
         if tensor.tensor_type in byteswap_tensors:
-            # one row per block, then swap each f16 field of all blocks at once
+            # one row per block, then swap each field of all blocks at once
             type_size = gguf.constants.GGML_QUANT_SIZES[tensor.tensor_type][1]
             blocks = tensor.data.reshape(-1, type_size, copy=False)
-            for offs in byteswap_tensors[tensor.tensor_type]:
-                blocks[:, offs:offs + 2].view(dtype=np.uint16)[:, 0].byteswap(inplace=True)
+            for offs, dtype in byteswap_tensors[tensor.tensor_type]:
+                size = np.dtype(dtype).itemsize
+                blocks[:, offs:offs + size].view(dtype=dtype)[:, 0].byteswap(inplace=True)
         elif tensor.tensor_type == gguf.GGMLQuantizationType.BF16:
             # Special case for BF16
             # It is 2-bytes data, but by default view loads it as 1-byte data.
