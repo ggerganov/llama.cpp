@@ -232,7 +232,6 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
         routes.post_control                = models_routes->proxy_post;
         routes.post_responses_oai          = models_routes->proxy_post;
         routes.post_transcriptions_oai     = models_routes->proxy_post;
-        routes.post_realtime_transcription_sessions = models_routes->proxy_post;
         routes.post_anthropic_messages     = models_routes->proxy_post;
         routes.post_anthropic_count_tokens = models_routes->proxy_post;
         routes.post_infill                 = models_routes->proxy_post;
@@ -278,7 +277,6 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
     ctx_http.post("/responses",                ex_wrapper(routes.post_responses_oai));
     ctx_http.post("/v1/audio/transcriptions",  ex_wrapper(routes.post_transcriptions_oai));
     ctx_http.post("/audio/transcriptions",     ex_wrapper(routes.post_transcriptions_oai));
-    ctx_http.post("/v1/realtime/transcription_sessions", ex_wrapper(routes.post_realtime_transcription_sessions));
     if (!is_router_server) {
         ctx_http.ws("/v1/realtime", routes.ws_realtime); // websocket, not proxied in router mode
     }

@@ -5244,23 +5244,6 @@ std::unique_ptr<server_res_generator> server_routes::create_response(bool bypass
     return std::make_unique<server_res_generator>(queue_tasks, queue_results, params.sleep_idle_seconds, bypass_sleep);
 }
 
-json server_routes::rt_session_config(const std::string & id, int64_t expires_at, const std::string & language) const {
-    return json {
-        {"id",                      id},
-        {"object",                  "realtime.transcription_session"},
-        {"expires_at",              expires_at},
-        {"input_audio_format",      "pcm16"},
-        {"input_audio_sample_rate", mtmd_get_audio_sample_rate(ctx_server.mctx)},
-        {"input_audio_transcription", {
-            {"model",    meta->model_name},
-            {"language", language},
-            {"prompt",   ""},
-        }},
-        {"modalities",     json::array({"text"})},
-        {"turn_detection", nullptr},
-    };
-}
-
 server_routes::server_routes(const common_params & params, server_context & ctx_server)
         : params(params),
           ctx_server(*ctx_server.impl),
@@ -5786,59 +5769,9 @@ void server_routes::init_routes() {
             session);
     };
 
-    // realtime transcription, modeled after the OpenAI realtime API (transcription sessions)
+    // realtime transcription over websocket, modeled after the OpenAI realtime API
     // audio is PCM16 mono at the model sample rate, sent as base64 in input_audio_buffer.append events
     // input_audio_buffer.commit with "final": true ends the input, closing the socket also ends it
-    this->post_realtime_transcription_sessions = [this](const server_http_req & req) {
-        auto res = create_response();
-        if (!meta->has_audio_stream) {
-            res->error(format_error_response("The current model does not support realtime transcription.", ERROR_TYPE_NOT_SUPPORTED));
-            return res;
-        }
-        const json body = req.body.empty() ? json::object() : json::parse(req.body);
-
-        const std::string format = json_value(body, "input_audio_format", std::string("pcm16"));
-        if (format != "pcm16") {
-            res->error(format_error_response("only pcm16 input audio is supported", ERROR_TYPE_INVALID_REQUEST));
-            return res;
-        }
-
-        int64_t ttl = 600;
-        if (body.contains("client_secret") && body.at("client_secret").contains("expires_at")) {
-            ttl = json_value(body.at("client_secret").at("expires_at"), "seconds", ttl);
-            ttl = std::max<int64_t>(10, std::min<int64_t>(7200, ttl));
-        }
-
-        std::string language;
-        if (body.contains("input_audio_transcription")) {
-            language = json_value(body.at("input_audio_transcription"), "language", std::string());
-        }
-
-        rt_session session;
-        session.id         = "sess_" + random_string();
-        session.expires_at = (int64_t) time(nullptr) + ttl;
-        session.config     = rt_session_config(session.id, session.expires_at, language);
-
-        const std::string secret = "ek_" + random_string();
-        {
-            std::lock_guard<std::mutex> lock(mutex_rt);
-            // drop the expired sessions, so the map does not grow
-            const int64_t now = (int64_t) time(nullptr);
-            for (auto it = rt_sessions.begin(); it != rt_sessions.end();) {
-                it = it->second.expires_at < now ? rt_sessions.erase(it) : std::next(it);
-            }
-            rt_sessions[secret] = session;
-        }
-
-        json out = session.config;
-        out["client_secret"] = json {
-            {"value",      secret},
-            {"expires_at", session.expires_at},
-        };
-        res->ok(out);
-        return res;
-    };
-
     this->ws_realtime = [this](const server_http_req & req, server_http_context::ws_conn & conn) {
         auto send_event = [&conn](json ev) {
             ev["event_id"] = "event_" + random_string();
@@ -5862,43 +5795,39 @@ void server_routes::init_routes() {
             return;
         }
 
-        // the client sends the session secret as a bearer token, or as the client_secret query parameter
-        std::string token = req.get_param("client_secret");
-        for (const auto & [key, value] : req.headers) {
-            std::string lower = key;
-            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-            if (token.empty() && lower == "authorization") {
-                token = value;
+        // the API key middleware does not cover websocket paths, check the bearer token here
+        if (!params.api_keys.empty()) {
+            std::string token;
+            for (const auto & [key, value] : req.headers) {
+                std::string lower = key;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+                if (lower == "authorization") {
+                    token = value;
+                }
             }
-        }
-        const std::string prefix = "Bearer ";
-        if (token.compare(0, prefix.size(), prefix) == 0) {
-            token = token.substr(prefix.size());
-        }
-
-        rt_session session;
-        bool found = false;
-        {
-            std::lock_guard<std::mutex> lock(mutex_rt);
-            auto it = rt_sessions.find(token);
-            if (it != rt_sessions.end() && it->second.expires_at >= (int64_t) time(nullptr)) {
-                session = it->second;
-                found = true;
+            const std::string prefix = "Bearer ";
+            if (token.compare(0, prefix.size(), prefix) == 0) {
+                token = token.substr(prefix.size());
             }
-        }
-        if (!found) {
-            // a server API key is also accepted, the session is then created on the fly
             const auto & keys = params.api_keys;
-            if (!keys.empty() && std::find(keys.begin(), keys.end(), token) == keys.end()) {
-                send_error_event("Invalid API key or session secret", "authentication_error");
+            if (std::find(keys.begin(), keys.end(), token) == keys.end()) {
+                send_error_event("Invalid API Key", "authentication_error");
                 conn.close();
                 return;
             }
-            session.id     = "sess_" + random_string();
-            session.config = rt_session_config(session.id, 0, "");
         }
 
-        send_event(json {{"type", "session.created"}, {"session", session.config}});
+        const std::string session_id = "sess_" + random_string();
+        const json session_config = json {
+            {"id",                      session_id},
+            {"object",                  "realtime.transcription_session"},
+            {"input_audio_format",      "pcm16"},
+            {"input_audio_sample_rate", mtmd_get_audio_sample_rate(ctx_server.mctx)},
+            {"input_audio_transcription", {{"model", meta->model_name}}},
+            {"modalities",     json::array({"text"})},
+            {"turn_detection", nullptr},
+        };
+        send_event(json {{"type", "session.created"}, {"session", session_config}});
 
         auto res = create_response();
         auto & rd = res->rd;
@@ -5907,7 +5836,7 @@ void server_routes::init_routes() {
             task.id = rd.get_new_id();
             task.params.sampling          = params.sampling;
             task.params.stream            = true;
-            task.params.oaicompat_cmpl_id = session.id;
+            task.params.oaicompat_cmpl_id = session_id;
             task.params.oaicompat_model   = meta->model_name;
             rd.post_task(std::move(task));
         }
@@ -5933,7 +5862,7 @@ void server_routes::init_routes() {
             server_task task(SERVER_TASK_TYPE_CONTROL);
             task.id                     = ctl.get_new_id();
             task.params.control_action  = action;
-            task.params.control_cmpl_id = session.id;
+            task.params.control_cmpl_id = session_id;
             task.params.control_audio   = std::move(audio);
             ctl.post_task(std::move(task));
             auto result = ctl.next([&conn]() { return !conn.is_open(); });
@@ -5955,7 +5884,7 @@ void server_routes::init_routes() {
                 }
                 const std::string type = json_value(ev, "type", std::string());
                 if (type == "session.update" || type == "transcription_session.update") {
-                    send_event(json {{"type", "session.updated"}, {"session", session.config}});
+                    send_event(json {{"type", "session.updated"}, {"session", session_config}});
                 } else if (type == "input_audio_buffer.append") {
                     std::string pcm;
                     try {
