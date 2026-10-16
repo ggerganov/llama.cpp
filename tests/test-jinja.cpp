@@ -360,6 +360,38 @@ static void test_loops(testing & t) {
         "1x1y2x2y"
     );
 
+    test_template(t, "loop assignments do not persist between iterations",
+        "{% for i in [1, 2] %}{% if i == 1 %}{% set x = 7 %}{% endif %}{{ x is defined }};{% endfor %}",
+        json::object(),
+        "True;False;"
+    );
+
+    test_template(t, "loop assignments shadow outer variables",
+        "{% set x = 9 %}{% for i in [1, 2] %}{% if i == 1 %}{% set x = 7 %}{% endif %}{{ x }};{% endfor %}{{ x }}",
+        json::object(),
+        "7;9;9"
+    );
+
+    test_template(t, "nested loop assignments do not persist between iterations",
+        "{% for i in [1, 2] %}{% for j in [1, 2] %}{% if j == 1 %}{% set x = i %}{% endif %}{{ x is defined }};{% endfor %}{% endfor %}",
+        json::object(),
+        "True;False;True;False;"
+    );
+
+    test_template(t, "reasoning is local to each message",
+        "{% for m in messages %}{% if m.reasoning_content is string %}{% set reasoning_content = m.reasoning_content %}{% elif '</think>' in m.content %}{% set reasoning_content = m.content.split('</think>')[0].split('<think>')[-1] %}{% endif %}[{{ reasoning_content is defined }}:{{ reasoning_content if reasoning_content is defined else '' }}]{% endfor %}",
+        {{"messages", json::array({
+            {{"reasoning_content", "first"}, {"content", "answer"}},
+            {{"content", "answer"}},
+            {{"reasoning_content", nullptr}, {"content", "answer"}},
+            {{"reasoning_content", 1}, {"content", "answer"}},
+            {{"reasoning_content", ""}, {"content", "answer"}},
+            {{"content", "<think>embedded</think>answer"}},
+            {{"content", "answer"}}
+        })}},
+        "[True:first][False:][False:][False:][True:][True:embedded][False:]"
+    );
+
     test_template(t, "for with range",
         "{% for i in range(3) %}{{ i }}{% endfor %}",
         json::object(),
@@ -1049,6 +1081,13 @@ static void test_literals(testing & t) {
         "{{ a|string }} {{ b|string }} {{ (b * 10)|string }}",
         {{"a", 1.0}, {"b", 1e308}},
         "1.0 1e+308 inf"
+    );
+
+    // json.dumps writes NaN and Infinity, str() writes nan and inf
+    test_template(t, "nan and inf",
+        "{{ [p|float, n|float, q|float]|tojson }} {{ {p|float: 1}|tojson }} {{ p|float|string }} {{ n|float|string }} {{ q|float|safe }}",
+        {{"p", "inf"}, {"n", "-inf"}, {"q", "nan"}},
+        "[Infinity, -Infinity, NaN] {\"Infinity\": 1} inf -inf nan"
     );
 
     test_template(t, "string|tojson",
