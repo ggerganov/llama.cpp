@@ -1401,6 +1401,22 @@ void server_models::load(const std::string & name, const load_options & opts) {
             }
             SRV_INF("resuming download for model '%s'\n", name.c_str());
         }
+
+        // two downloads writing the same partial would interleave their bytes
+        for (const auto & d : unfinished_downloads.get_all()) {
+            auto other = mapping.find(d.model);
+            if (d.model == name || other == mapping.end() || other->second.meta.status != SERVER_MODEL_STATUS_DOWNLOADING) {
+                continue;
+            }
+            for (const auto & p : d.partials) {
+                const bool shared = std::any_of(opts.partials.begin(), opts.partials.end(), [&](const common_download_partial & q) {
+                    return q.path == p.path;
+                });
+                if (shared) {
+                    throw std::invalid_argument("model '" + name + "' shares files with the download of '" + d.model + "' on its way, retry once it is done");
+                }
+            }
+        }
     }
 
     auto meta = opts.custom_meta.has_value() ? *opts.custom_meta : mapping[name].meta;
