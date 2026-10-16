@@ -93,6 +93,12 @@ void deferred_memcpy(void * dst, const void * src, size_t size, std::vector<vk_s
 void deferred_memset(void * dst, uint32_t val, size_t size, std::vector<vk_staging_memset>* memsets = nullptr);
 
 // scratch
+struct vk_fa_dequant_kv {
+    bool   use         = false;
+    bool   raw_strided = false;
+    size_t scratch_ts  = 0;
+};
+vk_fa_dequant_kv ggml_vk_fa_dequant_kv(const vk_device & device, const ggml_tensor * q, const ggml_tensor * k, const ggml_tensor * v);
 size_t ggml_vk_scratch_offset(const vk_device & device, size_t nbytes);
 size_t ggml_vk_op_scratch_size(const vk_device & device, const ggml_tensor * dst);
 size_t ggml_vk_tensor_alloc_size(const vk_device & device, const ggml_tensor * dst);

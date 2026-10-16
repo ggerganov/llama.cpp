@@ -8130,37 +8130,12 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
 
     const bool f32acc = !ctx->device->fp16 || dst->op_params[3] == GGML_PREC_F32 || k->type == GGML_TYPE_BF16;
 
-    // dequant K/V once into an f16 scratch, reordered KV layout so FA can read without a stride
-    auto is_dense_kv_cache = [](const ggml_tensor * t) {
-        return t->nb[0] == ggml_type_size(t->type) &&
-               t->nb[2] == ggml_row_size(t->type, t->ne[0]) &&
-               t->nb[1] == t->nb[2] * t->ne[2] &&
-               (t->ne[3] == 1 || t->nb[3] == t->nb[1] * t->ne[1]);
-    };
-    const bool k_quant = k->type != GGML_TYPE_F16 && k->type != GGML_TYPE_BF16 && k->type != GGML_TYPE_F32;
-    const bool v_quant = v->type != GGML_TYPE_F16 && v->type != GGML_TYPE_BF16 && v->type != GGML_TYPE_F32;
-    const bool kv_raw = (k->type == GGML_TYPE_F16 || k->type == GGML_TYPE_BF16) && k->type == v->type;
-    // gated to AMD, except RDNA4, which regressed in benchmarks
-    const bool kv_raw_strided = ctx->device->vendor_id == VK_VENDOR_ID_AMD &&
-                                ctx->device->architecture != vk_device_architecture::AMD_RDNA4 &&
-                                neq1 >= 256 &&
-                                kv_raw &&
-                                (k->nb[1] != (uint64_t)HSK * ggml_type_size(k->type) ||
-                                 v->nb[1] != (uint64_t)HSV * ggml_type_size(v->type)) &&
-                                (HSK % 8) == 0 && (HSV % 8) == 0;
-    const size_t kv_scratch_ts = kv_raw_strided ? ggml_type_size(k->type) : sizeof(ggml_fp16_t);
-    const bool use_dequant_kv = ((k_quant && v_quant) || kv_raw_strided) && neq1 >= 64 &&
-                                is_dense_kv_cache(k) && is_dense_kv_cache(v) &&
-                                (uint64_t)ggml_nelements(k) * kv_scratch_ts <= ctx->device->properties.limits.maxStorageBufferRange &&
-                                (uint64_t)ggml_nelements(v) * kv_scratch_ts <= ctx->device->properties.limits.maxStorageBufferRange &&
-                                (kv_raw_strided ||
-                                 (ctx->device->pipeline_dequant_transpose[k->type] != nullptr &&
-                                  ctx->device->pipeline_dequant_transpose[v->type] != nullptr)) &&
-                                // coopmat2 path does not benefit from the f16 scratch
-                                !ctx->device->coopmat2 &&
-                                // Intel Xe1 regresses, see PR 25494
-                                (ctx->device->vendor_id != VK_VENDOR_ID_INTEL ||
-                                 (ctx->device->coopmat_support && ctx->device->architecture != vk_device_architecture::INTEL_XE1));
+    // dequant K/V once into an f16 scratch, reordered KV layout so FA can read without a stride.
+    // Scratch lives in the dst allocation padding, so it must fit (ggml_vk_scratch_available).
+    const vk_fa_dequant_kv dkv = ggml_vk_fa_dequant_kv(ctx->device, q, k, v);
+    const bool   kv_raw_strided = dkv.raw_strided;
+    const size_t kv_scratch_ts  = dkv.scratch_ts;
+    const bool   use_dequant_kv = dkv.use && ggml_vk_scratch_available(ctx, dst);
     const ggml_type k_type_eff = (use_dequant_kv && !kv_raw_strided) ? GGML_TYPE_F16 : k->type;
     const ggml_type v_type_eff = (use_dequant_kv && !kv_raw_strided) ? GGML_TYPE_F16 : v->type;
 
@@ -8438,14 +8413,11 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
     }
 
     if (use_dequant_kv) {
-        const uint64_t k_sz = (uint64_t)ggml_nelements(k) * kv_scratch_ts;
-        const uint64_t v_sz = (uint64_t)ggml_nelements(v) * kv_scratch_ts;
-        if (ctx->prealloc_size_x < k_sz + v_sz) {
-            ctx->prealloc_size_x = k_sz + v_sz;
-            ggml_vk_preallocate_buffers(ctx, subctx);
-        }
-        vk_subbuffer k_dst = vk_subbuffer{ ctx->prealloc_x, 0,    k_sz };
-        vk_subbuffer v_dst = vk_subbuffer{ ctx->prealloc_x, k_sz, v_sz };
+        const uint64_t k_sz  = (uint64_t)ggml_nelements(k) * kv_scratch_ts;
+        const uint64_t v_sz  = (uint64_t)ggml_nelements(v) * kv_scratch_ts;
+        const uint64_t v_off = ggml_vk_scratch_offset(ctx->device, k_sz);
+        vk_subbuffer k_dst = ggml_vk_scratch_subbuffer(ctx, dst, 0,     k_sz);
+        vk_subbuffer v_dst = ggml_vk_scratch_subbuffer(ctx, dst, v_off, v_sz);
         const uint32_t k_nel = (uint32_t)ggml_nelements(k);
         const uint32_t v_nel = (uint32_t)ggml_nelements(v);
         if (kv_raw_strided) {
@@ -8453,9 +8425,6 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
             vk_pipeline cp_v = ggml_vk_get_cpy_pipeline(ctx, v, nullptr, v->type);
             ggml_pipeline_request_descriptor_sets(ctx, cp_k, 1);
             ggml_pipeline_request_descriptor_sets(ctx, cp_v, 1);
-            if (ctx->prealloc_x_need_sync) {
-                ggml_vk_sync_buffers(ctx, subctx);
-            }
             auto make_pc = [](uint32_t hs, uint32_t nh, uint32_t kv, uint32_t nel) {
                 vk_op_unary_push_constants pc{};
                 pc.ne = nel;
@@ -8480,9 +8449,6 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
             vk_pipeline tr_v = ctx->device->pipeline_dequant_transpose[v->type];
             ggml_pipeline_request_descriptor_sets(ctx, tr_k, 1);
             ggml_pipeline_request_descriptor_sets(ctx, tr_v, 1);
-            if (ctx->prealloc_x_need_sync) {
-                ggml_vk_sync_buffers(ctx, subctx);
-            }
             { const std::vector<uint32_t> pc = { (uint32_t)HSK, (uint32_t)nek2, (uint32_t)KV, 0, k_nel };
               ggml_vk_dispatch_pipeline(ctx, subctx, tr_k, { k_buf, k_dst }, pc, { k_nel, 1, 1 }); }
             { const std::vector<uint32_t> pc = { (uint32_t)HSV, (uint32_t)nev2, (uint32_t)KV, 0, v_nel };
@@ -8645,9 +8611,6 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
                                     pc, { workgroups_x, workgroups_y, workgroups_z });
     }
 
-    if (use_dequant_kv) {
-        ctx->prealloc_x_need_sync = true;
-    }
     if (use_mask_opt || use_sparse) {
         ctx->prealloc_y_need_sync = true;
     }
