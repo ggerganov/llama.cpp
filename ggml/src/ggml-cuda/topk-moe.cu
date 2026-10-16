@@ -80,7 +80,7 @@ __device__ void sqrt_softplus_warp_inplace(float (&vals)[experts_per_thread], co
     }
 }
 
-#if !defined(GGML_USE_HIP) || __HIP_ARCH_HAS_WARP_BALLOT__
+#if !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
 // Set -inf for experts outside the top n_group_used groups. Group score is the sum of its top-2 experts (DeepSeek V3).
 template <int n_experts, int experts_per_thread>
 __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const int n_groups, const int n_group_used, const int lane) {
@@ -125,7 +125,7 @@ __device__ void group_mask_warp_inplace(float (&vals)[experts_per_thread], const
         }
     }
 }
-#endif // !defined(GGML_USE_HIP) || __HIP_ARCH_HAS_WARP_BALLOT__
+#endif // !defined(GGML_USE_HIP) || defined(__HIP_ARCH_HAS_WARP_BALLOT__)
 
 /*
     This kernel does the following:
