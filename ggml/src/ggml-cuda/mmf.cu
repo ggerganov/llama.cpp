@@ -92,6 +92,7 @@ void ggml_cuda_mul_mat_f(ggml_backend_cuda_context & ctx, const ggml_tensor * sr
         ids_info.ids_dst_compact   = ids_dst_compact_dev.get();
         ids_info.expert_bounds_dev = expert_bounds_dev.get();
         ids_info.n_experts         = static_cast<int>(n_experts);
+        ids_info.n_cols            = static_cast<int>(ne_get_rows);
         ids_info.sis1              = sis1;
         ids_info_ptr = &ids_info;
     }

@@ -340,7 +340,7 @@ void ggml_cuda_mul_mat_q(
                                          ne11 * ne10_padded * sizeof(block_q8_1) / (QK8_1 * sizeof(int));
     const int64_t s13 = ne12*s12;
 
-    // Note that ne02 is used instead of ne12 because the number of y channels determines the z dimension of the CUDA grid.
+    // Note that ne02 is used instead of ne12 because for MoE the number of y channels is the number of experts.
     const mmq_args args = {
         src0_d, src0->type, (const int *) src1_q8_1.get(), ids_dst.get(), expert_bounds.get(), dst_d,
         src1_scale.ptr,

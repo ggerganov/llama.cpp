@@ -3,6 +3,7 @@
 #include "mma.cuh"
 #include "common.cuh"
 #include "convert.cuh"
+#include "mmid.cuh"
 
 using namespace ggml_cuda_mma;
 
@@ -38,6 +39,7 @@ struct mmf_ids_data {
     const int32_t * ids_dst_compact = nullptr;
     const int32_t * expert_bounds_dev = nullptr;
     int n_experts = 0;
+    int n_cols = 0; // Total number of columns over all experts.
     int sis1 = 0;
 };
 
@@ -312,7 +314,7 @@ static __global__ void mul_mat_f_ids(
         const int ncols, const int ncols_dst_total, const int nchannels_dst, const int stride_row, const int stride_col_y, const int stride_col_dst,
         const int channel_ratio, const int stride_channel_x, const int stride_channel_y, const int stride_channel_dst,
         const int sample_ratio, const int stride_sample_x, const int stride_sample_y, const int stride_sample_dst,
-        const uint3 sis1_fd, const uint3 nch_fd) {
+        const uint3 sis1_fd, const uint3 nch_fd, const int n_experts) {
 // TODO: handle this in a consistent and simpler way after AMD MFMA support has been added
 #if defined(VOLTA_MMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE) || defined(AMD_MFMA_AVAILABLE)
 #if defined(AMD_WMMA_AVAILABLE)
@@ -351,16 +353,14 @@ static __global__ void mul_mat_f_ids(
 
     const int row0        = blockIdx.x * rows_per_block;
 
-    const int expert_idx = blockIdx.y;
+    int expert_idx;
+    int tile_idx;
+    if (!mm_ids_find_tile<cols_per_block>(expert_bounds, n_experts, blockIdx.y, expert_idx, tile_idx)) {
+        return;
+    }
     const int expert_start = expert_bounds[expert_idx];
     const int expert_end   = expert_bounds[expert_idx + 1];
     const int ncols_expert = expert_end - expert_start;
-
-    const int tiles_for_expert = (ncols_expert + cols_per_block - 1) / cols_per_block;
-    const int tile_idx = blockIdx.z;
-    if (tile_idx >= tiles_for_expert) {
-        return;
-    }
 
     const int col_base = tile_idx * cols_per_block;
 
@@ -583,7 +583,7 @@ static __global__ void mul_mat_f_ids(
     GGML_UNUSED_VARS(x, y, ids_src_compact, ids_dst_compact, expert_bounds, dst,
         ncols, ncols_dst_total, nchannels_dst, stride_row, stride_col_y, stride_col_dst,
         channel_ratio, stride_channel_x, stride_channel_y, stride_channel_dst,
-        sample_ratio, stride_sample_x, stride_sample_y, stride_sample_dst, sis1_fd, nch_fd);
+        sample_ratio, stride_sample_x, stride_sample_y, stride_sample_dst, sis1_fd, nch_fd, n_experts);
     NO_DEVICE_CODE;
 #endif // defined(VOLTA_MMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE) || defined(AMD_MFMA_AVAILABLE)
 }
@@ -603,11 +603,11 @@ static inline void mul_mat_f_switch_ids(
     // Use the compact-ids kernel only for larger tiles; for small ncols_dst (< 16)
     // we prefer the normal mul_mat_f path with has_ids=true.
     if (has_ids_data && ncols_dst > 16) {
-        const int max_tiles = (int) ((ncols_dst + cols_per_block - 1) / cols_per_block);
-        if (max_tiles == 0) {
-            return;
-        }
-        dim3 block_nums_ids(block_nums.x, ids_data->n_experts, max_tiles);
+        // Upper bound for the number of packed tiles, each expert can have at most one partial tile:
+        const int64_t ntiles = (ids_data->n_cols + cols_per_block - 1) / cols_per_block
+            + std::min<int64_t>(ids_data->n_experts, ids_data->n_cols);
+        GGML_ASSERT(ntiles <= 65535);
+        dim3 block_nums_ids(block_nums.x, ntiles, 1);
 
         const uint3 sis1_fd = ids_data->sis1 > 0 ? init_fastdiv_values((uint32_t) ids_data->sis1) : make_uint3(0, 0, 1);
         const uint3 nch_fd  = init_fastdiv_values((uint32_t) nchannels_dst);
@@ -617,7 +617,7 @@ static inline void mul_mat_f_switch_ids(
             ncols_x, ncols_dst, nchannels_dst, stride_row, stride_col_y, stride_col_dst,
             channel_ratio, stride_channel_x, stride_channel_y, stride_channel_dst,
             sample_ratio, stride_sample_x, stride_sample_y, stride_sample_dst,
-            sis1_fd, nch_fd);
+            sis1_fd, nch_fd, ids_data->n_experts);
     } else if (ids) {
         const int64_t col_tiles = (ncols_dst + cols_per_block - 1) / cols_per_block;
         dim3 block_nums_ids = block_nums;
