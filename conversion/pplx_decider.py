@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from pathlib import Path
-from typing import Any, Callable, Iterable, TYPE_CHECKING
+from typing import Any, Iterable, TYPE_CHECKING
 
 import torch
 
@@ -77,7 +77,6 @@ class PplxDeciderModel(Qwen3_5TextModel):
         self.gguf_writer.add_decision_type(self._DECISION_TYPE)
         for name in ("choice", "score", "noul"):
             self.gguf_writer.add_decision_temperature(name, self.hparams["decision"]["temperature"])
-
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
         yield from super().generate_extra_tensors()
