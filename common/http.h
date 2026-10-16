@@ -99,6 +99,63 @@ static common_http_url common_http_parse_url(const std::string & url) {
     return parts;
 }
 
+// match a loopback destination: a remote proxy can never reach the client machine's own
+// loopback, so these hosts are always contacted directly, before NO_PROXY is consulted
+// (similar to Go's net/http)
+static bool common_http_is_loopback(const std::string & host) {
+    auto lower = [](std::string s) {
+        for (auto & c : s) {
+            if (c >= 'A' && c <= 'Z') {
+                c += 'a' - 'A';
+            }
+        }
+        return s;
+    };
+
+    const std::string h = lower(host);
+
+    if (h == "localhost" || h == "::1" || h == "0.0.0.0") {
+        return true;
+    }
+
+    if (h.size() > 10 && h.compare(h.size() - 10, 10, ".localhost") == 0) {
+        return true;
+    }
+
+    // IPv4 literal: exactly four all-digit octets with values 0-255, loopback is 127.0.0.0/8
+    int octets[4] = { 0, 0, 0, 0 };
+    size_t pos = 0;
+    int n = 0;
+    bool complete = false;
+    while (n < 4 && pos <= h.size()) {
+        size_t dot = h.find('.', pos);
+        if (dot == std::string::npos) {
+            dot = h.size();
+        }
+        if (dot == pos || dot - pos > 3) {
+            return false;
+        }
+        int val = 0;
+        for (size_t i = pos; i < dot; i++) {
+            if (h[i] < '0' || h[i] > '9') {
+                return false;
+            }
+            val = val * 10 + (h[i] - '0');
+        }
+        if (val > 255) {
+            return false;
+        }
+        octets[n++] = val;
+        if (dot == h.size()) {
+            complete = (n == 4);
+            break;
+        }
+        pos = dot + 1;
+    }
+
+    return complete && octets[0] == 127;
+}
+
 // match a host against a NO_PROXY list: comma separated entries, "*" bypasses the proxy for every host,
 // an entry matches the host itself or any of its subdomains, a leading dot is optional, ports are ignored
 static bool common_http_proxy_bypass(const std::string & no_proxy, const std::string & host) {
@@ -193,7 +250,8 @@ static std::pair<httplib::Client, common_http_url> common_http_client(const std:
         ? getenv_s("HTTPS_PROXY", "https_proxy")
         : getenv_s("HTTP_PROXY",  "http_proxy");
 
-    if (!proxy_url.empty() && !common_http_proxy_bypass(getenv_s("NO_PROXY", "no_proxy"), parts.host)) {
+    if (!proxy_url.empty() && !common_http_is_loopback(parts.host) &&
+        !common_http_proxy_bypass(getenv_s("NO_PROXY", "no_proxy"), parts.host)) {
         try {
             common_http_url proxy = common_http_parse_url(proxy_url);
             cli.set_proxy(proxy.host, proxy.port);
