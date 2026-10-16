@@ -772,6 +772,10 @@ void server_http_context::ws(const std::string & path, const server_http_context
                 std::lock_guard<std::mutex> lock(mutex_send);
                 return sock.send(msg);
             }
+            bool send_binary(const std::string & msg) override {
+                std::lock_guard<std::mutex> lock(mutex_send);
+                return sock.send(msg.data(), msg.size());
+            }
             bool is_open() const override {
                 return sock.is_open();
             }

@@ -80,6 +80,7 @@ struct server_http_context {
         virtual int  read(std::string & msg) = 0;
         // thread-safe, can be called while another thread is in read()
         virtual bool send(const std::string & msg) = 0;
+        virtual bool send_binary(const std::string & msg) = 0;
         virtual bool is_open() const = 0;
         virtual void close() = 0;
         virtual ~ws_conn() = default;
