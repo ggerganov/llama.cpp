@@ -2301,7 +2301,7 @@ void server_models_routes::init_routes() {
             // download on its way reports the kinds it pulls, as an unfinished one does
             const auto it_unfinished = unfinished.find(meta.name);
 
-            if (it_unfinished != unfinished.end()) {
+            if (it_unfinished != unfinished.end() && meta.status == SERVER_MODEL_STATUS_DOWNLOADING) {
                 model_info["sidecars"] = it_unfinished->second;
             } else if (meta.source != SERVER_MODEL_SOURCE_MODELS_DIR) {
                 model_info["sidecars"] = cached_sidecars(meta);
