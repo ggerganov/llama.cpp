@@ -338,8 +338,8 @@ static inline int hmx_fa_find_chunk_size(size_t * Br_out,
     // Only relax when kv_len is too short to form enough blocks.
     size_t Bc_limit     = can_pipeline ? hex_align_down(kv_len / FA_MIN_KV_BLOCKS, bc_unit) :
                                          (kv_len >= bc_unit ? hex_align_down(kv_len, bc_unit) : bc_unit);
-    // For SWA-sized KV caches (kv_len <= 2048), cap Bc at 256 for block-skipping granularity
-    if (kv_len <= 2048 && Bc_limit > 256) {
+    // For small-Q SWA-sized KV caches (qo_len <= 16, kv_len <= 2048), cap Bc at 256 for block-skipping granularity
+    if (qo_len <= 16 && kv_len <= 2048 && Bc_limit > 256) {
         Bc_limit = 256;
     }
     // Cost coefficients calibrated from profiling
