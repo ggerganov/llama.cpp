@@ -403,6 +403,12 @@ static void ggml_hexagon_precompute_dsv4_hc_pre_params(
     struct htp_dsv4_hc_pre_kernel_params * kparams
 );
 
+static void ggml_hexagon_precompute_dsv4_hc_post_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_dsv4_hc_post_kernel_params * kparams
+);
+
 static void ggml_hexagon_precompute_sort_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
@@ -4899,6 +4905,40 @@ static void ggml_hexagon_precompute_dsv4_hc_pre_params(
     kparams->div_n_threads = init_fastdiv_values(kparams->n_threads);
 }
 
+static void ggml_hexagon_precompute_dsv4_hc_post_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_dsv4_hc_post_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * x = op->src[0];
+    const uint32_t n_tokens = (uint32_t) x->ne[1];
+
+    kparams->has_comb   = op->src[3] != nullptr;
+    kparams->n_chunks   = ((uint32_t) x->ne[0] + HTP_DSV4_HC_CHUNK_ELEMS - 1) / HTP_DSV4_HC_CHUNK_ELEMS;
+    kparams->total_jobs = n_tokens * kparams->n_chunks;
+    if (kparams->total_jobs == 0) {
+        return;
+    }
+    kparams->n_threads       = (std::min)((uint32_t) sess->n_threads, kparams->total_jobs);
+    kparams->jobs_per_thread = (kparams->total_jobs + kparams->n_threads - 1) / kparams->n_threads;
+
+    kparams->dma_block_chunks = (std::min)((uint32_t) HTP_DSV4_HC_DMA_CHUNKS, kparams->n_chunks);
+    kparams->dma_row_stride   = kparams->dma_block_chunks * 128;
+    kparams->dma_buffer_size  = HTP_DSV4_HC_POST_DMA_ROWS*kparams->dma_row_stride;
+    kparams->dma_vtcm_size    = 2*kparams->dma_buffer_size*kparams->n_threads;
+
+    // decode uses l2 prefetch: per-thread data is too small to hide the dma latency
+    kparams->dma_eligible = n_tokens > 1 &&
+                            x->ne[0] % HTP_DSV4_HC_CHUNK_ELEMS == 0 &&
+                            kparams->jobs_per_thread >= 2*kparams->dma_block_chunks &&
+                            kparams->dma_vtcm_size <= sess->vtcm_size;
+
+    kparams->div_n_chunks  = init_fastdiv_values(kparams->n_chunks);
+    kparams->div_n_threads = init_fastdiv_values(kparams->n_threads);
+}
+
 static void ggml_hexagon_precompute_sort_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
@@ -6759,6 +6799,34 @@ static bool ggml_hexagon_supported_dsv4_hc_pre(const struct ggml_hexagon_session
     GGML_UNUSED(sess);
 }
 
+static bool ggml_hexagon_supported_dsv4_hc_post(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
+    const struct ggml_tensor * x        = op->src[0];
+    const struct ggml_tensor * residual = op->src[1];
+    const struct ggml_tensor * post     = op->src[2];
+    const struct ggml_tensor * comb     = op->src[3];
+    const struct ggml_tensor * dst      = op;
+
+    if (x->type != GGML_TYPE_F32 || residual->type != GGML_TYPE_F32 || post->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) {
+        return false;
+    }
+    if (comb && comb->type != GGML_TYPE_F32) {
+        return false;
+    }
+    if (residual->ne[1] != 4 || x->ne[2] != 1 || x->ne[3] != 1) {
+        return false;
+    }
+    if (x->nb[0] != sizeof(float) || residual->nb[0] != sizeof(float) || dst->nb[0] != sizeof(float)) {
+        return false;
+    }
+    if (ggml_is_permuted(x) || ggml_is_permuted(residual) || ggml_is_permuted(dst)) {
+        return false;
+    }
+
+    return true;
+
+    GGML_UNUSED(sess);
+}
+
 static const char * ggml_backend_hexagon_name(ggml_backend_t backend) {
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     return sess->c_name();
@@ -6816,6 +6884,7 @@ static htp_op_code op_remap_to_htp(const ggml_tensor * t) {
         case GGML_OP_DIAG:            return HTP_OP_DIAG;
         case GGML_OP_SOLVE_TRI:       return HTP_OP_SOLVE_TRI;
         case GGML_OP_DSV4_HC_PRE:     return HTP_OP_DSV4_HC_PRE;
+        case GGML_OP_DSV4_HC_POST:    return HTP_OP_DSV4_HC_POST;
         case GGML_OP_TRI:             return HTP_OP_TRI;
         case GGML_OP_PAD:             return HTP_OP_PAD;
         case GGML_OP_IM2COL:          return HTP_OP_IM2COL;
@@ -7108,6 +7177,11 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 ggml_hexagon_precompute_dsv4_hc_pre_params(sess,
                     node.node,
                     (struct htp_dsv4_hc_pre_kernel_params *)node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_DSV4_HC_POST) {
+                ggml_hexagon_precompute_dsv4_hc_post_params(sess,
+                    node.node,
+                    (struct htp_dsv4_hc_post_kernel_params *)node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
                 ggml_hexagon_precompute_sort_params(sess,
@@ -8040,6 +8114,10 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
 
         case GGML_OP_DSV4_HC_PRE:
             supp = ggml_hexagon_supported_dsv4_hc_pre(sess, op);
+            break;
+
+        case GGML_OP_DSV4_HC_POST:
+            supp = ggml_hexagon_supported_dsv4_hc_post(sess, op);
             break;
 
         case GGML_OP_TRI:
