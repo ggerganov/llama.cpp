@@ -218,8 +218,6 @@ llama_model_qwen3next::graph::graph(const llama_model & model, const llm_graph_p
 
     cb(cur, "result_output", -1);
     res->t_logits = cur;
-
-    ggml_build_forward_expand(gf, cur);
 }
 
 ggml_tensor * llama_model_qwen3next::graph::build_norm_gated(
@@ -296,7 +294,6 @@ ggml_tensor * llama_model_qwen3next::graph::build_layer_attn(
                 Qcur, Kcur, Vcur, nullptr, nullptr, nullptr, kq_scale, il);
     cb(cur, "attn_pregate", il);
 
-    // TODO: CUDA is missing non-contiguous unary ops. when implemented: remove this cont
     gate = ggml_cont_2d(ctx0, gate, n_embd_head * n_head, n_tokens);
 
     gate = ggml_sigmoid(ctx0, gate);
@@ -436,9 +433,6 @@ ggml_tensor * llama_model_qwen3next::graph::build_layer_attn_linear(
                                    mixed_ba_reshaped->nb[1], mixed_ba_reshaped->nb[2], mixed_ba_reshaped->nb[3],
                                    split_sizes_ba[0] * ggml_element_size(mixed_ba_reshaped));
     cb(a, "a", il);
-
-    // TODO: CUDA is missing non-contiguous unary ops. when implemented: remove this cont
-    b = ggml_cont(ctx0, b);
 
     ggml_tensor * beta = ggml_sigmoid(ctx0, b);
 
@@ -642,7 +636,7 @@ llama_model_qwen3next::graph_mtp::graph_mtp(const llama_model & model, const llm
     GGML_ASSERT(layer.ffn_gate_inp     && "MTP block missing ffn_gate_inp");
 
     // TODO: extract in a common llm_graph_context::build_inp_embd_h()
-    auto inp = std::make_unique<llm_graph_input_embd_h>(hparams.n_embd);
+    auto inp = std::make_unique<llm_graph_input_embd_h>(hparams.n_embd_inp(), hparams.n_embd);
 
     inp->tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     ggml_set_input(inp->tokens);
@@ -739,7 +733,6 @@ llama_model_qwen3next::graph_mtp::graph_mtp(const llama_model & model, const llm
             ggml_element_size(Qcur_full) * n_embd_head * 2 * n_head,
             ggml_element_size(Qcur_full) * n_embd_head);
 
-    // TODO: CUDA is missing non-contiguous unary ops. when implemented: remove this cont
     gate = ggml_cont_2d(ctx0, gate, n_embd_head * n_head, n_tokens);
     cb(gate, "mtp_gate", il);
 
@@ -819,5 +812,4 @@ llama_model_qwen3next::graph_mtp::graph_mtp(const llama_model & model, const llm
     cb(cur, "result_output", -1);
 
     res->t_logits = cur;
-    ggml_build_forward_expand(gf, cur);
 }
