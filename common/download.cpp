@@ -344,6 +344,17 @@ static int common_download_file_single_online(const std::string & url,
     const std::string path_temporary = path + PARTIAL_SUFFIX;
     int delay = retry_delay_seconds;
 
+    if (!skip_etag && !etag.empty()) {
+        if (std::filesystem::exists(path_temporary) && read_etag(path_temporary) != etag) {
+            LOG_WRN("%s: partial file does not match the server etag, discarding it: %s\n", __func__, path_temporary.c_str());
+            if (remove(path_temporary.c_str()) != 0) {
+                LOG_ERR("%s: unable to delete file: %s\n", __func__, path_temporary.c_str());
+                return -1;
+            }
+        }
+        write_etag(path_temporary, etag);
+    }
+
     if (opts.callback) {
         // report the resume offset, so a resumed file does not start at 0
         p.downloaded = supports_ranges && std::filesystem::exists(path_temporary) ?
@@ -385,6 +396,7 @@ static int common_download_file_single_online(const std::string & url,
             }
             if (!etag.empty() && !skip_etag) {
                 write_etag(path, etag);
+                remove((path_temporary + ".etag").c_str());
             }
             success = true;
             break;
