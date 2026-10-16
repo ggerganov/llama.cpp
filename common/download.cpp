@@ -214,7 +214,7 @@ static bool common_pull_file(httplib::Client & cli,
             if (progress_step >= p.total / 1000 || p.downloaded == p.total) {
                 if (callback) {
                     callback->on_update(p);
-                    if (callback->is_cancelled()) {
+                    if (callback->is_cancelled() && (p.total == 0 || p.downloaded != p.total)) {
                         return false;
                     }
                 }
