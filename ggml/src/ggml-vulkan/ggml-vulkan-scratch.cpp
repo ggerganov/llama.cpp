@@ -84,7 +84,13 @@ bool ggml_vk_scratch_available(const ggml_backend_vk_context * ctx, const ggml_t
     if (dst->buffer == nullptr || !ggml_backend_buffer_is_vk(dst->buffer)) {
         return false;
     }
-    return ggml_vk_op_scratch_size(ctx->device, dst) > 0;
+    const size_t scratch = ggml_vk_op_scratch_size(ctx->device, dst);
+    if (scratch == 0) {
+        return false;
+    }
+    // meta backend (-sm tensor) reserves for the full tensor, slices may not fit
+    ggml_backend_vk_buffer_context * buf_ctx = (ggml_backend_vk_buffer_context *)dst->buffer->context;
+    return vk_tensor_offset(dst) + ggml_vk_scratch_offset(ctx->device, ggml_nbytes(dst)) + scratch <= buf_ctx->dev_buffer->size;
 }
 
 vk_subbuffer ggml_vk_scratch_subbuffer(const ggml_backend_vk_context * ctx, const ggml_tensor * dst, size_t offset, size_t size) {
