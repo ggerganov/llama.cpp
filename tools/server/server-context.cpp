@@ -1491,7 +1491,7 @@ private:
         }
 
         // decision requests rarely repeat a state, the prompt cache is opt-in for decision models
-        if (decision.type != COMMON_DECISION_TYPE_NONE && !params_base.cache_ram_explicit) {
+        if (decision.type != COMMON_DECISION_TYPE_NONE && !common_get_decision_chat(model_tgt) && !params_base.cache_ram_explicit) {
             SRV_INF("%s", "decision model: prompt cache disabled by default, use `--cache-ram N` to enable it\n");
             params_base.cache_ram_mib    = 0;
             params_base.cache_idle_slots = false;
@@ -4817,7 +4817,7 @@ server_context_meta server_context::get_meta() const {
         /* model_aliases           */ impl->model_aliases,
         /* model_tags              */ impl->model_tags,
         /* model_path              */ impl->params_base.model.path,
-        /* model_output_modalities */ server_model_output_modalities(common_get_decision_type(impl->model_tgt)),
+        /* model_output_modalities */ server_model_output_modalities(common_get_decision_type(impl->model_tgt), common_get_decision_chat(impl->model_tgt)),
         /* has_mtmd                */ impl->mctx != nullptr,
         /* has_inp_image           */ impl->chat_params.allow_image,
         /* has_inp_audio           */ impl->chat_params.allow_audio,
