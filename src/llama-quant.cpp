@@ -36,9 +36,11 @@ enum tensor_category {
     TENSOR_CATEGORY_ATTENTION_QKV,
     TENSOR_CATEGORY_ATTENTION_KV_B,
     TENSOR_CATEGORY_ATTENTION_OUTPUT,
+    TENSOR_CATEGORY_ATTENTION_GATE,
     TENSOR_CATEGORY_FFN_UP,
     TENSOR_CATEGORY_FFN_GATE,
     TENSOR_CATEGORY_FFN_DOWN,
+    TENSOR_CATEGORY_FFN_LATENT,
     TENSOR_CATEGORY_OUTPUT,
     TENSOR_CATEGORY_OTHER
 };
@@ -129,6 +131,8 @@ static tensor_category tensor_get_category(const std::string & tensor_name) {
     if (tensor_name.find("attn_output.weight") != std::string::npos) { return TENSOR_CATEGORY_ATTENTION_OUTPUT; }
     if (tensor_name.find("ffn_up") != std::string::npos)             { return TENSOR_CATEGORY_FFN_UP; }
     if (tensor_name.find("ffn_gate") != std::string::npos)           { return TENSOR_CATEGORY_FFN_GATE; }
+    if (tensor_name.find("ffn_latent") != std::string::npos)         { return TENSOR_CATEGORY_FFN_LATENT; }
+    if (tensor_name.find("attn_gate.weight") != std::string::npos)   { return TENSOR_CATEGORY_ATTENTION_GATE; }
     if (tensor_name.find("ffn_down") != std::string::npos)           { return TENSOR_CATEGORY_FFN_DOWN; }
 
     return TENSOR_CATEGORY_OTHER;
@@ -329,6 +333,11 @@ static bool tensor_allows_quantization(const llama_model_quantize_params * param
         quantize &= name.find("attn_v_b.weight")         == std::string::npos;
     }
 
+    // the decision head of vllm-decision2 is small and computed in F32
+    if (arch == LLM_ARCH_VLLM_DECISION2) {
+        quantize &= name.compare(0, 9, "decision.") != 0;
+    }
+
     // do not quantize RWKV's small yet 2D weights
     quantize &= name.find("time_mix_first.weight") == std::string::npos;
     quantize &= name.find("time_mix_w0.weight") == std::string::npos;
@@ -453,6 +462,14 @@ static ggml_type llama_tensor_get_type_impl(quantize_state_impl & qs, ggml_type 
             default:
                 return GGML_TYPE_Q8_0;
         }
+    }
+
+    // bumping to q8_0 is preferred since these tensors are not really big
+    // TODO: nemotron 3 super shares ffn_latent and afmoe, bailingmoe3, dots3note, hy-v4, kimi-k3 and laguna share attn_gate.
+    //       Widening the guard is likely a win there too, but it changes their files, so it wants a perplexity comparison per architecture first.
+    if (arch == LLM_ARCH_MUSE_SPARK && (category == TENSOR_CATEGORY_FFN_LATENT || category == TENSOR_CATEGORY_ATTENTION_GATE)) {
+        auto bits_per_weight = [](ggml_type t) { return 8.0 * ggml_type_size(t) / ggml_blck_size(t); };
+        if (ggml_is_quantized(new_type) && bits_per_weight(new_type) < bits_per_weight(GGML_TYPE_Q8_0)) { new_type = GGML_TYPE_Q8_0; }
     }
 
     // for arches that share the same tensor between the token embeddings and the output,
