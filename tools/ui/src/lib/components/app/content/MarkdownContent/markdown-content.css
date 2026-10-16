@@ -139,13 +139,13 @@
 /* Lists */
 .markdown-content :global(ul) {
 	list-style-type: disc;
-	margin-inline-start: 1.5rem;
+	margin-inline-start: 2rem;
 	margin-bottom: 1rem;
 }
 
 .markdown-content :global(ol) {
 	list-style-type: decimal;
-	margin-inline-start: 1.5rem;
+	margin-inline-start: 2rem;
 	margin-bottom: 1rem;
 }
 
