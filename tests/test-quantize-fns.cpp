@@ -26,6 +26,7 @@ constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS_XXS = 0.0050f;
 constexpr float MAX_QUANTIZATION_TOTAL_ERROR_FP4 = 0.0030f;
 constexpr float MAX_DOT_PRODUCT_ERROR = 0.02f;
 constexpr float MAX_DOT_PRODUCT_ERROR_LOWBIT = 0.04f;
+constexpr float MAX_DOT_PRODUCT_ERROR_IQ2_XXS = 0.05f;
 constexpr float MAX_DOT_PRODUCT_ERROR_FP4 = 0.03f;
 constexpr float MAX_DOT_PRODUCT_ERROR_BINARY = 0.40f;
 constexpr float MAX_DOT_PRODUCT_ERROR_TERNARY = 0.15f;
@@ -96,8 +97,18 @@ static float dot_product_error(const ggml_type_traits_cpu * qfns_cpu, ggml_type 
 
     std::vector<uint8_t> tmp_q1(bx * nrc);
     std::vector<uint8_t> tmp_q2(by * nrc);
+    const std::vector<float> imatrix(test_size, 1.0f);
 
-    qfns_cpu->from_float(test_data1, tmp_q1.data(), test_size);
+    // IQ types have no from_float, quantize them through ggml_quantize_chunk instead
+    const auto quantize_src0 = [&](const float * src, uint8_t * dst) {
+        if (qfns_cpu->from_float) {
+            qfns_cpu->from_float(src, dst, test_size);
+        } else {
+            ggml_quantize_chunk(src0_type, src, dst, 0, 1, test_size, imatrix.data());
+        }
+    };
+
+    quantize_src0(test_data1, tmp_q1.data());
     vdot->from_float(test_data2, tmp_q2.data(), test_size);
 
     if (nrc == 1) {
@@ -111,7 +122,7 @@ static float dot_product_error(const ggml_type_traits_cpu * qfns_cpu, ggml_type 
     // nrc == 2: kernel computes a 2x2 dot product matrix
     // Output layout: s[0]=dot(vx0,vy0), s[1]=dot(vx1,vy0), s[bs]=dot(vx0,vy1), s[bs+1]=dot(vx1,vy1)
     // row and output strides are padded, same as in the mul_mat path
-    qfns_cpu->from_float(test_data3, tmp_q1.data() + bx, test_size);
+    quantize_src0(test_data3, tmp_q1.data() + bx);
     vdot->from_float(test_data4, tmp_q2.data() + by, test_size);
 
     const size_t bs = 16;
@@ -210,9 +221,14 @@ static int test_vec_dot_q(bool verbose) {
             if (failed || verbose) {
                 printf("%5s reference implementation error: %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], reference_error);
             }
+        }
 
+        if (qfns_cpu->vec_dot) {
             const float vec_dot_error = dot_product_error(qfns_cpu, type, test_size, test_data.data(), test_data2.data(), nullptr, nullptr, 1);
-            const float max_allowed_error = type == GGML_TYPE_Q2_K || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ2_XXS ||
+            const float max_allowed_error = type == GGML_TYPE_IQ2_XXS
+                ? MAX_DOT_PRODUCT_ERROR_IQ2_XXS
+                : type == GGML_TYPE_Q2_K || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M ||
+                type == GGML_TYPE_IQ2_XS ||
                 type == GGML_TYPE_IQ3_XXS || type == GGML_TYPE_IQ3_S || type == GGML_TYPE_IQ2_S
                 ? MAX_DOT_PRODUCT_ERROR_LOWBIT
                 : type == GGML_TYPE_Q1_0
@@ -222,7 +238,7 @@ static int test_vec_dot_q(bool verbose) {
                 : type == GGML_TYPE_NVFP4
                 ? MAX_DOT_PRODUCT_ERROR_FP4
                 : MAX_DOT_PRODUCT_ERROR;
-            failed = !(vec_dot_error < max_allowed_error);
+            bool failed = !(vec_dot_error < max_allowed_error);
             num_failed += failed;
             if (failed || verbose) {
                 printf("%5s dot product error:              %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], vec_dot_error);
