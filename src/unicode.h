@@ -104,7 +104,6 @@ unicode_cpt_flags unicode_cpt_flags_from_utf8(const std::string & utf8);
 
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t     unicode_utf8_to_byte(const std::string & utf8);
-// same mapping as unicode_utf8_to_byte, from the code point; throws std::out_of_range for other code points
 uint8_t     unicode_cpt_to_byte (uint32_t cpt);
 
 uint32_t unicode_tolower(uint32_t cpt);
