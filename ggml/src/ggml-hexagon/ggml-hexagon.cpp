@@ -956,9 +956,6 @@ static void ggml_backend_hexagon_buffer_get_tensor(ggml_backend_buffer_t buffer,
         return;
     }
 
-    if (tensor->type != GGML_TYPE_Q2_0) {
-        GGML_ASSERT(offset == 0);
-    }
     htp_unpack_tensor_tiled(data, tensor, offset, size);
 }
 
@@ -1040,13 +1037,6 @@ static void ggml_backend_hexagon_buffer_get_tensor_2d(ggml_backend_buffer_t buff
         return;
     }
 
-    if (tensor->type == GGML_TYPE_Q2_0) {
-        for (size_t i = 0; i < n_copies; i++) {
-            htp_unpack_tensor_tiled((uint8_t *) data + i * stride_data, tensor, offset + i * stride_tensor, size);
-        }
-        return;
-    }
-
     size_t temp_size      = n_copies > 0 ? (n_copies - 1) * stride_tensor + size : 0;
     size_t slice_size     = tensor->ne[1] * ggml_row_size(tensor->type, tensor->ne[0]);
     size_t slice_offset   = offset % slice_size;
@@ -1054,7 +1044,6 @@ static void ggml_backend_hexagon_buffer_get_tensor_2d(ggml_backend_buffer_t buff
 
     GGML_ASSERT((slice_offset % row_size_bytes) == 0 && "offset must be aligned to row boundary");
     GGML_ASSERT((temp_size % row_size_bytes)    == 0 && "temp_size must be a multiple of row size");
-    GGML_ASSERT((slice_offset / row_size_bytes) % 32 == 0 && "offset must be aligned to tile size (32 rows)");
     GGML_ASSERT((offset + temp_size) <= ggml_nbytes(tensor));
 
     std::vector<uint8_t> temp_buf(temp_size);
