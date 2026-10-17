@@ -4,7 +4,7 @@ set -euo pipefail
 if [ $# -lt 2 ]; then
     printf "Usage: %s <llama-quantize> <llama-perplexity> [<scratch-dir>] [--no-check]\n" "$0"
     printf "  <scratch-dir>  dir for the model and outputs, default /tmp/test-quantize-be\n"
-    printf "  --no-check     print the sha256 and perplexity of each output without checking them\n"
+    printf "  --no-check     print the perplexity of each output without checking it\n"
     printf "Example: %s ./build/bin/llama-quantize ./build/bin/llama-perplexity\n" "$0"
     exit 1
 fi
@@ -68,38 +68,13 @@ check_sha256() {
     local actual
     actual=$(sha256sum "$file" | cut -d ' ' -f 1)
 
-    if [ "$no_check" = --no-check ]; then
-        printf "%-16s %-64s %s\n" "$name" "$actual" -
-    elif [ "$actual" = "$expected" ]; then
-        printf "%-16s %-64s %b\n" "$name" "$actual" "\033[32mOK\033[0m"
-    else
-        printf "%-16s %-64s %b\n" "$name" "$actual" "\033[31mFAIL\033[0m"
+    if [ "$actual" != "$expected" ]; then
         echo "error: sha256 mismatch for $name: expected '$expected', got '$actual'" >&2
         exit 1
     fi
 }
 
-check_ppl() {
-    local name=$1
-    local log=$2
-    local max=$3
-
-    # llama-perplexity prints no final estimate when the result is nan
-    local ppl
-    ppl=$(sed -n 's/.*Final estimate: PPL = \([0-9.]*\).*/\1/p' "$log")
-
-    if [ "$no_check" = --no-check ]; then
-        printf "%-16s %-10s %-10s %s\n" "$name" "${ppl:-nan}" "$max" -
-    elif [ -n "$ppl" ] && awk -v p="$ppl" -v m="$max" 'BEGIN { exit !(p <= m) }'; then
-        printf "%-16s %-10s %-10s %b\n" "$name" "$ppl" "$max" "\033[32mOK\033[0m"
-    else
-        printf "%-16s %-10s %-10s %b\n" "$name" "${ppl:-nan}" "$max" "\033[31mFAIL\033[0m"
-        echo "error: perplexity of $name is ${ppl:-nan}, expected at most $max" >&2
-        exit 1
-    fi
-}
-
-# keep the table readable, only show a command's output when it fails
+# keep the report readable, only show a command's output when it fails
 run_logged() {
     local log=$1
     shift
@@ -107,8 +82,23 @@ run_logged() {
     if ! "$@" > "$log" 2>&1; then
         cat "$log" >&2
         echo "error: command failed: $*" >&2
-        exit 1
+        return 1
     fi
+}
+
+# quantize one type and print its perplexity, print nothing if a step fails
+measure_ppl() {
+    local type=$1
+    local out=$2
+    local log=$scratch_dir/stories15M-be-$type-ppl.log
+
+    if [ "$type" != F32 ]; then
+        run_logged "$scratch_dir/stories15M-be-$type.log" "$quantize" --pure "$f32" "$out" "$type" || return 1
+    fi
+    run_logged "$log" "$perplexity" -m "$out" -f "$text" -c 128 || return 1
+
+    # llama-perplexity prints no final estimate when the result is nan
+    sed -n 's/.*Final estimate: PPL = \([0-9.]*\).*/\1/p' "$log"
 }
 
 mkdir -p "$scratch_dir"
@@ -118,12 +108,11 @@ if [ ! -f "$model" ]; then
     wget -q -O "$model" "$MODEL_URL"
 fi
 
-printf "%-16s %-64s %s\n" file sha256 result
 check_sha256 stories15M.gguf "$model" "$MODEL_SHA256"
 
 f32=$scratch_dir/stories15M-be-F32.gguf
 cp "$model" "$f32"
-echo YES | run_logged "$scratch_dir/stories15M-be-F32.log" python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big
+echo YES | run_logged "$scratch_dir/stories15M-be-F32.log" python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big || exit 1
 check_sha256 F32 "$f32" "$F32_SHA256"
 
 # 588 tokens, enough for 4 chunks of 128
@@ -141,15 +130,49 @@ The bird hopped over and ate the bread. Then it sang again, louder than before. 
 Lily and the bird became good friends. Every day she gave it bread, and every day it sang for her. Lily learned that being kind to others, even small birds, can make the world a happy place.
 EOF
 
-printf "\n%-16s %-10s %-10s %s\n" type ppl max result
+rows=()
+n_ok=0
+n_bad=0
 for entry in "${outputs[@]}"; do
     read -r type max <<< "$entry"
     out=$scratch_dir/stories15M-be-$type.gguf
 
-    if [ "$type" != F32 ]; then
-        run_logged "$scratch_dir/stories15M-be-$type.log" "$quantize" --pure "$f32" "$out" "$type"
+    if ! ppl=$(measure_ppl "$type" "$out"); then
+        ppl=-
+        status=FAIL
+    elif [ "$no_check" = --no-check ]; then
+        status=-
+    elif [[ $ppl =~ ^[0-9.]+$ ]] && awk -v p="$ppl" -v m="$max" 'BEGIN { exit !(p <= m) }'; then
+        status=OK
+    else
+        status=FAIL
     fi
 
-    run_logged "$scratch_dir/stories15M-be-$type-ppl.log" "$perplexity" -m "$out" -f "$text" -c 128
-    check_ppl "$type" "$scratch_dir/stories15M-be-$type-ppl.log" "$max"
+    case $status in
+        OK)   n_ok=$((n_ok + 1)) ;;
+        FAIL) n_bad=$((n_bad + 1)) ;;
+    esac
+
+    rows+=("$type ${ppl:-nan} $max $status")
+    printf "%s: %-10s (%s) done\n" "$(basename "$0")" "$type" "$out"
 done
+
+printf "\n%-10s %10s %10s %s\n" type ppl max status
+for row in "${rows[@]}"; do
+    read -r type ppl max status <<< "$row"
+    case $status in
+        OK)   status="\033[32mOK\033[0m" ;;
+        FAIL) status="\033[31mFAIL\033[0m" ;;
+    esac
+    printf "%-10s %10s %10s %b\n" "$type" "$ppl" "$max" "$status"
+done
+
+if [ "$no_check" != --no-check ]; then
+    printf "summary: %d ok, %d failed\n" "$n_ok" "$n_bad"
+fi
+
+if [ "$n_bad" -ne 0 ]; then
+    printf "\nif the perplexity is expected to change, run with --no-check and update the max values in %s:\n\n" "$0"
+    printf "%s %s %s %s --no-check\n" "$0" "$quantize" "$perplexity" "$scratch_dir"
+    exit 1
+fi
