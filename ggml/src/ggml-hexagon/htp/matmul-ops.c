@@ -278,9 +278,8 @@ static void hvx_mm_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
     uint32_t n_k_tiles_w = ne00 / htp_tensor_get_tile_k(src0->type);
-    uint32_t n_k_tiles_a = ne10 / htp_tensor_get_tile_k(src0->type);
     uint32_t tile_row_stride = n_k_tiles_w * tile_size;
-    uint32_t tile_row_transfer_size_aligned = n_k_tiles_a * aligned_tile_size;
+    uint32_t tile_row_transfer_size_aligned = n_k_tiles_w * aligned_tile_size;
 
     uint32_t ct_start = src0_start_row / 32;
     uint32_t ct_end   = (src0_end_row + 31) / 32;
@@ -289,7 +288,7 @@ static void hvx_mm_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     if (src0_start_row < src0_end_row) {
         for (uint32_t d = 0; d < n_prefetch && push_ct < ct_end; d++, push_ct++) {
             dma_queue_push(dma_q, dma_make_data(vtcm_src0_ptr + d * tile_row_transfer_size_aligned,
-                           src0_row + push_ct * tile_row_stride), aligned_tile_size, tile_size, tile_size, n_k_tiles_a);
+                           src0_row + push_ct * tile_row_stride), aligned_tile_size, tile_size, tile_size, n_k_tiles_w);
         }
     }
 
@@ -341,7 +340,7 @@ static void hvx_mm_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
 
         if (push_ct < ct_end) {
             dma_queue_push(dma_q, dma_make_data(w_tile, src0_row + push_ct * tile_row_stride),
-                           aligned_tile_size, tile_size, tile_size, n_k_tiles_a);
+                           aligned_tile_size, tile_size, tile_size, n_k_tiles_w);
             push_ct++;
         }
     }
@@ -380,9 +379,8 @@ static void hvx_mv_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
     const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(src0->type);
 
     uint32_t n_k_tiles_w = ne00 / htp_tensor_get_tile_k(src0->type);
-    uint32_t n_k_tiles_a = ne10 / htp_tensor_get_tile_k(src0->type);
     uint32_t tile_row_stride = n_k_tiles_w * tile_size;
-    uint32_t tile_row_transfer_size_aligned = n_k_tiles_a * aligned_tile_size;
+    uint32_t tile_row_transfer_size_aligned = n_k_tiles_w * aligned_tile_size;
 
     uint32_t ct_start = src0_start_row / 32;
     uint32_t ct_end   = (src0_end_row + 31) / 32;
@@ -401,7 +399,7 @@ static void hvx_mv_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
         }
         for (uint32_t d = 0; d < n_prefetch && push_ct < ct_end; d++, push_ct++) {
             dma_queue_push(dma_q, dma_make_data(vtcm_src0_ptr + d * tile_row_transfer_size_aligned,
-                           src0_row + push_ct * tile_row_stride), aligned_tile_size, tile_size, tile_size, n_k_tiles_a);
+                           src0_row + push_ct * tile_row_stride), aligned_tile_size, tile_size, tile_size, n_k_tiles_w);
         }
     }
 
@@ -422,7 +420,7 @@ static void hvx_mv_2d_tiled(unsigned int nth, unsigned int ith, void * data) {
 
         if (push_ct < ct_end) {
             dma_queue_push(dma_q, dma_make_data(w_tile, src0_row + push_ct * tile_row_stride),
-                           aligned_tile_size, tile_size, tile_size, n_k_tiles_a);
+                           aligned_tile_size, tile_size, tile_size, n_k_tiles_w);
             push_ct++;
         }
     }
@@ -2680,8 +2678,6 @@ static int hmx_mm_2d_f32(struct htp_context *ctx,
     size_t n_chunk_n_cols = n_chunk;
     size_t vtcm_used      = vtcm_size;
 
-    const size_t qweight_row_stride = is_tiled ? (size_t)(n_k_tiles * aligned_tile_size) / 32 : 0;
-
     struct htp_mm_hmx_vtcm_layout L;
     htp_mm_hmx_vtcm_layout_build(&L, HTP_MM_KERNEL_HMX_2D, weight_type, k, m_chunk_n_rows, n_chunk_n_cols, 1, pipeline, act_threads, aligned_tile_size, src2_bytes);
 
@@ -3545,6 +3541,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
     }
 
     const int n_k_tiles = k / HTP_MM_HMX_TILE_N_COLS;
+    const uint32_t n_weight_tiles = k / htp_tensor_get_tile_k(weight_type);
     const struct fastdiv_values n_k_tiles_div = init_fastdiv_values(n_k_tiles);
 
     const size_t vec_dot_size = k * sizeof(__fp16);
@@ -3558,7 +3555,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
     const uint32_t dma_src_stride  = is_tiled ? tile_size : weight_stride;
     const uint32_t dma_width_bytes = is_tiled ? tile_size : row_stride;
 
-    const size_t qweight_row_stride = is_tiled ? (size_t)(n_k_tiles * aligned_tile_size) / 32 : 0;
+    const size_t qweight_row_stride = is_tiled ? (size_t)(n_weight_tiles * aligned_tile_size) / 32 : 0;
     const size_t weight_row_stride = is_tiled ? qweight_row_stride : row_stride;
 
     size_t size_per_n = 0, size_per_m = 0, size_per_mn = 0;
@@ -3614,7 +3611,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
         // A0: Pre-fetch the first weight chunk (nc = 0)
         if (n > 0) {
             const size_t n_cols = hex_smin((size_t) n, n_chunk_n_cols);
-            const uint32_t height = is_tiled ? hmx_ceil_div(n_cols, 32) * n_k_tiles : n_cols;
+            const uint32_t height = is_tiled ? hmx_ceil_div(n_cols, 32) * n_weight_tiles : n_cols;
             dma_queue_push(weight_dma, dma_make_data(vtcm_raw_bufs[0], weight),
                            dma_dst_stride, dma_src_stride, dma_width_bytes, height);
         }
@@ -3638,7 +3635,7 @@ static int hmx_mm_id_2d_f32(struct htp_context *ctx,
             const size_t nc_next = nc + n_chunk_n_cols;
             if (nc_next < (size_t) n) {
                 const size_t n_cols_next = hex_smin((size_t) n - nc_next, n_chunk_n_cols);
-                const uint32_t height_next = is_tiled ? hmx_ceil_div(n_cols_next, 32) * n_k_tiles : n_cols_next;
+                const uint32_t height_next = is_tiled ? hmx_ceil_div(n_cols_next, 32) * n_weight_tiles : n_cols_next;
                 dma_queue_push(weight_dma, dma_make_data(vtcm_raw_bufs[(i + 1) % 2], weight + nc_next * weight_stride),
                                dma_dst_stride, dma_src_stride, dma_width_bytes, height_next);
             }

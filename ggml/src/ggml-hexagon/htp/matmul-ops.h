@@ -435,7 +435,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
 
     if (is_fused_nx) {
         uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
-        uint32_t n_k_tiles = hex_round_up(ne10, 32) / 32;
+        uint32_t n_k_tiles = (ne10 + htp_tensor_get_tile_k(wtype) - 1) / htp_tensor_get_tile_k(wtype);
         uint32_t tile_row_size = n_k_tiles * aligned_tile_size;
         size_t weight_sz_per_thread = hex_round_up(n_prefetch * tile_row_size, 128);
 
@@ -451,7 +451,7 @@ static inline void htp_mm_hvx_vtcm_layout_build(
     } else if (is_matmul_id) {
         const size_t act_row_size_tiled = htp_mm_tiled_act_row_size(wtype, ne10);
         const uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
-        const uint32_t n_k_tiles         = ne10 / 32;
+        const uint32_t n_k_tiles         = (ne10 + htp_tensor_get_tile_k(wtype) - 1) / htp_tensor_get_tile_k(wtype);
         const uint32_t tile_row_size     = n_k_tiles * aligned_tile_size;
         size_t src0_sz_per_thread        = htp_mm_round_up(n_prefetch * tile_row_size, 256);
 

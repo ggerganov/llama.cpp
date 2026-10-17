@@ -3769,13 +3769,8 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     bool is_matmul_id,
     bool is_batched
 ) {
-    if (src0->type == GGML_TYPE_Q1_0) {
-        if (!dst || dst->op != GGML_OP_MUL_MAT || dst->type != GGML_TYPE_F32 || src1->type != GGML_TYPE_F32 ||
-            !ggml_is_contiguous(src0) || !ggml_is_contiguous(src1) || !ggml_is_contiguous(dst) ||
-            is_matmul_id || is_batched || src0->ne[0] % QK1_0 != 0) {
-            return false;
-        }
-    }
+    GGML_UNUSED(dst);
+
     if (src1->type != GGML_TYPE_F32 && (src1->type != GGML_TYPE_F16 || is_matmul_id)) {
         return false;
     }
@@ -3787,7 +3782,7 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
     const int wtype = src0->type;
 
     // HMX weight tiles accept non-32-aligned N for non-matmul_id.
-    if (ne01 % 32 != 0 && is_matmul_id) {
+    if (ne01 % HTP_TENSOR_TILE_N_ROWS != 0 && is_matmul_id) {
         return false;
     }
 
@@ -3796,8 +3791,8 @@ static bool ggml_hexagon_matmul_is_hmx_eligible(
         return false;
     }
 
-    // HMX paths require K aligned to 32.
-    if (ne00 % 32 != 0) {
+    // HMX paths require K aligned to HMX tile cols (32).
+    if (ne00 % HTP_TENSOR_TILE_N_COLS != 0) {
         return false;
     }
 
@@ -4228,7 +4223,7 @@ static void ggml_hexagon_precompute_matmul_params(
     const struct ggml_tensor * dst,
     struct htp_mm_kernel_params * kparams
 ) {
-    if (src0->type != GGML_TYPE_Q1_0 && ggml_hexagon_matmul_can_collapse(src0, src1, dst)) {
+    if (ggml_hexagon_matmul_can_collapse(src0, src1, dst)) {
         const ggml_tensor src1_collapsed = ggml_hexagon_tensor_collapse_rows(src1);
         const ggml_tensor dst_collapsed  = ggml_hexagon_tensor_collapse_rows(dst);
         ggml_hexagon_precompute_matmul_params_impl(sess, src0, &src1_collapsed, &dst_collapsed, 0, 0, kparams);
@@ -5394,12 +5389,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
                 return false;
             }
 
-            if (src0->type == GGML_TYPE_Q1_0 && src1->type != GGML_TYPE_F32) {
-                return false;
-            }
-            const int64_t qk = src0->type == GGML_TYPE_Q1_0 ? QK1_0 :
-                ((src0->type == GGML_TYPE_Q6_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q4_K ||
-                  src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q2_K) ? QK_K : 32);
+            const int64_t qk = ggml_blck_size(src0->type);
             if (src0->ne[0] % qk) {
                 return false;
             }
@@ -5481,6 +5471,7 @@ static bool ggml_hexagon_supported_mul_mat_id(const struct ggml_hexagon_session 
     }
 
     switch (src0->type) {
+        case GGML_TYPE_Q1_0:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q8_0:
@@ -5495,8 +5486,7 @@ static bool ggml_hexagon_supported_mul_mat_id(const struct ggml_hexagon_session 
                 return false;
             }
 
-            if (src0->ne[0] % ((src0->type == GGML_TYPE_Q6_K || src0->type == GGML_TYPE_Q5_K || src0->type == GGML_TYPE_Q4_K ||
-                                src0->type == GGML_TYPE_Q3_K || src0->type == GGML_TYPE_Q2_K) ? QK_K : 32)) {
+            if (src0->ne[0] % ggml_blck_size(src0->type) != 0) {
                 return false;
             }
             break;
