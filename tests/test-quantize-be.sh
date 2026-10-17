@@ -48,10 +48,29 @@ check_sha256() {
 
     local actual
     actual=$(sha256sum "$file" | cut -d ' ' -f 1)
-    echo "$name $actual"
 
-    if [ "$no_check" != --no-check ] && [ "$actual" != "$expected" ]; then
+    local result=OK
+    if [ "$no_check" = --no-check ]; then
+        result=-
+    elif [ "$actual" != "$expected" ]; then
+        result=FAIL
+    fi
+    printf "%-16s %-6s %s\n" "$name" "$result" "$actual"
+
+    if [ "$result" = FAIL ]; then
         echo "error: sha256 mismatch for $name: expected '$expected', got '$actual'" >&2
+        exit 1
+    fi
+}
+
+# keep the table readable, only show a command's output when it fails
+run_logged() {
+    local log=$1
+    shift
+
+    if ! "$@" > "$log" 2>&1; then
+        cat "$log" >&2
+        echo "error: command failed: $*" >&2
         exit 1
     fi
 }
@@ -62,18 +81,20 @@ model=$folder/stories15M.gguf
 if [ ! -f "$model" ]; then
     wget -q -O "$model" "$MODEL_URL"
 fi
+
+printf "%-16s %-6s %s\n" type result sha256
 check_sha256 stories15M.gguf "$model" "$MODEL_SHA256"
 
 f32=$folder/stories15M-be-F32.gguf
 cp "$model" "$f32"
-echo YES | python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big
+echo YES | run_logged "$folder/stories15M-be-F32.log" python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big
 
 for entry in "${outputs[@]}"; do
     read -r type expected <<< "$entry"
     out=$folder/stories15M-be-$type.gguf
 
     if [ "$type" != F32 ]; then
-        "$quantize" --pure "$f32" "$out" "$type"
+        run_logged "$folder/stories15M-be-$type.log" "$quantize" --pure "$f32" "$out" "$type"
     fi
 
     check_sha256 "$type" "$out" "$expected"
