@@ -39,7 +39,7 @@ struct htp_binary_kernel_params {
     uint8_t  split_at_ne01;
     uint8_t  split_at_ne02;
     uint8_t  src1_strided;
-    uint8_t  pad;
+    uint8_t  n_srcs;
 };
 
 #if defined(__cplusplus)
@@ -100,6 +100,8 @@ static inline void htp_binary_vtcm_layout_build(
         return;
     }
 
+    const uint32_t n_srcs = kparams->n_srcs > 2 ? kparams->n_srcs : 2;
+
     if (kparams->kernel_type == HTP_BINARY_KERNEL_CHUNKED) {
         const size_t chunk_bytes = kparams->chunk_bytes;
         if (chunk_bytes == 0) {
@@ -107,7 +109,7 @@ static inline void htp_binary_vtcm_layout_build(
         }
 
         L->src0_bytes_per_thread = 2 * chunk_bytes;
-        L->src1_bytes_per_thread = kparams->is_scalar ? 0 : (2 * chunk_bytes);
+        L->src1_bytes_per_thread = kparams->is_scalar ? 0 : (2 * (n_srcs - 1) * chunk_bytes);
         L->dst_bytes_per_thread  = 2 * chunk_bytes;
 
         L->src0_spad_half_size = chunk_bytes;
@@ -135,7 +137,7 @@ static inline void htp_binary_vtcm_layout_build(
     }
 
     const size_t spad_row_total = (kparams->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE)
-        ? 2 * (kparams->src0_row_size_aligned + kparams->src1_row_size_aligned + kparams->dst_row_size_aligned)
+        ? 2 * (kparams->src0_row_size_aligned + (n_srcs - 1) * kparams->src1_row_size_aligned + kparams->dst_row_size_aligned)
         : 2 * (kparams->src0_row_size_aligned + kparams->dst_row_size_aligned);
 
     const size_t static_vtcm_size = kparams->src1_size + kparams->src2_size;
@@ -155,11 +157,13 @@ static inline void htp_binary_vtcm_layout_build(
     L->src0_bytes_per_thread = rows_per_buffer * 2 * kparams->src0_row_size_aligned;
     L->dst_bytes_per_thread  = rows_per_buffer * 2 * kparams->dst_row_size_aligned;
     L->src1_bytes_per_thread = (kparams->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE)
-        ? rows_per_buffer * 2 * kparams->src1_row_size_aligned
+        ? rows_per_buffer * 2 * (n_srcs - 1) * kparams->src1_row_size_aligned
         : 0;
 
     L->src0_spad_half_size = L->src0_bytes_per_thread / 2;
-    L->src1_spad_half_size = L->src1_bytes_per_thread / 2;
+    L->src1_spad_half_size = (kparams->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE)
+        ? rows_per_buffer * kparams->src1_row_size_aligned
+        : 0;
     L->dst_spad_half_size  = L->dst_bytes_per_thread / 2;
 
     const size_t src0_total = n_threads * L->src0_bytes_per_thread;

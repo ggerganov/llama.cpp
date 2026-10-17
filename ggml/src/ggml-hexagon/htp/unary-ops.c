@@ -213,13 +213,15 @@ static void rms_norm_f32(const void * restrict src,
                          const struct htp_unary_context * uctx) {
     htp_unary_op_preamble;
     float epsilon = 0.f;
-    memcpy(&epsilon, op_params, sizeof(float));
+    float scale   = 0.f;
+    memcpy(&epsilon, &op_params[0], sizeof(float));
+    memcpy(&scale,   &op_params[1], sizeof(float));
 
     for (uint32_t ir = 0; ir < num_rows; ir++) {
         const uint8_t * restrict src_local = (const uint8_t *)src + (ir * src0_row_size_aligned);
         uint8_t * restrict dst_local       = (uint8_t *)dst + (ir * dst_row_size_aligned);
 
-        hvx_fast_rms_norm_f32((const uint8_t *) src_local, (uint8_t *) dst_local, ne0, epsilon);
+        hvx_fast_rms_norm_f32((const uint8_t *) src_local, (uint8_t *) dst_local, ne0, epsilon, scale);
     }
 }
 
@@ -230,14 +232,16 @@ static void rms_norm_mul_f32(const void * restrict src,
                              const struct htp_unary_context * uctx) {
     htp_unary_op_preamble;
     float epsilon = 0.f;
-    memcpy(&epsilon, op_params, sizeof(float));
+    float scale   = 0.f;
+    memcpy(&epsilon, &op_params[0], sizeof(float));
+    memcpy(&scale,   &op_params[1], sizeof(float));
 
     for (uint32_t ir = 0; ir < num_rows; ir++) {
         const uint8_t * restrict src_local = (const uint8_t *)src + (ir * src0_row_size_aligned);
         const uint8_t * restrict w_local   = (const uint8_t *)weight + (uctx->broadcast_weight ? 0 : ir * uctx->src1_row_size_aligned);
         uint8_t * restrict dst_local       = (uint8_t *)dst + (ir * dst_row_size_aligned);
 
-        hvx_fast_rms_norm_mul_f32(src_local, w_local, dst_local, ne0, epsilon);
+        hvx_fast_rms_norm_mul_f32(src_local, w_local, dst_local, ne0, epsilon, scale);
     }
 }
 
