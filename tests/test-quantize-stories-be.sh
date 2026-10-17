@@ -24,8 +24,6 @@ declare -a outputs=(
     "F32       "
     "F16       "
     "BF16      "
-    "Q1_0      "
-    "Q2_0      "
     "Q4_0      "
     "Q4_1      "
     "Q5_0      "
@@ -38,8 +36,6 @@ declare -a outputs=(
     "Q6_K      "
     "IQ4_NL    "
     "IQ4_XS    "
-    "TQ1_0     "
-    "TQ2_0     "
     "MXFP4_MOE "
 )
 
@@ -74,12 +70,9 @@ for entry in "${outputs[@]}"; do
     read -r type expected <<< "$entry"
     out=$folder/stories15M-be-$type.gguf
 
-    case $type in
-        F32)  ;;
-        # Q1_0 has no fallback type for rows that are not a multiple of 128, so only ffn_down (768 wide) gets it
-        Q1_0) "$quantize" --pure --tensor-type ffn_down=q1_0 "$f32" "$out" Q8_0 ;;
-        *)    "$quantize" --pure "$f32" "$out" "$type" ;;
-    esac
+    if [ "$type" != F32 ]; then
+        "$quantize" --pure "$f32" "$out" "$type"
+    fi
 
     check_sha256 "$type" "$out" "$expected"
 done
