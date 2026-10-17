@@ -1683,6 +1683,11 @@ static int hvx_mm_init_tiled_vec_dot(struct htp_mm_context * mmctx, enum htp_dat
             mmctx->vec_dot_32x1 = tiled_vec_dot_q2_k_32x1;
             mmctx->vec_dot_32x2 = tiled_vec_dot_q2_k_32x2;
             return 0;
+        case HTP_TYPE_Q2_0:
+            mmctx->type         = "q2_0_tiled-f32";
+            mmctx->vec_dot_32x1 = tiled_vec_dot_q2_0_32x1;
+            mmctx->vec_dot_32x2 = tiled_vec_dot_q2_0_32x2;
+            return 0;
         case HTP_TYPE_IQ4_NL:
             mmctx->type         = "iq4nl_tiled-f32";
             mmctx->vec_dot_32x1 = tiled_vec_dot_iq4nl_32x1;
@@ -2321,6 +2326,7 @@ static inline tiled_dequant_task_fn_t hmx_get_dequant_worker_fn(int weight_type,
         case HTP_TYPE_Q3_K:   return dequantize_tiled_weight_to_fp16_task_q3_k;
         case HTP_TYPE_Q2_K:   return dequantize_tiled_weight_to_fp16_task_q2_k;
         case HTP_TYPE_Q1_0:   return dequantize_tiled_weight_to_fp16_task_q1_0;
+        case HTP_TYPE_Q2_0:   return dequantize_tiled_weight_to_fp16_task_q2_0;
         case HTP_TYPE_F16:    return is_tiled ? NULL : convert_f16_weight_to_fp16_tiles_task;
         case HTP_TYPE_BF16:   return convert_bf16_weight_to_fp16_tiles_task;
         case HTP_TYPE_F32:    return quantize_f32_weight_to_fp16_tiles_task;
@@ -2342,9 +2348,9 @@ static void dequantize_tiled_weight_chunk_to_fp16_tiles(
 
     assert(k_block % HTP_MM_HMX_TILE_N_COLS == 0);
 
-    size_t n_col_tiles = hmx_ceil_div(n_cols, HTP_MM_HMX_TILE_N_COLS);
+    const size_t n_col_tiles = hmx_ceil_div(n_cols, HTP_MM_HMX_TILE_N_COLS);
     const uint32_t n_weight_tiles = k_block / htp_tensor_get_tile_k(weight_type);
-    size_t n_tot_tiles = n_col_tiles * n_weight_tiles;
+    const size_t n_tot_tiles = n_col_tiles * n_weight_tiles;
 
     size_t n_tiles_per_task = (n_threads == 1) ? n_tot_tiles : hmx_ceil_div(n_tot_tiles, n_threads);
 

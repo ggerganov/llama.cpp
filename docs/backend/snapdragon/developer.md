@@ -61,6 +61,7 @@ Implementation: [`htp-repack.cpp`](../../../ggml/src/ggml-hexagon/htp-repack.cpp
 
 Each tile represents a submatrix of `N_rows = 32` rows and `K_cols` columns:
 - Standard types (`Q4_0`, `Q4_1`, `Q8_0`, `IQ4_NL`, `MXFP4`, and K-quants): `K_cols = 32` (`HTP_TENSOR_TILE_N_COLS = 32`).
+- `Q2_0`: `K_cols = 64` (`HTP_TENSOR_TILE_K_Q2_0 = 64`).
 - `Q1_0`: `K_cols = 128` (`HTP_TENSOR_TILE_K_Q1_0 = 128`).
 
 For a weight matrix of logical shape `[ne0, ne1]` (where `ne0 = K`, `ne1 = N`):
@@ -144,6 +145,30 @@ Block-32 formats use a tile size of 32 rows x 32 columns (`K_cols = 32`):
   - HMX hardware operates strictly on 32x32 FP16 tiles (`HTP_TENSOR_TILE_N_ROWS = 32`, `HTP_TENSOR_TILE_N_COLS = 32`).
   - During kernel execution, HVX dequantization (`dequantize_tiled_weight_to_fp16_task_q1_0`) expands each 32x128 Q1_0 tile (576 bytes) into 4 contiguous 32x32 FP16 HMX tiles (4 x 2048 bytes = 8192 bytes total) in VTCM.
   - HMX systolic array processes the 4 resulting 32x32 FP16 tiles over 4 compute steps along K.
+
+### Q2_0 Format (2-Bit Quantization)
+
+`Q2_0` packs 64 columns per tile (`K_cols = 64`, `HTP_TENSOR_TILE_K_Q2_0 = 64`):
+
+- **Tile Layout** (576 bytes per tile, `HTP_TENSOR_TILE_SIZE_Q2_0`):
+  - **Quants** (bytes 0..511, 512 bytes):
+    Contains 32 rows x 64 columns of 2-bit quants (codes 0..3 representing signed values -1..2).
+    Divided into 16 column groups `group = 0..15` of 4 columns each.
+    Stored in `vrmpy` byte order across 4 HVX vectors (vec 0..3):
+    Vector `group >> 2` (0..3) holds `group & 3` at bit offset `2 * (group & 3)`.
+    Byte `4 * row + byte` holds row `row = 0..31` and column byte `0..3`.
+    Vec 0..1 holds the first 32 columns (half 0), vec 2..3 holds the next 32 columns (half 1).
+  - **Scales** (bytes 512..575, 64 bytes):
+    32 FP16 values (`ggml_half`), storing scale `d` for each row `row = 0..31` (at offset `512 + 2 * row`).
+    One scale per row applies to all 64 columns of the tile.
+
+- **HMX Mapping (1-to-2 Tile Expansion)**:
+  - HMX hardware operates strictly on 32x32 FP16 tiles (`HTP_TENSOR_TILE_N_ROWS = 32`, `HTP_TENSOR_TILE_N_COLS = 32`).
+  - During kernel execution, HVX dequantization (`dequantize_tiled_weight_to_fp16_task_q2_0`) expands each 32x64 Q2_0 tile (576 bytes) into 2 contiguous 32x32 FP16 HMX tiles (2 x 2048 bytes = 4096 bytes total) in VTCM.
+  - HMX systolic array processes the 2 resulting 32x32 FP16 tiles over 2 compute steps along K.
+
+- **HVX Vector Dot-Product**:
+  - `tiled_vec_dot_q2_0_32x1` and `tiled_vec_dot_q2_0_32x2` unpack 2-bit quants using `unpack_q3_k_low2`, subtract 1, and accumulate against Q8_0 activation tiles using `Q6_Vw_vrmpyacc_VwVbVb`.
 
 ### K-Quants Formats
 

@@ -956,7 +956,9 @@ static void ggml_backend_hexagon_buffer_get_tensor(ggml_backend_buffer_t buffer,
         return;
     }
 
-    GGML_ASSERT(offset == 0);
+    if (tensor->type != GGML_TYPE_Q2_0) {
+        GGML_ASSERT(offset == 0);
+    }
     htp_unpack_tensor_tiled(data, tensor, offset, size);
 }
 
@@ -1034,6 +1036,13 @@ static void ggml_backend_hexagon_buffer_get_tensor_2d(ggml_backend_buffer_t buff
     if ((extra->flags & GGML_HEXAGON_TENSOR_TILED) == 0) {
         for (size_t i = 0; i < n_copies; i++) {
             memcpy((uint8_t *)data + i * stride_data, (const uint8_t *)tensor->data + offset + i * stride_tensor, size);
+        }
+        return;
+    }
+
+    if (tensor->type == GGML_TYPE_Q2_0) {
+        for (size_t i = 0; i < n_copies; i++) {
+            htp_unpack_tensor_tiled((uint8_t *) data + i * stride_data, tensor, offset + i * stride_tensor, size);
         }
         return;
     }
@@ -5375,6 +5384,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
 
     switch (src0->type) {
         case GGML_TYPE_Q1_0:
+        case GGML_TYPE_Q2_0:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q8_0:
@@ -5472,6 +5482,7 @@ static bool ggml_hexagon_supported_mul_mat_id(const struct ggml_hexagon_session 
 
     switch (src0->type) {
         case GGML_TYPE_Q1_0:
+        case GGML_TYPE_Q2_0:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q8_0:
@@ -8322,6 +8333,8 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
     static_assert((unsigned int) HTP_TYPE_Q2_K == (unsigned int) GGML_TYPE_Q2_K,
                   "please update hexagon_type to match ggml_type");
     static_assert((unsigned int) HTP_TYPE_Q1_0 == (unsigned int) GGML_TYPE_Q1_0,
+                  "please update hexagon_type to match ggml_type");
+    static_assert((unsigned int) HTP_TYPE_Q2_0 == (unsigned int) GGML_TYPE_Q2_0,
                   "please update hexagon_type to match ggml_type");
     static_assert((unsigned int) HTP_TYPE_BF16 == (unsigned int) GGML_TYPE_BF16,
                   "please update hexagon_type to match ggml_type");

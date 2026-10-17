@@ -20,6 +20,10 @@ extern "C" {
 #define HTP_MM_HMX_TILE_N_ELMS 1024
 #define HTP_MM_HMX_MIN_NROWS   4
 
+#define HTP_MM_WEIGHT_TILE_K_Q2_0             64
+#define HTP_MM_WEIGHT_TILE_SIZE_Q2_0          HTP_TENSOR_TILE_SIZE_Q2_0
+#define HTP_MM_WEIGHT_ALIGNED_TILE_SIZE_Q2_0  640
+
 // --- Activation Tiled Block Sizes (including padding) ---
 #define HTP_MM_ACT_TILE_SIZE_Q8_0      1152
 #define HTP_MM_ACT_TILE_SIZE_Q8_1      1280
@@ -489,8 +493,8 @@ static inline void htp_mm_hvx_vtcm_layout_build(
             case HTP_MM_KERNEL_HVX_QUANT_ROW: {
                 size_t q_act_row_size = htp_mm_tiled_act_row_size(wtype, ne10);
                 uint32_t aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
-                uint32_t n_k_tiles = (ne10 + htp_tensor_get_tile_k(wtype) - 1) / htp_tensor_get_tile_k(wtype);
-                uint32_t tile_row_size = n_k_tiles * aligned_tile_size;
+                uint32_t n_weight_tiles = (ne10 + htp_tensor_get_tile_k(wtype) - 1) / htp_tensor_get_tile_k(wtype);
+                uint32_t tile_row_size = n_weight_tiles * aligned_tile_size;
                 size_t tiled_vtcm_size = htp_mm_round_up(n_prefetch * tile_row_size, 256);
 
                 src0_sz = tiled_vtcm_size * n_threads;
