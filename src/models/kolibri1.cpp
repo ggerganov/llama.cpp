@@ -13,9 +13,8 @@ void llama_model_kolibri1::load_arch_hparams(llama_model_loader & ml) {
         throw std::runtime_error("Kolibri-1: invalid sliding window or shared expert configuration");
     }
 
-    // Four sliding layers at n_swa, then one global layer without RoPE.
     hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
-    load_swa_pattern(ml, 5);
+    ml.get_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.is_swa_impl);
 
     hparams.rope_freq_base_train_swa  = hparams.rope_freq_base_train;
     hparams.rope_freq_scale_train_swa = hparams.rope_freq_scale_train;
