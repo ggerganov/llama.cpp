@@ -395,28 +395,14 @@ static inline HVX_VectorPair unpack_and_interleave_4bit_x2(HVX_Vector v_src, HVX
     return Q6_W_vcombine_VV(v_W1, v_W0);
 }
 
-static inline HVX_VectorPair unpack_q1_0_group_x2(
+static inline HVX_Vector unpack_q1_0_group(
     HVX_Vector v_plane,
-    int i,
+    int g,
     HVX_Vector v_neg_one,
     HVX_Vector v_pos_one
 ) {
-    HVX_VectorPred q_lo = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * i));
-    HVX_VectorPred q_hi = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * i + 1));
-    HVX_Vector v_lo = Q6_V_vmux_QVV(q_lo, v_pos_one, v_neg_one);
-    HVX_Vector v_hi = Q6_V_vmux_QVV(q_hi, v_pos_one, v_neg_one);
-
-    HVX_VectorPair v01_pair = Q6_W_vshuff_VVR(v_hi, v_lo, -1);
-    HVX_Vector v01_lo = Q6_V_lo_W(v01_pair);
-    HVX_Vector v01_hi = Q6_V_hi_W(v01_pair);
-
-    HVX_Vector v23_lo = Q6_V_valign_VVR(v01_hi, v01_lo, 64);
-    HVX_Vector v_W0 = Q6_V_lo_W(Q6_W_vshuff_VVR(v23_lo, v01_lo, -2));
-
-    HVX_Vector v67_lo = Q6_V_valign_VVR(v01_lo, v01_hi, 64);
-    HVX_Vector v_W1 = Q6_V_lo_W(Q6_W_vshuff_VVR(v67_lo, v01_hi, -2));
-
-    return Q6_W_vcombine_VV(v_W1, v_W0);
+    HVX_VectorPred q = Q6_Q_vand_VR(v_plane, 0x01010101u << g);
+    return Q6_V_vmux_QVV(q, v_pos_one, v_neg_one);
 }
 
 static inline HVX_Vector accum_q1_0_32x1(
@@ -425,16 +411,18 @@ static inline HVX_Vector accum_q1_0_32x1(
     HVX_Vector v_neg_one,
     HVX_Vector v_pos_one
 ) {
-    HVX_Vector v_sum0 = Q6_V_vzero();
-    HVX_Vector v_sum1 = Q6_V_vzero();
+    HVX_Vector v_sum_lo = Q6_V_vzero();
+    HVX_Vector v_sum_hi = Q6_V_vzero();
 
-    for (int i = 0; i < 4; i++) {
-        HVX_VectorPair v_W_pair = unpack_q1_0_group_x2(v_plane, i, v_neg_one, v_pos_one);
-        v_sum0 = Q6_Vw_vrmpyacc_VwVbVb(v_sum0, Q6_V_lo_W(v_W_pair), v_act[i * 2 + 0]);
-        v_sum1 = Q6_Vw_vrmpyacc_VwVbVb(v_sum1, Q6_V_hi_W(v_W_pair), v_act[i * 2 + 1]);
+    #pragma unroll
+    for (int g = 0; g < 4; g++) {
+        HVX_Vector v_W_lo = unpack_q1_0_group(v_plane, g,     v_neg_one, v_pos_one);
+        HVX_Vector v_W_hi = unpack_q1_0_group(v_plane, g + 4, v_neg_one, v_pos_one);
+        v_sum_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum_lo, v_W_lo, v_act[g]);
+        v_sum_hi = Q6_Vw_vrmpyacc_VwVbVb(v_sum_hi, v_W_hi, v_act[g + 4]);
     }
 
-    return Q6_Vw_vadd_VwVw(v_sum0, v_sum1);
+    return Q6_Vw_vadd_VwVw(v_sum_lo, v_sum_hi);
 }
 
 static inline HVX_Vector accum_4bit_32x1(
@@ -486,18 +474,24 @@ static inline HVX_VectorPair accum_q1_0_32x2(
     HVX_Vector v_neg_one,
     HVX_Vector v_pos_one
 ) {
-    HVX_Vector v_sum0 = Q6_V_vzero();
-    HVX_Vector v_sum1 = Q6_V_vzero();
+    HVX_Vector v_sum0_lo = Q6_V_vzero();
+    HVX_Vector v_sum0_hi = Q6_V_vzero();
+    HVX_Vector v_sum1_lo = Q6_V_vzero();
+    HVX_Vector v_sum1_hi = Q6_V_vzero();
 
-    for (int i = 0; i < 4; i++) {
-        HVX_VectorPair v_W_pair = unpack_q1_0_group_x2(v_plane, i, v_neg_one, v_pos_one);
-        v_sum0 = Q6_Vw_vrmpyacc_VwVbVb(v_sum0, Q6_V_lo_W(v_W_pair), v_act0[i * 2 + 0]);
-        v_sum0 = Q6_Vw_vrmpyacc_VwVbVb(v_sum0, Q6_V_hi_W(v_W_pair), v_act0[i * 2 + 1]);
-        v_sum1 = Q6_Vw_vrmpyacc_VwVbVb(v_sum1, Q6_V_lo_W(v_W_pair), v_act1[i * 2 + 0]);
-        v_sum1 = Q6_Vw_vrmpyacc_VwVbVb(v_sum1, Q6_V_hi_W(v_W_pair), v_act1[i * 2 + 1]);
+    #pragma unroll
+    for (int g = 0; g < 4; g++) {
+        HVX_Vector v_W_lo = unpack_q1_0_group(v_plane, g,     v_neg_one, v_pos_one);
+        HVX_Vector v_W_hi = unpack_q1_0_group(v_plane, g + 4, v_neg_one, v_pos_one);
+        v_sum0_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum0_lo, v_W_lo, v_act0[g]);
+        v_sum0_hi = Q6_Vw_vrmpyacc_VwVbVb(v_sum0_hi, v_W_hi, v_act0[g + 4]);
+        v_sum1_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum1_lo, v_W_lo, v_act1[g]);
+        v_sum1_hi = Q6_Vw_vrmpyacc_VwVbVb(v_sum1_hi, v_W_hi, v_act1[g + 4]);
     }
 
-    return Q6_W_vcombine_VV(v_sum1, v_sum0);
+    return Q6_W_vcombine_VV(
+        Q6_Vw_vadd_VwVw(v_sum1_lo, v_sum1_hi),
+        Q6_Vw_vadd_VwVw(v_sum0_lo, v_sum0_hi));
 }
 
 static inline HVX_VectorPair accum_4bit_32x2(
@@ -982,7 +976,6 @@ static void tiled_vec_dot_q1_0_32x2(const uint32_t n, float * restrict s0, float
         const HVX_Vector * restrict vptr = (const HVX_Vector *) (tile_ptr + kt * htp_tensor_get_tile_padded_size(HTP_TYPE_Q1_0));
         HVX_Vector v_scale_w = vptr[4];
 
-        #pragma unroll
         for (int quarter = 0; quarter < 4; quarter++) {
             const uint32_t act_tile = 4 * kt + quarter;
             const HVX_Vector * restrict v_act0 = (const HVX_Vector *) (y0_q + act_tile * HTP_MM_ACT_TILE_SIZE_Q8_0);

@@ -131,12 +131,10 @@ Block-32 formats use a tile size of 32 rows x 32 columns (`K_cols = 32`):
   - **Quants** (bytes 0..511, 512 bytes):
     Contains 32 rows x 128 columns of 1-bit quants (-1 or +1).
     Divided into 4 quarters (`quarter = 0..3`), where each quarter covers 32 columns in K.
-    Each quarter occupies 128 bytes (1 HVX vector).
-    Within a quarter, columns `kq = 0..31` map into 16 column pairs `cp = kq / 2` and `i = cp / 4` (0..3):
-    `lane = (cp % 4) * 32 + row` (0..127)
-    `byte_offset = quarter * 128 + lane`
-    `bit = 2 * i + (kq & 1)`
-    This bit packing allows HVX vector instructions to extract and dequantize 1-bit values with parallel vector align and mask operations without lane conflicts.
+    Each quarter occupies 128 bytes (1 HVX vector) in `vrmpy` byte order.
+    Within a quarter, columns `kq = 0..31` map into 8 groups `g = kq / 4` (0..7) of 4 consecutive columns:
+    `byte_offset = quarter * 128 + 4 * row + (kq % 4)`
+    `bit = g` (0..7)
   - **Scales** (bytes 512..575, 64 bytes):
     32 FP16 values (`ggml_half`), storing scale `d` for each row `row = 0..31`.
     One scale per row applies to all 128 columns (all 4 quarters) of the tile.

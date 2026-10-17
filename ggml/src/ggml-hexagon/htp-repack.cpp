@@ -977,12 +977,9 @@ static void repack_tiled_q5_K(void * data, const ggml_tensor * t, size_t offset,
 static inline void q1_0_tiled_bit_location(int k, int row, int & byte_offset, int & bit) {
     const int quarter = k / 32;
     const int kq      = k % 32;
-    const int cp      = kq / 2;
-    const int i       = cp / 4;
-    const int lane    = (cp % 4) * 32 + row;
 
-    byte_offset = quarter * 128 + lane;
-    bit         = 2 * i + (kq & 1);
+    byte_offset = quarter * 128 + 4 * row + (kq % 4);
+    bit         = kq / 4;
 }
 
 static void repack_q1_0_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {

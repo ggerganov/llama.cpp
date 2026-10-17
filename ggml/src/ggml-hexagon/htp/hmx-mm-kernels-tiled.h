@@ -57,23 +57,15 @@ static void dequantize_tiled_weight_to_fp16_task_q1_0(
             __fp16 * quarter_dst = dst_ptr + q * HTP_MM_HMX_TILE_N_ELMS;
 
             #pragma unroll
-            for (int g = 0; g < 4; g++) {
-                const HVX_VectorPred q_lo = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * g));
-                const HVX_VectorPred q_hi = Q6_Q_vand_VR(v_plane, 0x01010101u << (2 * g + 1));
-                const HVX_VectorPair v_q = Q6_W_vshuff_VVR(
-                    Q6_V_vmux_QVV(q_hi, v_pos_one, v_neg_one),
-                    Q6_V_vmux_QVV(q_lo, v_pos_one, v_neg_one), -1);
-                const HVX_VectorPair v_lo = Q6_Wh_vunpack_Vb(Q6_V_lo_W(v_q));
-                const HVX_VectorPair v_hi = Q6_Wh_vunpack_Vb(Q6_V_hi_W(v_q));
+            for (int g = 0; g < 8; g++) {
+                const HVX_Vector     v_q  = unpack_q1_0_group(v_plane, g, v_neg_one, v_pos_one);
+                const HVX_VectorPair vp16 = Q6_Wh_vunpack_Vb(v_q);
+                const HVX_VectorPair vp_k = Q6_W_vdeal_VVR(Q6_V_hi_W(vp16), Q6_V_lo_W(vp16), -4);
 
-                hvx_vmem(quarter_dst + (4 * g + 0) * 64) =
-                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(v_lo)), v_scale));
-                hvx_vmem(quarter_dst + (4 * g + 1) * 64) =
-                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(v_lo)), v_scale));
-                hvx_vmem(quarter_dst + (4 * g + 2) * 64) =
-                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(v_hi)), v_scale));
-                hvx_vmem(quarter_dst + (4 * g + 3) * 64) =
-                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(v_hi)), v_scale));
+                hvx_vmem(quarter_dst + (2 * g + 0) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_lo_W(vp_k)), v_scale));
+                hvx_vmem(quarter_dst + (2 * g + 1) * 64) =
+                    Q6_Vhf_equals_Vqf16(Q6_Vqf16_vmpy_VhfVhf(Q6_Vhf_equals_Vh(Q6_V_hi_W(vp_k)), v_scale));
             }
         }
     }
