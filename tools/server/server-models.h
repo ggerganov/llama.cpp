@@ -16,6 +16,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /**
  * state diagram:
@@ -31,6 +32,7 @@
 enum server_model_status {
     // TODO: also add downloading state when the logic is added
     SERVER_MODEL_STATUS_DOWNLOADING,
+    SERVER_MODEL_STATUS_INCOMPLETE, // a download that never finished, listed without an instance
     SERVER_MODEL_STATUS_DOWNLOADED,
     SERVER_MODEL_STATUS_UNLOADED,
     SERVER_MODEL_STATUS_LOADING,
@@ -52,6 +54,7 @@ enum server_child_mode {
 static std::string server_model_status_to_string(server_model_status status) {
     switch (status) {
         case SERVER_MODEL_STATUS_DOWNLOADING: return "downloading";
+        case SERVER_MODEL_STATUS_INCOMPLETE:  return "incomplete";
         case SERVER_MODEL_STATUS_DOWNLOADED:  return "downloaded";
         case SERVER_MODEL_STATUS_UNLOADED:    return "unloaded";
         case SERVER_MODEL_STATUS_LOADING:     return "loading";
@@ -84,8 +87,9 @@ struct server_model_meta {
     json progress; // reflect load or download progress info, if any
     int exit_code = 0; // exit code of the model instance process (only valid if status == FAILED)
     int stop_timeout = 0; // seconds to wait before force-killing the model instance during shutdown
-    mtmd_caps multimodal; // multimodal capabilities
     bool hidden = false; // hidden from GET /models, but still accept if requested
+    json architecture = server_model_architecture_json(false, false, false, {"text"});
+    uint32_t n_ctx_train = 0; // trained context, read from the GGUF metadata; 0 when unknown
 
     bool is_ready() const {
         return status == SERVER_MODEL_STATUS_LOADED;
@@ -104,7 +108,52 @@ struct server_model_meta {
     }
 
     void update_args(common_preset_context & ctx_presets, std::string bin_path);
-    void update_caps();
+    void update_caps(const common_params & base);
+};
+
+// a download that never finished: the tag it was asked under, the sidecar kinds it
+// pulls and the partial files its plan writes
+struct server_unfinished_download {
+    std::string                          model;
+    std::vector<std::string>             sidecars;
+    std::vector<common_download_partial> partials;
+};
+
+// the downloads that never finished, recorded next to the model cache. The cache names
+// partial files after their content hash, so this record is the only trace of what is
+// still incomplete: it lets a restarted router list, resume or remove them
+// a partial another recorded download also writes is never deleted
+// these functions are thread-safe
+struct server_unfinished_downloads {
+    // read the record an earlier run left
+    void load();
+
+    // record a download that starts, replacing an earlier record of the same model,
+    // and delete the partials of that record the new plan no longer writes
+    void add(const server_unfinished_download & download);
+
+    // forget a download whose files are complete
+    void forget(const std::string & model);
+
+    // forget a download and delete its partials; returns false when it is not recorded
+    bool remove(const std::string & model);
+
+    // drop the sidecar `kind` from a download and delete its partials; returns false
+    // when the download is not recorded with that kind
+    bool remove_sidecar(const std::string & model, const std::string & kind);
+
+    // every recorded download
+    std::vector<server_unfinished_download> get_all();
+
+private:
+    std::mutex mutex;
+    std::vector<server_unfinished_download> downloads;
+
+    // write the record back; callers hold the mutex
+    void save();
+
+    // delete the partials of `parts` no recorded download writes; callers hold the mutex
+    void delete_partials(const std::vector<common_download_partial> & parts);
 };
 
 struct server_models_routes;
@@ -132,6 +181,9 @@ private:
 
     // models asked to stop, still counted as running until the monitor records their exit
     std::set<std::string> stopping_models;
+
+    // downloads that never finished, with the sidecar kinds they pull
+    server_unfinished_downloads unfinished_downloads;
 
     // set to true while load_models() is executing a reload; load() will wait until clear
     bool is_reloading = false;
@@ -251,6 +303,16 @@ public:
     // check if a model instance exists (thread-safe)
     bool has_model(const std::string & name);
 
+    // downloads that never finished, with their sidecar kinds (thread-safe)
+    std::vector<server_unfinished_download> unfinished_downloads_get();
+
+    // drop a download that will never be resumed, its record and its partial files;
+    // throws for a name that is not recorded (thread-safe)
+    void unfinished_downloads_remove(const std::string & name);
+
+    // remove the sidecar `kind` of a model that is not in use, its files and partials (thread-safe)
+    bool remove_sidecar(const std::string & name, const std::string & kind);
+
     // return a copy of model metadata (thread-safe)
     std::optional<server_model_meta> get_meta(const std::string & name);
 
@@ -261,6 +323,10 @@ public:
         server_child_mode mode = SERVER_CHILD_MODE_NORMAL;
         // used for spawning a downloading child process
         std::optional<server_model_meta> custom_meta = std::nullopt;
+        // download mode: the sidecar kinds pulled with the model, as -hf would, and
+        // the partial files the download plan writes
+        std::vector<std::string>             sidecars;
+        std::vector<common_download_partial> partials;
     };
 
     // load and unload model instances
@@ -320,6 +386,11 @@ struct server_child {
     std::mutex mtx_stdout;
     std::atomic<bool> is_finished_downloading = false; // set by run_download
 
+    // in a child, keeps stdout for the commands to the router, so it is created before anything is written;
+    // everything else written to stdout goes to stderr with the logs
+    server_child();
+    ~server_child();
+
     // return true if the current process is a child server instance
     bool is_child();
     server_child_mode get_mode();
@@ -332,6 +403,9 @@ struct server_child {
     // notify router server for status changes (e.g. loading, downloading, sleeping, etc.)
     // message will be handled by server_models::handle_child_state() on the router side
     void notify_to_router(const std::string & state_name, const json & payload);
+
+private:
+    FILE * cmd_out = nullptr; // the stdout the router reads the commands from
 };
 
 struct server_models_routes {

@@ -52,6 +52,7 @@ class SpecialVocab:
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
     chat_template: str | Sequence[Mapping[str, str]] | None
+    normalizer_nfc: bool | None
     normalizer_lowercase: bool | None
     normalizer_strip_accents: bool | None
 
@@ -66,6 +67,7 @@ class SpecialVocab:
         self.load_merges = load_merges
         self.merges = []
         self.chat_template = None
+        self.normalizer_nfc = None
         self.normalizer_lowercase = None
         self.normalizer_strip_accents = None
         if special_token_types is not None:
@@ -106,6 +108,10 @@ class SpecialVocab:
             if not quiet:
                 logger.info(f'Setting chat_template to {self.chat_template}')
             gw.add_chat_template(self.chat_template)
+        if self.normalizer_nfc is not None:
+            if not quiet:
+                logger.info(f'Setting normalizer_nfc to {self.normalizer_nfc}')
+            gw.add_normalizer_nfc(self.normalizer_nfc)
         if self.normalizer_lowercase is not None:
             if not quiet:
                 logger.info(f'Setting normalizer_lowercase to {self.normalizer_lowercase}')
@@ -169,6 +175,8 @@ class SpecialVocab:
         normalizer_type = normalizer.get('type')
         if normalizer_type == 'Lowercase':
             self.normalizer_lowercase = True
+        elif normalizer_type == 'NFC':
+            self.normalizer_nfc = True
         elif normalizer_type == 'StripAccents':
             self.normalizer_strip_accents = True
         elif normalizer_type == 'BertNormalizer':
@@ -234,7 +242,11 @@ class SpecialVocab:
                 tokenizer_config['eos_token'] = special_eos = special_sep
             if post_processor := tokenizer.get('post_processor'):
                 for processor in post_processor.get('processors', [post_processor]):
-                    if processor.get('type') == 'RobertaProcessing':
+                    processor_type = processor.get('type')
+                    if processor_type == 'ByteLevel':
+                        self.add_special_token.setdefault('bos', False)
+                        self.add_special_token.setdefault('eos', False)
+                    elif processor_type == 'RobertaProcessing':
                         self.add_special_token['bos'] = True
                         self.add_special_token['eos'] = True
                         self.add_special_token['sep'] = True
@@ -247,7 +259,7 @@ class SpecialVocab:
                         continue
                     # Crude parsing of TemplateProcessing to determine if BOS/SEP/EOS should be added
                     # Only works with simple templates, **will** get it wrong on unusual sequences
-                    if processor.get('type') == 'TemplateProcessing':
+                    elif processor_type == 'TemplateProcessing':
                         tmpl_single = processor.get('single', [])
                         tmpl_pair = processor.get('pair', [])
                         special_first = None
@@ -336,7 +348,10 @@ class SpecialVocab:
         for typ in self.special_token_types:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
-                self.add_special_token[typ] = add_entry
+                if typ not in self.add_special_token:
+                    self.add_special_token[typ] = add_entry
+                elif self.add_special_token[typ] != add_entry:
+                    logger.warning(f'Mismatch between tokenizer_config add_{typ}_token({add_entry}) and tokenizer post_processor<{typ}>({self.add_special_token[typ]}) - opting for the latter')
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry

@@ -101,6 +101,10 @@ struct clip_graph {
 
     ggml_tensor * build_inp_raw(int channels = 3);
 
+    // f16 if flash attn is enabled, set it with set_input_attn_mask()
+    // idx is only needed when the graph has more than one mask
+    ggml_tensor * build_inp_attn_mask(int64_t n_kv, int64_t n_q, int idx = 0);
+
     ggml_tensor * build_norm(
             ggml_tensor * cur,
             ggml_tensor * mw,
@@ -162,4 +166,7 @@ struct clip_graph {
     // Generic function to stack frames for audio processing
     // Abstracts out the StackAudioFrames logic used by ultravox
     ggml_tensor * build_stack(ggml_tensor * cur, int32_t stack_factor, int32_t n_embed);
+
+    // append the separators of img.suffix_type after the image tokens
+    ggml_tensor * build_suffix(ggml_tensor * cur);
 };
