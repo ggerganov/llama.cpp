@@ -25,34 +25,11 @@
 #define HTP_TENSOR_TILE_SIZE_Q6_K   896
 #define HTP_TENSOR_TILE_SIZE_Q3_K   512
 #define HTP_TENSOR_TILE_SIZE_Q2_K   336
-#define HTP_TENSOR_TILE_K_Q1_0       128
-#define HTP_TENSOR_TILE_SIZE_Q1_0    576
+#define HTP_TENSOR_TILE_K_Q1_0      128
+#define HTP_TENSOR_TILE_SIZE_Q1_0   576
 
-// Q2_K, Q3_K, Q6_K use vrmpy byte order within each 128B HVX vector:
-//   k = 0..31 is split into 8 groups g = k/4 of 4 k each; byte 4*r + (k%4) holds row r
-//
-// Q2_K (336B, lossless tiling with same size as block_q2_K):
-//   bytes   0..255 (vec 0..1): unsigned 2-bit quants, vec m holds groups 4m..4m+3 at bit offsets 0,2,4,6
-//   bytes 256..319:            raw scales[] bytes (min << 4 | sc): [0..31] for k 0..15, [32..63] for k 16..31
-//   bytes 320..335:            8 fp16 in tile j (0..7) of super-block: d (j < 4) or -dmin (j >= 4) for rows 8*(j%4)..8*(j%4)+7
-//
-// Q3_K (512B):
-//   bytes   0..255 (vec 0..1): low 2 bits, vec m holds groups 4m..4m+3 at bit offsets 0,2,4,6
-//   bytes 256..383 (vec 2):    sign mask, bit g set when hmask is 0 (quant = low2 - 4)
-//   bytes 384..511 (vec 3):    fp16 scales d * (scales[] - 32): fp16[0..31] for k 0..15, fp16[32..63] for k 16..31
-//
-// Q4_K (640B, same layout as Q4_1 tile; each 256-k super-block splits into 8 tiles of 32 k):
-//   bytes   0..511 (vec 0..3): 4-bit quants, byte 32*cp + r holds k = 2*cp (low nibble) and 2*cp + 1 (high nibble)
-//   bytes 512..639 (vec 4):    32x2 fp16 per row: (d * sc, -dmin * m)
-//
-// Q5_K (768B):
-//   bytes   0..639 (vec 0..4): Q4_K tile (low 4 bits + fp16 scale/min pairs)
-//   bytes 640..767 (vec 5):    5th-bit plane; byte l holds the 8 high bits for lane l across vec i = 0..3 (bit 2i = lo, 2i+1 = hi)
-//
-// Q6_K (896B):
-//   bytes   0..511 (vec 0..3): low 4 bits, vec i holds group 2i (low nibble) and 2i+1 (high nibble)
-//   bytes 512..767 (vec 4..5): high 2 bits, vec 4+m holds groups 4m..4m+3 at bit offsets 0,2,4,6
-//   bytes 768..895 (vec 6):    fp16 scales d * scales[]: fp16[0..31] for k 0..15, fp16[32..63] for k 16..31
+// For tiled weight tensor layouts
+// see docs/backend/snapdragon/developer.md ("Tiled Weight Formats").
 
 struct htp_tensor_mdev_range {
     uint32_t start;
