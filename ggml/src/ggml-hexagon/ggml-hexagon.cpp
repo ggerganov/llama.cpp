@@ -1396,19 +1396,19 @@ struct ggml_hexagon_opbatch {
 
     // add tensor and return its index
     int add_tensor(const ggml_tensor * t) {
-        auto extra = (htp_tensor_extra *) t->extra;
-        auto sbuf  = static_cast<ggml_hexagon_shared_buffer *>(t->buffer->context);
-
-        // First lookup by tensor data
-        auto range = d_map.equal_range(t->data);
-        for (auto it = range.first; it != range.second; ++it) {
-            htp_tensor * h = &h_tens[it->second];
-            if (same_shape(h, t)) { return it->second; }
-        }
-
         // Lookup by tensor ptr
         auto it = t_map.find(t);
         if (it != t_map.end()) { return it->second; }
+
+        // Lookup by tensor data and shape
+        auto range = d_map.equal_range(t->data);
+        for (auto dit = range.first; dit != range.second; ++dit) {
+            htp_tensor * h = &h_tens[dit->second];
+            if (same_shape(h, t)) { return dit->second; }
+        }
+
+        auto extra = (htp_tensor_extra *) t->extra;
+        auto sbuf  = static_cast<ggml_hexagon_shared_buffer *>(t->buffer->context);
 
         // Add new tensor to the batch
         int ti = n_tens++;
@@ -1619,7 +1619,6 @@ struct ggml_hexagon_opqueue {
     using opvec = std::vector<htp_opnode>;
 
     std::vector<opvec>          op_cache;       // per batch op cache
-    std::vector<uint64_t>       start_usec;     // per batch start time
 
     ggml_hexagon_opqueue(ggml_hexagon_session *sess, size_t batch_size, size_t depth) : depth(depth) {
         size_t n_bufs    = HTP_OP_MAX_BUFS;
@@ -1640,7 +1639,6 @@ struct ggml_hexagon_opqueue {
         shm_buf = new ggml_hexagon_shared_buffer(sess, shm_blk_size * depth, true /* pinned */);
 
         op_cache.resize(depth);
-        start_usec.resize(depth, 0);
 
         if (opt_verbose) {
             GGML_LOG_INFO("ggml-hex: %s allocated opqueue : batch-size %zu depth %zu shm-size %zu shm-block-size %zu\n",
@@ -1672,8 +1670,9 @@ struct ggml_hexagon_opqueue {
         req.n_tensors = op_batch->n_tens;
         req.n_ops     = op_batch->n_ops;
 
-        op_cache[slot]   = op_batch->ops;
-        start_usec[slot] = ggml_time_us();
+        if (opt_profile) {
+            op_cache[slot].assign(op_batch->ops.begin(), op_batch->ops.begin() + req.n_ops);
+        }
 
         const size_t b_size = sizeof(htp_buf_desc)  * req.n_bufs;
         const size_t t_size = sizeof(htp_tensor)    * req.n_tensors;
@@ -1751,7 +1750,7 @@ struct ggml_hexagon_opqueue {
         uint8_t * m_ptr = (uint8_t*) dbuf.ptr;
         uint8_t * p_ptr = m_ptr + (b_size + t_size + o_size);
 
-        if (rsp.n_ops > 0) {
+        if (rsp.n_ops > 0 && opt_profile) {
             auto & ops = op_cache[slot];
             GGML_ASSERT(rsp.n_ops <= ops.size());
 
@@ -1761,19 +1760,13 @@ struct ggml_hexagon_opqueue {
                 trace_events = (const htp_trace_desc *) (p_ptr + p_size);
             }
 
-            if (opt_profile) {
-                ggml_hexagon_dump_batch_prof(shm_buf->sess->name, rsp);
-            }
+            ggml_hexagon_dump_batch_prof(shm_buf->sess->name, rsp);
 
             for (uint32_t i = 0; i < rsp.n_ops; i++) {
-                if (opt_profile) {
-                    ggml_hexagon_dump_op_prof(shm_buf->sess->name, ops[i], pd[i]);
-                }
+                ggml_hexagon_dump_op_prof(shm_buf->sess->name, ops[i], pd[i]);
             }
 
-            if (opt_profile) {
-                ggml_hexagon_dump_trace_events(shm_buf->sess->name, rsp, trace_events, n_traces);
-            }
+            ggml_hexagon_dump_trace_events(shm_buf->sess->name, rsp, trace_events, n_traces);
         }
     }
 };
@@ -1938,11 +1931,10 @@ void ggml_hexagon_session::enqueue_op(const htp_opnode & node) {
 
     if (op_batch->empty()) {
         start_batch();
-    }
-
-    if (!op_batch->fit_op(node)) {
-        GGML_ABORT("ggml-hex: %s op does not fit into empty batch (vmem/tensor/buffer limit exceeded)\n",
-                   c_name());
+        if (!op_batch->fit_op(node)) {
+            GGML_ABORT("ggml-hex: %s op does not fit into empty batch (vmem/tensor/buffer limit exceeded)\n",
+                       c_name());
+        }
     }
 
     op_batch->add_op(node);
