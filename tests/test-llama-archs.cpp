@@ -168,6 +168,9 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     uint32_t n_layer = 2;
     if (arch == LLM_ARCH_LLAMA4) {
         n_layer = 4; // hparams.n_no_rope_layer_step is hard-coded to 4
+    } else if (arch == LLM_ARCH_GIGACHAT35) {
+        n_head = 8;
+        n_layer = 4; // dense recurrent, MoE MLA, MoE recurrent, MoE MLA
     } else if (arch == LLM_ARCH_MAION_CODER) {
         n_head = 4;
         n_layer = 4; // dense and MoE layers, each with local and full attention
@@ -216,7 +219,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     }
 
     uint32_t n_head_kv = n_head;
-    if (arch == LLM_ARCH_QWEN3) {
+    if (arch == LLM_ARCH_QWEN3 || arch == LLM_ARCH_GIGACHAT35) {
         n_head_kv = 1; // MQA coverage
     } else if (arch == LLM_ARCH_MUSE_GLIMMER || arch == LLM_ARCH_MUSE_SPARK || arch == LLM_ARCH_AFMOE || arch == LLM_ARCH_MAION_CODER ||
             arch == LLM_ARCH_KOLIBRI1) {
@@ -294,6 +297,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
             || arch == LLM_ARCH_KIMI_K3
             || arch == LLM_ARCH_GLM5_NEXT
             || arch == LLM_ARCH_HY_V4
+            || arch == LLM_ARCH_GIGACHAT35
             || arch == LLM_ARCH_MISTRAL4) {
         // GLM5 next MLA is nope only, the cache row is the compressed latent alone.
         ms.add_kv(LLM_KV_ATTENTION_KEY_LENGTH,       arch == LLM_ARCH_GLM5_NEXT ? uint32_t(512) : uint32_t(576));
@@ -561,6 +565,35 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     ms.add_kv(LLM_KV_ACTIVATION_SITU_LINEAR_BETA, 25.0f);
     ms.add_kv(LLM_KV_KDA_GATE_LOWER_BOUND,        -5.0f);
 
+    if (arch == LLM_ARCH_GIGACHAT35) {
+        ms.add_kv(LLM_KV_SSM_INNER_SIZE, uint32_t(128) * n_head);
+        ms.add_kv(LLM_KV_SSM_GROUP_COUNT, uint32_t(4));
+
+        // These projections take their shapes from tensor metadata.
+        ggml_context_ptr ctx(ggml_init({64 * ggml_tensor_overhead(), nullptr, true}));
+        auto add_projection = [&](const std::string & name, int64_t ne0, int64_t ne1) {
+            ggml_tensor * t = ggml_new_tensor_2d(ctx.get(), GGML_TYPE_F16, ne0, ne1);
+            ggml_set_name(t, name.c_str());
+            gguf_add_tensor(ms.gguf_ctx, t);
+        };
+        auto add_norm_gate = [&](const std::string & name, int64_t dim) {
+            add_projection(name + "_gate_up.weight", dim, 16);
+            add_projection(name + "_gate_down.weight", 16, dim);
+        };
+        add_norm_gate("output_norm", n_embd);
+        for (uint32_t il = 0; il < n_layer; il++) {
+            const std::string prefix = "blk." + std::to_string(il) + ".";
+            for (const char * name : {"attn_norm", "post_attention_norm", "ffn_norm", "post_ffw_norm"}) {
+                add_norm_gate(prefix + name, n_embd);
+            }
+            if (il % 2 == 1) {
+                add_norm_gate(prefix + "attn_q_a_norm", 512);
+                add_norm_gate(prefix + "attn_kv_a_norm", 512);
+                add_projection(prefix + "attn_gate.weight", n_embd, 128 * n_head);
+            }
+        }
+    }
+
     for (uint32_t il = 0; il < n_layer; il++) {
         ggml_tensor t;
         memset(&t, 0, sizeof(ggml_tensor));
@@ -790,6 +823,7 @@ static bool moe_mandatory(const llm_arch arch) {
         case LLM_ARCH_KIMI_LINEAR:
         case LLM_ARCH_KIMI_K3:
         case LLM_ARCH_GLM5_NEXT:
+        case LLM_ARCH_GIGACHAT35:
         case LLM_ARCH_STEP35:
         case LLM_ARCH_MISTRAL4:
         case LLM_ARCH_MELLUM:

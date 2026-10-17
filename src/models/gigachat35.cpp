@@ -16,7 +16,7 @@ void llama_model_gigachat35::load_arch_hparams(llama_model_loader & ml) {
     ml.get_key(LLM_KV_ATTENTION_KEY_LENGTH_MLA,   hparams.n_embd_head_k_mla_impl, false);
     ml.get_key(LLM_KV_ATTENTION_VALUE_LENGTH_MLA, hparams.n_embd_head_v_mla_impl, false);
 
-    ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH,        hparams.n_ff_exp);
+    ml.get_key_or_arr(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp_arr, hparams.n_layer_all);
     ml.get_key(LLM_KV_EXPERT_SHARED_FEED_FORWARD_LENGTH, hparams.n_ff_shexp, false);
     ml.get_key(LLM_KV_EXPERT_SHARED_COUNT,               hparams.n_expert_shared, false);
     ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE,              hparams.expert_weights_scale, false);
@@ -68,6 +68,13 @@ void llama_model_gigachat35::load_arch_tensors(llama_model_loader & ml) {
 
     auto create_tensor_from_meta = [&](const LLM_TN_IMPL & tname, int flags) -> ggml_tensor * {
         const ggml_tensor * meta = ml.get_tensor_meta(tname.str().c_str());
+        if (meta == nullptr && ml.files.empty()) {
+            const int64_t id = gguf_find_tensor(ml.metadata, tname.str().c_str());
+            if (id >= 0) {
+                const int64_t * ne = gguf_get_tensor_ne(ml.metadata, id);
+                return create_tensor(tname, { ne[0], ne[1], ne[2], ne[3] }, flags);
+            }
+        }
         if (meta == nullptr) {
             if (flags & TENSOR_NOT_REQUIRED) {
                 return nullptr;
@@ -102,7 +109,7 @@ void llama_model_gigachat35::load_arch_tensors(llama_model_loader & ml) {
         output = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), { n_embd, n_vocab }, TENSOR_DUPLICATED);
     }
 
-    const int64_t n_ff_exp   = hparams.n_ff_exp ? hparams.n_ff_exp : (n_expert_used > 0 ? n_ff / n_expert_used : 0);
+    const int64_t n_ff_exp   = hparams.n_ff_exp() ? hparams.n_ff_exp() : (n_expert_used > 0 ? n_ff / n_expert_used : 0);
     const int64_t n_ff_shexp = hparams.n_ff_shexp ? hparams.n_ff_shexp : n_ff_exp * (hparams.n_expert_shared ? hparams.n_expert_shared : 1);
     GGML_ASSERT(n_ff_exp > 0);
 
@@ -360,7 +367,7 @@ llama_model_gigachat35::graph_mtp::graph_mtp(const llama_model & model, const ll
     const float mscale          = attn_factor_org * (1.0f + 0.1f * hparams.rope_yarn_log_mul * logf(1.0f / freq_scale));
     const float kq_scale        = mscale * mscale / sqrtf(float(n_embd_head_k_mla));
 
-    auto inp = std::make_unique<llm_graph_input_embd_h>(hparams.n_embd);
+    auto inp = std::make_unique<llm_graph_input_embd_h>(hparams.n_embd_inp(), hparams.n_embd);
 
     inp->tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     ggml_set_input(inp->tokens);

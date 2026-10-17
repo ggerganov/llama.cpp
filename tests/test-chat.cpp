@@ -1517,11 +1517,6 @@ class peg_test_builder {
         return *this;
     }
 
-    peg_test_builder & chat_template_kwargs(std::map<std::string, std::string> kwargs) {
-        tc_.params.chat_template_kwargs = std::move(kwargs);
-        return *this;
-    }
-
     peg_test_builder & parallel_tool_calls(bool val) {
         tc_.params.parallel_tool_calls = val;
         return *this;
@@ -4404,12 +4399,7 @@ static void test_template_output_peg_parsers(bool detailed_debug) {
             .run();
     }
 
-    // GigaChat 3.5 tests - format uses GCML markup inside the assistant message:
-    //   <｜GCML｜tool_calls>
-    //   <｜GCML｜invoke name="foo">
-    //   <｜GCML｜parameter name="bar" string="true|false">value</｜GCML｜parameter>
-    //   </｜GCML｜invoke>
-    //   </｜GCML｜tool_calls>
+    // GigaChat 3.5: GCML tool calls inside the assistant message
     {
         auto tst = peg_tester("models/templates/GigaChat3.5.jinja", detailed_debug);
 
@@ -4493,9 +4483,7 @@ static void test_template_output_peg_parsers(bool detailed_debug) {
             .run();
     }
 
-    // GigaChat 3.5 Reasoning tests - same GCML markup, but the template always opens
-    // a forced "<think>" in the generation prompt (no opt-out) and every assistant
-    // turn carries a think block (empty "<think></think>" when there is no reasoning)
+    // GigaChat 3.5 Reasoning: the template always opens <think>, even for empty reasoning
     {
         auto tst = peg_tester("models/templates/GigaChat3.5-Reasoning.jinja", detailed_debug);
 
@@ -4571,8 +4559,7 @@ static void test_template_output_peg_parsers(bool detailed_debug) {
             .expect_content("Hello, world!\nWhat's up?")
             .run();
 
-        // content continuation with no prior reasoning: the prompt still carries
-        // the forced empty think block
+        // content continuation still includes the forced empty think block
         tst.test("world!\nWhat's up?")
             .reasoning_format(COMMON_REASONING_FORMAT_DEEPSEEK)
             .messages({ message_user, simple_assist_msg("Hello, ", "") })

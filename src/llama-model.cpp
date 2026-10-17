@@ -527,6 +527,16 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
             }
         }
 
+        if (ud->model->arch == LLM_ARCH_GIGACHAT35 &&
+                (std::regex_match(tensor_name, pattern_kv_cache) || std::regex_match(tensor_name, pattern_q_weight) ||
+                 std::regex_match(tensor_name, pattern_attn_gate_weight) || std::regex_match(tensor_name, pattern_attn_out_weight))) {
+            // MLA has one compressed KV head; its cache and attention projections must stay mirrored.
+            const tensor_config tc = get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_MIRRORED);
+            if (!hparams.is_recr(tc.il)) {
+                return tc;
+            }
+        }
+
         // the qsa indexer has one key head and its projections are mirrored, so its cache cannot be split
         if (std::regex_match(tensor_name, pattern_idx_cache)) {
             return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_MIRRORED);
@@ -727,7 +737,15 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
             // linear attention
             const int64_t head_dim        = hparams.ssm_d_state;
             const int64_t blck_size_perf  = std::lcm(blck_size, 128);
-            const int64_t granularity_qkv = std::lcm(blck_size_perf, head_dim);
+            const int64_t head_ratio      = ud->model->arch == LLM_ARCH_GIGACHAT35 ? hparams.ssm_dt_rank / hparams.ssm_n_group : 1;
+            const int64_t granularity_qkv = std::lcm(blck_size_perf, head_dim) * head_ratio;
+            if (ud->model->arch == LLM_ARCH_GIGACHAT35 &&
+                    (std::regex_match(tensor_name, pattern_qkv_weight) || std::regex_match(tensor_name, pattern_ssm_conv1d) ||
+                     std::regex_match(tensor_name, pattern_r_cache))) {
+                // Keep each K head with its group of V heads, including when some devices receive no heads.
+                const int64_t scale = std::regex_match(tensor_name, pattern_r_cache) ? hparams.ssm_d_conv - 1 : 1;
+                return {granularity_qkv / head_ratio * scale, granularity_qkv * scale};
+            }
             if (std::regex_match(tensor_name, pattern_qkv_weight) || std::regex_match(tensor_name, pattern_attn_gate_weight) ||
                     std::regex_match(tensor_name, pattern_ssm_conv1d) || std::regex_match(tensor_name, pattern_ssm_out_weight)) {
                 return std::vector<int64_t>(segments.size(), granularity_qkv);
