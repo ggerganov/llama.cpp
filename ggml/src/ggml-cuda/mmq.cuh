@@ -964,15 +964,15 @@ static __device__ __forceinline__ int mmq_get_ntiles_x(
 
 // Splits the index of an output tile into row tile it, sample wt, channel zt and column tile jt.
 // Column tiles are the fastest-moving index, then channels, then samples, then row tiles.
+// Returns false for a MoE tile past the last packed tile.
 template <int J>
-static __device__ __forceinline__ void mmq_get_tile(
+static __device__ __forceinline__ bool mmq_get_tile(
         const int tile, const int32_t * __restrict__ ids_dst, const int32_t * __restrict__ expert_bounds, const int ntiles_x,
         const uint3 nchannels_y, const uint3 nsamples_y, const uint3 ntx, int & it, int & wt, int & zt, int & jt) {
     if (ids_dst) { // MoE has a single sample.
         it = tile / ntiles_x;
         wt = 0;
-        mm_ids_find_tile<J>(expert_bounds, nchannels_y.z, tile % ntiles_x, zt, jt);
-        return;
+        return mm_ids_find_tile<J>(expert_bounds, nchannels_y.z, tile % ntiles_x, zt, jt);
     }
     uint2 tmp2 = fast_div_modulo(tile, ntx);
     jt = tmp2.y;
@@ -981,6 +981,7 @@ static __device__ __forceinline__ void mmq_get_tile(
     tmp2 = fast_div_modulo(tmp2.x, nsamples_y);
     wt = tmp2.y;
     it = tmp2.x;
+    return true;
 }
 
 // The mul_mat_q kernel implements "stream-k" work partitioning as described in https://arxiv.org/abs/2301.03598
@@ -1102,7 +1103,8 @@ static __global__ void mul_mat_q(
     constexpr int ITER_K          = ggml_cuda_mmq_get_K_vram(type, J, fallback, prec_src1);
     constexpr int blocks_per_iter = ITER_K / qk;
 
-    const int ntiles_x = mmq_get_ntiles_x<J>(ids_dst, expert_bounds, nchannels_y, ntx);
+    // Without fixup each CUDA block does exactly one tile of the upper bound, MoE tiles past the last packed one are skipped.
+    const int ntiles_x = tmp_fixup ? mmq_get_ntiles_x<J>(ids_dst, expert_bounds, nchannels_y, ntx) : (ids_dst ? ntx.z : nchannels_y.z*ntx.z);
     const int nkbc     = nsamples_y.z*ntiles_x*nty*blocks_per_ne00.z;
 
     // kbc == k block continuous, current index in continuous ijk space.
@@ -1117,7 +1119,9 @@ static __global__ void mul_mat_q(
     int kb0_stop  = min(blocks_per_ne00.z, uint32_t(kb0_start + kbc_stop - kbc));
     while (kbc < kbc_stop && kb0_stop == int(blocks_per_ne00.z)) {
         int it, wt, zt, jt;
-        mmq_get_tile<J>(fastdiv(kbc, blocks_per_ne00), ids_dst, expert_bounds, ntiles_x, nchannels_y, nsamples_y, ntx, it, wt, zt, jt);
+        if (!mmq_get_tile<J>(fastdiv(kbc, blocks_per_ne00), ids_dst, expert_bounds, ntiles_x, nchannels_y, nsamples_y, ntx, it, wt, zt, jt)) {
+            return;
+        }
 
         // Defaults for regular matrix multiplication:
         int col_low    = 0;
@@ -1467,12 +1471,13 @@ static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & a
     const int ntiles_dst = ntx * nty * ntzw;
     const int tiles_nwaves = (ntiles_dst + nsm - 1) / nsm;
     const int tiles_efficiency_percent = 100 * ntiles_dst / (nsm*tiles_nwaves);
-    // For MoE ntiles_dst is only an upper bound so the work is always split across the SMs and the fixup is always needed.
-    const dim3 block_nums_stream_k(!is_moe && GGML_CUDA_CC_IS_NVIDIA(cc) && tiles_efficiency_percent >= 90 ? ntiles_dst : nsm, 1, 1);
+    const bool use_tiling = GGML_CUDA_CC_IS_NVIDIA(cc) && tiles_efficiency_percent >= 90;
+    const dim3 block_nums_stream_k(use_tiling ? ntiles_dst : nsm, 1, 1);
 
     GGML_ASSERT(ntiles_dst * blocks_per_ne00_fd.z < (1 << 30)); // Assert that variable kbc will not overflow.
 
-    const bool fixup_needed = is_moe || ntiles_dst % block_nums_stream_k.x != 0;
+    // For MoE ntiles_dst is only an upper bound, splitting it across the SMs needs the actual number of tiles and thus the fixup.
+    const bool fixup_needed = (is_moe && !use_tiling) || ntiles_dst % block_nums_stream_k.x != 0;
 
     ggml_cuda_pool & pool = ctx.pool(id);
     ggml_cuda_pool_alloc<float> tmp_fixup(pool);
