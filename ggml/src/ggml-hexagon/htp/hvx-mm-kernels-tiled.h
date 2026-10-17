@@ -834,11 +834,10 @@ static inline void accum_q2_k_32x2(
     *v_sums1 = Q6_W_vcombine_VV(v_sum1_hi, v_sum1_lo);
 }
 
-// Q2_0: codes 0..3 as signed -1..2. k-groups group_base .. group_base + 7 are 32 k, group_base is 0 or 8 for the two halves of the 64-k tile
+// Q2_0: codes 0..3 as signed -1..2. 8 k-groups (32 k) in vptr[0..1]
 static inline HVX_Vector accum_q2_0_32x1(
     const HVX_Vector * restrict vptr,
-    const HVX_Vector * restrict v_act,
-    int group_base
+    const HVX_Vector * restrict v_act
 ) {
     HVX_Vector v_sum_lo = Q6_V_vzero();
     HVX_Vector v_sum_hi = Q6_V_vzero();
@@ -847,8 +846,8 @@ static inline HVX_Vector accum_q2_0_32x1(
 
     #pragma unroll
     for (int g = 0; g < 4; g++) {
-        HVX_Vector v_W_lo = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, group_base + g,     mask_03), v_one);
-        HVX_Vector v_W_hi = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, group_base + g + 4, mask_03), v_one);
+        HVX_Vector v_W_lo = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, g,     mask_03), v_one);
+        HVX_Vector v_W_hi = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, g + 4, mask_03), v_one);
         v_sum_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum_lo, v_W_lo, v_act[g]);
         v_sum_hi = Q6_Vw_vrmpyacc_VwVbVb(v_sum_hi, v_W_hi, v_act[g + 4]);
     }
@@ -860,7 +859,6 @@ static inline void accum_q2_0_32x2(
     const HVX_Vector * restrict vptr,
     const HVX_Vector * restrict v_act0,
     const HVX_Vector * restrict v_act1,
-    int group_base,
     HVX_Vector * v_sum0,
     HVX_Vector * v_sum1
 ) {
@@ -873,8 +871,8 @@ static inline void accum_q2_0_32x2(
 
     #pragma unroll
     for (int g = 0; g < 4; g++) {
-        HVX_Vector v_W_lo = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, group_base + g,     mask_03), v_one);
-        HVX_Vector v_W_hi = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, group_base + g + 4, mask_03), v_one);
+        HVX_Vector v_W_lo = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, g,     mask_03), v_one);
+        HVX_Vector v_W_hi = Q6_Vb_vsub_VbVb(unpack_q3_k_low2(vptr, g + 4, mask_03), v_one);
         v_sum0_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum0_lo, v_W_lo, v_act0[g]);
         v_sum0_hi = Q6_Vw_vrmpyacc_VwVbVb(v_sum0_hi, v_W_hi, v_act0[g + 4]);
         v_sum1_lo = Q6_Vw_vrmpyacc_VwVbVb(v_sum1_lo, v_W_lo, v_act1[g]);
@@ -1566,7 +1564,7 @@ static void tiled_vec_dot_q2_0_32x1(const uint32_t n, float * restrict s, const 
         for (int half = 0; half < 2; half++) {
             const HVX_Vector * restrict v_act = (const HVX_Vector *) (y_q + (2 * kt + half) * HTP_MM_ACT_TILE_SIZE_Q8_0);
 
-            HVX_Vector v_sum_sf = Q6_Vsf_equals_Vw(accum_q2_0_32x1(vptr, v_act, 8 * half));
+            HVX_Vector v_sum_sf = Q6_Vsf_equals_Vw(accum_q2_0_32x1(vptr + 2 * half, v_act));
             HVX_Vector v_scale_comb = hvx_vec_mul_f16_f16_to_f32_lower32(v_scale_w, v_act[8]);
             v_sum_float = hvx_vec_add_f32_f32(v_sum_float, hvx_vec_mul_f32_f32(v_sum_sf, v_scale_comb));
         }
@@ -1579,8 +1577,7 @@ static void tiled_vec_dot_q2_0_32x1(const uint32_t n, float * restrict s, const 
     }
 }
 
-// noinline: inlined into its single caller it spills the accumulators in the k loop
-static __attribute__((noinline)) void tiled_vec_dot_q2_0_32x2(const uint32_t n, float * restrict s0, float * restrict s1, const void * restrict vx, const void * restrict vy0, const void * restrict vy1, uint32_t valid_rows, const float * restrict sz0, const float * restrict sz1) {
+static void tiled_vec_dot_q2_0_32x2(const uint32_t n, float * restrict s0, float * restrict s1, const void * restrict vx, const void * restrict vy0, const void * restrict vy1, uint32_t valid_rows, const float * restrict sz0, const float * restrict sz1) {
     const uint8_t * restrict tile_ptr = vx;
     const uint8_t * restrict y0_q = vy0;
     const uint8_t * restrict y1_q = vy1;
@@ -1593,13 +1590,12 @@ static __attribute__((noinline)) void tiled_vec_dot_q2_0_32x2(const uint32_t n, 
         const HVX_Vector * restrict vptr = (const HVX_Vector *) (tile_ptr + kt * HTP_MM_WEIGHT_ALIGNED_TILE_SIZE_Q2_0);
         HVX_Vector v_scale_w = vptr[4];
 
-        #pragma unroll
         for (int half = 0; half < 2; half++) {
             const HVX_Vector * restrict v_act0 = (const HVX_Vector *) (y0_q + (2 * kt + half) * HTP_MM_ACT_TILE_SIZE_Q8_0);
             const HVX_Vector * restrict v_act1 = (const HVX_Vector *) (y1_q + (2 * kt + half) * HTP_MM_ACT_TILE_SIZE_Q8_0);
 
             HVX_Vector v_sum_c0, v_sum_c1;
-            accum_q2_0_32x2(vptr, v_act0, v_act1, 8 * half, &v_sum_c0, &v_sum_c1);
+            accum_q2_0_32x2(vptr + 2 * half, v_act0, v_act1, &v_sum_c0, &v_sum_c1);
 
             HVX_Vector v_scale_comb_c0 = hvx_vec_mul_f16_f16_to_f32_lower32(v_scale_w, v_act0[8]);
             HVX_Vector v_scale_comb_c1 = hvx_vec_mul_f16_f16_to_f32_lower32(v_scale_w, v_act1[8]);
