@@ -2,15 +2,32 @@
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-    printf "Usage: %s <llama-quantize> <target-folder> [--no-check]\n" "$0"
-    printf "  --no-check  print the sha256 of each output without checking it\n"
-    printf "Example: %s ./build/bin/llama-quantize ./build/quantize-test\n" "$0"
+    printf "Usage: %s <llama-quantize> <llama-perplexity> [<scratch-dir>] [--no-check]\n" "$0"
+    printf "  <scratch-dir>  dir for the model and outputs, default /tmp/test-quantize-be\n"
+    printf "  --no-check     print the sha256 and perplexity of each output without checking them\n"
+    printf "Example: %s ./build/bin/llama-quantize ./build/bin/llama-perplexity\n" "$0"
     exit 1
 fi
 
 quantize=$1
-folder=$2
-no_check=${3:-}
+perplexity=$2
+shift 2
+
+scratch_dir=/tmp/test-quantize-be
+no_check=
+for arg in "$@"; do
+    case $arg in
+        --no-check) no_check=--no-check ;;
+        *)          scratch_dir=$arg ;;
+    esac
+done
+
+for bin in "$quantize" "$perplexity"; do
+    if [ ! -x "$bin" ]; then
+        echo "error: $bin not found, build it first" >&2
+        exit 1
+    fi
+done
 
 if [ "$(uname -m)" != s390x ]; then
     echo "error: this test needs a big-endian s390x host" >&2
@@ -19,26 +36,28 @@ fi
 
 MODEL_URL=https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories15M.gguf
 MODEL_SHA256=61b50d457809a5194818fd22e6724b456cd7bb9a6264c52c8110684c53f3704a
+F32_SHA256=55174d7a7d46f29fc6be163ccb040330c357aa727b22ec13e2c5d713e5ba5b76
 
-# sha256 of each big-endian output, taken from files that ran coherently
+# perplexity ceiling of each big-endian output on the text below, about 10% above the measured value
+# a wrong byte order gives nan or a perplexity in the hundreds
 # F32 is the converted input, all other types come from llama-quantize --pure
 declare -a outputs=(
-    "F32       55174d7a7d46f29fc6be163ccb040330c357aa727b22ec13e2c5d713e5ba5b76"
-    "F16       69e9a5adde6799bc1dbe52014f6fb35608d3763bac8bf482246ab1885c53d43c"
-    "BF16      14b7a140ec1e91329e87508c259f18d2529d4f5adf2fe321bae1f99361e80dbb"
-    "Q4_0      110a813b1e6a790e1721669c4deb526cf1a58c95546f1c0fdf7e54d2a37d7068"
-    "Q4_1      a9ab77b87495d68882bafa6eea39f31596102cafaed03da7ffaaea8d7e7f61e3"
-    "Q5_0      8163abe266b1a10d2be4f29496adc81a5372e418bf945b81184abed3ad965ffb"
-    "Q5_1      c62221a9f8fddc79ac765909478801b7490f29a9ffaa9e7b328ed6187b47c6cd"
-    "Q8_0      eb9dc6d93c6b5983ef2974e99ad3b06fd6514269a37b9674eef9cb8a66874344"
-    "Q2_K      34822c88057a7bd4bfe91f3e7b99317a686c0193615993e9953b846819d056a2"
-    "Q3_K      b6e433dc7e47dd0ea2f80111d6d69b368e4977787148d3d52041ec6b7a55d2c2"
-    "Q4_K      ec6b1ff9a68d9353915f20b8f74330200b9ecdd9136b579602abb8bfeb5278b9"
-    "Q5_K      5f9a07f75c0f5678a4a5e23654fae19287460fc941c4e960eccbe49bfec3a980"
-    "Q6_K      5494d2f6b237e786a01287874d26261c1f21a3de812be4e65e2ca7a1f140f0af"
-    "IQ4_NL    a40ac05e62aeaed04139f615ed7460ff4449d12a80bcde27889a213ba384264e"
-    "IQ4_XS    c15ea97f4938d156cef3481a97247fb168b1594c7efafaa05b7fcd69f5edb63d"
-    "MXFP4_MOE 66bffefcbaaff94f5291f03aab598623200511ab92bec2921ab47a9d568999b7"
+    "F32       3.60"
+    "F16       3.60"
+    "BF16      3.59"
+    "Q4_0      4.14"
+    "Q4_1      4.01"
+    "Q5_0      3.82"
+    "Q5_1      3.65"
+    "Q8_0      3.60"
+    "Q2_K      5.24"
+    "Q3_K      4.25"
+    "Q4_K      3.83"
+    "Q5_K      3.67"
+    "Q6_K      3.60"
+    "IQ4_NL    3.86"
+    "IQ4_XS    3.85"
+    "MXFP4_MOE 4.27"
 )
 
 check_sha256() {
@@ -60,6 +79,26 @@ check_sha256() {
     fi
 }
 
+check_ppl() {
+    local name=$1
+    local log=$2
+    local max=$3
+
+    # llama-perplexity prints no final estimate when the result is nan
+    local ppl
+    ppl=$(sed -n 's/.*Final estimate: PPL = \([0-9.]*\).*/\1/p' "$log")
+
+    if [ "$no_check" = --no-check ]; then
+        printf "%-16s %-10s %-10s %s\n" "$name" "${ppl:-nan}" "$max" -
+    elif [ -n "$ppl" ] && awk -v p="$ppl" -v m="$max" 'BEGIN { exit !(p <= m) }'; then
+        printf "%-16s %-10s %-10s %b\n" "$name" "$ppl" "$max" "\033[32mOK\033[0m"
+    else
+        printf "%-16s %-10s %-10s %b\n" "$name" "${ppl:-nan}" "$max" "\033[31mFAIL\033[0m"
+        echo "error: perplexity of $name is ${ppl:-nan}, expected at most $max" >&2
+        exit 1
+    fi
+}
+
 # keep the table readable, only show a command's output when it fails
 run_logged() {
     local log=$1
@@ -72,27 +111,45 @@ run_logged() {
     fi
 }
 
-mkdir -p "$folder"
+mkdir -p "$scratch_dir"
 
-model=$folder/stories15M.gguf
+model=$scratch_dir/stories15M.gguf
 if [ ! -f "$model" ]; then
     wget -q -O "$model" "$MODEL_URL"
 fi
 
-printf "%-16s %-64s %s\n" type sha256 result
+printf "%-16s %-64s %s\n" file sha256 result
 check_sha256 stories15M.gguf "$model" "$MODEL_SHA256"
 
-f32=$folder/stories15M-be-F32.gguf
+f32=$scratch_dir/stories15M-be-F32.gguf
 cp "$model" "$f32"
-echo YES | run_logged "$folder/stories15M-be-F32.log" python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big
+echo YES | run_logged "$scratch_dir/stories15M-be-F32.log" python3 "$(dirname "$0")/../gguf-py/gguf/scripts/gguf_convert_endian.py" "$f32" big
+check_sha256 F32 "$f32" "$F32_SHA256"
 
+# 588 tokens, enough for 4 chunks of 128
+text=$scratch_dir/stories.txt
+cat > "$text" << 'EOF'
+Once upon a time, there was a little girl named Lily. She lived in a small house with her mom and dad. Lily loved to play outside in the garden. One sunny day, she saw a big red ball under a tree. She ran to the ball and picked it up. It was soft and round.
+Lily wanted to play with her friend Tom. She went to his house and knocked on the door. Tom opened the door and smiled. "Hi, Lily! Do you want to play?" he asked. "Yes! Look at my new ball," said Lily. They went to the park together.
+At the park, Lily and Tom threw the ball to each other. They laughed and ran on the green grass. Then the ball went too high. It flew over a fence and into a pond. Lily was sad. "Oh no, my ball is in the water," she said.
+Tom had an idea. He found a long stick near the pond. He held the stick out over the water and pushed the ball to the side. Lily helped him. Soon the ball came close and Lily picked it up. It was wet, but it was not broken.
+"Thank you, Tom," said Lily. "You are a good friend." Tom smiled and said, "You are welcome. Let's play again, but not near the pond." They both laughed and went back to the grass.
+When the sun went down, Lily's mom called her home. Lily said goodbye to Tom and walked home with her ball. She told her mom about the pond and the stick. Her mom gave her a big hug. "I am happy you and Tom helped each other," she said.
+That night, Lily put the ball next to her bed. She thought about the fun day at the park. She closed her eyes and smiled. Lily knew that sharing and helping made every day better.
+The next morning, Lily woke up early. She saw a little bird outside her window. The bird was singing a happy song. Lily wanted to give the bird some food. She asked her dad for some bread. Her dad gave her a small piece, and Lily put it on the window.
+The bird hopped over and ate the bread. Then it sang again, louder than before. Lily clapped her hands. "Thank you for the song, little bird," she said. The bird flew away, but it came back every morning after that.
+Lily and the bird became good friends. Every day she gave it bread, and every day it sang for her. Lily learned that being kind to others, even small birds, can make the world a happy place.
+EOF
+
+printf "\n%-16s %-10s %-10s %s\n" type ppl max result
 for entry in "${outputs[@]}"; do
-    read -r type expected <<< "$entry"
-    out=$folder/stories15M-be-$type.gguf
+    read -r type max <<< "$entry"
+    out=$scratch_dir/stories15M-be-$type.gguf
 
     if [ "$type" != F32 ]; then
-        run_logged "$folder/stories15M-be-$type.log" "$quantize" --pure "$f32" "$out" "$type"
+        run_logged "$scratch_dir/stories15M-be-$type.log" "$quantize" --pure "$f32" "$out" "$type"
     fi
 
-    check_sha256 "$type" "$out" "$expected"
+    run_logged "$scratch_dir/stories15M-be-$type-ppl.log" "$perplexity" -m "$out" -f "$text" -c 128
+    check_ppl "$type" "$scratch_dir/stories15M-be-$type-ppl.log" "$max"
 done

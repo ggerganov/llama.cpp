@@ -112,7 +112,7 @@ jobs:
       - name: Test quantize (s390x)
         id: quantize_test_s390x
         run: |
-          ./tests/test-quantize-be.sh ./build/bin/llama-quantize ./build/quantize-test
+          ./tests/test-quantize-be.sh ./build/bin/llama-quantize ./build/bin/llama-perplexity 2>&1
 
   ubuntu-26-zdnn-s390x:
     name: ubuntu-26-zdnn-s390x
