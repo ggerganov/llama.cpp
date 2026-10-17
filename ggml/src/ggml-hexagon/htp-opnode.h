@@ -4,13 +4,14 @@
 #define GGML_COMMON_IMPL_CPP
 #include "ggml-backend-impl.h"
 #include "ggml-common.h"
+#include "ggml-impl.h"
 
 #include <algorithm>
 #include <string>
 #include <vector>
 #include <memory>
 #include <stdio.h>
-#include "htp-ops.h"
+#include "htp/htp-ops.h"
 #include "htp/matmul-ops.h"
 #include "htp/flash-attn-ops.h"
 #include "htp/unary-ops.h"
@@ -25,6 +26,7 @@
 struct htp_opnode {
     ggml_tensor * node   { nullptr };
     htp_op_code   opcode { HTP_OP_INVALID };
+    int32_t       params[HTP_OP_MAX_PARAMS] {0};
     int32_t       kernel_params[HTP_OP_MAX_KERN_PARAMS] {0};
 
     std::vector<ggml_tensor *>                fused;
@@ -47,6 +49,9 @@ struct htp_opnode {
     void init(ggml_tensor * node) {
         this->node = node;
         if (this->node) {
+            static_assert(sizeof(this->params) == sizeof(this->node->op_params), "params size mismatch");
+            memcpy(this->params, this->node->op_params, sizeof(this->params));
+
             if (this->node->op == GGML_OP_MUL_MAT &&
                 ggml_get_op_params_i32(this->node, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
                 this->name = "MUL_MAT_HADAMARD";

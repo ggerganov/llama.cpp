@@ -136,9 +136,10 @@ enum htp_op_code {
 #define HTP_MMAP_MAX_VMEM  (2147483648u)
 
 enum htp_tensor_flags {
-    HTP_TENSOR_WEIGHT  = (1U << 0), // Tensor buffer model weight data (not compute)
-    HTP_TENSOR_TILED   = (1U << 1), // Tensor is in tiled format
-    HTP_TENSOR_FENCE   = (1U << 2)  // Tensor is synchronization fence (explicitly managed)
+    HTP_TENSOR_WEIGHT   = (1U << 0), // Tensor buffer model weight data (not compute)
+    HTP_TENSOR_TILED    = (1U << 1), // Tensor is in tiled format
+    HTP_TENSOR_FENCE    = (1U << 2), // Tensor is synchronization fence (explicitly managed)
+    HTP_TENSOR_FUSEABLE = (1U << 3), // Tensor can be fused (host-only)
 };
 
 enum htp_buf_flags {
