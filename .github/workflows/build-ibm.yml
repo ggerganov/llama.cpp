@@ -24,7 +24,7 @@ on:
       'ggml/src/ggml-quants.c',
       'src/llama-quant.cpp',
       'gguf-py/gguf/scripts/gguf_convert_endian.py',
-      'tests/test-quantize-stories-be.sh'
+      'tests/test-quantize-be.sh'
     ]
 
 cache-mode: none
@@ -112,7 +112,7 @@ jobs:
       - name: Test quantize (s390x)
         id: quantize_test_s390x
         run: |
-          ./tests/test-quantize-stories-be.sh ./build/bin/llama-quantize ./build/quantize-test
+          ./tests/test-quantize-be.sh ./build/bin/llama-quantize ./build/quantize-test
 
   ubuntu-26-zdnn-s390x:
     name: ubuntu-26-zdnn-s390x
