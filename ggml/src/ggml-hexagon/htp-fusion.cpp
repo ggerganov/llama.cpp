@@ -12,6 +12,11 @@ static inline bool htp_same_shape_and_contiguity(const ggml_tensor * a, const gg
     return ggml_are_same_shape(a, b) && (ggml_is_contiguous(a) == ggml_is_contiguous(b));
 }
 
+static inline bool htp_inplace_overlap_unsafe(const ggml_tensor * dst, const ggml_tensor * in) {
+    return htp_tensors_overlap(dst, in) &&
+           (dst->data != in->data || dst->nb[1] != in->nb[1] || dst->nb[2] != in->nb[2] || dst->nb[3] != in->nb[3]);
+}
+
 static inline bool htp_match_consumer(
     const htp_opnode & prev,
     const htp_opnode & cur,
@@ -319,7 +324,8 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
 
     const ggml_tensor * src0 = prev.src0();
     const ggml_tensor * dst  = cur.dst();
-    if (src0->ne[0] != weight->ne[0] || !htp_same_shape_and_contiguity(src0, dst)) return false;
+    if (src0->ne[0] != weight->ne[0] || !htp_same_shape_and_contiguity(prev.dst(), dst)) return false;
+    if (htp_inplace_overlap_unsafe(dst, src0)) return false;
 
     const bool is_row_bcast  = (weight->ne[1] == 1 && weight->ne[2] == 1 && weight->ne[3] == 1);
     const bool is_same_shape = ggml_are_same_shape(src0, weight);
@@ -349,7 +355,8 @@ static bool fuse_rms_norm_scale(const ggml_hexagon_session * sess, htp_opnode & 
 
     const ggml_tensor * src0 = prev.src0();
     const ggml_tensor * dst  = cur.dst();
-    if (src0->type != GGML_TYPE_F32 || !htp_same_shape_and_contiguity(src0, dst)) return false;
+    if (src0->type != GGML_TYPE_F32 || !htp_same_shape_and_contiguity(prev.dst(), dst)) return false;
+    if (htp_inplace_overlap_unsafe(dst, src0)) return false;
 
     float scale = 0.0f;
     float bias  = 0.0f;
@@ -677,10 +684,7 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     if (!htp_binary_strides_safe(src0, new_src, dst, ggml_type_size(src0->type))) return false;
 
     for (const auto * in : prev.inputs) {
-        if (htp_tensors_overlap(dst, in) &&
-            (dst->data != in->data || dst->nb[1] != in->nb[1] || dst->nb[2] != in->nb[2] || dst->nb[3] != in->nb[3])) {
-            return false;
-        }
+        if (htp_inplace_overlap_unsafe(dst, in)) return false;
     }
 
     struct htp_binary_kernel_params kparams = *k0;
