@@ -49,15 +49,12 @@ check_sha256() {
     local actual
     actual=$(sha256sum "$file" | cut -d ' ' -f 1)
 
-    local result=OK
     if [ "$no_check" = --no-check ]; then
-        result=-
-    elif [ "$actual" != "$expected" ]; then
-        result=FAIL
-    fi
-    printf "%-16s %-6s %s\n" "$name" "$result" "$actual"
-
-    if [ "$result" = FAIL ]; then
+        printf "%-16s %-64s %s\n" "$name" "$actual" -
+    elif [ "$actual" = "$expected" ]; then
+        printf "%-16s %-64s %b\n" "$name" "$actual" "\033[32mOK\033[0m"
+    else
+        printf "%-16s %-64s %b\n" "$name" "$actual" "\033[31mFAIL\033[0m"
         echo "error: sha256 mismatch for $name: expected '$expected', got '$actual'" >&2
         exit 1
     fi
@@ -82,7 +79,7 @@ if [ ! -f "$model" ]; then
     wget -q -O "$model" "$MODEL_URL"
 fi
 
-printf "%-16s %-6s %s\n" type result sha256
+printf "%-16s %-64s %s\n" type sha256 result
 check_sha256 stories15M.gguf "$model" "$MODEL_SHA256"
 
 f32=$folder/stories15M-be-F32.gguf
