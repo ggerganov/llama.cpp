@@ -726,3 +726,44 @@ def test_completion_checkpoint_after_unrelated_prompt():
     assert [tid for tid, _ in actual] == [tid for tid, _ in expected]
     for (_, lp), (_, lp_expected) in zip(actual, expected):
         assert lp == pytest.approx(lp_expected, abs=1e-3)
+
+
+# a restored context checkpoint must be kept for the next request that shares the same prefix
+def test_completion_checkpoint_kept_after_restore():
+    global server
+    server = ServerPreset.tinygemma3()
+    server.n_slots = 1
+    server.n_batch = 16
+    server.n_ubatch = 16
+    server.cache_ram = 0
+    server.temperature = 0.0
+    server.start()
+
+    def tokenize(content):
+        res = server.make_request("POST", "/tokenize", data={"content": content})
+        assert res.status_code == 200
+        return res.body["tokens"]
+
+    def cache_n(prompt):
+        res = server.make_request("POST", "/completion", data={
+            "prompt": prompt,
+            "n_predict": 1,
+            "cache_prompt": True,
+        })
+        assert res.status_code == 200
+        return res.body["timings"]["cache_n"]
+
+    prefix = tokenize("Purple elephants quietly compose sonnets about tax law in the moonlight")
+    suffixes = [tokenize(s) for s in [
+        "The quick brown fox jumps over the lazy dog while the farmer counts his sheep and the sun slowly sets behind the distant hills",
+        "Seven tiny robots repaired the broken lighthouse lens before the storm arrived, then danced on the rocks until the morning tide came in",
+        "Green apples rolled down the hill toward the river, where a curious otter collected them one by one and stacked them on a flat stone",
+    ]]
+
+    # 4 tokens: the checkpoint 4 tokens before the end of the prompt holds exactly the prefix
+    cache_n(prefix + suffixes[0][:4])
+
+    # suffixes longer than n_ubatch + 4: no new checkpoint within the prefix, only the restored one can be reused
+    for suffix in suffixes[1:]:
+        assert len(suffix) > server.n_ubatch + 4
+        assert cache_n(prefix + suffix) == len(prefix) - 1
