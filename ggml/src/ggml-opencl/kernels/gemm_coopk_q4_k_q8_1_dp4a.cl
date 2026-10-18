@@ -38,14 +38,14 @@ typedef int2   coopk_dotv;
                   (((uint)((u) & 0xF000u)) << 12) )
 
 #if COOPK_ROWS == 4
-#define COOPK_DOT(ci, t)                                                 \
-    s0.s##ci = dot_acc_sat_4x8packed_ss_int(w0, A##ci.s##t, s0.s##ci);    \
-    s1.s##ci = dot_acc_sat_4x8packed_ss_int(w1, A##ci.s##t, s1.s##ci);    \
-    s2.s##ci = dot_acc_sat_4x8packed_ss_int(w2, A##ci.s##t, s2.s##ci);    \
+#define COOPK_DOT(ci, t)                                               \
+    s0.s##ci = dot_acc_sat_4x8packed_ss_int(w0, A##ci.s##t, s0.s##ci); \
+    s1.s##ci = dot_acc_sat_4x8packed_ss_int(w1, A##ci.s##t, s1.s##ci); \
+    s2.s##ci = dot_acc_sat_4x8packed_ss_int(w2, A##ci.s##t, s2.s##ci); \
     s3.s##ci = dot_acc_sat_4x8packed_ss_int(w3, A##ci.s##t, s3.s##ci);
 #else
-#define COOPK_DOT(ci, t)                                                 \
-    s0.s##ci = dot_acc_sat_4x8packed_ss_int(w0, A##ci.s##t, s0.s##ci);    \
+#define COOPK_DOT(ci, t)                                               \
+    s0.s##ci = dot_acc_sat_4x8packed_ss_int(w0, A##ci.s##t, s0.s##ci); \
     s1.s##ci = dot_acc_sat_4x8packed_ss_int(w1, A##ci.s##t, s1.s##ci);
 #endif
 
@@ -70,22 +70,22 @@ typedef int2   coopk_dotv;
 #endif
 
 #if COOPK_ROWS == 4
-#define COOPK_KSTEP(t)                                                   \
-    {                                                                     \
-    ushort4 bits = COOPK_QBITS4(t);                                      \
-    const uint w0 = EXP4(bits.s0);                                        \
-    const uint w1 = EXP4(bits.s1);                                        \
-    const uint w2 = EXP4(bits.s2);                                        \
-    const uint w3 = EXP4(bits.s3);                                        \
-    COOPK_DOTS_AT(t)                                                        \
+#define COOPK_KSTEP(t)              \
+    {                               \
+    ushort4 bits = COOPK_QBITS4(t); \
+    const uint w0 = EXP4(bits.s0);  \
+    const uint w1 = EXP4(bits.s1);  \
+    const uint w2 = EXP4(bits.s2);  \
+    const uint w3 = EXP4(bits.s3);  \
+    COOPK_DOTS_AT(t)                \
     }
 #else
-#define COOPK_KSTEP(t)                                                   \
-    {                                                                     \
-    ushort2 bits = COOPK_QBITS2(t);                                      \
-    const uint w0 = EXP4(bits.s0);                                        \
-    const uint w1 = EXP4(bits.s1);                                        \
-    COOPK_DOTS_AT(t)                                                        \
+#define COOPK_KSTEP(t)              \
+    {                               \
+    ushort2 bits = COOPK_QBITS2(t); \
+    const uint w0 = EXP4(bits.s0);  \
+    const uint w1 = EXP4(bits.s1);  \
+    COOPK_DOTS_AT(t)                \
     }
 #endif
 
@@ -220,16 +220,16 @@ kernel void kernel_gemm_coopk_q4_k_q8_1_dp4a(
     coopk_accv out2 = (coopk_accv)(0.0f), out3 = (coopk_accv)(0.0f);
 #endif
 
-#define COOPK_REDUCE(accv, outv)                                       \
-    barrier(CLK_LOCAL_MEM_FENCE);                                    \
-    if (sg > 0) { reduceLM[(sg - 1) * COOPK_SG + lane] = (accv); }     \
-    barrier(CLK_LOCAL_MEM_FENCE);                                    \
-    if (sg == 0) {                                                   \
-        coopk_accv sum = (accv);                                       \
-        for (int s = 0; s < COOPK_NSG - 1; s++) {                      \
-            sum += reduceLM[s * COOPK_SG + lane];                      \
-        }                                                            \
-        (outv) = sum;                                                \
+#define COOPK_REDUCE(accv, outv)                                   \
+    barrier(CLK_LOCAL_MEM_FENCE);                                  \
+    if (sg > 0) { reduceLM[(sg - 1) * COOPK_SG + lane] = (accv); } \
+    barrier(CLK_LOCAL_MEM_FENCE);                                  \
+    if (sg == 0) {                                                 \
+        coopk_accv sum = (accv);                                   \
+        for (int s = 0; s < COOPK_NSG - 1; s++) {                  \
+            sum += reduceLM[s * COOPK_SG + lane];                  \
+        }                                                          \
+        (outv) = sum;                                              \
     }
 
     COOPK_REDUCE(acc0, out0)
@@ -242,16 +242,16 @@ kernel void kernel_gemm_coopk_q4_k_q8_1_dp4a(
 #undef COOPK_REDUCE
 
 #if COOPK_ROWS == 4
-#define COOPK_STORE_COL(ci)                                                                   \
-    if (idx < m*n_no_padding) {                                                             \
-        vstore4((float4)(out0.s##ci, out1.s##ci, out2.s##ci, out3.s##ci), 0, dst + idx);    \
-        idx += m;                                                                           \
+#define COOPK_STORE_COL(ci)                                                              \
+    if (idx < m*n_no_padding) {                                                          \
+        vstore4((float4)(out0.s##ci, out1.s##ci, out2.s##ci, out3.s##ci), 0, dst + idx); \
+        idx += m;                                                                        \
     }
 #else
-#define COOPK_STORE_COL(ci)                                                                   \
-    if (idx < m*n_no_padding) {                                                             \
-        vstore2((float2)(out0.s##ci, out1.s##ci), 0, dst + idx);                            \
-        idx += m;                                                                           \
+#define COOPK_STORE_COL(ci)                                      \
+    if (idx < m*n_no_padding) {                                  \
+        vstore2((float2)(out0.s##ci, out1.s##ci), 0, dst + idx); \
+        idx += m;                                                \
     }
 #endif
 
