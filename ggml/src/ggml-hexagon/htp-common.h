@@ -128,6 +128,13 @@ void htp_precompute_get_rows_params(
     struct htp_get_rows_kernel_params * kparams
 );
 
+bool htp_precompute_glu_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * src0,
+    const struct ggml_tensor * dst,
+    struct htp_glu_kernel_params * kparams
+);
+
 void htp_precompute_matmul_params_impl(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * src0,

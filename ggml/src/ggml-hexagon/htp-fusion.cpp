@@ -580,16 +580,16 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     if (!ggml_is_contiguous_1(gate) || !ggml_is_contiguous_1(up) || !ggml_is_contiguous(dst)) return false;
     if (htp_inplace_overlap_unsafe(dst, gate) || htp_inplace_overlap_unsafe(dst, up)) return false;
 
-    const size_t row_size_aligned = hex_round_up(dst->ne[0] * ggml_type_size(dst->type), 128);
-    if (6 * row_size_aligned * htp_session_n_threads(sess) > htp_session_vtcm_size(sess)) return false;
+    struct htp_glu_kernel_params kparams;
+    if (!htp_precompute_glu_params(sess, gate, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
     prev.name   += "+MUL";
     prev.inputs  = { gate, up };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
-    memset(prev.params,        0, sizeof(prev.params));
-    memset(prev.kernel_params, 0, sizeof(prev.kernel_params));
+    memset(prev.params, 0, sizeof(prev.params));
+    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
     return true;
 }
 
@@ -665,10 +665,13 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     kparams.n_srcs = curr_n + 1;
     if (k0->kernel_type != HTP_BINARY_KERNEL_CHUNKED || k1->kernel_type != HTP_BINARY_KERNEL_CHUNKED) {
         if (kparams.kernel_type != HTP_BINARY_KERNEL_SAME_SHAPE) {
-            const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
+            const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
+            const size_t   dst_row_size        = dst->ne[0] * ggml_type_size(dst->type);
+            const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_row_size - 1) / dst_row_size));
+            const uint32_t max_threads         = (std::max)(1u, src0_nrows / min_rows_per_thread);
             memset(&kparams, 0, sizeof(kparams));
             kparams.kernel_type           = HTP_BINARY_KERNEL_SAME_SHAPE;
-            kparams.n_threads             = (std::min)(htp_session_n_threads(sess), src0_nrows);
+            kparams.n_threads             = (std::min)(htp_session_n_threads(sess), max_threads);
             kparams.n_srcs                = curr_n + 1;
             kparams.src0_row_size_aligned = k0->src0_row_size_aligned;
             kparams.src1_row_size_aligned = k0->src0_row_size_aligned;

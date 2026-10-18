@@ -22,6 +22,9 @@
 #include "htp/softmax-ops.h"
 #include "htp/argsort-ops.h"
 #include "htp/get-rows-ops.h"
+#include "htp/glu-ops.h"
+#include "htp/sum-rows-ops.h"
+#include "htp/repeat-ops.h"
 
 struct htp_opnode {
     ggml_tensor * node   { nullptr };
@@ -399,6 +402,9 @@ struct htp_opformat {
                 case HTP_GET_ROWS_KERNEL_FLAT:     ktype_str = "flat"; break;
             }
             snprintf(str, max_size, "%s%s vtcm %u", ktype_str, kparams->n_threads > 1 ? "-multi" : "", (unsigned int) kparams->vtcm_size);
+        } else if (htp_op_is_glu(node.opcode)) {
+            const auto * kparams = (const struct htp_glu_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "nth %d vtcm %u", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
         } else {
             snprintf(str, max_size, "----");
         }

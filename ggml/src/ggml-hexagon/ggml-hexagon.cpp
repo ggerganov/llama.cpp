@@ -75,6 +75,9 @@
 #include "htp/concat-ops.h"
 #include "htp/cpy-ops.h"
 #include "htp/im2col-ops.h"
+#include "htp/sum-rows-ops.h"
+#include "htp/glu-ops.h"
+#include "htp/repeat-ops.h"
 #include "htp_iface.h"
 #include "htp-drv.h"
 #include "htp-repack.h"
@@ -3413,12 +3416,14 @@ static bool ggml_hexagon_precompute_binary_params(
 
     if (!is_add_id && is_contig && (ggml_are_same_shape(src0, src1) || is_scalar_broadcast)) {
         const uint32_t total_elems = (uint32_t) ggml_nelements(src0);
-        const uint32_t n_threads = sess->n_threads;
+        const uint32_t max_threads = sess->n_threads;
         const uint32_t max_chunk_elems = 32768 / elem_size;
         const uint32_t min_chunk_elems = 256;
-        const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * n_threads) - 1) / (2 * n_threads), 32);
+        const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * max_threads) - 1) / (2 * max_threads), 32);
         const uint32_t chunk_size = (std::min)(max_chunk_elems, (std::max)(target_chunk_elems, min_chunk_elems));
         const uint32_t chunk_bytes = hex_round_up(chunk_size * elem_size, 128);
+        const uint32_t total_chunks = (total_elems + chunk_size - 1) / chunk_size;
+        const uint32_t n_threads = (total_chunks >= 2) ? (std::min)(max_threads, total_chunks) : 1;
 
         kparams->kernel_type           = HTP_BINARY_KERNEL_CHUNKED;
         kparams->n_threads             = n_threads;
@@ -3482,10 +3487,12 @@ static bool ggml_hexagon_precompute_binary_params(
         kparams->src1_strided = !ggml_is_contiguous(src1) ? 1 : 0;
     }
 
-    const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_row_size - 1) / dst_row_size));
+    const uint32_t max_threads         = (std::max)(1u, src0_nrows / min_rows_per_thread);
 
     kparams->kernel_type           = kernel_type;
-    kparams->n_threads             = (std::min)((uint32_t) sess->n_threads, src0_nrows);
+    kparams->n_threads             = (std::min)((uint32_t) sess->n_threads, max_threads);
     kparams->n_srcs                = 2;
     kparams->src0_row_size_aligned = src0_row_size_aligned;
     kparams->src1_row_size_aligned = src1_row_size_aligned;
@@ -3530,12 +3537,14 @@ static bool ggml_hexagon_precompute_binary_params(
     if (L.rows_per_buffer == 0 || L.total_bytes > sess->vtcm_size) {
         if (!is_add_id && is_contig && (ggml_are_same_shape(src0, src1) || is_scalar_broadcast)) {
             const uint32_t total_elems = (uint32_t) ggml_nelements(src0);
-            const uint32_t n_threads = sess->n_threads;
+            const uint32_t max_threads = sess->n_threads;
             const uint32_t max_chunk_elems = 32768 / elem_size;
             const uint32_t min_chunk_elems = 256;
-            const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * n_threads) - 1) / (2 * n_threads), 32);
+            const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * max_threads) - 1) / (2 * max_threads), 32);
             const uint32_t chunk_size = (std::min)(max_chunk_elems, (std::max)(target_chunk_elems, min_chunk_elems));
             const uint32_t chunk_bytes = hex_round_up(chunk_size * elem_size, 128);
+            const uint32_t total_chunks = (total_elems + chunk_size - 1) / chunk_size;
+            const uint32_t n_threads = (total_chunks >= 2) ? (std::min)(max_threads, total_chunks) : 1;
 
             kparams->kernel_type           = HTP_BINARY_KERNEL_CHUNKED;
             kparams->n_threads             = n_threads;
@@ -3574,15 +3583,17 @@ void htp_precompute_unary_params(
 ) {
     memset(kparams, 0, sizeof(*kparams));
 
-    const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
-    const uint32_t n_threads  = (std::min)((uint32_t)sess->n_threads, src0_nrows);
-
-    kparams->n_threads = n_threads;
-
     const size_t elem_size = ggml_type_size(src0->type);
 
     const size_t src0_data_row_size = src0->ne[0] * elem_size;
     const size_t dst_data_row_size  = dst->ne[0]  * ggml_type_size(dst->type);
+
+    const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_data_row_size - 1) / dst_data_row_size));
+    const uint32_t max_threads         = (std::max)(1u, src0_nrows / min_rows_per_thread);
+    const uint32_t n_threads           = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    kparams->n_threads = n_threads;
 
     const size_t src0_row_size_aligned = hex_round_up(src0_data_row_size, 128);
     const size_t dst_row_size_aligned  = hex_round_up(dst_data_row_size,  128);
@@ -3663,9 +3674,11 @@ void htp_precompute_get_rows_params(
         kparams->kernel_type = HTP_GET_ROWS_KERNEL_FLAT;
     }
 
-    const uint32_t total_tasks = nr;
+    const uint32_t total_tasks          = nr;
+    const uint32_t min_tasks_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst->nb[1] - 1) / dst->nb[1]));
+    const uint32_t max_threads          = (std::max)(1u, total_tasks / min_tasks_per_thread);
 
-    kparams->n_threads = (std::min)((uint32_t)sess->n_threads, total_tasks);
+    kparams->n_threads = (std::min)((uint32_t) sess->n_threads, max_threads);
 
     struct htp_get_rows_vtcm_layout vtcm_layout = {};
     while (kparams->n_threads > 0) {
@@ -3725,8 +3738,11 @@ static void ggml_hexagon_precompute_softmax_params(
     const struct ggml_tensor * src0 = op->src[0];
     const struct ggml_tensor * src1 = op->src[1];
 
-    const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
-    const uint32_t n_threads  = (std::min)((uint32_t) sess->n_threads, src0_nrows);
+    const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const size_t   dst_data_row_size   = op->ne[0] * ggml_type_size(op->type);
+    const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_data_row_size - 1) / dst_data_row_size));
+    const uint32_t max_threads         = (std::max)(1u, src0_nrows / min_rows_per_thread);
+    const uint32_t n_threads           = (std::min)((uint32_t) sess->n_threads, max_threads);
 
     float scale = 1.0f;
     float max_bias = 0.0f;
@@ -3819,6 +3835,108 @@ static void ggml_hexagon_precompute_rope_params(
         kparams->div_ne2_ne1 = init_fastdiv_values(dst->ne[2] * dst->ne[1]);
         kparams->div_ne1     = init_fastdiv_values(dst->ne[1]);
     }
+}
+
+static void ggml_hexagon_precompute_sum_rows_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_sum_rows_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const uint32_t ne00             = src0->ne[0];
+    const uint32_t src0_nrows       = src0->ne[1] * src0->ne[2] * src0->ne[3];
+
+    if (op->op == GGML_OP_SUM) {
+        const uint32_t total_elems = (uint32_t) ggml_nelements(src0);
+        const uint32_t n_threads   = (total_elems >= 1024) ? (std::min)((uint32_t) sess->n_threads, (uint32_t) HTP_MAX_NTHREADS) : 1;
+        const uint32_t raw_chunk   = (total_elems + n_threads - 1) / n_threads;
+
+        kparams->n_threads        = n_threads;
+        kparams->elems_per_thread = hex_round_up(raw_chunk, 32);
+    } else if (op->op == GGML_OP_ARGMAX && src0_nrows <= 1) {
+        const uint32_t n_threads  = (ne00 >= 1024) ? (std::min)((uint32_t) sess->n_threads, (uint32_t) HTP_MAX_NTHREADS) : 1;
+        const uint32_t raw_chunk  = (ne00 + n_threads - 1) / n_threads;
+
+        kparams->n_threads        = n_threads;
+        kparams->elems_per_thread = hex_round_up(raw_chunk, 32);
+    } else {
+        const uint32_t min_rpt     = (src0->nb[1] < 1024) ? 32 : 1;
+        const uint32_t max_threads = (std::max)(1u, src0_nrows / min_rpt);
+
+        kparams->n_threads = (std::min)((uint32_t) sess->n_threads, max_threads);
+    }
+}
+
+bool htp_precompute_glu_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * src0,
+    const struct ggml_tensor * dst,
+    struct htp_glu_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const size_t   elem_size           = ggml_type_size(dst->type);
+    const size_t   dst_row_size        = dst->ne[0] * elem_size;
+    const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_row_size - 1) / dst_row_size));
+    const uint32_t max_threads         = (std::max)(1u, src0_nrows / min_rows_per_thread);
+    const uint32_t n_threads           = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    const size_t row_size_aligned = hex_round_up(dst_row_size, 128);
+
+    struct htp_glu_vtcm_layout L;
+    htp_glu_vtcm_layout_build(&L, row_size_aligned, row_size_aligned, row_size_aligned, n_threads, sess->vtcm_size);
+    if (L.vtcm_row_per_thread < 2) {
+        return false;
+    }
+
+    kparams->n_threads                 = n_threads;
+    kparams->vtcm_row_per_thread       = L.vtcm_row_per_thread;
+    kparams->block                     = (uint32_t) ((L.src0_bytes_per_thread / 2) / row_size_aligned);
+    kparams->vtcm_src0_size_per_thread = (uint32_t) L.src0_bytes_per_thread;
+    kparams->vtcm_src1_size_per_thread = (uint32_t) L.src1_bytes_per_thread;
+    kparams->vtcm_dst_size_per_thread  = (uint32_t) L.dst_bytes_per_thread;
+    kparams->off_src0                  = (uint32_t) L.off_src0;
+    kparams->off_src1                  = (uint32_t) L.off_src1;
+    kparams->off_dst                   = (uint32_t) L.off_dst;
+    kparams->vtcm_size                 = (uint32_t) L.total_bytes;
+    kparams->src0_row_size_aligned     = (uint32_t) row_size_aligned;
+    kparams->src1_row_size_aligned     = (uint32_t) row_size_aligned;
+    kparams->dst_row_size_aligned      = (uint32_t) row_size_aligned;
+
+    return true;
+}
+
+static void ggml_hexagon_precompute_repeat_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_repeat_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t total_dst_rows      = dst->ne[1] * dst->ne[2] * dst->ne[3];
+    const size_t   dst_row_size        = dst->ne[0] * ggml_type_size(dst->type);
+    const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_row_size - 1) / dst_row_size));
+    const uint32_t max_threads         = (std::max)(1u, total_dst_rows / min_rows_per_thread);
+    const uint32_t n_threads           = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    kparams->n_threads = n_threads;
+    kparams->nr0       = dst->ne[0] / src0->ne[0];
+    kparams->nr1       = dst->ne[1] / src0->ne[1];
+    kparams->nr2       = dst->ne[2] / src0->ne[2];
+    kparams->nr3       = dst->ne[3] / src0->ne[3];
+
+    kparams->div_ne1  = init_fastdiv_values(dst->ne[1]);
+    kparams->div_ne2  = init_fastdiv_values(dst->ne[2]);
+    kparams->div_ne12 = init_fastdiv_values(dst->ne[1] * dst->ne[2]);
+    kparams->div_ne01 = init_fastdiv_values(src0->ne[1]);
+    kparams->div_ne02 = init_fastdiv_values(src0->ne[2]);
+    kparams->div_ne03 = init_fastdiv_values(src0->ne[3]);
 }
 
 static void ggml_hexagon_precompute_ssm_conv_params(
@@ -4817,7 +4935,7 @@ static bool ggml_hexagon_supported_pool_1d(const struct ggml_hexagon_session * s
     return htp_pool_solve_layout(&layout, (uint32_t) src0->ne[0], 1, (uint32_t) op->ne[0], 1, n_threads, sess->vtcm_size);
 }
 
-static bool ggml_hexagon_supported_activations(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
+static bool ggml_hexagon_supported_glu(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
     const struct ggml_tensor * src0 = op->src[0];
     const struct ggml_tensor * src1 = op->src[1];
     const struct ggml_tensor * dst  = op;
@@ -4848,9 +4966,8 @@ static bool ggml_hexagon_supported_activations(const struct ggml_hexagon_session
         }
     }
 
-    return true;
-
-    GGML_UNUSED(sess);
+    struct htp_glu_kernel_params kparams;
+    return htp_precompute_glu_params(sess, src0, dst, &kparams);
 }
 
 static bool ggml_hexagon_supported_softmax(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
@@ -5937,6 +6054,22 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                     node.node,
                     (struct htp_im2col_kernel_params *) node.kernel_params
                 );
+            } else if (node.opcode == HTP_OP_SUM_ROWS || node.opcode == HTP_OP_SUM || node.opcode == HTP_OP_ARGMAX) {
+                ggml_hexagon_precompute_sum_rows_params(sess,
+                    node.node,
+                    (struct htp_sum_rows_kernel_params *) node.kernel_params
+                );
+            } else if (htp_op_is_glu(node.opcode)) {
+                GGML_ASSERT(htp_precompute_glu_params(sess,
+                    node.node->src[0],
+                    node.dst(),
+                    (struct htp_glu_kernel_params *) node.kernel_params
+                ));
+            } else if (node.opcode == HTP_OP_REPEAT) {
+                ggml_hexagon_precompute_repeat_params(sess,
+                    node.node,
+                    (struct htp_repeat_kernel_params *) node.kernel_params
+                );
             }
             computed_nodes.push_back(std::move(node));
         }
@@ -6747,11 +6880,11 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
                 case GGML_GLU_OP_SWIGLU_OAI:
                 case GGML_GLU_OP_SWIGLU_CLAMP:
                 case GGML_GLU_OP_GEGLU:
-                    supp = ggml_hexagon_supported_activations(sess, op);
+                    supp = ggml_hexagon_supported_glu(sess, op);
                     break;
                 case GGML_GLU_OP_GEGLU_QUICK:
                 case GGML_GLU_OP_GEGLU_ERF:
-                    supp = (op->src[0]->type == GGML_TYPE_F32) && ggml_hexagon_supported_activations(sess, op);
+                    supp = (op->src[0]->type == GGML_TYPE_F32) && ggml_hexagon_supported_glu(sess, op);
                     break;
                 default:
                     supp = false;

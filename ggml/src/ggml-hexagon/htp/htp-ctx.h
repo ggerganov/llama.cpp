@@ -148,7 +148,7 @@ int op_unary(struct htp_ops_context * octx);
 int op_sum(struct htp_ops_context * octx);
 int op_sum_rows(struct htp_ops_context * octx);
 int op_argmax(struct htp_ops_context * octx);
-int op_activations(struct htp_ops_context * octx);
+int op_glu(struct htp_ops_context * octx);
 int op_softmax(struct htp_ops_context * octx);
 int op_add_id(struct htp_ops_context * octx);
 int op_rope(struct htp_ops_context * octx);
