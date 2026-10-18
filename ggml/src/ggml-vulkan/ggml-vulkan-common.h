@@ -236,6 +236,12 @@ void ggml_backend_vk_free(ggml_backend_t backend);
 ggml_backend_reg_t ggml_backend_vk_reg();
 
 // debug
+void ggml_vk_count_fusion(const vk_device & device, const char * label);
+void * ggml_backend_vk_fusion_get(ggml_backend_dev_t dev);
+void ggml_backend_vk_fusion_stats_init(void * finfo);
+void ggml_backend_vk_fusion_stats_reset(void * finfo);
+int ggml_backend_vk_fusion_stats_get(void * finfo, const char ** labels, uint64_t * counts, int n);
+void ggml_backend_vk_fusion_set_enabled(void * finfo, bool enabled);
 int64_t ggml_vk_get_op_batch_size(const ggml_tensor * op);
 #ifdef GGML_VULKAN_RUN_TESTS
 template <typename X_TYPE, typename Y_TYPE>
