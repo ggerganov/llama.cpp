@@ -1,6 +1,7 @@
 #include "llama-graph.h"
 
 #include "llama-impl.h"
+#include "llama-lazy-reader.h"
 #include "llama-model.h"
 #include "llama-moe-cache.h"
 #include "llama-batch.h"
@@ -1412,6 +1413,10 @@ void llm_graph_result::reset() {
     fused_nodes.clear();
     hdmd_inputs.clear();
 
+    lazy_reader = nullptr;
+    lazy_gathers.clear();
+    lazy_idx_bufs.clear();
+
     buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
 
     ggml_init_params params = {
@@ -1425,9 +1430,161 @@ void llm_graph_result::reset() {
     gf = ggml_new_graph_custom(ctx_compute.get(), max_nodes, false);
 }
 
+void llm_graph_result::rewrite_lazy_nodes(const llama_lazy_reader * reader) {
+    lazy_reader = reader;
+    if (!reader || !gf) {
+        return;
+    }
+
+    bool modified = false;
+    std::map<std::pair<const ggml_tensor *, ggml_tensor *>, size_t> seen_get_rows;
+
+    const int n_nodes = ggml_graph_n_nodes(gf);
+    for (int i = 0; i < n_nodes; ++i) {
+        ggml_tensor * node = ggml_graph_node(gf, i);
+        if (!node || !node->src[0]) {
+            continue;
+        }
+
+        if (node->op == GGML_OP_GET_ROWS && reader->has(node->src[0])) {
+            const ggml_tensor * table = node->src[0];
+            ggml_tensor * orig_idx = node->src[1];
+            GGML_ASSERT(orig_idx != nullptr && orig_idx->type == GGML_TYPE_I32);
+
+            const auto key = std::make_pair(table, orig_idx);
+            auto it = seen_get_rows.find(key);
+            if (it == seen_get_rows.end()) {
+                const int64_t n_rows = orig_idx->ne[0];
+
+                ggml_tensor * t_staged = ggml_new_tensor_2d(ctx_compute.get(), table->type, table->ne[0], n_rows);
+                ggml_set_input(t_staged);
+
+                ggml_tensor * t_identity = ggml_new_tensor_1d(ctx_compute.get(), GGML_TYPE_I32, n_rows);
+                ggml_set_input(t_identity);
+
+                lazy_gather_binding binding;
+                binding.table      = table;
+                binding.orig_idx   = orig_idx;
+                binding.t_staged   = t_staged;
+                binding.t_identity = t_identity;
+                binding.n_rows     = n_rows;
+                binding.identity.resize(n_rows);
+                for (int64_t r = 0; r < n_rows; ++r) {
+                    binding.identity[r] = (int32_t) r;
+                }
+
+                const size_t idx = lazy_gathers.size();
+                lazy_gathers.push_back(std::move(binding));
+                it = seen_get_rows.emplace(key, idx).first;
+            }
+
+            const auto & binding = lazy_gathers[it->second];
+            node->src[0] = binding.t_staged;
+            node->src[1] = binding.t_identity;
+            modified = true;
+        } else if (node->op == GGML_OP_VIEW && reader->has(node->src[0])) {
+            const ggml_tensor * table = node->src[0];
+            size_t byte_offs = 0;
+            memcpy(&byte_offs, node->op_params, sizeof(size_t));
+            const int32_t row_idx = (int32_t) (byte_offs / table->nb[1]);
+
+            ggml_tensor * t_staged = ggml_new_tensor_1d(ctx_compute.get(), table->type, table->ne[0]);
+            ggml_set_input(t_staged);
+
+            lazy_gather_binding binding;
+            binding.table      = table;
+            binding.orig_idx   = nullptr;
+            binding.t_staged   = t_staged;
+            binding.t_identity = nullptr;
+            binding.n_rows     = 1;
+            binding.static_row = row_idx;
+            lazy_gathers.push_back(std::move(binding));
+
+            node->src[0]   = t_staged;
+            node->view_src = t_staged;
+            memset(node->op_params, 0, sizeof(size_t));
+            modified = true;
+        }
+    }
+
+    if (!modified) {
+        return;
+    }
+
+    // Rebuild graph topology so unreferenced lazy tables are removed from leafs
+    // and newly created staged input tensors are registered as leafs
+    ggml_tensor ** nodes_ptr = ggml_graph_nodes(gf);
+    std::vector<ggml_tensor *> old_nodes(nodes_ptr, nodes_ptr + n_nodes);
+    ggml_graph_clear(gf);
+    for (ggml_tensor * n : old_nodes) {
+        if (n->flags & GGML_TENSOR_FLAG_COMPUTE) {
+            ggml_build_forward_expand(gf, n);
+        } else {
+            ggml_build_forward_order(gf, n);
+        }
+    }
+
+    // Ensure any orig_idx tensor that is no longer referenced in gf has a host buffer
+    // so the model's set_input() can write row indices into it via ggml_backend_tensor_set
+    const int new_n_nodes = ggml_graph_n_nodes(gf);
+    for (auto & binding : lazy_gathers) {
+        if (!binding.orig_idx) {
+            continue;
+        }
+        bool in_gf = false;
+        for (int i = 0; i < new_n_nodes && !in_gf; ++i) {
+            ggml_tensor * node = ggml_graph_node(gf, i);
+            if (node == binding.orig_idx) {
+                in_gf = true;
+                break;
+            }
+            for (int j = 0; j < GGML_MAX_SRC; ++j) {
+                if (node->src[j] == binding.orig_idx) {
+                    in_gf = true;
+                    break;
+                }
+            }
+        }
+        if (!in_gf && binding.orig_idx->buffer == nullptr) {
+            ggml_backend_buffer_t buf = ggml_backend_buft_alloc_buffer(
+                    ggml_backend_cpu_buffer_type(), ggml_nbytes(binding.orig_idx));
+            GGML_ASSERT(buf != nullptr);
+            ggml_backend_tensor_alloc(buf, binding.orig_idx, ggml_backend_buffer_get_base(buf));
+            lazy_idx_bufs.emplace_back(buf);
+        }
+    }
+}
+
 void llm_graph_result::set_inputs(const llama_ubatch * ubatch) {
     for (auto & input : inputs) {
         input->set_input(ubatch);
+    }
+
+    if (!lazy_reader || lazy_gathers.empty()) {
+        return;
+    }
+
+    for (auto & binding : lazy_gathers) {
+        const size_t rsize = ggml_row_size(binding.table->type, binding.table->ne[0]);
+        binding.staging.resize((size_t) binding.n_rows * rsize);
+
+        if (binding.orig_idx != nullptr) {
+            const int32_t * idx_ptr = nullptr;
+            if (binding.orig_idx->buffer && ggml_backend_buffer_is_host(binding.orig_idx->buffer)) {
+                idx_ptr = (const int32_t *) binding.orig_idx->data;
+            } else {
+                binding.host_idx.resize(binding.n_rows);
+                ggml_backend_tensor_get(binding.orig_idx, binding.host_idx.data(), 0, binding.n_rows * sizeof(int32_t));
+                idx_ptr = binding.host_idx.data();
+            }
+
+            lazy_reader->gather(binding.table, idx_ptr, binding.n_rows, binding.staging.data());
+            ggml_backend_tensor_set(binding.t_staged, binding.staging.data(), 0, binding.staging.size());
+            ggml_backend_tensor_set(binding.t_identity, binding.identity.data(), 0, binding.n_rows * sizeof(int32_t));
+        } else {
+            lazy_reader->gather(binding.table, &binding.static_row, 1, binding.staging.data());
+            ggml_backend_tensor_set(binding.t_staged, binding.staging.data(), 0, binding.staging.size());
+        }
     }
 }
 

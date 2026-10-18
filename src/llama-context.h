@@ -8,6 +8,7 @@
 #include "llama-impl.h"
 #include "llama-memory.h"
 #include "llama-moe-cache.h"
+#include "llama-lazy-reader.h"
 
 #include "ggml-cpp.h"
 #include "ggml-opt.h"
@@ -298,6 +299,7 @@ private:
     //
 
     const llama_model & model;
+    std::unique_ptr<llama_lazy_reader> lazy_reader;
 
     llama_cparams cparams;
 

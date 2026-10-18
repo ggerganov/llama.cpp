@@ -4,6 +4,7 @@
 #include "llama-ext.h"
 #include "llama-hparams.h"
 #include "llama-impl.h"
+#include "llama-lazy-reader.h"
 #include "llama-mmap.h"
 #include "llama-cparams.h"
 #include "llama-model-loader.h"
@@ -1265,6 +1266,7 @@ struct llama_model::impl {
 
     // contexts where the model tensors metadata is stored as well as the corresponding buffers:
     std::vector<std::pair<ggml_context_ptr, std::vector<ggml_backend_buffer_ptr>>> ctxs_bufs;
+    std::set<const ggml_context *> lazy_ctxs;
 
     buft_list_t cpu_buft_list;
     std::map<ggml_backend_dev_t, buft_list_t> gpu_buft_list;
@@ -1865,7 +1867,30 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
 
     ml.done_getting_tensors();
 
-    if (per_layer_tok_embd && ml.lazy.has(per_layer_tok_embd)) {
+    const bool is_direct_lazy = ml.lazy.mode == LLAMA_LAZY_MODE_DIRECT;
+
+    if (is_direct_lazy) {
+        if (ml.lazy.any()) {
+            lazy_reader_factory = std::make_unique<llama_lazy_reader_factory>();
+
+            for (auto & [ctx_key, ctx_ptr] : ml.ctx_map) {
+                if (!ctx_key.lazy) {
+                    continue;
+                }
+                for (auto * cur = ggml_get_first_tensor(ctx_ptr.get()); cur != nullptr; cur = ggml_get_next_tensor(ctx_ptr.get(), cur)) {
+                    if (ml.no_alloc || ml.files.empty()) {
+                        lazy_reader_factory->add_virtual(cur);
+                    } else {
+                        const auto * weight = ml.get_weight(ggml_get_name(cur));
+                        GGML_ASSERT(weight != nullptr);
+                        LLAMA_LOG_INFO("%s: enabling direct lazy read for '%s' (%.2f GiB, unmapped from RAM)\n",
+                                __func__, ggml_get_name(cur), (double) ggml_nbytes(cur) / (1024.0 * 1024.0 * 1024.0));
+                        lazy_reader_factory->add(cur, *ml.files.at(weight->idx), weight->offs);
+                    }
+                }
+            }
+        }
+    } else if (per_layer_tok_embd && ml.lazy.has(per_layer_tok_embd)) {
         LLAMA_LOG_INFO("%s: enabling prefetch for '%s'\n", __func__, per_layer_tok_embd->name);
 
         can_prefetch.insert(per_layer_tok_embd);
@@ -1924,10 +1949,14 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
 
         std::vector<ggml_backend_buffer_ptr> bufs;
 
-        // a lazy context is mapped whatever the load mode, but the memory-fit pass maps nothing
-        const bool is_lazy_mapped = ctx_key.lazy && !ml.no_alloc;
+        if (is_direct_lazy && ctx_key.lazy) {
+            pimpl->lazy_ctxs.insert(ctx);
+        }
 
-        if ((ml.use_mmap || is_lazy_mapped) && use_mmap_buffer && buffer_from_host_ptr_supported && is_default_buft) {
+        // a lazy context (in ON/AUTO mode) is mapped whatever the load mode, but the memory-fit pass maps nothing
+        const bool is_lazy_mapped = !is_direct_lazy && ctx_key.lazy && !ml.no_alloc;
+
+        if (((ml.use_mmap && !(is_direct_lazy && ctx_key.lazy)) || is_lazy_mapped) && use_mmap_buffer && buffer_from_host_ptr_supported && is_default_buft) {
             GGML_ASSERT(!ml.no_alloc);
             const size_t max_size = ggml_get_max_tensor_size(ctx);
 
@@ -1950,7 +1979,7 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             }
         } else {
             ggml_backend_buffer_t buf;
-            if (ml.no_alloc) {
+            if (ml.no_alloc || (is_direct_lazy && ctx_key.lazy)) {
                 buf = ggml_backend_buft_alloc_buffer(buft, /*size =*/ 0); // dummy buffer
                 for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
                     t->buffer = buf; // set dummy buffer for weights so that the backend scheduler won't try to allocate them
@@ -2428,6 +2457,9 @@ std::map<ggml_backend_buffer_type_t, size_t> llama_model::memory_breakdown() con
     std::map<ggml_backend_buffer_type_t, size_t> ret;
     for (const auto & [ctx, bufs] : pimpl->ctxs_bufs) {
         if (hparams.no_alloc) {
+            if (pimpl->lazy_ctxs.count(ctx.get())) {
+                continue;
+            }
             GGML_ASSERT(bufs.size() == 1);
             ggml_backend_buffer_t buf = bufs[0].get();
             GGML_ASSERT(ggml_backend_buffer_get_base(buf) == nullptr);
@@ -3333,6 +3365,8 @@ ggml_cgraph * llama_model::build_graph(const llm_graph_params & params) const {
     // dense linear projections are applied after pooling
     // TODO: move reranking logic here and generalize
     llm->build_dense_out(dense_2_out_layers, dense_2_out_layers_b, dense_3_out_layers);
+
+    llm->res->rewrite_lazy_nodes(params.lazy_reader);
 
     llm->res->set_outputs(params);
 

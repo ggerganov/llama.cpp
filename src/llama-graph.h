@@ -799,6 +799,7 @@ struct llm_graph_params {
 
     ggml_backend_sched_t sched;
     ggml_backend_t backend_cpu;
+    const struct llama_lazy_reader * lazy_reader = nullptr;
 
     const llama_adapter_cvec     * cvec;
     const llama_adapter_loras    * loras;
@@ -939,6 +940,10 @@ public:
     void set_inputs(const llama_ubatch * ubatch);
     void set_outputs(const llm_graph_params & params);
 
+    // automatically rewrite any GGML_OP_GET_ROWS / GGML_OP_VIEW node referencing a lazy table
+    // into a compact staged input tensor gathered on demand via pread
+    void rewrite_lazy_nodes(const struct llama_lazy_reader * reader);
+
     // try to update the existing graph result using the new graph parameters in order to reuse it
     // this can only be done if we determine that the resulting graph using the new graph parameters
     //   would be identical to the existing graph. in that case, we simply have to update the memory
@@ -988,6 +993,22 @@ public:
     int64_t max_nodes;
 
 private:
+    struct lazy_gather_binding {
+        const ggml_tensor * table      = nullptr;
+        ggml_tensor       * orig_idx   = nullptr; // I32 [n_rows] populated by model's set_input (nullptr for static view)
+        ggml_tensor       * t_staged   = nullptr; // [ne0, n_rows] in table->type
+        ggml_tensor       * t_identity = nullptr; // I32 [0 .. n_rows-1]
+        int64_t             n_rows     = 0;
+        int32_t             static_row = 0;
+        std::vector<uint8_t> staging;
+        std::vector<int32_t> identity;
+        std::vector<int32_t> host_idx;
+    };
+
+    const struct llama_lazy_reader * lazy_reader = nullptr;
+    std::vector<lazy_gather_binding> lazy_gathers;
+    std::vector<ggml_backend_buffer_ptr> lazy_idx_bufs;
+
     // keep a copy of the previous graph parameters
     // we will use this to determine whether the graph can be reused by comparing them with the new parameters
     // note: these are updated after constructing the new graph

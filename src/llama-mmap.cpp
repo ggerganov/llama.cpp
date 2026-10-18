@@ -84,7 +84,7 @@ struct llama_file::impl {
         return ret;
     }
 
-    impl(const char * fname, const char * mode, [[maybe_unused]] const bool use_direct_io = false) {
+    impl(const char * fname, const char * mode, [[maybe_unused]] const bool use_direct_io = false) : fname(fname) {
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -95,7 +95,7 @@ struct llama_file::impl {
         seek(0, SEEK_SET);
     }
 
-    impl(FILE * file) : owns_fp(false) {
+    impl(FILE * file) : fname("(file*)"), owns_fp(false) {
         fp = file;
         fp_win32 = (HANDLE) _get_osfhandle(_fileno(fp));
         seek(0, SEEK_END);
@@ -143,6 +143,30 @@ struct llama_file::impl {
             bytes_read += chunk_read;
         }
     }
+
+    void read_at(size_t offset, void * ptr, size_t len) const {
+        size_t bytes_read = 0;
+        while (bytes_read < len) {
+            const DWORD chunk_size = (DWORD) std::min<size_t>(len - bytes_read, 64*1024*1024);
+            const uint64_t off = (uint64_t) offset + bytes_read;
+
+            OVERLAPPED ov = {};
+            ov.Offset     = (DWORD) (off & 0xFFFFFFFFull);
+            ov.OffsetHigh = (DWORD) (off >> 32);
+
+            DWORD chunk_read = 0;
+            if (!ReadFile(fp_win32, reinterpret_cast<char *>(ptr) + bytes_read, chunk_size, &chunk_read, &ov)) {
+                throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
+            }
+            if (chunk_read == 0) {
+                throw std::runtime_error("unexpectedly reached end of file");
+            }
+
+            bytes_read += chunk_read;
+        }
+    }
+
+    void advise_random([[maybe_unused]] size_t offset, [[maybe_unused]] size_t len) const {}
 
     uint32_t read_u32() {
         uint32_t val;
@@ -368,6 +392,33 @@ struct llama_file::impl {
         return ret;
     }
 
+    void read_at(size_t offset, void * ptr, size_t len) const {
+        GGML_ASSERT(!has_direct_io()); // a single row read meets none of O_DIRECT's alignment rules
+
+        const int rfd = fd != -1 ? fd : fileno(fp);
+
+        size_t bytes_read = 0;
+        while (bytes_read < len) {
+            const ssize_t ret = ::pread(rfd, reinterpret_cast<char *>(ptr) + bytes_read,
+                                        len - bytes_read, (off_t) (offset + bytes_read));
+            if (ret < 0 && errno == EINTR) {
+                continue;
+            }
+            if (ret <= 0) {
+                throw std::runtime_error(format("read error at offset %zu: %s", offset + bytes_read,
+                        ret == 0 ? "unexpectedly reached end of file" : strerror(errno)));
+            }
+            bytes_read += (size_t) ret;
+        }
+    }
+
+    void advise_random([[maybe_unused]] size_t offset, [[maybe_unused]] size_t len) const {
+#if defined(__linux__)
+        const int rfd = fd != -1 ? fd : fileno(fp);
+        (void) ::posix_fadvise(rfd, (off_t) offset, (off_t) len, POSIX_FADV_RANDOM);
+#endif
+    }
+
     void write_raw(const void * ptr, size_t len) const {
         if (len == 0) {
             return;
@@ -395,8 +446,9 @@ struct llama_file::impl {
         }
     }
     int fd = -1;
-    std::string fname;
 #endif
+
+    std::string fname;
 
     size_t read_alignment() const {
         return alignment;
@@ -422,6 +474,11 @@ size_t llama_file::size() const { return pimpl->size; }
 size_t llama_file::read_alignment() const { return pimpl->read_alignment(); }
 bool llama_file::has_direct_io() const { return pimpl->has_direct_io(); }
 
+const std::string & llama_file::name() const { return pimpl->fname; }
+
+void llama_file::read_at(size_t offset, void * dst, size_t len) const { pimpl->read_at(offset, dst, len); }
+void llama_file::advise_random(size_t offset, size_t len) const { pimpl->advise_random(offset, len); }
+
 int llama_file::file_id() const {
 #ifdef _WIN32
     return _fileno(pimpl->fp);
@@ -434,6 +491,24 @@ int llama_file::file_id() const {
 #else
     return ::fileno(pimpl->fp);
 #endif
+#endif
+}
+
+bool llama_file::same_file(const llama_file & other) const {
+#ifdef _WIN32
+    BY_HANDLE_FILE_INFORMATION a, b;
+    if (!GetFileInformationByHandle(pimpl->fp_win32, &a) || !GetFileInformationByHandle(other.pimpl->fp_win32, &b)) {
+        throw std::runtime_error("failed to identify model file");
+    }
+    return a.dwVolumeSerialNumber == b.dwVolumeSerialNumber &&
+           a.nFileIndexHigh == b.nFileIndexHigh && a.nFileIndexLow == b.nFileIndexLow &&
+           a.nFileSizeHigh == b.nFileSizeHigh && a.nFileSizeLow == b.nFileSizeLow;
+#else
+    struct stat a, b;
+    if (fstat(file_id(), &a) != 0 || fstat(other.file_id(), &b) != 0) {
+        throw std::runtime_error(format("failed to identify model file: %s", strerror(errno)));
+    }
+    return a.st_dev == b.st_dev && a.st_ino == b.st_ino && a.st_size == b.st_size;
 #endif
 }
 

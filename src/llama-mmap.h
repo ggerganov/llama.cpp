@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 #include <cstdio>
@@ -26,6 +27,15 @@ struct llama_file {
     size_t size() const;
 
     int file_id() const; // fileno overload
+    bool same_file(const llama_file & other) const;
+
+    const std::string & name() const; // path this file was opened from
+
+    // positional read, bypassing stdio buffering
+    void read_at(size_t offset, void * dst, size_t len) const;
+
+    // hint random access on [offset, offset + len) to disable kernel readahead caching
+    void advise_random(size_t offset, size_t len) const;
 
     void seek(size_t offset, int whence) const;
 

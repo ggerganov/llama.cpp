@@ -1091,24 +1091,27 @@ bool llama_model_loader::lazy_read::add(const std::string & name, const ggml_ten
         return false;
     }
 
-    // do not lazy-read small tensors, it has significant overhead and is not worth it
+    // don't force mmap (and thus force the rest of the model to use the CPU buffer) for a small tensor
     constexpr size_t auto_min_size = 4ull * 1024 * 1024 * 1024;
-    if (mode != LLAMA_LAZY_MODE_ON && ggml_nbytes(t) <= auto_min_size) {
+    if (mode == LLAMA_LAZY_MODE_AUTO && ggml_nbytes(t) <= auto_min_size) {
         return false;
     }
 
-    if (!llama_mmap::SUPPORTED) {
-        LLAMA_LOG_WARN("%s: mmap is not available, so tensor %s (size = %zu MiB) is loaded into RAM in full\n",
-                __func__, name.c_str(), ggml_nbytes(t)/1024/1024);
-        return false;
+    if (mode == LLAMA_LAZY_MODE_DIRECT) {
+        if (!ggml_is_matrix(t) || (t->type != GGML_TYPE_F32 && ggml_get_type_traits(t->type)->to_float == nullptr)) {
+            LLAMA_LOG_WARN("%s: tensor %s cannot be read row by row, loading it in full\n", __func__, name.c_str());
+            return false;
+        }
     }
+
+    tensors.insert(name);
 
     if (w) {
         ranges[w->idx].emplace_back(w->offs, w->offs + ggml_nbytes(t));
-        tensors.insert(name);
 
-        LLAMA_LOG_INFO("%s: tensor %s (size = %zu MiB) lazy read enabled\n",
-                __func__, name.c_str(), ggml_nbytes(t)/1024/1024);
+        LLAMA_LOG_INFO("%s: tensor %s (size = %zu MiB) %s enabled\n",
+                __func__, name.c_str(), ggml_nbytes(t)/1024/1024,
+                mode == LLAMA_LAZY_MODE_DIRECT ? "direct lazy read" : "lazy read");
     }
 
     return true;
@@ -1117,8 +1120,32 @@ bool llama_model_loader::lazy_read::add(const std::string & name, const ggml_ten
 struct ggml_tensor * llama_model_loader::create_tensor(
         const llama_hparams & hparams, const buft_list_t * buft_list_cpu, const buft_list_t * buft_list_input, const buft_list_t * buft_list_output,
         const buft_list_t * buft_list_layer, const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne, int flags) {
+    // automatically enable lazy row reads for ALL PLE models (current and future) when using direct mode
+    if (tn.tensor == LLM_TENSOR_PER_LAYER_TOKEN_EMBD && lazy.mode == LLAMA_LAZY_MODE_DIRECT) {
+        flags |= TENSOR_READ_LAZY;
+    }
+
     // set below, before buft_for_tensor() runs
     bool is_lazy = false;
+
+    auto resolve_lazy = [&](const ggml_tensor * t_meta) {
+        if (flags & TENSOR_READ_LAZY) {
+            bool overridden = false;
+            if (tensor_buft_overrides) {
+                const std::string tensor_name = tn.str();
+                for (const auto * overrides = tensor_buft_overrides; overrides->pattern != nullptr; ++overrides) {
+                    if (std::regex_search(tensor_name, std::regex(overrides->pattern))) {
+                        overridden = true;
+                        break;
+                    }
+                }
+            }
+            if (!overridden) {
+                // the decision must not depend on the load mode, or the memory-fit pass (no_alloc, no mmap)
+                is_lazy = lazy.add(tn.str(), t_meta, (no_alloc || files.empty()) ? nullptr : &require_weight(tn.str().c_str()));
+            }
+        }
+    };
 
     auto ctx_for_buft = [&](ggml_backend_buffer_type_t buft) -> ggml_context * {
         const ctx_key key { buft, is_lazy };
@@ -1326,6 +1353,8 @@ struct ggml_tensor * llama_model_loader::create_tensor(
         }
         ggml_set_name(&t_meta, tn.str().c_str());
 
+        resolve_lazy(&t_meta);
+
         ggml_backend_buffer_type_t buft = buft_for_tensor(&t_meta);
         GGML_ASSERT(buft != nullptr);
         ggml_context * ctx = ctx_for_buft(buft);
@@ -1338,11 +1367,6 @@ struct ggml_tensor * llama_model_loader::create_tensor(
     const struct ggml_tensor * cur = check_tensor_dims(tn.str(), ne, !(flags & TENSOR_NOT_REQUIRED), flags & TENSOR_ALLOW_RESHAPE);
     if (cur == NULL) {
         return NULL;
-    }
-
-    if (flags & TENSOR_READ_LAZY) {
-        // the decision must not depend on the load mode, or the memory-fit pass (no_alloc, no mmap)
-        is_lazy = lazy.add(tn.str(), cur, no_alloc ? nullptr : &require_weight(tn.str().c_str()));
     }
 
     ggml_tensor t_meta = *cur;
@@ -1360,6 +1384,8 @@ struct ggml_tensor * llama_model_loader::create_tensor(
     }
 
     GGML_ASSERT(ggml_nbytes(&t_meta) == ggml_nbytes(cur));
+
+    resolve_lazy(&t_meta);
 
     ggml_backend_buffer_type_t buft = buft_for_tensor(&t_meta);
     if (buft == nullptr) {
@@ -1409,8 +1435,9 @@ void llama_model_loader::done_getting_tensors(bool partial) const {
 }
 
 void llama_model_loader::init_mappings(bool prefetch, llama_mlocks * mlock_mmaps) {
-    // note: read_lazy also requires mmap; this condition make sure it's usable even when --load-mode is not set to mmap
-    if (use_mmap || lazy.any()) {
+    // note: read_lazy (ON/AUTO) requires mmap; DIRECT uses pread and unmaps lazy ranges if mmap is active
+    const bool is_direct = lazy.mode == LLAMA_LAZY_MODE_DIRECT;
+    if (use_mmap || (lazy.any() && !is_direct)) {
         mappings.reserve(files.size());
         mmaps_used.reserve(files.size());
         for (uint32_t idx = 0; idx < files.size(); idx++) {
@@ -1696,6 +1723,11 @@ bool llama_model_loader::load_all_data(
 
         size_t n_size = ggml_nbytes(cur);
 
+        if (lazy.mode == LLAMA_LAZY_MODE_DIRECT && lazy.has(cur)) {
+            size_done += n_size;
+            continue;
+        }
+
         const bool from_mapping = use_mmap || lazy.has(cur);
 
         if (from_mapping) {
@@ -1848,6 +1880,15 @@ bool llama_model_loader::load_all_data(
                 mapping->unmap_fragment(0, mmap_used.first);
                 if (mmap_used.second != 0) {
                     mapping->unmap_fragment(mmap_used.second, mapping->size());
+                    if (lazy.mode == LLAMA_LAZY_MODE_DIRECT) {
+                        for (const auto & r : lazy.for_file(idx)) {
+                            const size_t beg = std::max(r.first,  mmap_used.first);
+                            const size_t end = std::min(r.second, mmap_used.second);
+                            if (beg < end) {
+                                mapping->unmap_fragment(beg, end);
+                            }
+                        }
+                    }
                 }
             }
         }
