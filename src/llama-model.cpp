@@ -322,6 +322,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_minimax_m3(params);
         case LLM_ARCH_HRM_TEXT:
             return new llama_model_hrm_text(params);
+        case LLM_ARCH_BEAM:
+            return new llama_model_beam(params);
         case LLM_ARCH_COGVLM:
             return new llama_model_cogvlm(params);
         case LLM_ARCH_PANGU_EMBED:
@@ -358,6 +360,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_spark2_5(params);
         case LLM_ARCH_K2_HORIZON:
             return new llama_model_k2_horizon(params);
+        case LLM_ARCH_KOLIBRI1:
+            return new llama_model_kolibri1(params);
         default:
             throw std::runtime_error(std::string("unsupported model architecture: '") + llm_arch_name(arch) + "'");
     }
@@ -405,6 +409,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
     static const std::regex pattern_idx_cache       ("cache_idx_(k|v)_l\\d*");
     static const std::regex pattern_dsv4_state      ("dsv4_(csa|hca|lid)_state_(kv|score)_l\\d*");
     static const std::regex pattern_attn_sinks      ("blk\\.\\d*\\.attn_sinks.weight");
+    static const std::regex pattern_attn_gate_bias  ("blk\\.\\d*\\.attn_gate\\.bias");
     static const std::regex pattern_attn_out_weight ("blk\\.\\d*\\.attn_output.weight");
     static const std::regex pattern_attn_out_bias   ("blk\\.\\d*\\.attn_output.bias");
     static const std::regex pattern_attn_out_a_weight("blk\\.\\d*\\.attn_output_a\\.weight");
@@ -550,7 +555,8 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
         if (std::regex_match(tensor_name, pattern_qk_norm)) {
             return get_tensor_config_impl(tensor->ne[1] == 1 ? GGML_BACKEND_SPLIT_AXIS_MIRRORED : GGML_BACKEND_SPLIT_AXIS_1, "attn_output.weight");
         }
-        if (std::regex_match(tensor_name, pattern_kv_cache) || std::regex_match(tensor_name, pattern_attn_sinks)) {
+        if (std::regex_match(tensor_name, pattern_kv_cache) || std::regex_match(tensor_name, pattern_attn_sinks) ||
+                std::regex_match(tensor_name, pattern_attn_gate_bias)) {
             return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_0, "attn_output.weight");
         }
         if (std::regex_match(tensor_name, pattern_attn_out_weight)) {
@@ -749,6 +755,10 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
 
             const int64_t granularity_q    = std::lcm(n_embd_q, blck_size_perf);
             const int64_t granularity_head = granularity_q / hparams.n_embd_head_k(il); // for tensors with one value per head
+            if (std::regex_match(tensor_name, pattern_attn_gate_bias)) {
+                GGML_ASSERT(segments.size() == 1);
+                return {granularity_head};
+            }
             if (std::regex_match(tensor_name, pattern_attn_sinks)) {
                 GGML_ASSERT(segments.size() == 1);
                 if (is_dsv4) {
@@ -994,6 +1004,7 @@ const char * llm_type_name(llm_type type) {
         case LLM_TYPE_10B_128x3_66B: return "10B+128x3.66B";
         case LLM_TYPE_57B_A14B:      return "57B.A14B";
         case LLM_TYPE_816B_A42B:     return "816B.A42B";
+        case LLM_TYPE_78B_A3_5B:     return "78B.A3.5B";
         case LLM_TYPE_17B_16E:       return "17Bx16E (Scout)";
         case LLM_TYPE_17B_128E:      return "17Bx128E (Maverick)";
         case LLM_TYPE_A13B:          return "A13B";
@@ -3606,6 +3617,8 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_MELLUM:
         case LLM_ARCH_MAPLE:
         case LLM_ARCH_HRM_TEXT:
+        case LLM_ARCH_BEAM:
+        case LLM_ARCH_KOLIBRI1:
             return LLAMA_ROPE_TYPE_NEOX;
 
         case LLM_ARCH_DFLASH:
