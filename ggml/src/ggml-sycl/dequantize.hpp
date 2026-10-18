@@ -857,7 +857,6 @@ static void dequantize_block_q8_0_reorder(const void * __restrict__ vx, dst_t * 
     }
 }
 
-// documentation deleted as per reviewer: Titaniumtown
 template<typename dst_t>
 static void dequantize_block_q8_0_reorder_wide(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
                                                const sycl::id<1> idx) {
