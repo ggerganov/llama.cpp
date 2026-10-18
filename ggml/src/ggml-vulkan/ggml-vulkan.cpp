@@ -8156,7 +8156,9 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
                                 (uint64_t)ggml_nelements(v) * kv_scratch_ts <= ctx->device->properties.limits.maxStorageBufferRange &&
                                 (kv_raw_strided ||
                                  (ctx->device->pipeline_dequant_transpose[k->type] != nullptr &&
-                                  ctx->device->pipeline_dequant_transpose[v->type] != nullptr)) &&
+                                  ctx->device->pipeline_dequant_transpose[v->type] != nullptr &&
+                                  // RDNA4 regresses with the f16 scratch at head size 512 (Gemma 4 global layers)
+                                  !(ctx->device->architecture == vk_device_architecture::AMD_RDNA4 && (HSK > 256 || HSV > 256)))) &&
                                 // coopmat2 path does not benefit from the f16 scratch
                                 !ctx->device->coopmat2 &&
                                 // Intel Xe1 regresses, see PR 25494
