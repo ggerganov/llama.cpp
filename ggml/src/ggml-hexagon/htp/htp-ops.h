@@ -126,7 +126,7 @@ enum htp_op_code {
 #define HTP_OP_MAX_KERN_PARAMS 32
 
 #define HTP_OP_MAX_BUFS    16
-#define HTP_OP_MAX_TENSORS 8192 // must stay under 64K (uint16)
+#define HTP_OP_MAX_TENSORS 65534 // must stay under 64K (uint16)
 
 #define HTP_FENCE_TIMEOUT  (1000000000ULL)
 #define HTP_FENCE_SLOT_SIZE 128

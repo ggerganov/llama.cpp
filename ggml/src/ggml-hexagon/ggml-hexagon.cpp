@@ -163,7 +163,7 @@ int    opt_ar_scatter    = 1; // 1 = reduce-scatter the fused ALLREDUCE+ADD (def
 //     https://docs.qualcomm.com/doc/80-N2040-61/topic/hvx-pmu-events.html
 static u32vec opt_pmu_evt { 0x3, 0x111, 0x100, 0x105, 0x240, 0x256, 0x7D, 0x8C };
 
-int    opt_opbatch   = 1280; // max number of ops in a batch
+int    opt_opbatch   = 2048; // max number of ops in a batch
 int    opt_opqueue   = 8;    // max number of pending batches
 int    opt_optrace   = 0;    // trace buffer size per thread (0 means default)
 int    opt_oppoll    = 0;    // polling for batch completions
@@ -1327,7 +1327,7 @@ struct ggml_hexagon_opbatch {
 
         n_bufs_max = HTP_OP_MAX_BUFS;
         n_ops_max  = batch_size;
-        n_tens_max = std::min<size_t>(n_ops_max + n_ops_max * HTP_OP_MAX_INPUTS, HTP_OP_MAX_TENSORS);
+        n_tens_max = std::min<size_t>(n_ops_max * 4 + HTP_OP_MAX_INPUTS + HTP_OP_MAX_OUTPUTS, HTP_OP_MAX_TENSORS);
 
         b_vmem_max = max_vmem;
 
@@ -1404,7 +1404,10 @@ struct ggml_hexagon_opbatch {
         auto range = d_map.equal_range(t->data);
         for (auto dit = range.first; dit != range.second; ++dit) {
             htp_tensor * h = &h_tens[dit->second];
-            if (same_shape(h, t)) { return dit->second; }
+            if (same_shape(h, t)) {
+                t_map.insert({t, dit->second});
+                return dit->second;
+            }
         }
 
         auto extra = (htp_tensor_extra *) t->extra;
@@ -1623,7 +1626,7 @@ struct ggml_hexagon_opqueue {
     ggml_hexagon_opqueue(ggml_hexagon_session *sess, size_t batch_size, size_t depth) : depth(depth) {
         size_t n_bufs    = HTP_OP_MAX_BUFS;
         size_t n_ops     = batch_size;
-        size_t n_tensors = n_ops * HTP_OP_MAX_OUTPUTS + n_ops * HTP_OP_MAX_INPUTS;
+        size_t n_tensors = std::min<size_t>(n_ops * 4 + HTP_OP_MAX_INPUTS + HTP_OP_MAX_OUTPUTS, HTP_OP_MAX_TENSORS);
 
         size_t tr_size = 0;
         if (opt_profile == 3) {
