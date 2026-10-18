@@ -460,6 +460,7 @@ void ggml_vec_swiglu_f32(const int n, float * y, const float * x, const float * 
     }
 }
 
+#ifndef GGML_GELU_QUICK_FP16
 // computed in f32 without the fp16 table, which loses precision on f32 input
 void ggml_vec_gelu_quick_f32(const int n, float * y, const float * x) {
     int i = 0;
@@ -535,6 +536,7 @@ void ggml_vec_geglu_quick_f32(const int n, float * y, const float * x, const flo
         y[i] = ggml_gelu_quick_f32(x[i]) * g[i];
     }
 }
+#endif
 
 ggml_float ggml_vec_cvar_f32(const int n, float * y, const float * x, const float mean) {
     int i = 0;

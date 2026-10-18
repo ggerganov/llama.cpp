@@ -1043,7 +1043,18 @@ inline static void ggml_vec_gelu_quick_bf16(const int n, ggml_bf16_t * y, const 
     }
 }
 
+#ifdef GGML_GELU_QUICK_FP16
+inline static void ggml_vec_gelu_quick_f32(const int n, float * y, const float * x) {
+    uint16_t t;
+    for (int i = 0; i < n; ++i) {
+        ggml_fp16_t fp16 = GGML_CPU_FP32_TO_FP16(x[i]);
+        memcpy(&t, &fp16, sizeof(uint16_t));
+        y[i] = GGML_CPU_FP16_TO_FP32(ggml_table_gelu_quick_f16[t]);
+    }
+}
+#else
 void ggml_vec_gelu_quick_f32(const int n, float * y, const float * x);
+#endif
 
 // Sigmoid Linear Unit (SiLU) function
 inline static float ggml_silu_f32(float x) {
@@ -1586,7 +1597,18 @@ inline static void ggml_vec_geglu_erf_bf16(const int n, ggml_bf16_t * y, const g
     }
 }
 
+#ifdef GGML_GELU_QUICK_FP16
+inline static void ggml_vec_geglu_quick_f32(const int n, float * y, const float * x, const float * g) {
+    uint16_t t;
+    for (int i = 0; i < n; ++i) {
+        ggml_fp16_t fp16 = GGML_CPU_FP32_TO_FP16(x[i]);
+        memcpy(&t, &fp16, sizeof(uint16_t));
+        y[i] = GGML_CPU_FP16_TO_FP32(ggml_table_gelu_quick_f16[t]) * g[i];
+    }
+}
+#else
 void ggml_vec_geglu_quick_f32(const int n, float * y, const float * x, const float * g);
+#endif
 
 inline static void ggml_vec_geglu_quick_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x, const ggml_fp16_t * g) {
     const uint16_t * i16 = (const uint16_t *) x;
