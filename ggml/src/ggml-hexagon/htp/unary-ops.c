@@ -621,10 +621,11 @@ static void tri_f32(const void * restrict src,
     const uint32_t nloe  = ne0 % VLEN_FP32;
 
     const uint32_t ne01 = uctx->octx->src[0]->ne[1];
+    const struct fastdiv_values * div_ne01 = &uctx->kparams->div_ne01;
 
     for (uint32_t b = 0; b < num_rows; b++) {
         const uint32_t abs_row = ir + b;
-        const uint32_t i01     = abs_row % ne01;
+        const uint32_t i01     = fastmodulo(abs_row, ne01, div_ne01);
 
         const HVX_Vector * restrict v_src = (const HVX_Vector *) ((const uint8_t *) src + b * src0_row_size_aligned);
         HVX_Vector * restrict v_dst       = (HVX_Vector *) ((uint8_t *) dst + b * dst_row_size_aligned);
@@ -2015,8 +2016,25 @@ static int execute_op_unary(struct htp_ops_context * octx) {
 int op_unary(struct htp_ops_context * octx) {
     switch (octx->src[0]->type) {
         case HTP_TYPE_F32:
-        case HTP_TYPE_F16:
-            return execute_op_unary(octx);
+        case HTP_TYPE_F16: {
+            if (!htp_unary_is_elementwise(octx->op)) {
+                return execute_op_unary(octx);
+            }
+
+            struct htp_tensor src0_c = *octx->src[0];
+            struct htp_tensor dst_c  = *octx->dst;
+            const size_t elem_size = (src0_c.type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
+            HTP_UNARY_COLLAPSE_DIMS(src0_c.ne, src0_c.nb, dst_c.ne, dst_c.nb, elem_size);
+
+            const struct htp_tensor * orig_src0 = octx->src[0];
+            const struct htp_tensor * orig_dst  = octx->dst;
+            octx->src[0] = &src0_c;
+            octx->dst    = &dst_c;
+            const int status = execute_op_unary(octx);
+            octx->src[0] = orig_src0;
+            octx->dst    = orig_dst;
+            return status;
+        }
 
         default:
             return HTP_STATUS_NO_SUPPORT;

@@ -3598,6 +3598,14 @@ void htp_precompute_unary_params(
 
     const size_t elem_size = ggml_type_size(src0->type);
 
+    struct ggml_tensor src0_c = *src0;
+    struct ggml_tensor dst_c  = *dst;
+    if (htp_unary_is_elementwise(op)) {
+        HTP_UNARY_COLLAPSE_DIMS(src0_c.ne, src0_c.nb, dst_c.ne, dst_c.nb, elem_size);
+        src0 = &src0_c;
+        dst  = &dst_c;
+    }
+
     const size_t src0_data_row_size = src0->ne[0] * elem_size;
     const size_t dst_data_row_size  = dst->ne[0]  * ggml_type_size(dst->type);
 
