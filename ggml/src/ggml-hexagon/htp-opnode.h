@@ -25,6 +25,12 @@
 #include "htp/glu-ops.h"
 #include "htp/sum-rows-ops.h"
 #include "htp/repeat-ops.h"
+#include "htp/pad-ops.h"
+#include "htp/cumsum-ops.h"
+#include "htp/fill-ops.h"
+#include "htp/roll-ops.h"
+#include "htp/diag-ops.h"
+#include "htp/solve-tri-ops.h"
 
 struct htp_opnode {
     ggml_tensor * node   { nullptr };
@@ -405,6 +411,24 @@ struct htp_opformat {
         } else if (htp_op_is_glu(node.opcode)) {
             const auto * kparams = (const struct htp_glu_kernel_params *) node.kernel_params;
             snprintf(str, max_size, "nth %d vtcm %u", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_PAD) {
+            const auto * kparams = (const struct htp_pad_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "k%d nth %d vtcm %u", (int) kparams->kernel_type, (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_CUMSUM) {
+            const auto * kparams = (const struct htp_cumsum_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s nth %d vtcm %u", kparams->use_dma ? "dma" : "hvx", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_FILL) {
+            const auto * kparams = (const struct htp_fill_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s nth %d", kparams->opt_path ? "opt" : "strided", (int) kparams->n_threads);
+        } else if (node.opcode == HTP_OP_ROLL) {
+            const auto * kparams = (const struct htp_roll_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "k%d nth %d", (int) kparams->kernel_type, (int) kparams->n_threads);
+        } else if (node.opcode == HTP_OP_DIAG) {
+            const auto * kparams = (const struct htp_diag_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s nth %d vtcm %u", kparams->use_dma ? "dma" : "hvx", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_SOLVE_TRI) {
+            const auto * kparams = (const struct htp_solve_tri_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s nth %d", kparams->batched ? "batched" : "chunked", (int) kparams->n_threads);
         } else {
             snprintf(str, max_size, "----");
         }

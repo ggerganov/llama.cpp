@@ -16,6 +16,7 @@
 #include "hvx-types.h"
 #include "hvx-utils.h"
 #include "dma-queue.h"
+#include "cumsum-ops.h"
 
 #define htp_cumsum_tensors_preamble                         \
     const struct htp_tensor * restrict src0 = octx->src[0]; \
@@ -90,8 +91,8 @@ static inline HVX_Vector hvx_splat_last_f32(HVX_Vector v) {
 }
 
 static inline void hvx_cumsum_row_f32(const float * restrict src, float * restrict dst, uint32_t n) {
-    const uint32_t nvec = n / VLEN_FP32;
-    const uint32_t nloe = n % VLEN_FP32;
+    const uint32_t nvec = n >> 5;
+    const uint32_t nloe = n & (VLEN_FP32 - 1);
 
     HVX_Vector carry = Q6_V_vsplat_R(0);
 
@@ -211,9 +212,11 @@ static void cumsum_thread_f32(unsigned int nth, unsigned int ith, void * data) {
 int op_cumsum_f32(struct htp_ops_context * octx) {
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
+    const struct htp_cumsum_kernel_params * kparams =
+        (const struct htp_cumsum_kernel_params *) octx->kernel_params;
 
-    const uint32_t total_rows      = src0->ne[1] * src0->ne[2] * src0->ne[3];
-    const size_t dst_data_row_size = dst->ne[0] * sizeof(float);
+    const uint32_t total_rows        = kparams->total_rows;
+    const size_t   dst_data_row_size = dst->ne[0] * sizeof(float);
 
     uint32_t row_start = 0;
     uint32_t nrows     = total_rows;
@@ -230,43 +233,45 @@ int op_cumsum_f32(struct htp_ops_context * octx) {
         return HTP_STATUS_OK;
     }
 
+    if (!htp_ops_context_set_n_threads(octx, MIN(kparams->n_threads, nrows))) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
+
     const uint32_t n_threads = octx->n_threads;
 
-    const size_t src_row_size         = src0->nb[1];
-    const size_t dst_row_size         = dst->nb[1];
-    const size_t src_row_size_aligned = hex_round_up(src_row_size, VLEN);
-    const size_t dst_row_size_aligned = hex_round_up(dst_row_size, VLEN);
+    if (!kparams->use_dma && (htp_tensor_is_extended(src0) || htp_tensor_is_extended(dst))) {
+        return HTP_STATUS_NO_SUPPORT;
+    }
 
-    // 2 ping-pong buffers per thread for src and dst
-    const size_t spad_per_thread = 2 * (src_row_size_aligned + dst_row_size_aligned);
+    if (kparams->use_dma) {
+        struct htp_cumsum_vtcm_layout layout;
+        htp_cumsum_vtcm_layout_build(&layout, kparams->src_row_size_aligned, kparams->dst_row_size_aligned, n_threads);
 
-    octx->src0_spad.size_per_thread = src_row_size_aligned * 2;
-    octx->dst_spad.size_per_thread  = dst_row_size_aligned * 2;
-
-    octx->src0_spad.size  = n_threads * octx->src0_spad.size_per_thread;
-    octx->dst_spad.size   = n_threads * octx->dst_spad.size_per_thread;
-
-    octx->src0_spad.data  = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, 0);                    octx->src0_spad.src = NULL;
-    octx->dst_spad.data   = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, octx->src0_spad.size); octx->dst_spad.src  = NULL;
+        octx->src0_spad.size_per_thread = layout.src0_bytes_per_thread;
+        octx->dst_spad.size_per_thread  = layout.dst_bytes_per_thread;
+        octx->src0_spad.size = n_threads * layout.src0_bytes_per_thread;
+        octx->dst_spad.size  = n_threads * layout.dst_bytes_per_thread;
+        octx->src0_spad.data = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, layout.off_src0);
+        octx->dst_spad.data  = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, layout.off_dst);
+        octx->src0_spad.src  = NULL;
+        octx->dst_spad.src   = NULL;
+    }
 
     struct htp_cumsum_context cctx = {
         .octx                 = octx,
-        .src_row_size         = src_row_size,
-        .dst_row_size         = dst_row_size,
-        .src_row_size_aligned = src_row_size_aligned,
-        .dst_row_size_aligned = dst_row_size_aligned,
+        .src_row_size         = kparams->src_row_size,
+        .dst_row_size         = kparams->dst_row_size,
+        .src_row_size_aligned = kparams->src_row_size_aligned,
+        .dst_row_size_aligned = kparams->dst_row_size_aligned,
         .rows_per_thread      = fastdiv(nrows + n_threads - 1, &octx->n_threads_div),
         .total_rows           = nrows,
         .row_start            = row_start,
     };
 
-    if (octx->ctx->vtcm_size < spad_per_thread * n_threads) {
-        if (htp_tensor_is_extended(src0) || htp_tensor_is_extended(dst)) {
-            return HTP_STATUS_NO_SUPPORT;
-        }
-        work_queue_run(octx->ctx->work_queue, cumsum_thread_f32, &cctx, n_threads);
-    } else {
+    if (kparams->use_dma) {
         work_queue_run(octx->ctx->work_queue, cumsum_thread_f32_dma, &cctx, n_threads);
+    } else {
+        work_queue_run(octx->ctx->work_queue, cumsum_thread_f32, &cctx, n_threads);
     }
 
     return HTP_STATUS_OK;

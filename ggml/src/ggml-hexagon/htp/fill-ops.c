@@ -16,6 +16,7 @@
 #include "htp-ctx.h"
 #include "htp-ops.h"
 #include "htp-tensor.h"
+#include "fill-ops.h"
 
 // ggml op_params layout for FILL:
 //   op_params[0] (as float) - the scalar fill value
@@ -36,6 +37,7 @@
 
 struct htp_fill_context {
     struct htp_ops_context * octx;
+    const struct htp_fill_kernel_params * kparams;
     uint32_t nrows_per_thread;
     uint32_t total_rows;  // ne1 * ne2 * ne3
     uint32_t row_start;
@@ -47,6 +49,7 @@ struct htp_fill_context {
 static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
     const struct htp_fill_context * fctx = (const struct htp_fill_context *) data;
     struct htp_ops_context        * octx = fctx->octx;
+    const struct htp_fill_kernel_params * kparams = fctx->kparams;
     fill_preamble;
 
     // Parallelise over the flat row index spanning ne1*ne2*ne3
@@ -69,9 +72,10 @@ static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
     } else {
         // Non-contiguous path: must respect strides
         for (uint32_t ir = ir0; ir < ir1; ++ir) {
-            const uint32_t i1 = ir % ne1;
-            const uint32_t i2 = (ir / ne1) % ne2;
-            const uint32_t i3 = ir / (ne1 * ne2);
+            const uint32_t i3  = fastdiv(ir, &kparams->div_ne1_ne2);
+            const uint32_t rem = ir - i3 * (ne1 * ne2);
+            const uint32_t i2  = fastdiv(rem, &kparams->div_ne1);
+            const uint32_t i1  = rem - i2 * ne1;
             uint8_t * dst_ptr = (uint8_t *) dst->data + i1*nb1 + i2*nb2 + i3*nb3;
             hvx_splat_u(dst_ptr, fctx->splat_vec, ne0, fctx->elem_size);
         }
@@ -83,6 +87,8 @@ static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
 
 int op_fill(struct htp_ops_context * octx) {
     fill_preamble;
+    const struct htp_fill_kernel_params * kparams =
+        (const struct htp_fill_kernel_params *) octx->kernel_params;
 
     if (dst->type != HTP_TYPE_F32 && dst->type != HTP_TYPE_F16) {
         return HTP_STATUS_NO_SUPPORT;
@@ -93,12 +99,10 @@ int op_fill(struct htp_ops_context * octx) {
     }
 
     uint32_t row_start = 0;
-    uint32_t nrows     = nr;
+    uint32_t nrows     = kparams->total_rows;
 
     if (octx->ctx->mdev.count > 1) {
-        const uint32_t row_size = nb1;
-        const uint32_t rows_per_chunk = (row_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(row_size, HEX_L2_LINE_SIZE)) : 1;
-        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(nr, htp_tensor_mdev_data_aligned(dst) ? rows_per_chunk : 0, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
+        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(kparams->total_rows, htp_tensor_mdev_data_aligned(dst) ? kparams->rows_per_chunk : 0, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
         row_start = range.start;
         nrows     = range.count;
     }
@@ -107,11 +111,12 @@ int op_fill(struct htp_ops_context * octx) {
         return HTP_STATUS_OK;
     }
 
-    // nr = ne1*ne2*ne3 (flat row count across all outer dims); parallelise over it.
-    const uint32_t n_threads = octx->n_threads;
+    if (!htp_ops_context_set_n_threads(octx, MIN(kparams->n_threads, nrows))) {
+        return HTP_STATUS_INVAL_PARAMS;
+    }
 
-    // Optimize if fully contiguous: skip stride arithmetic, treat as flat array
-    const bool opt_path = (nb2 == nb1 * ne1) && (nb3 == nb2 * ne2);
+    const uint32_t n_threads = octx->n_threads;
+    const bool     opt_path  = (kparams->opt_path != 0);
 
     FARF(HIGH, "fill: (%ux%ux%ux%u) type=%u opt=%d\n",
          dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], dst->type, (int) opt_path);
@@ -121,20 +126,20 @@ int op_fill(struct htp_ops_context * octx) {
 
     struct htp_fill_context fctx = {
         .octx             = octx,
+        .kparams          = kparams,
         .nrows_per_thread = fastdiv(nrows + n_threads - 1, &octx->n_threads_div),
         .total_rows       = nrows,
         .row_start        = row_start,
         .opt_path         = opt_path,
+        .elem_size        = kparams->elem_size,
     };
 
     switch (dst->type) {
     case HTP_TYPE_F32:
         fctx.splat_vec = hvx_vec_splat_f32(val_f32);
-        fctx.elem_size = sizeof(float);
         break;
     case HTP_TYPE_F16:
         fctx.splat_vec = hvx_vec_splat_f16((_Float16) val_f32);
-        fctx.elem_size = sizeof(_Float16);
         break;
     default:
         return HTP_STATUS_NO_SUPPORT;

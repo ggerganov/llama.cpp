@@ -78,6 +78,12 @@
 #include "htp/sum-rows-ops.h"
 #include "htp/glu-ops.h"
 #include "htp/repeat-ops.h"
+#include "htp/pad-ops.h"
+#include "htp/cumsum-ops.h"
+#include "htp/fill-ops.h"
+#include "htp/roll-ops.h"
+#include "htp/diag-ops.h"
+#include "htp/solve-tri-ops.h"
 #include "htp_iface.h"
 #include "htp-drv.h"
 #include "htp-repack.h"
@@ -5722,6 +5728,259 @@ static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session *
     return ggml_hexagon_precompute_im2col_3d_params(sess, op, &kparams);
 }
 
+static void ggml_hexagon_precompute_pad_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_pad_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t type_size      = (uint32_t) ggml_type_size(src0->type);
+    const uint32_t total_dst_rows = (uint32_t) (dst->ne[1] * dst->ne[2] * dst->ne[3]);
+    const uint32_t max_threads    = (std::max)(1u, total_dst_rows);
+    const uint32_t n_threads      = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    const uint32_t src_row_size         = (uint32_t) src0->ne[0] * type_size;
+    const uint32_t dst_row_size         = (uint32_t) dst->ne[0] * type_size;
+    const uint32_t src_row_size_aligned = hex_round_up(src_row_size, 128);
+    const uint32_t dst_row_size_aligned = hex_round_up(dst_row_size, 128);
+
+    struct htp_pad_vtcm_layout layout;
+    htp_pad_vtcm_layout_build(&layout, src_row_size_aligned, dst_row_size_aligned, n_threads);
+
+    const bool use_dma  = (src0->nb[0] == type_size) && (src0->ne[0] >= 512) &&
+                          (sess->vtcm_size >= layout.total_bytes);
+    const bool circular = (((const int32_t *) op->op_params)[8] != 0);
+
+    kparams->n_threads            = n_threads;
+    kparams->total_dst_rows       = total_dst_rows;
+    kparams->use_dma              = use_dma ? 1 : 0;
+    kparams->type_size            = type_size;
+    kparams->src_row_size         = src_row_size;
+    kparams->src_row_size_aligned = src_row_size_aligned;
+    kparams->dst_row_size         = dst_row_size;
+    kparams->dst_row_size_aligned = dst_row_size_aligned;
+    kparams->vtcm_size            = use_dma ? (uint32_t) layout.total_bytes : 0;
+
+    if (circular && use_dma) {
+        kparams->kernel_type = HTP_PAD_KERNEL_HVX_CIRCULAR_DMA;
+    } else if (circular) {
+        kparams->kernel_type = HTP_PAD_KERNEL_HVX_CIRCULAR;
+    } else if (use_dma) {
+        kparams->kernel_type = HTP_PAD_KERNEL_HVX_DMA;
+    } else {
+        kparams->kernel_type = HTP_PAD_KERNEL_HVX;
+    }
+
+    kparams->div_ne1     = init_fastdiv_values((uint32_t) dst->ne[1]);
+    kparams->div_ne1_ne2 = init_fastdiv_values((uint32_t) (dst->ne[1] * dst->ne[2]));
+    kparams->div_ne01    = init_fastdiv_values((uint32_t) src0->ne[1]);
+    kparams->div_ne02    = init_fastdiv_values((uint32_t) src0->ne[2]);
+    kparams->div_ne03    = init_fastdiv_values((uint32_t) src0->ne[3]);
+}
+
+static void ggml_hexagon_precompute_cumsum_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_cumsum_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t total_rows  = (uint32_t) (src0->ne[1] * src0->ne[2] * src0->ne[3]);
+    const uint32_t max_threads = (std::max)(1u, total_rows);
+    const uint32_t n_threads   = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    const uint32_t src_row_size         = (uint32_t) src0->nb[1];
+    const uint32_t dst_row_size         = (uint32_t) dst->nb[1];
+    const uint32_t src_row_size_aligned = hex_round_up(src_row_size, 128);
+    const uint32_t dst_row_size_aligned = hex_round_up(dst_row_size, 128);
+
+    struct htp_cumsum_vtcm_layout layout;
+    htp_cumsum_vtcm_layout_build(&layout, src_row_size_aligned, dst_row_size_aligned, n_threads);
+
+    const bool use_dma = (sess->vtcm_size >= layout.total_bytes);
+
+    kparams->n_threads            = n_threads;
+    kparams->total_rows           = total_rows;
+    kparams->use_dma              = use_dma ? 1 : 0;
+    kparams->src_row_size         = src_row_size;
+    kparams->dst_row_size         = dst_row_size;
+    kparams->src_row_size_aligned = src_row_size_aligned;
+    kparams->dst_row_size_aligned = dst_row_size_aligned;
+    kparams->vtcm_size            = use_dma ? (uint32_t) layout.total_bytes : 0;
+}
+
+static void ggml_hexagon_precompute_fill_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_fill_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * dst = op;
+
+    const uint32_t ne1 = (uint32_t) dst->ne[1];
+    const uint32_t ne2 = (uint32_t) dst->ne[2];
+    const uint32_t ne3 = (uint32_t) dst->ne[3];
+    const uint32_t nb1 = (uint32_t) dst->nb[1];
+    const uint32_t nb2 = (uint32_t) dst->nb[2];
+    const uint32_t nb3 = (uint32_t) dst->nb[3];
+
+    const uint32_t total_rows     = ne1 * ne2 * ne3;
+    const uint32_t max_threads    = (std::max)(1u, total_rows);
+    const uint32_t n_threads      = (std::min)((uint32_t) sess->n_threads, max_threads);
+    const uint32_t elem_size      = (uint32_t) ggml_type_size(dst->type);
+    const bool     opt_path       = (nb2 == nb1 * ne1) && (nb3 == nb2 * ne2);
+    const uint32_t rows_per_chunk = (nb1 > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(nb1, HEX_L2_LINE_SIZE)) : 1;
+
+    kparams->n_threads      = n_threads;
+    kparams->total_rows     = total_rows;
+    kparams->elem_size      = elem_size;
+    kparams->opt_path       = opt_path ? 1 : 0;
+    kparams->rows_per_chunk = rows_per_chunk;
+    kparams->div_ne1        = init_fastdiv_values(ne1);
+    kparams->div_ne1_ne2    = init_fastdiv_values(ne1 * ne2);
+}
+
+static void ggml_hexagon_precompute_roll_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_roll_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t ne0 = (uint32_t) dst->ne[0];
+    const uint32_t ne1 = (uint32_t) dst->ne[1];
+    const uint32_t ne2 = (uint32_t) dst->ne[2];
+    const uint32_t ne3 = (uint32_t) dst->ne[3];
+
+    const int32_t  s0  = ((const int32_t *) op->op_params)[0];
+    uint32_t i0_src0 = 0;
+    if (-s0 < 0) {
+        i0_src0 = (uint32_t) (-s0 + (int32_t) ne0);
+    } else if ((uint32_t) (-s0) >= ne0) {
+        i0_src0 = (uint32_t) (-s0) - ne0;
+    } else {
+        i0_src0 = (uint32_t) (-s0);
+    }
+
+    const uint32_t total_rows  = ne1 * ne2 * ne3;
+    const uint32_t max_threads = (std::max)(1u, total_rows);
+    const uint32_t n_threads   = (std::min)((uint32_t) sess->n_threads, max_threads);
+
+    kparams->n_threads  = n_threads;
+    kparams->total_rows = total_rows;
+    kparams->i0_src0    = i0_src0;
+    kparams->n0         = ne0 - i0_src0;
+
+    if (sess->mdev.count <= 1) {
+        if (ggml_is_contiguous(src0) && ggml_is_contiguous(dst)) {
+            kparams->kernel_type = HTP_ROLL_KERNEL_DMA_CONTIGUOUS;
+        } else {
+            kparams->kernel_type = HTP_ROLL_KERNEL_DMA_STRIDED;
+        }
+    } else {
+        kparams->kernel_type = HTP_ROLL_KERNEL_HVX;
+    }
+
+    kparams->div_ne1     = init_fastdiv_values(ne1);
+    kparams->div_ne2_ne1 = init_fastdiv_values(ne2 * ne1);
+}
+
+static void ggml_hexagon_precompute_diag_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_diag_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t total_batches  = (uint32_t) (src0->ne[2] * src0->ne[3]);
+    const uint32_t max_threads    = (std::max)(1u, total_batches);
+    const uint32_t n_threads      = (std::min)((uint32_t) sess->n_threads, max_threads);
+    const uint32_t dst_batch_size = (uint32_t) (dst->ne[1] * dst->nb[1]);
+
+    bool can_split = (dst->ne[0] == 1 || dst->nb[0] == sizeof(float)) && !ggml_is_permuted(dst);
+    uint32_t batches_per_chunk = 1;
+    if (can_split) {
+        if (dst->ne[2] > 1 && (dst->nb[2] & (HEX_L2_LINE_SIZE - 1)) == 0 &&
+            (dst->ne[3] <= 1 || (dst->nb[3] & (HEX_L2_LINE_SIZE - 1)) == 0)) {
+            batches_per_chunk = 1;
+        } else if (dst->nb[2] == dst_batch_size &&
+                   (dst->ne[3] <= 1 || dst->nb[3] == dst->nb[2] * dst->ne[2])) {
+            batches_per_chunk = (dst_batch_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(dst_batch_size, HEX_L2_LINE_SIZE)) : 1;
+        } else {
+            can_split = false;
+        }
+    }
+
+    const uint32_t src_batch_size         = (uint32_t) (src0->ne[0] * sizeof(float));
+    const uint32_t dst_row_size           = (uint32_t) (dst->ne[0] * sizeof(float));
+    const uint32_t src_batch_size_aligned = hex_round_up(src_batch_size, 128);
+    const uint32_t dst_row_size_aligned   = hex_round_up(dst_row_size, 128);
+
+    struct htp_diag_vtcm_layout layout;
+    htp_diag_vtcm_layout_build(&layout, src_batch_size_aligned, dst_row_size_aligned, n_threads);
+
+    const bool use_dma = (sess->vtcm_size >= layout.total_bytes);
+
+    kparams->n_threads              = n_threads;
+    kparams->total_batches          = total_batches;
+    kparams->use_dma                = use_dma ? 1 : 0;
+    kparams->can_split              = can_split ? 1 : 0;
+    kparams->batches_per_chunk      = batches_per_chunk;
+    kparams->src_batch_size         = src_batch_size;
+    kparams->dst_row_size           = dst_row_size;
+    kparams->src_batch_size_aligned = src_batch_size_aligned;
+    kparams->dst_row_size_aligned   = dst_row_size_aligned;
+    kparams->vtcm_size              = use_dma ? (uint32_t) layout.total_bytes : 0;
+    kparams->div_ne02               = init_fastdiv_values((uint32_t) src0->ne[2]);
+}
+
+static void ggml_hexagon_precompute_solve_tri_params(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_solve_tri_kernel_params * kparams
+) {
+    memset(kparams, 0, sizeof(*kparams));
+
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * src1 = op->src[1];
+    const struct ggml_tensor * dst  = op;
+
+    const uint32_t k                 = (uint32_t) src1->ne[0];
+    const uint32_t col_block         = 32;
+    const uint32_t k_chunks          = (k + col_block - 1) / col_block;
+    const uint32_t total_batches     = (uint32_t) (src0->ne[2] * src0->ne[3]);
+    const bool     batched           = total_batches >= (uint32_t) sess->n_threads;
+    const uint32_t total_jobs        = batched ? total_batches : (total_batches * k_chunks);
+    const uint32_t max_threads       = (std::max)(1u, total_jobs);
+    const uint32_t n_threads         = (std::min)((uint32_t) sess->n_threads, max_threads);
+    const uint32_t batch_size        = (uint32_t) dst->nb[2];
+    const uint32_t batches_per_chunk = (batch_size > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(batch_size, HEX_L2_LINE_SIZE)) : 1;
+
+    kparams->n_threads         = n_threads;
+    kparams->total_batches     = total_batches;
+    kparams->total_jobs        = total_jobs;
+    kparams->k_chunks          = k_chunks;
+    kparams->col_block         = col_block;
+    kparams->batched           = batched ? 1 : 0;
+    kparams->batches_per_chunk = batches_per_chunk;
+    kparams->div_ne02          = init_fastdiv_values((uint32_t) src0->ne[2]);
+    kparams->div_k_chunks      = init_fastdiv_values(k_chunks > 0 ? k_chunks : 1);
+}
+
 static bool ggml_hexagon_supported_pad(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
     const struct ggml_tensor * src0 = op->src[0];
     const struct ggml_tensor * dst  = op;
@@ -6086,6 +6345,36 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 ggml_hexagon_precompute_repeat_params(sess,
                     node.node,
                     (struct htp_repeat_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_PAD) {
+                ggml_hexagon_precompute_pad_params(sess,
+                    node.node,
+                    (struct htp_pad_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_CUMSUM) {
+                ggml_hexagon_precompute_cumsum_params(sess,
+                    node.node,
+                    (struct htp_cumsum_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_FILL) {
+                ggml_hexagon_precompute_fill_params(sess,
+                    node.node,
+                    (struct htp_fill_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_ROLL) {
+                ggml_hexagon_precompute_roll_params(sess,
+                    node.node,
+                    (struct htp_roll_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_DIAG) {
+                ggml_hexagon_precompute_diag_params(sess,
+                    node.node,
+                    (struct htp_diag_kernel_params *) node.kernel_params
+                );
+            } else if (node.opcode == HTP_OP_SOLVE_TRI) {
+                ggml_hexagon_precompute_solve_tri_params(sess,
+                    node.node,
+                    (struct htp_solve_tri_kernel_params *) node.kernel_params
                 );
             }
             computed_nodes.push_back(std::move(node));
