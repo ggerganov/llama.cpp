@@ -801,7 +801,10 @@ struct llama_mlock::impl {
     }
 
     void grow_to(size_t target_size) {
-        GGML_ASSERT(addr);
+        if (addr == NULL) {
+            // dummy (zero-size) buffers have no base to lock
+            return;
+        }
         if (failed_already) {
             return;
         }

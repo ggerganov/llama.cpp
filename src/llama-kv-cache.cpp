@@ -162,6 +162,18 @@ llama_kv_cache::llama_kv_cache(
 
     const bool is_mla = hparams.is_mla();
 
+    // a shared layer keeps the buffers of the other cache: the scheduler of this model can
+    // only run ops on buffer types its devices support, otherwise it aborts at the first op
+    auto buft_usable = [&](ggml_backend_buffer_type_t other_buft) {
+        for (const llama_device & dev : model.devices) {
+            if (ggml_backend_dev_supports_buft(dev.dev, other_buft)) {
+                return true;
+            }
+        }
+
+        return other_buft == ggml_backend_cpu_buffer_type();
+    };
+
     for (uint32_t il = 0; il < n_layer; il++) {
         if (!hparams.has_kv(il)) {
             LLAMA_LOG_DEBUG("%s: layer %3d: does not have KV cache\n", __func__, il);
@@ -179,15 +191,20 @@ llama_kv_cache::llama_kv_cache(
             if (il_share >= 0) {
                 const auto & layer_share = other->layers[other->map_layer_ids[il_share]];
 
-                LLAMA_LOG_WARN("%s: layer %3d: sharing with layer %d. k = %p, v = %p\n", __func__, il, il_share,
-                        layer_share.k->data, layer_share.v->data);
+                if (!buft_usable(ggml_backend_buffer_get_type(layer_share.k->buffer))) {
+                    LLAMA_LOG_WARN("%s: layer %3d: cannot share layer %d of the other cache (%s buffer) with this model - allocating this layer's KV\n",
+                            __func__, il, il_share, ggml_backend_buft_name(ggml_backend_buffer_get_type(layer_share.k->buffer)));
+                } else {
+                    LLAMA_LOG_WARN("%s: layer %3d: sharing with layer %d. k = %p, v = %p\n", __func__, il, il_share,
+                            layer_share.k->data, layer_share.v->data);
 
-                map_layer_ids[il] = layers.size();
+                    map_layer_ids[il] = layers.size();
 
-                layers.push_back(layer_share);
-                layers.back().il = il;
+                    layers.push_back(layer_share);
+                    layers.back().il = il;
 
-                continue;
+                    continue;
+                }
             }
         }
 
@@ -215,9 +232,21 @@ llama_kv_cache::llama_kv_cache(
 
         if (offload) {
             auto * dev = model.dev_layer(il);
-            buft = ggml_backend_dev_buffer_type(dev);
+            ggml_backend_buffer_type_t dev_buft = ggml_backend_dev_buffer_type(dev);
 
-            dev_name = ggml_backend_dev_name(dev);
+            // KV tensors are pre-allocated, so the scheduler cannot move one that does not fit
+            // a single buffer of this device - it would abort. keep such layers on the host
+            const size_t k_bytes    = ggml_row_size(type_k, n_embd_k_gqa) * (size_t) kv_size * n_stream;
+            const size_t v_bytes    = !is_mla ? ggml_row_size(type_v, n_embd_v_gqa) * (size_t) kv_size * n_stream : 0;
+            const size_t max_size   = ggml_backend_buft_get_max_size(dev_buft);
+
+            if (k_bytes > max_size || v_bytes > max_size) {
+                LLAMA_LOG_WARN("%s: layer %3d: KV of %zu + %zu bytes does not fit in a %s buffer of %zu bytes - keeping this layer's KV on the CPU\n",
+                        __func__, il, k_bytes, v_bytes, ggml_backend_buft_name(dev_buft), max_size);
+            } else {
+                buft = dev_buft;
+                dev_name = ggml_backend_dev_name(dev);
+            }
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
@@ -706,7 +735,7 @@ std::map<ggml_backend_buffer_type_t, size_t> llama_kv_cache::memory_breakdown() 
         ggml_backend_buffer_type_t buft = ggml_backend_buffer_get_type(buf.get());
 
         if (hparams.no_alloc) {
-            GGML_ASSERT(ggml_backend_buffer_get_base(buf.get()) == nullptr);
+            GGML_ASSERT(ggml_backend_buffer_get_size(buf.get()) == 0); // dummy buffer
             ret[buft] += ggml_backend_alloc_ctx_tensors_from_buft_size(ctx.get(), buft);
         } else {
             // GGML_ASSERT(ggml_backend_buffer_get_base(buf.get()) != nullptr); // multi_buffer does not have a defined base
@@ -721,14 +750,12 @@ llama_memory_context_ptr llama_kv_cache::init_batch(
             llama_batch_allocr & balloc,
             uint32_t n_ubatch,
             bool embd_all) {
-    GGML_UNUSED(embd_all);
-
     do {
         balloc.split_reset();
 
         std::vector<llama_ubatch> ubatches;
         while (true) {
-            auto ubatch = n_stream == 1 ? balloc.split_simple(n_ubatch) : balloc.split_equal(n_ubatch, true, 0);
+            auto ubatch = n_stream == 1 ? balloc.split_simple(n_ubatch) : embd_all ? balloc.split_seq(n_ubatch) : balloc.split_equal(n_ubatch, true, 0);
 
             if (ubatch.n_tokens == 0) {
                 break;

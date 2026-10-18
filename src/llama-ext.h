@@ -88,6 +88,11 @@ LLAMA_API int32_t llama_model_n_devices(const struct llama_model * model);
 
 LLAMA_API ggml_backend_dev_t llama_model_get_device(const struct llama_model * model, int i);
 
+// Whether this arch makes its KV caches alias the memory of llama_context_params::ctx_other
+// (see the memory ctor in llama-model.cpp). Only these archs can run a draft on the target's
+// memory; hybrid and recurrent memories do not take mem_other at all.
+LLAMA_API bool llama_model_uses_shared_kv(const struct llama_model * model);
+
 LLAMA_API llama_memory_breakdown llama_get_memory_breakdown(const struct llama_context * ctx);
 
 // Set whether the context outputs nextn embeddings or not

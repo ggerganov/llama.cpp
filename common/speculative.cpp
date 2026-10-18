@@ -856,6 +856,14 @@ struct common_speculative_impl_draft_eagle3 : public common_speculative_impl {
                 const float * prenorm = llama_get_embeddings_nextn_ith(ctx_dft, i_batch);
                 ++i_batch;
 
+                if (prenorm == nullptr) {
+                    SPC_ERR("draft nextn row %d is not readable - stopping the draft for seq_id=%d\n",
+                            i_batch - 1, (int) seq_id);
+                    drafting[seq_id] = false;
+                    n_drafting--;
+                    continue;
+                }
+
                 const auto * cur_p = common_sampler_get_candidates(smpl, true);
 
                 for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
@@ -1387,6 +1395,40 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
     }
 };
 
+// Do two models have at least one common physical device? A draft reading the target's KV
+// needs that: a local GPU and an RPC endpoint share no address space. Meta devices (-sm tensor)
+// wrap a device list that is not visible here and CPU-only models have an empty list, so neither
+// one rejects the pairing.
+static bool common_speculative_share_devices(const llama_model * model_a, const llama_model * model_b) {
+    std::vector<ggml_backend_dev_t> devs_a;
+    for (int i = 0; i < llama_model_n_devices(model_a); ++i) {
+        const ggml_backend_dev_t dev = llama_model_get_device(model_a, i);
+        if (dev && ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_META) {
+            devs_a.push_back(dev);
+        }
+    }
+
+    std::vector<ggml_backend_dev_t> devs_b;
+    for (int i = 0; i < llama_model_n_devices(model_b); ++i) {
+        const ggml_backend_dev_t dev = llama_model_get_device(model_b, i);
+        if (dev && ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_META) {
+            devs_b.push_back(dev);
+        }
+    }
+
+    if (devs_a.empty() || devs_b.empty()) {
+        return true;
+    }
+
+    for (const ggml_backend_dev_t dev : devs_b) {
+        if (std::find(devs_a.begin(), devs_a.end(), dev) != devs_a.end()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 struct common_speculative_impl_draft_mtp : public common_speculative_impl {
     common_params_speculative_draft params; // reuses the draft-model params slot (ctx_tgt/ctx_dft)
 
@@ -1434,8 +1476,8 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         GGML_ASSERT(ctx_tgt && ctx_dft && "MTP requires ctx_tgt and ctx_dft to be set");
 
         n_embd = llama_model_n_embd_out(llama_get_model(ctx_dft));
-        GGML_ASSERT(n_embd == llama_model_n_embd_out(llama_get_model(ctx_tgt)) &&
-                "MTP input row width must match the target h_nextn width");
+        // row width and NextN layer count are validated before this implementation is
+        // created - see common_speculative_mtp_is_available in common_speculative_init
         n_mtp_layers = std::max(1, (int) llama_model_n_layer_nextn(llama_get_model(ctx_dft)));
 
         SPC_TRC("%s", "adding speculative implementation 'draft-mtp'\n");
@@ -1478,8 +1520,29 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
         llama_set_embeddings_nextn(ctx_tgt, true, /*masked*/ false);
         llama_set_embeddings_nextn(ctx_dft, true, /*masked*/ true);
 
-        is_mem_shared = llama_get_ctx_other(ctx_dft) == ctx_tgt;
+        auto * model_tgt = llama_get_model(ctx_tgt);
+        auto * model_dft = llama_get_model(ctx_dft);
+        GGML_ASSERT(model_tgt && model_dft);
+
+        // ctx_other is set for every draft context, but only some archs alias the target's KV
+        // when building their caches (see llama_model_uses_shared_kv and the memory ctor in
+        // llama-model.cpp): hybrid memories, such as the qwen4exp draft, do not take mem_other
+        // at all and keep their own cache
+        const bool ctx_linked     = llama_get_ctx_other(ctx_dft) == ctx_tgt;
+        const bool shared_kv_arch = llama_model_uses_shared_kv(model_dft);
+        const bool same_devices   = common_speculative_share_devices(model_tgt, model_dft);
+
+        // a draft whose KV aliases the target's cannot use the catch-up decode below
+        if (shared_kv_arch && !same_devices) {
+            SPC_ERR("%s: the draft model and the target model share no device - the draft cannot alias the target KV (check --draft-device)\n", __func__);
+            GGML_ASSERT(same_devices);
+        }
+
+        is_mem_shared = ctx_linked && shared_kv_arch && same_devices;
         chain_heads   = n_mtp_layers > 1 && !is_mem_shared;
+
+        SPC_TRC("- mem_shared=%d [ctx_other=%d, shared_kv_arch=%d, same_devices=%d]\n",
+                (int) is_mem_shared, (int) ctx_linked, (int) shared_kv_arch, (int) same_devices);
 
         if (chain_heads) {
             this->params.n_max = std::min(this->params.n_max, n_mtp_layers);
@@ -1578,6 +1641,11 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
             //                                                       ^--- this is a problem
             // TODO:this is generally true, but would be nice to assert it
             const float * h_tgt = llama_get_embeddings_nextn(ctx_tgt);
+            if (h_tgt == nullptr) {
+                SPC_ERR("%s: target nextn embeddings are not readable - the draft cannot catch up\n",
+                        __func__);
+                return false;
+            }
 
             for (int k = 0; k < n_tokens; ++k) {
                 const auto & t = batch_in.tokens[k];
@@ -1639,6 +1707,11 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
 
             for (int32_t i = 0; i < n_rows; ++i) {
                 const float * h = llama_get_embeddings_nextn_ith(ctx_tgt, i_batch_beg[seq_id] + i);
+                if (h == nullptr) {
+                    SPC_ERR("%s: target nextn row %d is not readable for seq %d\n", __func__,
+                            i_batch_beg[seq_id] + i, (int) seq_id);
+                    return false;
+                }
                 std::memcpy(verify_h[seq_id].data() + (size_t) i * n_embd, h, row_bytes);
             }
 
@@ -1731,6 +1804,12 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
 
                 const llama_token id_sampled = common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
                 const float * h_row = llama_get_embeddings_nextn_ith(ctx_dft, i_last[seq_id]);
+                if (h_row == nullptr) {
+                    SPC_ERR("draft nextn row is not readable for seq_id=%d - stopping the draft\n", (int) seq_id);
+                    drafting[seq_id] = false;
+                    n_drafting--;
+                    continue;
+                }
 
                 const auto * cur_p = common_sampler_get_candidates(smpl, true);
 
@@ -2684,6 +2763,34 @@ common_speculative_output_limits common_speculative_get_output_limits(
 
 // initialization of the speculative decoding system
 //
+// check the MTP contract up-front so that the implementation can be skipped instead
+// of asserting at runtime: the target and the draft must exchange h rows of equal width
+// and the draft model must actually contain NextN layers
+static bool common_speculative_mtp_is_available(const common_params_speculative_draft & draft) {
+    if (!draft.ctx_tgt || !draft.ctx_dft) {
+        return false;
+    }
+
+    const llama_model * model_tgt = llama_get_model(draft.ctx_tgt);
+    const llama_model * model_dft = llama_get_model(draft.ctx_dft);
+
+    const int32_t n_embd_tgt = llama_model_n_embd_out(model_tgt);
+    const int32_t n_embd_dft = llama_model_n_embd_out(model_dft);
+
+    if (n_embd_tgt != n_embd_dft) {
+        SPC_WRN("%s: draft-mtp is not usable: draft n_embd_out = %d, target n_embd_out = %d\n", __func__,
+                (int) n_embd_dft, (int) n_embd_tgt);
+        return false;
+    }
+
+    if (llama_model_n_layer_nextn(model_dft) <= 0) {
+        SPC_WRN("%s: draft-mtp is not usable: the draft model has no NextN layers\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
 common_speculative * common_speculative_init(common_params_speculative & params, uint32_t n_seq) {
     // Compute the implementations to use based on the config and their order of preference
     std::vector<common_speculative_config> configs = {}; // list of speculative configs to try
@@ -2709,7 +2816,8 @@ common_speculative * common_speculative_init(common_params_speculative & params,
 
         add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE);
         add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3, params.draft.ctx_dft != nullptr);
-        add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_MTP,    params.draft.ctx_dft != nullptr);
+        add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_MTP,
+            common_speculative_mtp_is_available(params.draft));
         add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH, params.draft.ctx_dft != nullptr);
         add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK, params.draft.ctx_dft != nullptr);
     }

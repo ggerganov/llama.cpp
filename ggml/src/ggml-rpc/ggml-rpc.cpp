@@ -235,6 +235,13 @@ struct rpc_msg_graph_recompute_req {
     uint64_t uid;
 };
 
+// status of a graph compute issued by GRAPH_COMPUTE / GRAPH_RECOMPUTE: the compute itself is
+// asynchronous on the server, so this only carries what the server could observe at launch
+struct rpc_msg_graph_compute_rsp {
+    int8_t status;
+    int8_t padding[3];
+};
+
 struct rpc_msg_get_tensor_2d_req {
     rpc_tensor tensor;
     uint64_t offset;
@@ -430,6 +437,14 @@ static bool negotiate_hello(const std::shared_ptr<socket_t> & sock) {
         return false;
     }
 
+    // graph compute now carries a status response, so both sides must use the same patch
+    if (response.patch != RPC_PROTO_PATCH_VERSION) {
+        LOG_ERROR("RPC protocol patch mismatch: client %d.%d.%d, server %d.%d.%d\n",
+                       RPC_PROTO_MAJOR_VERSION, RPC_PROTO_MINOR_VERSION, RPC_PROTO_PATCH_VERSION,
+                       response.major, response.minor, response.patch);
+        return false;
+    }
+
     sock->update_caps(response.conn_caps);
     LOG_DBG("[%s] handshake ok: server version %d.%d.%d, transport: %s\n",
             __func__, response.major, response.minor, response.patch, sock->transport_name());
@@ -495,6 +510,12 @@ public:
     void send(enum rpc_cmd cmd, std::shared_ptr<const void> input, size_t input_size, void * output, size_t output_size);
     void send_async(enum rpc_cmd cmd, std::shared_ptr<const void> input, size_t input_size);
     void send_async(enum rpc_cmd cmd, std::shared_ptr<const void> input, size_t input_size, void * output, size_t output_size);
+    // async graph compute that expects a status response owned by the message itself
+    void send_async_graph_compute(enum rpc_cmd cmd, std::shared_ptr<const void> input, size_t input_size);
+
+    // status of the last graph compute answered by the server
+    int graph_compute_status() const;
+    void clear_graph_compute_status();
 
     ggml_backend_event_t event_new(ggml_backend_dev_t dev);
     void event_free(ggml_backend_event_t event);
@@ -518,6 +539,9 @@ private:
         void                        * output;
         size_t                        output_size;
         std::promise<void>            completion;
+        // responses small enough to be owned by the message, so that an async send does not
+        // depend on the caller's frame
+        uint8_t                       inline_output[4] = {};
     };
     using rpc_msg_ptr   = std::shared_ptr<rpc_msg>;
     using rpc_msg_queue = message_queue<rpc_msg_ptr>;
@@ -527,6 +551,7 @@ private:
     };
     std::mutex graph_mutex;
     std::unordered_map<uint32_t, std::unordered_set<uint64_t>> graph_uids;
+    std::atomic<int> graph_status = {0};
     rpc_msg_queue    queue;
     socket_ptr       sock;
     std::atomic_uint busy_spin_users = 0;
@@ -581,6 +606,25 @@ void rpc_dispatcher::send_async(enum rpc_cmd cmd, std::shared_ptr<const void> in
     msg->output = output;
     msg->output_size = output_size;
     GGML_ASSERT(queue.push(msg));
+}
+
+void rpc_dispatcher::send_async_graph_compute(enum rpc_cmd cmd, std::shared_ptr<const void> input, size_t input_size) {
+    GGML_ASSERT(sizeof(rpc_msg_graph_compute_rsp) <= sizeof(rpc_msg::inline_output));
+    auto msg = std::make_shared<rpc_msg>();
+    msg->cmd = cmd;
+    msg->input = input;
+    msg->input_size = input_size;
+    msg->output = msg->inline_output;
+    msg->output_size = sizeof(msg->inline_output);
+    GGML_ASSERT(queue.push(msg));
+}
+
+int rpc_dispatcher::graph_compute_status() const {
+    return graph_status.load(std::memory_order_acquire);
+}
+
+void rpc_dispatcher::clear_graph_compute_status() {
+    graph_status.store(0, std::memory_order_release);
 }
 
 ggml_backend_event_t rpc_dispatcher::event_new(ggml_backend_dev_t dev) {
@@ -674,6 +718,9 @@ void rpc_dispatcher::work() {
             if (msg_ptr->output) {
                 bool status = send_rpc_cmd(sock, msg_ptr->cmd, msg_ptr->input.get(), msg_ptr->input_size, msg_ptr->output, msg_ptr->output_size);
                 RPC_STATUS_ASSERT(status);
+                if (msg_ptr->cmd == RPC_CMD_GRAPH_COMPUTE || msg_ptr->cmd == RPC_CMD_GRAPH_RECOMPUTE) {
+                    graph_status.store((int8_t) ((uint8_t *) msg_ptr->output)[0], std::memory_order_release);
+                }
             } else {
                 bool status = send_rpc_cmd(sock, msg_ptr->cmd, msg_ptr->input.get(), msg_ptr->input_size);
                 RPC_STATUS_ASSERT(status);
@@ -1166,6 +1213,11 @@ static void ggml_backend_rpc_get_tensor_async(ggml_backend_t backend, const ggml
 static void ggml_backend_rpc_synchronize(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     rpc_ctx->dispatcher->synchronize();
+
+    const int status = rpc_ctx->dispatcher->graph_compute_status();
+    if (status != GGML_STATUS_SUCCESS) {
+        LOG_ERROR("%s: remote graph compute failed with status %d\n", __func__, status);
+    }
 }
 
 static void add_tensor(ggml_tensor * tensor, const ggml_cgraph * cgraph, const rpc_dispatcher * dispatcher, std::vector<rpc_tensor> & tensors, std::unordered_set<ggml_tensor*> & visited) {
@@ -1228,7 +1280,7 @@ void rpc_dispatcher::graph_compute(uint32_t device, const ggml_cgraph * cgraph) 
         auto request = std::make_shared<rpc_msg_graph_recompute_req>();
         request->device = device;
         request->uid    = cgraph->uid;
-        send_async(RPC_CMD_GRAPH_RECOMPUTE, request, sizeof(*request));
+        send_async_graph_compute(RPC_CMD_GRAPH_RECOMPUTE, request, sizeof(*request));
     } else {
         if (cgraph->uid != 0) {
             if (device_graph_uids.size() >= GRAPH_CACHE_MAX) {
@@ -1242,12 +1294,21 @@ void rpc_dispatcher::graph_compute(uint32_t device, const ggml_cgraph * cgraph) 
         uint8_t * input = serialize_graph(device, cgraph, this, &input_size);
         LOG_DBG2("[%s] serialized graph: %zu bytes\n", __func__, input_size);
         std::shared_ptr<uint8_t> input_ptr(input, std::default_delete<uint8_t[]>());
-        send_async(RPC_CMD_GRAPH_COMPUTE, input_ptr, input_size);
+        send_async_graph_compute(RPC_CMD_GRAPH_COMPUTE, input_ptr, input_size);
     }
 }
 
 static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
+
+    // graph compute is asynchronous, so a server-side failure is only observable once the
+    // answer has arrived: report it here instead of always claiming success
+    const int status = rpc_ctx->dispatcher->graph_compute_status();
+    rpc_ctx->dispatcher->clear_graph_compute_status();
+    if (status != GGML_STATUS_SUCCESS) {
+        return (enum ggml_status) status;
+    }
+
     rpc_ctx->dispatcher->graph_compute(rpc_ctx->device, cgraph);
     return GGML_STATUS_SUCCESS;
 }
@@ -1385,8 +1446,8 @@ public:
     bool get_tensor(const rpc_msg_get_tensor_req & request, std::vector<uint8_t> & response);
     bool get_tensor_2d(const rpc_msg_get_tensor_2d_req & request, std::vector<uint8_t> & response);
     bool copy_tensor(const rpc_msg_copy_tensor_req & request, rpc_msg_copy_tensor_rsp & response);
-    bool graph_compute(const std::vector<uint8_t> & input);
-    bool graph_recompute(const rpc_msg_graph_recompute_req & request);
+    bool graph_compute(const std::vector<uint8_t> & input, rpc_msg_graph_compute_rsp & response);
+    bool graph_recompute(const rpc_msg_graph_recompute_req & request, rpc_msg_graph_compute_rsp & response);
     bool comm_init(const rpc_msg_comm_init_req & request, rpc_msg_comm_init_rsp & response);
     bool comm_allreduce(const rpc_msg_comm_allreduce_req & request);
     bool comm_free(const rpc_msg_comm_free_req & request);
@@ -2069,7 +2130,8 @@ ggml_tensor * rpc_server::create_node(uint64_t id,
     return result;
 }
 
-bool rpc_server::graph_compute(const std::vector<uint8_t> & input) {
+bool rpc_server::graph_compute(const std::vector<uint8_t> & input, rpc_msg_graph_compute_rsp & response) {
+    response.status = 0;
     // serialization format:
     // | device (4 bytes) | uid (8 bytes) | n_nodes (4 bytes) | nodes (n_nodes * sizeof(uint64_t) | n_tensors (4 bytes) | tensors (n_tensors * sizeof(rpc_tensor)) |
     if (input.size() < 2*sizeof(uint32_t) + sizeof(uint64_t)) {
@@ -2144,7 +2206,8 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input) {
         // If id was non-zero and create_node returned nullptr, it indicates a deserialization error.
         if (graph->nodes[i] == nullptr && id != 0) {
             LOG_ERROR("[%s] failed to create graph node %d (id=%" PRId64 ")\n", __func__, i, id);
-            return false;
+            response.status = (int8_t) GGML_STATUS_FAILED;
+            return true;
         }
         if (graph->nodes[i] != nullptr) {
             LOG_DBG3("[%s] node %u: id=%" PRId64 ", op=%s, name=%s\n", __func__, i, id, ggml_op_name(graph->nodes[i]->op), graph->nodes[i]->name);
@@ -2155,13 +2218,17 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input) {
     const std::chrono::duration<double, std::milli> deserialize_ms = std::chrono::steady_clock::now() - t_deserialize;
 
     ggml_status status = ggml_backend_graph_compute_async(backends[device], graph);
-    GGML_ASSERT(status == GGML_STATUS_SUCCESS && "Unsuccessful graph computations are not supported with RPC");
+    if (status != GGML_STATUS_SUCCESS) {
+        LOG_ERROR("[%s] device: %u, graph compute returned %d\n", __func__, device, (int) status);
+        response.status = (int8_t) status;
+    }
     sg.graph = graph;
     LOG_DBG3("[%s] device: %u, graph build: %.3f ms\n", __func__, device, deserialize_ms.count());
     return true;
 }
 
-bool rpc_server::graph_recompute(const rpc_msg_graph_recompute_req & request) {
+bool rpc_server::graph_recompute(const rpc_msg_graph_recompute_req & request, rpc_msg_graph_compute_rsp & response) {
+    response.status = 0;
     uint32_t device = request.device;
     if (device >= backends.size()) {
         return false;
@@ -2169,12 +2236,16 @@ bool rpc_server::graph_recompute(const rpc_msg_graph_recompute_req & request) {
     auto it = stored_graphs[device].find(request.uid);
     if (it == stored_graphs[device].end() || it->second.graph == nullptr) {
         LOG_ERROR("[%s] device: %u, graph with uid %" PRIu64 " not found\n", __func__, device, request.uid);
-        return false;
+        response.status = (int8_t) GGML_STATUS_FAILED;
+        return true;
     }
     ggml_cgraph * graph = it->second.graph;
     LOG_DBG("[%s] device: %u, uid: %" PRIu64 "\n", __func__, device, request.uid);
     ggml_status status = ggml_backend_graph_compute_async(backends[device], graph);
-    GGML_ASSERT(status == GGML_STATUS_SUCCESS && "Unsuccessful graph computations are not supported with RPC");
+    if (status != GGML_STATUS_SUCCESS) {
+        LOG_ERROR("[%s] device: %u, graph compute returned %d\n", __func__, device, (int) status);
+        response.status = (int8_t) status;
+    }
     return true;
 }
 
@@ -2653,7 +2724,11 @@ static void rpc_serve_client(const std::vector<ggml_backend_t> & backends, const
                 if (!recv_msg(sock, input)) {
                     return;
                 }
-                if (!server.graph_compute(input)) {
+                rpc_msg_graph_compute_rsp response;
+                if (!server.graph_compute(input, response)) {
+                    return;
+                }
+                if (!send_msg(sock, &response, sizeof(response))) {
                     return;
                 }
                 break;
@@ -2663,7 +2738,11 @@ static void rpc_serve_client(const std::vector<ggml_backend_t> & backends, const
                 if (!recv_msg(sock, &request, sizeof(request))) {
                     return;
                 }
-                if (!server.graph_recompute(request)) {
+                rpc_msg_graph_compute_rsp response;
+                if (!server.graph_recompute(request, response)) {
+                    return;
+                }
+                if (!send_msg(sock, &response, sizeof(response))) {
                     return;
                 }
                 break;

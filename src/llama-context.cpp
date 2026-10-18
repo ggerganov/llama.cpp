@@ -1106,14 +1106,14 @@ float * llama_context::get_embeddings_seq(llama_seq_id seq_id) {
 float * llama_context::get_embeddings_nextn() {
     output_reorder();
 
-    return embd_nextn.data;
+    return embd_nextn_valid ? embd_nextn.data : nullptr;
 }
 
 float * llama_context::get_embeddings_nextn_ith(int32_t i) {
     output_reorder();
 
     try {
-        if (embd_nextn.data == nullptr) {
+        if (embd_nextn.data == nullptr || !embd_nextn_valid) {
             throw std::runtime_error("no nextn embeddings");
         }
 
@@ -1351,6 +1351,13 @@ void llama_context::set_embeddings_layer_inp(uint32_t lid, bool enable) {
 }
 
 void llama_context::set_nextn_layer_offset(int32_t offset) {
+    GGML_ASSERT(offset >= 0 && offset < (int32_t) model.hparams.n_layer_nextn);
+
+    if (cparams.nextn_layer_offset != offset) {
+        // the selected head changes which tensors the graph publishes
+        sched_need_reserve = true;
+    }
+
     cparams.nextn_layer_offset = offset;
 }
 
@@ -1724,13 +1731,18 @@ int llama_context::encode(const llama_batch_ext & batch_inp) {
     }
 
     // extract nextn embeddings (hidden state before the final output norm)
+    embd_nextn_valid = false;
     if (embd_nextn.data && t_h_nextn && cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
         ggml_backend_t backend_h = ggml_backend_sched_get_tensor_backend(sched.get(), t_h_nextn);
-        GGML_ASSERT(backend_h != nullptr);
-
-        const uint32_t n_embd = hparams.n_embd_out();
-        GGML_ASSERT(n_tokens*n_embd <= (int64_t) embd_nextn.size);
-        ggml_backend_tensor_get_async(backend_h, t_h_nextn, embd_nextn.data, 0, n_tokens*n_embd*sizeof(float));
+        if (backend_h == nullptr) {
+            // the reserved graph has no producer for t_h_nextn: the rows would be stale
+            LLAMA_LOG_WARN("%s: t_h_nextn is not scheduled - nextn embeddings are not readable\n", __func__);
+        } else {
+            const uint32_t n_embd = hparams.n_embd_out();
+            GGML_ASSERT(n_tokens*n_embd <= (int64_t) embd_nextn.size);
+            ggml_backend_tensor_get_async(backend_h, t_h_nextn, embd_nextn.data, 0, n_tokens*n_embd*sizeof(float));
+            embd_nextn_valid = true;
+        }
     }
 
     // TODO: hacky solution
@@ -1838,6 +1850,8 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
 
     // when computing embeddings, all tokens are output
     const bool output_all   = cparams.embeddings;
+    // non-causal attention needs the whole sequence in one ubatch
+    const bool embd_all     = output_all || !cparams.causal_attn;
     const bool has_samplers = !sampling.samplers.empty();
 
     const uint32_t n_seq_max = cparams.kv_unified ? LLAMA_MAX_SEQ : cparams.n_seq_max;
@@ -1916,7 +1930,7 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
     llama_memory_context_ptr mctx;
 
     while (true) {
-        mctx = memory->init_batch(*balloc, cparams.n_ubatch, output_all);
+        mctx = memory->init_batch(*balloc, cparams.n_ubatch, embd_all);
         if (!mctx) {
             return -2;
         }
@@ -2124,16 +2138,22 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
             const int64_t n_rows = masked ? n_outputs       : (int64_t) ubatch.n_tokens;
             const int64_t offset = masked ? n_outputs_prev  : n_tokens_prev;
 
+            embd_nextn_valid = false;
             if (embd_nextn.data && t_h_nextn && n_rows > 0 && cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
                 ggml_backend_t backend_h = ggml_backend_sched_get_tensor_backend(sched.get(), t_h_nextn);
-                GGML_ASSERT(backend_h != nullptr);
 
-                const uint32_t n_embd  = hparams.n_embd_out();
-                float * embd_nextn_out = embd_nextn.data + offset*n_embd;
+                if (backend_h == nullptr) {
+                    // the reserved graph has no producer for t_h_nextn: the rows would be stale
+                    LLAMA_LOG_WARN("%s: t_h_nextn is not scheduled - nextn embeddings are not readable\n", __func__);
+                } else {
+                    const uint32_t n_embd  = hparams.n_embd_out();
+                    float * embd_nextn_out = embd_nextn.data + offset*n_embd;
 
-                GGML_ASSERT((offset + n_rows)*n_embd <= (int64_t) embd_nextn.size);
-                ggml_backend_tensor_get_async(backend_h, t_h_nextn, embd_nextn_out, 0, n_rows*n_embd*sizeof(float));
-                extract_all_idxs = extract_all_idxs || !masked;
+                    GGML_ASSERT((offset + n_rows)*n_embd <= (int64_t) embd_nextn.size);
+                    ggml_backend_tensor_get_async(backend_h, t_h_nextn, embd_nextn_out, 0, n_rows*n_embd*sizeof(float));
+                    embd_nextn_valid = true;
+                    extract_all_idxs = extract_all_idxs || !masked;
+                }
             }
         }
 

@@ -1947,7 +1947,10 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             if (buf == nullptr) {
                 throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
             }
-            if (use_mlock && ggml_backend_buffer_is_host(buf)) {
+            // dummy buffers and multi-buffers have no base address to lock
+            const bool can_mlock = ggml_backend_buffer_is_host(buf)
+                && ggml_backend_buffer_get_base(buf) != nullptr;
+            if (use_mlock && can_mlock) {
                 pimpl->mlock_bufs.emplace_back(new llama_mlock);
                 auto & mlock_buf = pimpl->mlock_bufs.back();
                 mlock_buf->init   (ggml_backend_buffer_get_base(buf));
@@ -3779,6 +3782,10 @@ ggml_backend_dev_t llama_model_get_device(const struct llama_model * model, int 
         return nullptr;
     }
     return model->devices[i].dev;
+}
+
+bool llama_model_uses_shared_kv(const struct llama_model * model) {
+    return model->arch == LLM_ARCH_GEMMA4_ASSISTANT;
 }
 
 //
