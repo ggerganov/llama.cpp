@@ -3,6 +3,7 @@
 
 #include "hex-common.h"
 #include "htp-ops.h"
+#include "htp-vtcm.h"
 
 // Op-specific struct for precomputed unary params
 struct htp_unary_kernel_params {
@@ -25,6 +26,7 @@ struct htp_unary_kernel_params {
     uint32_t  dst_row_size_aligned;
 
     uint32_t  vtcm_size;
+    uint32_t  tiles_per_row;
 
     // Fastdiv helpers
     struct fastdiv_values div_ne01;
@@ -83,6 +85,24 @@ struct htp_unary_vtcm_layout {
 };
 
 static inline void htp_unary_vtcm_layout_build(
+    struct htp_unary_vtcm_layout * L,
+    size_t src0_bytes,
+    size_t src1_bytes,
+    size_t dst_bytes,
+    uint32_t n_threads
+) {
+    L->src0_bytes = src0_bytes;
+    L->src1_bytes = src1_bytes;
+    L->dst_bytes  = dst_bytes;
+
+    size_t off = 0;
+    VTCM_LAYOUT_ALLOC(off, off_src0, src0_bytes * n_threads);
+    VTCM_LAYOUT_ALLOC_OPTIONAL(off, off_src1, src1_bytes * n_threads, src1_bytes > 0);
+    VTCM_LAYOUT_ALLOC(off, off_dst,  dst_bytes * n_threads);
+    L->total_bytes = off;
+}
+
+static inline void htp_unary_solve_layout(
     struct htp_unary_vtcm_layout * L,
     uint32_t op,
     uint32_t ne00,
@@ -144,38 +164,33 @@ static inline void htp_unary_vtcm_layout_build(
     const bool is_f16 = (elem_size == sizeof(_Float16));
     uint32_t col_tile = 0;
 
+    size_t src0_bytes = 0;
+    size_t src1_bytes = 0;
+    size_t dst_bytes  = 0;
+
     if (vtcm_row_per_thread == 0 && !is_reduction && !is_f16) {
         const size_t per_thread_budget = vtcm_size / n_threads;
         const size_t col_tile_bytes = hex_align_down(per_thread_budget / 4, 128);
         col_tile = (uint32_t) (col_tile_bytes / elem_size);
 
-        L->src0_bytes = col_tile_bytes * 2;
-        L->dst_bytes  = col_tile_bytes * 2;
-        L->src1_bytes = 0;
+        src0_bytes = col_tile_bytes * 2;
+        dst_bytes  = col_tile_bytes * 2;
+        src1_bytes = 0;
     } else {
-        L->src0_bytes = src0_row_size_aligned * vtcm_row_per_thread * 2;
-        L->dst_bytes  = dst_row_size_aligned * vtcm_row_per_thread * 2;
+        src0_bytes = src0_row_size_aligned * vtcm_row_per_thread * 2;
+        dst_bytes  = dst_row_size_aligned * vtcm_row_per_thread * 2;
         if (op == HTP_OP_RMS_NORM_MUL) {
             if (broadcast_weight) {
-                L->src1_bytes = src1_row_size_aligned;
+                src1_bytes = src1_row_size_aligned;
             } else {
-                L->src1_bytes = src1_row_size_aligned * vtcm_row_per_thread * 2;
+                src1_bytes = src1_row_size_aligned * vtcm_row_per_thread * 2;
             }
         } else {
-            L->src1_bytes = 0;
+            src1_bytes = 0;
         }
     }
 
-    L->off_src0 = 0;
-    if (op == HTP_OP_RMS_NORM_MUL) {
-        L->off_src1 = L->off_src0 + L->src0_bytes * n_threads;
-        L->off_dst  = L->off_src1 + L->src1_bytes * n_threads;
-    } else {
-        L->off_src1 = 0;
-        L->off_dst  = L->off_src0 + L->src0_bytes * n_threads;
-    }
-
-    L->total_bytes = L->off_dst + L->dst_bytes * n_threads;
+    htp_unary_vtcm_layout_build(L, src0_bytes, src1_bytes, dst_bytes, n_threads);
 
     *out_col_tile = col_tile;
     *out_vtcm_row_per_thread = vtcm_row_per_thread;

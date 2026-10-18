@@ -1229,13 +1229,13 @@ static int execute_op_binary(struct htp_ops_context * octx) {
     bctx.dst_row_size_aligned  = dst_row_size_aligned;
     bctx.row_size_bytes        = src0_row_size;
 
-    bctx.src0_dim1_div  = init_fastdiv_values(src0->ne[1]);
-    bctx.src0_dim2_div  = init_fastdiv_values(src0->ne[2]);
-    bctx.src0_dim12_div = init_fastdiv_values(src0->ne[1] * src0->ne[2]);
+    bctx.src0_dim1_div  = kparams->src0_dim1_div;
+    bctx.src0_dim2_div  = kparams->src0_dim2_div;
+    bctx.src0_dim12_div = kparams->src0_dim12_div;
 
-    bctx.src1_dim1_div  = init_fastdiv_values(src1->ne[1]);
-    bctx.src1_dim2_div  = init_fastdiv_values(src1->ne[2]);
-    bctx.src1_dim3_div  = init_fastdiv_values(src1->ne[3]);
+    bctx.src1_dim1_div  = kparams->src1_dim1_div;
+    bctx.src1_dim2_div  = kparams->src1_dim2_div;
+    bctx.src1_dim3_div  = kparams->src1_dim3_div;
 
     bctx.split_at_ne01  = kparams->split_at_ne01;
     bctx.split_at_ne02  = kparams->split_at_ne02;

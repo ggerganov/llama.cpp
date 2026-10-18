@@ -1548,7 +1548,7 @@ static void unary_thread_tiled(unsigned int nth, unsigned int ith, void * data) 
     const struct fastdiv_values * div_ne012 = &uctx->kparams->div_ne012;
     const struct fastdiv_values * div_tpr   = &uctx->kparams->div_tpr;
 
-    const uint32_t tiles_per_row = (ne0 + col_tile - 1) / col_tile;
+    const uint32_t tiles_per_row = uctx->kparams->tiles_per_row;
 
     const bool src0_contig = (nb02 == (size_t)ne01 * nb01) &&
                              (nb03 == (size_t)ne02 * nb02);
@@ -1558,8 +1558,8 @@ static void unary_thread_tiled(unsigned int nth, unsigned int ith, void * data) 
     const uint32_t total_tiles = (src0_end_row - src0_start_row) * tiles_per_row;
 
     for (uint32_t t = 0, vtcm_idx = 0; t < total_tiles && vtcm_idx < 2; t++, vtcm_idx++) {
-        const uint32_t row  = src0_start_row + t / tiles_per_row;
-        const uint32_t col  = (t % tiles_per_row) * col_tile;
+        const uint32_t row  = src0_start_row + fastdiv(t, div_tpr);
+        const uint32_t col  = fastmodulo(t, tiles_per_row, div_tpr) * col_tile;
         const uint32_t tw   = MIN(col_tile, ne0 - col);
         const size_t   tb   = (size_t) tw * sizeof(float);
         const size_t   soff = (src0_contig ? (row * nb01) :
@@ -1666,7 +1666,7 @@ static void unary_thread_tiled_tri_f32(unsigned int nth, unsigned int ith, void 
     const struct fastdiv_values * div_ne012 = &uctx->kparams->div_ne012;
     const struct fastdiv_values * div_tpr   = &uctx->kparams->div_tpr;
 
-    const uint32_t tiles_per_row = (ne0 + col_tile - 1) / col_tile;
+    const uint32_t tiles_per_row = uctx->kparams->tiles_per_row;
     const int32_t  tri_ttype     = op_params[0];
 
     const bool src0_contig = (nb02 == (size_t)ne01 * nb01) &&
@@ -1677,8 +1677,8 @@ static void unary_thread_tiled_tri_f32(unsigned int nth, unsigned int ith, void 
     const uint32_t total_tiles = (src0_end_row - src0_start_row) * tiles_per_row;
 
     for (uint32_t t = 0, vtcm_idx = 0; t < total_tiles && vtcm_idx < 2; t++, vtcm_idx++) {
-        const uint32_t row  = src0_start_row + t / tiles_per_row;
-        const uint32_t col  = (t % tiles_per_row) * col_tile;
+        const uint32_t row  = src0_start_row + fastdiv(t, div_tpr);
+        const uint32_t col  = fastmodulo(t, tiles_per_row, div_tpr) * col_tile;
         const uint32_t tw   = MIN(col_tile, ne0 - col);
         const size_t   tb   = (size_t) tw * sizeof(float);
         const size_t   soff = (src0_contig ? (row * nb01) :
@@ -1845,7 +1845,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
     const size_t src0_row_size_aligned = kparams->src0_row_size_aligned;
     const size_t dst_row_size_aligned  = kparams->dst_row_size_aligned;
 
-    // Always 0 for F16 - htp_unary_vtcm_layout_build() keeps F16 on the row-block path,
+    // Always 0 for F16 - htp_unary_solve_layout() keeps F16 on the row-block path,
     // since only F32 has unary_task_f32_tiled_* kernels.
     const uint32_t col_tile = kparams->col_tile;
 
@@ -1874,6 +1874,10 @@ static int execute_op_unary(struct htp_ops_context * octx) {
          src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
          kparams->vtcm_src0_size, kparams->vtcm_src1_size, kparams->vtcm_dst_size);
 
+    struct htp_unary_vtcm_layout L;
+    htp_unary_vtcm_layout_build(&L, kparams->vtcm_src0_size_per_thread, kparams->vtcm_src1_size_per_thread,
+                                kparams->vtcm_dst_size_per_thread, kparams->n_threads);
+
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
     struct htp_unary_context uctx = {
         .octx                  = octx,
@@ -1894,18 +1898,18 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         .src1_row_size_aligned = src1_row_size_aligned,
         .dst_row_size_aligned  = dst_row_size_aligned,
 
-        .src0_vtcm_half_size   = kparams->vtcm_src0_size_per_thread / 2,
-        .src1_vtcm_half_size   = (octx->op == HTP_OP_RMS_NORM_MUL) ? (kparams->vtcm_src1_size_per_thread / (broadcast_weight ? 1 : 2)) : 0,
-        .dst_vtcm_half_size    = kparams->vtcm_dst_size_per_thread / 2,
+        .src0_vtcm_half_size   = kparams->vtcm_src0_size_per_thread >> 1,
+        .src1_vtcm_half_size   = (octx->op == HTP_OP_RMS_NORM_MUL) ? (kparams->vtcm_src1_size_per_thread >> (broadcast_weight ? 0 : 1)) : 0,
+        .dst_vtcm_half_size    = kparams->vtcm_dst_size_per_thread >> 1,
 
         .block                 = kparams->block,
         .nc                    = src0->ne[0],
         .col_tile              = col_tile,
         .broadcast_weight      = broadcast_weight,
 
-        .vtcm_src0             = VTCM_LAYOUT_PTR(uint8_t, base, 0),
-        .vtcm_src1             = VTCM_LAYOUT_PTR_OPTIONAL(uint8_t, base, kparams->vtcm_src0_size, kparams->vtcm_src1_size > 0),
-        .vtcm_dst              = VTCM_LAYOUT_PTR(uint8_t, base, kparams->vtcm_src0_size + kparams->vtcm_src1_size),
+        .vtcm_src0             = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0),
+        .vtcm_src1             = VTCM_LAYOUT_PTR_OPTIONAL(uint8_t, base, L.off_src1, L.src1_bytes > 0),
+        .vtcm_dst              = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst),
 
         .vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread,
         .vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread,

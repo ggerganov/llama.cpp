@@ -775,10 +775,13 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     gctx.src0_row_stride = src0_row_stride;
     gctx.src1_row_stride = src1_row_stride;
 
+    struct htp_glu_vtcm_layout L;
+    htp_glu_vtcm_layout_build(&L, src0_row_size_aligned, src1_row_size_aligned, dst_row_size_aligned, n_threads, kparams->vtcm_row_per_thread);
+
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
-    gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_src0);
-    gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_src1);
-    gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_dst);
+    gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0);
+    gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src1);
+    gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
 
     gctx.vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread;
     gctx.vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread;
@@ -938,10 +941,13 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     gctx.src0_row_stride = src0_row_stride;
     gctx.src1_row_stride = src1_row_stride;
 
+    struct htp_glu_vtcm_layout L;
+    htp_glu_vtcm_layout_build(&L, src0_row_size_aligned, src1_row_size_aligned, dst_row_size_aligned, n_threads, kparams->vtcm_row_per_thread);
+
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
-    gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_src0);
-    gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_src1);
-    gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, kparams->off_dst);
+    gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0);
+    gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src1);
+    gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
 
     gctx.vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread;
     gctx.vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread;

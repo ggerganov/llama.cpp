@@ -10,6 +10,7 @@
 #include "htp-ctx.h"
 #include "htp-ops.h"
 #include "htp-tensor.h"
+#include "htp-vtcm.h"
 #include "hvx-types.h"
 #include "hex-utils.h"
 #include "hvx-copy.h"
@@ -202,8 +203,8 @@ int op_diag_f32(struct htp_ops_context * octx) {
     octx->src0_spad.size = n_threads * octx->src0_spad.size_per_thread;
     octx->dst_spad.size  = n_threads * octx->dst_spad.size_per_thread;
 
-    octx->src0_spad.data = octx->ctx->vtcm_base;                        octx->src0_spad.src = NULL;
-    octx->dst_spad.data  = octx->src0_spad.data + octx->src0_spad.size; octx->dst_spad.src  = NULL;
+    octx->src0_spad.data = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, 0);                    octx->src0_spad.src = NULL;
+    octx->dst_spad.data  = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, octx->src0_spad.size); octx->dst_spad.src  = NULL;
 
     struct htp_diag_context dctx = {
         .octx                   = octx,

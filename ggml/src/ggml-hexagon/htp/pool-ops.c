@@ -271,15 +271,15 @@ static void pool_2d_thread(unsigned int nth, unsigned int ith, void * data) {
     struct htp_thread_trace * tr = &ctx->octx->ctx->trace[ith];
     dma_queue * dma_queue = ctx->octx->ctx->dma[ith];
 
-    const uint32_t src_spad_half = p->src_plane_bytes_aligned;
-    const uint32_t dst_spad_half = p->dst_plane_bytes_aligned;
-    const uint32_t src_bytes_per_thread = 2 * src_spad_half;
-    const uint32_t dst_bytes_per_thread = 2 * dst_spad_half;
-    const size_t off_dst = (size_t) ctx->n_threads * src_bytes_per_thread;
+    struct htp_pool_vtcm_layout layout;
+    htp_pool_vtcm_layout_build(&layout, p->src_plane_bytes_aligned, p->dst_plane_bytes_aligned, ctx->n_threads);
+
+    const uint32_t src_spad_half = (uint32_t) layout.src_spad_half_size;
+    const uint32_t dst_spad_half = (uint32_t) layout.dst_spad_half_size;
 
     uint8_t * vtcm_base = (uint8_t *) ctx->octx->ctx->vtcm_base;
-    uint8_t * src_spad  = vtcm_base + ith * src_bytes_per_thread;
-    uint8_t * dst_spad  = vtcm_base + off_dst + ith * dst_bytes_per_thread;
+    uint8_t * src_spad  = VTCM_LAYOUT_PTR(uint8_t, vtcm_base, layout.off_src) + ith * layout.src_bytes_per_thread;
+    uint8_t * dst_spad  = VTCM_LAYOUT_PTR(uint8_t, vtcm_base, layout.off_dst) + ith * layout.dst_bytes_per_thread;
 
     float * srcb2[2] = { (float *) src_spad, (float *) (src_spad + src_spad_half) };
     float * dstb2[2] = { (float *) dst_spad, (float *) (dst_spad + dst_spad_half) };

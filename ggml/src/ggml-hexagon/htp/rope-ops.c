@@ -746,18 +746,21 @@ static int execute_op_rope_f32(struct htp_ops_context * octx) {
     const size_t dst_row_size    = dst->ne[0] * sizeof(float);
     const size_t dst_row_stride  = dst->nb[1];
 
+    struct htp_rope_vtcm_layout layout;
+    htp_rope_vtcm_layout_build(&layout, src0->ne[0], kparams->n_threads, src2 ? src2->ne[0] : 0);
+
     struct htp_rope_context rctx;
     memset(&rctx, 0, sizeof(struct htp_rope_context));
 
     rctx.octx                  = octx;
-    rctx.vtcm_base             = (uint8_t *) octx->ctx->vtcm_base;
-    rctx.spad_per_thread       = kparams->spad_per_thread;
-    rctx.theta_cache_offset    = kparams->theta_cache_offset;
+    rctx.vtcm_base             = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, layout.off_spad);
+    rctx.spad_per_thread       = layout.bytes_per_thread;
+    rctx.theta_cache_offset    = layout.theta_cache_size_aligned;
 
     if (src2) {
         dma_queue * dma_q = octx->ctx->dma[0];
         const size_t ff_size = src2->ne[0] * sizeof(float);
-        float * vtcm_freq_factors = (float *) (rctx.vtcm_base + kparams->freq_factors_offset);
+        float * vtcm_freq_factors = VTCM_LAYOUT_PTR(float, octx->ctx->vtcm_base, layout.off_freq_factors);
         dma_queue_push(dma_q, dma_make_data(vtcm_freq_factors, src2->data),
                        kparams->freq_factors_size, 0, ff_size, 1);
         dma_queue_pop(dma_q);

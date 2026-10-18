@@ -17,6 +17,7 @@
 #include "htp-ctx.h"
 #include "htp-ops.h"
 #include "htp-tensor.h"
+#include "htp-vtcm.h"
 
 /* Circular wrap: maps any integer x into [0, n) */
 static inline uint32_t wrap_around(int32_t x, uint32_t n) {
@@ -537,8 +538,8 @@ int op_pad(struct htp_ops_context * octx) {
         octx->dst_spad.size_per_thread  = 2 * dst_row_size_aligned;
         octx->src0_spad.size = n_threads * octx->src0_spad.size_per_thread;
         octx->dst_spad.size  = n_threads * octx->dst_spad.size_per_thread;
-        octx->src0_spad.data = octx->ctx->vtcm_base;
-        octx->dst_spad.data  = octx->src0_spad.data + octx->src0_spad.size;
+        octx->src0_spad.data = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, 0);
+        octx->dst_spad.data  = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, octx->src0_spad.size);
         octx->src0_spad.src  = NULL;
         octx->dst_spad.src   = NULL;
     }

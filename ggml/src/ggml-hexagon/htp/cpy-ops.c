@@ -254,16 +254,15 @@ static int cpy_scalar(struct htp_ops_context * octx, const struct htp_copy_kerne
     }
 
     dma_queue * dma_q = octx->ctx->dma[0];
-    dma_addr_t s_vtcm = (dma_addr_t)(uintptr_t) octx->ctx->vtcm_base;
-    dma_addr_t d_vtcm = s_vtcm + VLEN;
+    uint8_t * s_ptr = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, 0);
+    uint8_t * d_ptr = VTCM_LAYOUT_PTR(uint8_t, octx->ctx->vtcm_base, VLEN);
+    dma_addr_t s_vtcm = (dma_addr_t)(uintptr_t) s_ptr;
+    dma_addr_t d_vtcm = (dma_addr_t)(uintptr_t) d_ptr;
     const uint32_t s_size = kparams->src0_type_size;
     const uint32_t d_size = kparams->dst_type_size;
 
     dma_queue_push(dma_q, dma_make_data(s_vtcm, src0->data), s_size, s_size, s_size, 1);
     dma_queue_pop(dma_q);
-
-    uint8_t * s_ptr = (uint8_t *) octx->ctx->vtcm_base;
-    uint8_t * d_ptr = s_ptr + VLEN;
 
     const HVX_Vector v_src = hvx_vmem(s_ptr);
     HVX_Vector v_dst;
@@ -365,6 +364,9 @@ static int cpy_sameshape_convert(struct htp_ops_context * octx, const struct htp
     const uint32_t n_threads = octx->n_threads;
     const struct htp_copy_convert_params * cvt = &kparams->u.convert;
 
+    struct htp_copy_convert_vtcm_layout layout;
+    htp_copy_convert_vtcm_layout_build(&layout, cvt->src0_row_stride, cvt->dst_row_stride, cvt->blk_rows, n_threads);
+
     struct htp_copy_context ct;
     ct.octx                  = octx;
     ct.kparams               = kparams;
@@ -373,8 +375,8 @@ static int cpy_sameshape_convert(struct htp_ops_context * octx, const struct htp
     ct.src0_nrows_per_thread = fastdiv(nrows + n_threads - 1, &octx->n_threads_div);
 
     uint8_t * vtcm_base = (uint8_t *) octx->ctx->vtcm_base;
-    ct.vtcm_src0 = vtcm_base;
-    ct.vtcm_dst  = vtcm_base + (size_t) n_threads * cvt->spad0_size_per_thread;
+    ct.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, vtcm_base, layout.off_src0);
+    ct.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, vtcm_base, layout.off_dst);
 
     work_queue_func_t copy_fun = NULL;
     if (dst->type == HTP_TYPE_F16 && src0->type == HTP_TYPE_F32) {

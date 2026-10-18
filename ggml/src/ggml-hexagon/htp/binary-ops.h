@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "hex-common.h"
+#include "hex-fastdiv.h"
 #include "htp-ops.h"
 #include "htp-vtcm.h"
 
@@ -40,6 +41,14 @@ struct htp_binary_kernel_params {
     uint8_t  split_at_ne02;
     uint8_t  src1_strided;
     uint8_t  n_srcs;
+
+    struct fastdiv_values src0_dim1_div;
+    struct fastdiv_values src0_dim2_div;
+    struct fastdiv_values src0_dim12_div;
+
+    struct fastdiv_values src1_dim1_div;
+    struct fastdiv_values src1_dim2_div;
+    struct fastdiv_values src1_dim3_div;
 };
 
 #if defined(__cplusplus)
@@ -145,7 +154,9 @@ static inline void htp_binary_vtcm_layout_build(
         return;
     }
 
-    const size_t rows_per_buffer = (vtcm_size - static_vtcm_size) / (n_threads * spad_row_total);
+    const size_t rows_per_buffer = (kparams->rows_per_buffer > 0)
+        ? kparams->rows_per_buffer
+        : (vtcm_size - static_vtcm_size) / (n_threads * spad_row_total);
     if (rows_per_buffer == 0) {
         return;
     }

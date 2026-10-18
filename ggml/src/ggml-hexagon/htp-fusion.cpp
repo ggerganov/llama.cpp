@@ -612,7 +612,8 @@ static bool fuse_mul_mul_scalar(const ggml_hexagon_session * sess, htp_opnode & 
 
     const size_t vtcm_size = htp_session_vtcm_size(sess);
     struct htp_binary_kernel_params kparams = *k0;
-    kparams.src2_size = kparams.src1_size;
+    kparams.src2_size       = kparams.src1_size;
+    kparams.rows_per_buffer = 0;
     if (kparams.src1_size > 65536 || kparams.src1_size + kparams.src2_size > vtcm_size) return false;
 
     struct htp_binary_vtcm_layout L;
@@ -662,7 +663,8 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     }
 
     struct htp_binary_kernel_params kparams = *k0;
-    kparams.n_srcs = curr_n + 1;
+    kparams.n_srcs          = curr_n + 1;
+    kparams.rows_per_buffer = 0;
     if (k0->kernel_type != HTP_BINARY_KERNEL_CHUNKED || k1->kernel_type != HTP_BINARY_KERNEL_CHUNKED) {
         if (kparams.kernel_type != HTP_BINARY_KERNEL_SAME_SHAPE) {
             const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
@@ -676,6 +678,12 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
             kparams.src0_row_size_aligned = k0->src0_row_size_aligned;
             kparams.src1_row_size_aligned = k0->src0_row_size_aligned;
             kparams.dst_row_size_aligned  = k0->dst_row_size_aligned;
+            kparams.src0_dim1_div         = k0->src0_dim1_div;
+            kparams.src0_dim2_div         = k0->src0_dim2_div;
+            kparams.src0_dim12_div        = k0->src0_dim12_div;
+            kparams.src1_dim1_div         = k0->src1_dim1_div;
+            kparams.src1_dim2_div         = k0->src1_dim2_div;
+            kparams.src1_dim3_div         = k0->src1_dim3_div;
         }
 
         auto check_split = [&](const ggml_tensor * t) {

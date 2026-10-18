@@ -3,6 +3,7 @@
 
 #include "hex-common.h"
 #include "htp-ops.h"
+#include "htp-vtcm.h"
 #include <stdint.h>
 
 struct htp_glu_kernel_params {
@@ -14,9 +15,6 @@ struct htp_glu_kernel_params {
     uint32_t vtcm_src1_size_per_thread;
     uint32_t vtcm_dst_size_per_thread;
 
-    uint32_t off_src0;
-    uint32_t off_src1;
-    uint32_t off_dst;
     uint32_t vtcm_size;
 
     uint32_t src0_row_size_aligned;
@@ -63,22 +61,20 @@ static inline void htp_glu_vtcm_layout_build(
     size_t                       src1_row_size_aligned,
     size_t                       dst_row_size_aligned,
     uint32_t                     n_threads,
-    size_t                       vtcm_size
+    uint32_t                     vtcm_row_per_thread
 ) {
-    const size_t   spad_size_per_row   = src0_row_size_aligned + src1_row_size_aligned + dst_row_size_aligned;
-    const uint32_t vtcm_row_per_thread = (uint32_t) (vtcm_size / (n_threads * spad_size_per_row));
-
     L->vtcm_row_per_thread = vtcm_row_per_thread;
 
     L->src0_bytes_per_thread = src0_row_size_aligned * vtcm_row_per_thread;
     L->src1_bytes_per_thread = src1_row_size_aligned * vtcm_row_per_thread;
     L->dst_bytes_per_thread  = dst_row_size_aligned * vtcm_row_per_thread;
 
-    L->off_src0 = 0;
-    L->off_src1 = L->off_src0 + L->src0_bytes_per_thread * n_threads;
-    L->off_dst  = L->off_src1 + L->src1_bytes_per_thread * n_threads;
+    size_t off = 0;
+    VTCM_LAYOUT_ALLOC(off, off_src0, L->src0_bytes_per_thread * n_threads);
+    VTCM_LAYOUT_ALLOC(off, off_src1, L->src1_bytes_per_thread * n_threads);
+    VTCM_LAYOUT_ALLOC(off, off_dst,  L->dst_bytes_per_thread * n_threads);
 
-    L->total_bytes = L->off_dst + L->dst_bytes_per_thread * n_threads;
+    L->total_bytes = off;
 }
 
 #endif // HTP_GLU_OPS_H

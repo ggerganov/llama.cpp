@@ -232,7 +232,7 @@ static void ssm_conv_thread_f32_decode(unsigned int nth, unsigned int ith, void 
     // raw_dot keeps both operands in the DMA layout, so src1 needs no prep pass
     const bool raw_dot = (d_conv == 4) && (d_inner_per_thread % VLEN_FP32 == 0);
 
-    const uint32_t n_tiles   = (d_inner_per_thread + d_inner_tile - 1) / d_inner_tile;
+    const uint32_t n_tiles   = fastdiv(d_inner_per_thread + d_inner_tile - 1, &kparams->div_d_inner_tile);
     const uint32_t n_chunks  = n_s * n_tiles;
     const size_t   row_bytes = d_conv * sizeof(float);
 
@@ -397,7 +397,7 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
 
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
 
-    const uint32_t n_tiles   = (d_inner_per_thread + d_inner_tile - 1) / d_inner_tile;
+    const uint32_t n_tiles   = fastdiv(d_inner_per_thread + d_inner_tile - 1, &kparams->div_d_inner_tile);
     const uint32_t n_chunks  = n_s * n_tiles;
     const size_t   row_bytes = ncs * sizeof(float);
 
@@ -584,17 +584,23 @@ int op_ssm_conv_f32(struct htp_ops_context * octx) {
 
     const uint32_t n_threads = octx->n_threads;
 
+    struct htp_ssm_conv_vtcm_layout L;
+    htp_ssm_conv_vtcm_layout_build(&L, kparams->vtcm_src0_size_per_thread, kparams->vtcm_src1_size_per_thread,
+                                   kparams->vtcm_dst_size_per_thread, n_threads);
+
+    uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
+
     octx->src0_spad.size_per_thread = kparams->vtcm_src0_size_per_thread;
     octx->src1_spad.size_per_thread = kparams->vtcm_src1_size_per_thread;
     octx->dst_spad.size_per_thread  = kparams->vtcm_dst_size_per_thread;
 
-    octx->src0_spad.size = kparams->vtcm_src0_size;
-    octx->src1_spad.size = kparams->vtcm_src1_size;
-    octx->dst_spad.size  = kparams->vtcm_dst_size;
+    octx->src0_spad.size = L.src0_bytes;
+    octx->src1_spad.size = L.src1_bytes;
+    octx->dst_spad.size  = L.dst_bytes;
 
-    octx->src0_spad.data = octx->ctx->vtcm_base;
-    octx->src1_spad.data = octx->src0_spad.data + octx->src0_spad.size;
-    octx->dst_spad.data  = octx->src1_spad.data + octx->src1_spad.size;
+    octx->src0_spad.data = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0);
+    octx->src1_spad.data = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src1);
+    octx->dst_spad.data  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
     octx->src0_spad.src  = NULL;
     octx->src1_spad.src  = NULL;
     octx->dst_spad.src   = NULL;
