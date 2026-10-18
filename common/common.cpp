@@ -1248,8 +1248,7 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
 
         // the draft context is created from the same base params and follows the main context, fit both together
         const bool has_draft = params.speculative.has_dft();
-        const bool spec_mtp  = std::find(params.speculative.types.begin(), params.speculative.types.end(),
-            COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
+        const bool spec_mtp  = params.speculative.has_mtp();
 
         common_params params_dft = common_base_params_to_speculative(params);
 
