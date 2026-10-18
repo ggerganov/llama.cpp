@@ -6,6 +6,7 @@
 #include "ggml-cpp.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
@@ -150,6 +151,12 @@ static bool llama_moe_cache_is_host_weight(const ggml_tensor * t) {
 
 }
 
+void llama_moe_cache_prior_mask(const int32_t * slots, int32_t n_expert, float * mask) {
+    for (int32_t e = 0; e < n_expert; ++e) {
+        mask[e] = slots[e] >= 0 ? 1.0f : 0.0f;
+    }
+}
+
 struct llama_moe_cache::impl {
     // a GPU with its own budget and banks, it caches the layers assigned to it
     struct device {
@@ -197,6 +204,9 @@ struct llama_moe_cache::impl {
 
     int32_t n_expert_used;
 
+    float   prior_lam = 0.0f; // cache-aware routing: lambda, 0 = disabled
+    std::vector<char> prior_layer; // [n_layer] layers that were routed with the cache prior at least once
+
     stats stats_small; // up to 8 tokens per ubatch
     stats stats_large;
     stats stats_copy;  // experts copied from the cache for large batches
@@ -218,8 +228,9 @@ struct llama_moe_cache::impl {
     // views used by copy_experts
     ggml_context_ptr ctx_views;
 
-    impl(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size) :
-            n_expert_used(model.hparams.n_expert_used_max()), layers(model.layers.size()) {
+    impl(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float prior) :
+            n_expert_used(model.hparams.n_expert_used_max()), prior_lam(prior),
+            prior_layer(model.layers.size(), 0), layers(model.layers.size()) {
         for (size_t i = 0; i < backends.size(); ++i) {
             const auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backends[i]));
             if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU || dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
@@ -308,8 +319,6 @@ struct llama_moe_cache::impl {
         }
 
         // within a device the budget is split by the size of the experts, so each group caches the same fraction of its experts
-        std::vector<size_t> n_tensors(devices.size(), 0);
-        size_t n_tensors_host = 0;
         for (group & g : groups) {
             const device & d = devices[g.id];
             const int32_t n_expert  = g.ref[0]->ne[2];
@@ -318,17 +327,28 @@ struct llama_moe_cache::impl {
             while (g.n_slots < max_slots && alloc_size(g, g.n_slots + 1) <= budget) {
                 g.n_slots++;
             }
+        }
+
+        std::vector<size_t> n_tensors(devices.size(), 0);
+        size_t n_tensors_host = 0;
+        for (group & g : groups) {
             if (g.n_slots < n_expert_used) {
-                LLAMA_LOG_WARN("%s: MoE cache budget is too small for %zu layers, they are not cached\n", __func__, g.layers.size());
+                LLAMA_LOG_WARN("%s: the MoE cache budget of %.2f MiB is too small for %zu layers, they are not cached\n",
+                    __func__, size/1024.0/1024.0, g.layers.size());
                 g.n_slots = 0;
                 continue;
             }
-            g.lru.init(model.layers.size(), n_expert, g.n_slots);
+            g.lru.init(model.layers.size(), g.ref[0]->ne[2], g.n_slots);
             n_tensors[g.id] += g.ref.size()*(1 + g.layers.size());
             n_tensors_host  += g.layers.size();
         }
         if (n_tensors_host == 0) {
-            throw std::runtime_error("MoE cache is too small to hold the experts of one token");
+            char msg[256];
+            snprintf(msg, sizeof(msg),
+                "the MoE cache of %.2f MiB cannot hold the experts of a single token of any layer: "
+                "use a larger --moe-cache-mib, or keep the experts of a few layers on the device with --n-cpu-moe",
+                size/1024.0/1024.0);
+            throw std::runtime_error(msg);
         }
 
         auto init_ctx = [](size_t n_tensors) {
@@ -472,6 +492,28 @@ struct llama_moe_cache::impl {
         return l.slot_map;
     }
 
+    float prior() const {
+        return prior_lam;
+    }
+
+    bool is_cached(int32_t il) const {
+        return il >= 0 && il < (int32_t) layers.size() && layers[il].ig >= 0;
+    }
+
+    const int32_t * get_cached_slots(int32_t il) const {
+        if (il < 0 || il >= (int32_t) layers.size() || layers[il].ig < 0) {
+            return nullptr;
+        }
+        return groups[layers[il].ig].lru.slot_map[il];
+    }
+
+    int32_t n_expert(int32_t il) const {
+        if (il < 0 || il >= (int32_t) layers.size() || layers[il].ig < 0) {
+            return 0;
+        }
+        return (int32_t) layers[il].slot_map->ne[1];
+    }
+
     ggml_tensor * get_experts(const ggml_tensor * w) const {
         const auto it = bindings.find(w);
         return it != bindings.end() ? it->second.cached : nullptr;
@@ -576,6 +618,10 @@ struct llama_moe_cache::impl {
         st.misses += fills.size();
         st.bytes  += bytes;
 
+        if (prior_lam > 0.0f && ids.size() <= (size_t) 8*n_expert_used) {
+            prior_layer[il] = 1;
+        }
+
         // the next copy synchronizes the backend before it changes the slot map again
         ggml_backend_tensor_set_async(backend, dst, src->data, 0, ggml_nbytes(src));
 
@@ -593,17 +639,41 @@ struct llama_moe_cache::impl {
         };
         log("ubatch <= 8", stats_small);
         log("ubatch  > 8", stats_large);
+        if (prior_lam > 0.0f) {
+            size_t n_layer_prior = 0;
+            for (char c : prior_layer) {
+                n_layer_prior += c != 0;
+            }
+            LLAMA_LOG_INFO("llama_moe_cache: cache prior: lambda = %.2f, routed %zu/%zu cached layers\n",
+                prior_lam, n_layer_prior, prior_layer.size());
+        }
         if (stats_copy.hits > 0) {
             LLAMA_LOG_INFO("llama_moe_cache: large batches: %zu experts copied from the cache, %.2f MiB\n", stats_copy.hits, stats_copy.bytes/1024.0/1024.0);
         }
     }
 };
 
-llama_moe_cache::llama_moe_cache(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size) :
-    pimpl(new impl(model, backends, bufts, size)) {
+llama_moe_cache::llama_moe_cache(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float prior) :
+    pimpl(new impl(model, backends, bufts, size, prior)) {
 }
 
 llama_moe_cache::~llama_moe_cache() = default;
+
+float llama_moe_cache::prior() const {
+    return pimpl->prior();
+}
+
+bool llama_moe_cache::is_cached(int32_t il) const {
+    return pimpl->is_cached(il);
+}
+
+const int32_t * llama_moe_cache::get_cached_slots(int32_t il) const {
+    return pimpl->get_cached_slots(il);
+}
+
+int32_t llama_moe_cache::n_expert(int32_t il) const {
+    return pimpl->n_expert(il);
+}
 
 ggml_backend_t llama_moe_cache::backend(int32_t il) const {
     return pimpl->backend(il);

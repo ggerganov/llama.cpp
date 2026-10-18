@@ -597,6 +597,9 @@ struct common_params {
 
     size_t moe_cache_size = 0; // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
 
+    // cache-aware MoE routing (arXiv:2412.00099), requires moe_cache_size > 0
+    float   moe_cache_prior = 0.0f; // lambda in [0, 1]: favor the experts that are already in the MoE cache, 0 = disabled
+
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see tools/mtmd)

@@ -2,19 +2,39 @@
 
 #include "ggml-backend.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <vector>
 
 struct llama_model;
 
+// cache-aware MoE routing ("cache prior", arXiv:2412.00099)
+// fills mask[e] with 1.0f for every expert of the layer that is currently in the cache (slots[e] >= 0)
+// the caller applies the mask as a bias to the router scores, so that it only changes the ranking of the experts and
+// never the weights they are combined with
+void llama_moe_cache_prior_mask(const int32_t * slots, int32_t n_expert, float * mask);
+
 // keeps the most recently used experts of host-resident MoE layers in a device buffer
 // each layer has a slot map in host memory: when the scheduler copies it to the device, the copy callback uploads the missing experts
 class llama_moe_cache {
 public:
     // backends are all the backends of the context, each GPU gets its own cache of the given size for the layers assigned to it
-    llama_moe_cache(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size);
+    // prior is the lambda of the cache-aware routing, 0 keeps the original expert selection, see llama_moe_cache_prior_mask
+    llama_moe_cache(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float prior = 0.0f);
     ~llama_moe_cache();
+
+    // lambda of the cache-aware routing, 0 = disabled
+    float prior() const;
+
+    // true if the experts of the layer il are kept in the cache, so that a cache prior can be applied to its routing
+    bool is_cached(int32_t il) const;
+
+    // the slot of each expert of the layer il in the cache, -1 if it is not cached, nullptr if the layer is not cached
+    const int32_t * get_cached_slots(int32_t il) const;
+
+    // the number of experts of the layer il, 0 if the layer is not cached
+    int32_t n_expert(int32_t il) const;
 
     // the device that caches layer il
     ggml_backend_t backend(int32_t il) const;

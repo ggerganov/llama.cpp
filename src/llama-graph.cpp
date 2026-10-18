@@ -17,12 +17,14 @@
 #include "llama-memory-hybrid-iswa.h"
 #include "llama-memory-recurrent.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <unordered_set>
 
 // dedup helpers
@@ -2264,10 +2266,23 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         cb(selection_probs, "ffn_moe_probs_masked", il);
     }
 
+    // cache-aware routing: favor the experts that are already in the MoE cache, so that fewer of them have to be
+    // read from the host memory (ref: arXiv:2412.00099)
+    // only the ranking of the experts changes, their weights are still the unbiased probs
+    ggml_tensor * prior_bias = nullptr;
+    if (selected_experts_in == nullptr) {
+        prior_bias = build_moe_cache_prior(selection_probs, up_exps, gate_exps, down_exps, gate_up_exps, n_expert_used, il);
+    }
+
     // select experts
     ggml_tensor * selected_experts = selected_experts_in;
     if (selected_experts == nullptr) {
-        selected_experts = ggml_argsort_top_k(ctx0, selection_probs, n_expert_used); // [n_expert_used, n_tokens]
+        // the cache prior only ranks the experts, the weights below are read from the unbiased probs
+        ggml_tensor * ranking = prior_bias == nullptr ? selection_probs : ggml_add(ctx0, selection_probs, prior_bias);
+        if (prior_bias != nullptr) {
+            cb(ranking, "ffn_moe_probs_cache_prior", il);
+        }
+        selected_experts = ggml_argsort_top_k(ctx0, ranking, n_expert_used); // [n_expert_used, n_tokens]
         cb(selected_experts->src[0], "ffn_moe_argsort", il);
     }
     cb(selected_experts, "ffn_moe_topk", il);
@@ -2529,8 +2544,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     return moe_out;
 }
 
-ggml_tensor * llm_graph_context::build_moe_cache_slots(
-         ggml_tensor * selected_experts,
+ggml_tensor * llm_graph_context::build_moe_cache_slot_map(
          ggml_tensor * up_exps,
          ggml_tensor * gate_exps,
          ggml_tensor * down_exps,
@@ -2540,7 +2554,7 @@ ggml_tensor * llm_graph_context::build_moe_cache_slots(
         return nullptr;
     }
 
-    ggml_tensor * slot_map = moe_cache->get_slot_map(il, selected_experts->ne[1], selected_experts->ne[0]);
+    ggml_tensor * slot_map = moe_cache->get_slot_map(il, n_tokens, n_expert_used);
     if (slot_map == nullptr) {
         return nullptr;
     }
@@ -2548,6 +2562,21 @@ ggml_tensor * llm_graph_context::build_moe_cache_slots(
         if (w != nullptr && moe_cache->get_experts(w) == nullptr) {
             return nullptr;
         }
+    }
+
+    return slot_map;
+}
+
+ggml_tensor * llm_graph_context::build_moe_cache_slots(
+         ggml_tensor * selected_experts,
+         ggml_tensor * up_exps,
+         ggml_tensor * gate_exps,
+         ggml_tensor * down_exps,
+         ggml_tensor * gate_up_exps,
+                 int   il) const {
+    ggml_tensor * slot_map = build_moe_cache_slot_map(up_exps, gate_exps, down_exps, gate_up_exps, il);
+    if (slot_map == nullptr) {
+        return nullptr;
     }
 
     ggml_tensor * ids = selected_experts;
@@ -2569,6 +2598,114 @@ ggml_tensor * llm_graph_context::build_moe_cache_slots(
     ggml_build_forward_expand(gf, slots);
 
     return ggml_reshape_2d(ctx0, slots, selected_experts->ne[0], selected_experts->ne[1]); // [n_expert_used, n_tokens]
+}
+
+ggml_tensor * llm_graph_context::build_moe_cache_prior(
+         ggml_tensor * selection_probs,
+         ggml_tensor * up_exps,
+         ggml_tensor * gate_exps,
+         ggml_tensor * down_exps,
+         ggml_tensor * gate_up_exps,
+             int64_t   n_expert_used,
+                 int   il) const {
+    const float prior = cparams.moe_cache_prior;
+
+    if (moe_cache == nullptr || !(prior > 0.0f)) {
+        return nullptr;
+    }
+
+    ggml_tensor * slot_map = build_moe_cache_slot_map(up_exps, gate_exps, down_exps, gate_up_exps, il);
+    if (slot_map == nullptr || !moe_cache->is_cached(il)) {
+        return nullptr;
+    }
+
+    // the shape of the router scores is the reference: an architecture may route a number of tokens
+    // that is not the one of the ubatch, and every tensor below has to match the scores, not the ubatch
+    const int64_t n_expert = selection_probs->ne[0];
+    const int64_t n_routed = selection_probs->ne[1];
+    if (n_expert <= 1 || n_expert != slot_map->ne[1] || n_routed < 1) {
+        return nullptr;
+    }
+    if (n_routed != n_tokens) {
+        LLAMA_LOG_DEBUG("%s: layer %d routes %lld tokens, the ubatch has %lld, the cache prior follows the routing\n",
+            __func__, il, (long long) n_routed, (long long) n_tokens);
+    }
+
+    if (!ggml_is_contiguous(selection_probs)) {
+        selection_probs = ggml_cont(ctx0, selection_probs);
+    }
+
+    // the mask of the experts that are in the cache, refreshed by the input before every ubatch
+    auto inp = std::make_unique<llm_graph_input_moe_cache_prior>(moe_cache, il, (int32_t) n_expert, (int32_t) n_expert_used);
+    ggml_tensor * mask = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_expert);
+    ggml_set_input(mask);
+    ggml_format_name(mask, "inp_moe_cache_prior-%d", il);
+    inp->prior_mask = mask;
+    res->add_input(std::move(inp));
+
+    // delta of equation (10) of the paper is the range of the router scores, which for the gates that
+    // llama.cpp uses is the largest score of the token: the smallest one is close to 0 for a softmax
+    // and to the smallest sigmoid for a sigmoid gate, and the scores of a token are only compared to
+    // each other, so only their upper end matters. It is taken per token instead of as the running
+    // average of the paper, which appendix D of it finds equivalent
+    //
+    // a sharp softmax is a one-hot at the argmax, because the kernel subtracts the maximum of the row
+    // before the exponent, so sum_rows(scores*onehot) extracts one score of the row. Repeating that on
+    // the row with the winner pushed away gives the scores in order, without an argsort
+    constexpr float sharp = 16384.0f;
+
+    auto extract = [&](ggml_tensor * a, float sc) {
+        return ggml_sum_rows(ctx0, ggml_mul(ctx0, a, ggml_soft_max_ext(ctx0, a, nullptr, sc, 0.0f)));
+    };
+
+    ggml_tensor * hi = extract(selection_probs, sharp); // [1, n_routed], the largest score of the token
+
+    ggml_tensor * delta = ggml_clamp(ctx0, hi, 0.0f, INFINITY);
+    cb(delta, "ffn_moe_prior_delta", il);
+
+    // lambda*delta of every token, as a row that the bias broadcasts over the experts
+    ggml_tensor * ldelta = ggml_scale(ctx0, delta, prior); // [1, n_routed]
+
+    ggml_tensor * mask_r = ggml_repeat(ctx0, ggml_reshape_3d(ctx0, mask, n_expert, 1, 1), selection_probs);
+    ggml_tensor * bias   = ggml_mul(ctx0, mask_r, ggml_repeat(ctx0, ldelta, selection_probs));
+
+    // The best expert of the router keeps being selected whatever the cache holds, which is the
+    // m~ = m | top-J of section 3.3 of the paper with J = 1. Writing that union into the mask would
+    // need a scatter over the rows that an index tensor selects per token, and ggml does not have
+    // one, but the top-J of a token is a threshold, top-J = { e : s[e] >= s[J] }, and for J = 1 the
+    // threshold is the largest score, which is already extracted above. So the union of the two masks
+    // is a product:
+    //
+    //   m~ = m + ind - m*ind,  ind = [s >= max(s)],  bias = lambda*delta * m~
+    //
+    // The guarantee needs no cap on the bias: an expert that is not the best one scores below max(s),
+    // so with the same bias on both sides it cannot overtake it, s_e + b*m~_e < max(s) + b = s'_argmax.
+    // Capping the bias at the gap max(s) - s[2] instead would keep the top-1 as well, but it would cap
+    // the reranking with it, and on a router with flat scores that is most of it: measured on the
+    // simulation of scripts/simulate-moe-cache-prior.py, it costs 2.4x of the miss rate.
+    //
+    // J = 1 is not a knob, so that the whole feature is the one lambda: 0 is the original routing and
+    // 1 is the fastest routing that still selects the expert the router likes most, which leaves the
+    // rest of the selection to the cache. A larger J only raises the floor of the miss rate, and
+    // dropping the promotion to 0 trades the guarantee for a lower floor, which is another feature.
+    if (n_expert > 1) {
+        // [s >= max(s)] is 1 - step(max(s) - s), because the step of ggml is the strict x > 0 and the
+        // best expert scores exactly max(s); sgn would not do either, it is 0 at 0
+        ggml_tensor * one = ggml_fill(ctx0, ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, 1, n_routed, 1, 1), 1.0f);
+        ggml_tensor * ind = ggml_step(ctx0, ggml_sub(ctx0, ggml_repeat(ctx0, hi, selection_probs), selection_probs));
+        ind = ggml_neg(ctx0, ind);
+        ind = ggml_add(ctx0, ind, one); // ggml broadcasts the smaller operand, so 1 - x is its neg + 1
+
+        ggml_tensor * promote = ggml_sub(ctx0, ggml_add(ctx0, mask_r, ind), ggml_mul(ctx0, mask_r, ind));
+
+        bias = ggml_mul(ctx0, promote, ggml_repeat(ctx0, ldelta, selection_probs));
+
+        cb(ind, "ffn_moe_prior_topj", il);
+    }
+
+    cb(bias, "ffn_moe_prior_bias", il);
+
+    return bias;
 }
 
 // input embeddings with optional lora
@@ -2740,6 +2877,30 @@ ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd, float to
     ggml_build_forward_expand(gf, cur);
 
     return cur;
+}
+
+void llm_graph_input_moe_cache_prior::set_input(const llama_ubatch * ubatch) {
+    GGML_ASSERT(prior_mask != nullptr);
+
+    const int32_t n_expert = prior_mask->ne[0];
+
+    // the cache state left by the ubatch that was computed last: the copy callback of the MoE cache updated it
+    // large ubatches do not read their experts from the cache, so they are routed like before
+    const int32_t * slots = moe_cache->get_slot_map(il, ubatch->n_tokens, n_expert_used) != nullptr ?
+        moe_cache->get_cached_slots(il) : nullptr;
+
+    if (slots == nullptr) {
+        // no cache prior for this ubatch, the mask is all zeros and the bias of the graph is a no-op
+        std::vector<float> zero(n_expert, 0.0f);
+        ggml_backend_tensor_set(prior_mask, zero.data(), 0, ggml_nbytes(prior_mask));
+        return;
+    }
+
+    // the top-J experts are promoted in the graph, where the scores of the router are known
+    std::vector<float> mask(n_expert);
+    llama_moe_cache_prior_mask(slots, n_expert, mask.data());
+
+    ggml_backend_tensor_set(prior_mask, mask.data(), 0, ggml_nbytes(prior_mask));
 }
 
 ggml_tensor * llm_graph_context::build_inp_pos() const {

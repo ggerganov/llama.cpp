@@ -398,6 +398,15 @@ extern "C" {
 
         size_t moe_cache_size; // device cache in bytes for the experts kept in host memory, split among the devices like the layers, 0 = disabled [EXPERIMENTAL]
 
+        // cache-aware MoE routing ("cache prior"), only used when moe_cache_size > 0 [EXPERIMENTAL]
+        // adds lambda*delta to the router scores of the experts that are already in the device cache, where delta is
+        // the score range of the token, so that the router prefers them: this trades a small deviation from the
+        // original expert selection for fewer cache misses, i.e. less host -> device traffic
+        // lambda = 0 keeps the original routing, lambda = 1 lets the cached experts win every close comparison
+        // ref: Skliar et al., "Mixture of Cache-Conditional Experts for Efficient Mobile Device Inference", arXiv:2412.00099
+        float   moe_cache_prior; // lambda in [0, 1]: 0 = the original routing (default), 1 = the fastest routing
+                                 // that still selects the expert the router likes most in every layer
+
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
         // currently works only with CPU execution

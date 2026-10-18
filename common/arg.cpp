@@ -2788,6 +2788,23 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
     add_opt(common_arg(
+        {"--moe-cache-prior"}, "F",
+        string_format("cache-aware MoE routing: lambda in [0.0, 1.0]. Adds lambda*delta to the router scores of the "
+                      "experts that are already in the --moe-cache-mib cache, where delta is the largest score of the "
+                      "token, so that the router prefers them and fewer experts have to be read from the host memory. "
+                      "It changes which experts are selected, never the weights they are combined with, and the best "
+                      "expert of the router stays selected at any lambda, so 0.0 is the original routing and 1.0 is "
+                      "the fastest routing that still follows the router where it is confident "
+                      "(ref: arXiv:2412.00099) (default: %.1f, disabled)",
+                      (double) params.moe_cache_prior),
+        [](common_params & params, const std::string & value) {
+            params.moe_cache_prior = std::stof(value);
+            if (params.moe_cache_prior < 0.0f || params.moe_cache_prior > 1.0f) {
+                throw std::invalid_argument("value must be in [0.0, 1.0]");
+            }
+        }
+    ).set_env("LLAMA_ARG_MOE_CACHE_PRIOR"));
+    add_opt(common_arg(
         {"-ncffn", "--n-cpu-ffn"}, "N",
         "keep the dense FFN weights of the first N layers in the CPU\n"
         "(dense models; for MoE expert weights use --n-cpu-moe)",

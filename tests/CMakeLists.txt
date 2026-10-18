@@ -316,6 +316,10 @@ endif()
 llama_build(test-backend-ops.cpp LINK ggml)
 
 llama_build_and_test(test-tiled-mulmat.cpp LINK ggml)
+
+# the cache-aware MoE routing of the MoE cache: the host side mask and the graph side bias
+llama_build_and_test(test-moe-cache-prior.cpp LINK ggml llama)
+target_include_directories(test-moe-cache-prior PRIVATE ${PROJECT_SOURCE_DIR}/src)
 llama_build_and_test(test-model-load-cancel.cpp LABEL "model")
 llama_build_and_test(test-autorelease.cpp       LABEL "model")
 llama_build_and_test(test-backend-sampler.cpp   LABEL "model")

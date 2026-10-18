@@ -185,6 +185,25 @@ public:
     const llama_rope_section_order rope_section_order = LLAMA_ROPE_SECTION_ORDER_TYXZ;
 };
 
+// cache-aware MoE routing: the mask of the experts that are currently in the MoE cache of a layer
+// the mask is refreshed before every ubatch, because the cache is updated while the previous ubatch is computed
+// ref: arXiv:2412.00099
+class llm_graph_input_moe_cache_prior : public llm_graph_input_i {
+public:
+    llm_graph_input_moe_cache_prior(const llama_moe_cache * moe_cache, int il, int32_t n_expert, int32_t n_expert_used)
+        : moe_cache(moe_cache), il(il), n_expert(n_expert), n_expert_used(n_expert_used) {}
+    virtual ~llm_graph_input_moe_cache_prior() = default;
+
+    void set_input(const llama_ubatch * ubatch) override;
+
+    ggml_tensor * prior_mask = nullptr; // F32 [n_expert], 1.0f for the experts to promote
+
+    const llama_moe_cache * moe_cache;
+    const int32_t il;
+    const int32_t n_expert;
+    const int32_t n_expert_used;
+};
+
 // temperature tuning, used by llama4
 class llm_graph_input_attn_temp : public llm_graph_input_i {
 public:
@@ -1214,6 +1233,14 @@ struct llm_graph_context {
              ggml_tensor * post_exp_norm = nullptr,
                    float   post_exp_norm_eps = 1e-5f) const;
 
+    // the slot map of the layer il, nullptr if its experts are not read from the MoE cache for this ubatch
+    ggml_tensor * build_moe_cache_slot_map(
+             ggml_tensor * up_exps,
+             ggml_tensor * gate_exps,
+             ggml_tensor * down_exps,
+             ggml_tensor * gate_up_exps,
+                     int   il) const;
+
     // the slots of the selected experts in the MoE cache, nullptr if the experts of the layer are not read from the cache
     ggml_tensor * build_moe_cache_slots(
              ggml_tensor * selected_experts,
@@ -1221,6 +1248,17 @@ struct llm_graph_context {
              ggml_tensor * gate_exps,
              ggml_tensor * down_exps,
              ggml_tensor * gate_up_exps,
+                     int   il) const;
+
+    // cache-aware MoE routing (arXiv:2412.00099): the bias that favors the experts of the layer il that
+    // are already in the MoE cache, nullptr when the routing of the layer stays the original one
+    ggml_tensor * build_moe_cache_prior(
+             ggml_tensor * selection_probs,
+             ggml_tensor * up_exps,
+             ggml_tensor * gate_exps,
+             ggml_tensor * down_exps,
+             ggml_tensor * gate_up_exps,
+                 int64_t   n_expert_used,
                      int   il) const;
 
     //
