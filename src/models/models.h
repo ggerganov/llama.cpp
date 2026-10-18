@@ -2041,6 +2041,19 @@ struct llama_model_afmoe : public llama_model_base {
 };
 
 
+struct llama_model_beam : public llama_model_base {
+    llama_model_beam(const struct llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+
 struct llama_model_laguna : public llama_model_base {
     llama_model_laguna(const struct llama_model_params & params) : llama_model_base(params) {}
     void load_arch_hparams(llama_model_loader & ml) override;
@@ -2957,6 +2970,19 @@ struct llama_model_k2_horizon : public llama_model_base {
         graph(const llama_model & model, const llm_graph_params & params);
 
         ggml_tensor * build_routed_value(const llama_layer & layer, ggml_tensor * cur, int il) const;
+    };
+
+    std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
+};
+
+
+struct llama_model_kolibri1 : public llama_model_base {
+    llama_model_kolibri1(const struct llama_model_params & params) : llama_model_base(params) {}
+    void load_arch_hparams(llama_model_loader & ml) override;
+    void load_arch_tensors(llama_model_loader & ml) override;
+
+    struct graph : public llm_graph_context {
+        graph(const llama_model & model, const llm_graph_params & params);
     };
 
     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
