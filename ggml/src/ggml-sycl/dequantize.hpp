@@ -857,14 +857,7 @@ static void dequantize_block_q8_0_reorder(const void * __restrict__ vx, dst_t * 
     }
 }
 
-// q8_0 reorder layout, wide item: flat range<1> launch with two pairs (4 elements) per item and one
-// vectorized store. Float math like dequantize_block_q8_0_reorder above (NOT the half-precision
-// dequantize_q8_0_reorder helper, which would change f32 output). For dst_t = sycl::half this is
-// bit-exact vs the scalar F4 reference: d*qs is exact in f32 for every finite input pair (product
-// significand <= 19 bits < 24), so the single RNE rounding to half equals both the scalar f2h path and
-// a single half-precision multiply. For dst_t = float it is the exact f32 product, identical to
-// dequantize_block_q8_0_reorder's output. Requires k % 4 == 0 (implied by the launcher's
-// GGML_ASSERT(k % QK8_0 == 0)); no tail handling needed.
+// documentation deleted as per reviewer: Titaniumtown
 template<typename dst_t>
 static void dequantize_block_q8_0_reorder_wide(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
                                                const sycl::id<1> idx) {
