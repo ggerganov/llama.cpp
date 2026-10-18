@@ -628,7 +628,17 @@ struct llm_tokenizer_bpe_session {
         }
     }
 
-    virtual void tokenize(const std::string & text, std::vector<llama_token> & output) {
+    virtual void tokenize(const std::string & text_in, std::vector<llama_token> & output) {
+        // normalize before the pre-tokenizer when the vocab requests NFC
+        std::string text_nfc;
+        const bool apply_nfc = vocab.get_normalizer_opts().nfc;
+        if (apply_nfc) {
+            for (const uint32_t cpt : unicode_cpts_normalize_nfc(unicode_cpts_from_utf8(text_in))) {
+                text_nfc += unicode_cpt_to_utf8(cpt);
+            }
+        }
+        const std::string & text = apply_nfc ? text_nfc : text_in;
+
         int final_prev_index = -1;
         auto word_collection = unicode_regex_split(text, tokenizer.regex_exprs, tokenizer.byte_encode);
 
