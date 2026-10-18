@@ -226,7 +226,7 @@ inline int dot8_q8a_v(uint8 qw, uint4 a0, uint4 a1) {
 }
 
 __attribute__((qcom_wave_pair_mode(1)))
-kernel void kernel_gemm_noshuffle_q8_0_q8_1_dp4a_alds4(
+kernel void kernel_gemm_noshuffle_q8_0_q8_1_dp4a_act_vload4(
         __global const uint  * src0_q,
         __global const half  * src0_d,
         __global const uint  * src1_qa,
@@ -257,7 +257,9 @@ kernel void kernel_gemm_noshuffle_q8_0_q8_1_dp4a_alds4(
 #define NGROUPS (TILESIZE_N / 4)
     float4 acc[NGROUPS];
     #pragma unroll
-    for (int g = 0; g < NGROUPS; ++g) acc[g] = (float4)(0.0f);
+    for (int g = 0; g < NGROUPS; ++g) {
+        acc[g] = (float4)(0.0f);
+    }
 
     for (uint step = 0; step < (uint)k; step += 32) {
         const uint sub = step >> 5;
@@ -315,10 +317,18 @@ kernel void kernel_gemm_noshuffle_q8_0_q8_1_dp4a_alds4(
         const uint b = (uint)(g * 4);
         const float4 a = acc[g];
         const uint c0 = col_base + b;
-        if (c0 + 0 < (uint)n_no_padding) dst[(c0 + 0) * (uint)m + row] = a.s0;
-        if (c0 + 1 < (uint)n_no_padding) dst[(c0 + 1) * (uint)m + row] = a.s1;
-        if (c0 + 2 < (uint)n_no_padding) dst[(c0 + 2) * (uint)m + row] = a.s2;
-        if (c0 + 3 < (uint)n_no_padding) dst[(c0 + 3) * (uint)m + row] = a.s3;
+        if (c0 + 0 < (uint)n_no_padding) {
+            dst[(c0 + 0) * (uint)m + row] = a.s0;
+        }
+        if (c0 + 1 < (uint)n_no_padding) {
+            dst[(c0 + 1) * (uint)m + row] = a.s1;
+        }
+        if (c0 + 2 < (uint)n_no_padding) {
+            dst[(c0 + 2) * (uint)m + row] = a.s2;
+        }
+        if (c0 + 3 < (uint)n_no_padding) {
+            dst[(c0 + 3) * (uint)m + row] = a.s3;
+        }
     }
 #undef NGROUPS
 }
