@@ -1925,11 +1925,9 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
         ggml_cuda_mul_mat_q(ctx, src0, src1, nullptr, dst);
         return;
     }
-    if (src0->type == GGML_TYPE_BF16X) {
-        if (ggml_cuda_mul_mat_bf16x_mma(ctx, src0, src1, dst)) {
-            return;
-        }
-    }
+    // BF16X MMA kernel: WIP, pp currently uses cuBLAS fallback
+    // (dequant to F16 + cuBLAS GEMM — correct but not optimally fast)
+    // TODO: enable when the MMA kernel is verified
     ggml_cuda_mul_mat_cublas(ctx, src0, src1, dst);
 }
 

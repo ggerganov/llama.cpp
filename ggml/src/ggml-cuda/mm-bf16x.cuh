@@ -144,6 +144,16 @@ __global__ void k_mul_mm_bf16x_mma(
         bfx_af16(wrow0 + kb, wrow1 + kb, 0, tig, A0);   // k16 step 0
         bfx_af16(wrow0 + kb, wrow1 + kb, 1, tig, A1);   // k16 step 1
 
+        // DEBUG: print first few decoded values for block 0, warp 0
+        if (kb == 0 && warp == 0 && tid < 4 && blockIdx.x == 0 && blockIdx.y == 0) {
+            const block_bf16x * b0p = wrow0;
+            printf("[DBG] tid=%d lane_g=%d tig=%d A0[0]=%08x A0[1]=%08x A0[2]=%08x A0[3]=%08x emax=[%d,%d] f0=%f f1=%f\\n",
+                tid, g, tig, A0[0], A0[1], A0[2], A0[3],
+                b0p->emax[0], b0p->emax[1],
+                __uint_as_float(A0[0] << 16),
+                __uint_as_float(A0[0] & 0xFFFF0000u));
+        }
+
         // mma step 0 (iqs=0, k = kb*32 + 0..15)
         {
             float d[4] = {c[0][0], c[0][1], c[0][2], c[0][3]};
