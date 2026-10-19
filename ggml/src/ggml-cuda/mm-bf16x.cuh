@@ -69,9 +69,14 @@ __device__ __forceinline__ void bfx_af16(
         const block_bf16x * GGML_RESTRICT w1,   // row g+8 stream
         const int iqs, const int tig,
         uint32_t * GGML_RESTRICT af /* [4] */) {
+    // PTX ISA m16n8k16 A-fragment order (groupID = g, threadID_in_group = tig):
+    //   reg0 (a0,a1): row g,   k-pair tig        (k = 2*tig,   2*tig+1)
+    //   reg1 (a2,a3): row g+8, k-pair tig        (same k-pair, next row group)
+    //   reg2 (a4,a5): row g,   k-pair tig+4      (same row,    k = 2*tig+8, 2*tig+9)
+    //   reg3 (a6,a7): row g+8, k-pair tig+4
     af[0] = bfx_pair(w0, iqs, tig);
-    af[1] = bfx_pair(w0, iqs, tig + 4);
-    af[2] = bfx_pair(w1, iqs, tig);
+    af[1] = bfx_pair(w1, iqs, tig);
+    af[2] = bfx_pair(w0, iqs, tig + 4);
     af[3] = bfx_pair(w1, iqs, tig + 4);
 }
 
@@ -144,21 +149,12 @@ __global__ void k_mul_mm_bf16x_mma(
         bfx_af16(wrow0 + kb, wrow1 + kb, 0, tig, A0);   // k16 step 0
         bfx_af16(wrow0 + kb, wrow1 + kb, 1, tig, A1);   // k16 step 1
 
-        // DEBUG: print first few decoded values for block 0, warp 0
-        if (kb == 0 && warp == 0 && tid < 4 && blockIdx.x == 0 && blockIdx.y == 0) {
-            const block_bf16x * b0p = wrow0;
-            printf("[DBG] tid=%d lane_g=%d tig=%d A0[0]=%08x A0[1]=%08x A0[2]=%08x A0[3]=%08x emax=[%d,%d] f0=%f f1=%f\\n",
-                tid, g, tig, A0[0], A0[1], A0[2], A0[3],
-                b0p->emax[0], b0p->emax[1],
-                __uint_as_float(A0[0] << 16),
-                __uint_as_float(A0[0] & 0xFFFF0000u));
-        }
-
         // mma step 0 (iqs=0, k = kb*32 + 0..15)
         {
-            float d[4] = {c[0][0], c[0][1], c[0][2], c[0][3]};
 #pragma unroll
             for (int t = 0; t < NTILES; ++t) {
+                // per-tile accumulator: each n-tile owns its own C fragment
+                float d[4] = {c[t][0], c[t][1], c[t][2], c[t][3]};
                 const int nc = t * 8 + g;
                 const uint32_t b0 = __bfloat16_as_ushort(sX[cur][tig * 2][nc])
                                   | (__bfloat16_as_ushort(sX[cur][tig * 2 + 1][nc]) << 16);
@@ -174,9 +170,9 @@ __global__ void k_mul_mm_bf16x_mma(
         }
         // mma step 1 (iqs=1, k = kb*32 + 16..31)
         {
-            float d[4] = {c[0][0], c[0][1], c[0][2], c[0][3]};
 #pragma unroll
             for (int t = 0; t < NTILES; ++t) {
+                float d[4] = {c[t][0], c[t][1], c[t][2], c[t][3]};
                 const int nc = t * 8 + g;
                 const uint32_t b0 = __bfloat16_as_ushort(sX[cur][16 + tig * 2][nc])
                                   | (__bfloat16_as_ushort(sX[cur][16 + tig * 2 + 1][nc]) << 16);
@@ -199,13 +195,20 @@ __global__ void k_mul_mm_bf16x_mma(
         const int64_t n0t = n0 + t * 8 + tig * 2;
         const int64_t mr = row_base + g;
         const int64_t m8 = mr + 8;
-        if (n0t + 1 < ne11) {
-            if (mr < ne01) {
+        // per-element guards: an odd ne11 must still store its last column
+        if (mr < ne01) {
+            if (n0t < ne11) {
                 *((float *) ((char *) dst + mr * 4 + n0t * nb1 + i12 * nb2 + i13 * nb3)) = c[t][0];
+            }
+            if (n0t + 1 < ne11) {
                 *((float *) ((char *) dst + mr * 4 + (n0t + 1) * nb1 + i12 * nb2 + i13 * nb3)) = c[t][1];
             }
-            if (m8 < ne01) {
+        }
+        if (m8 < ne01) {
+            if (n0t < ne11) {
                 *((float *) ((char *) dst + m8 * 4 + n0t * nb1 + i12 * nb2 + i13 * nb3)) = c[t][2];
+            }
+            if (n0t + 1 < ne11) {
                 *((float *) ((char *) dst + m8 * 4 + (n0t + 1) * nb1 + i12 * nb2 + i13 * nb3)) = c[t][3];
             }
         }
@@ -219,6 +222,7 @@ static bool ggml_cuda_mul_mat_bf16x_mma(
     if (src0->type != GGML_TYPE_BF16X) return false;
     if (src1->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) return false;
     if (nb00 != sizeof(block_bf16x) || nb10 != 4 || nb0 != 4) return false;
+    if (ne00 % 32 != 0) return false;   // BK tail is not handled; fall back to cuBLAS
     const int r2 = ne12 / ne02, r3 = ne13 / ne03;
     const dim3 grid((unsigned) ((ne01 + 127) / 128), (unsigned) ((ne11 + 63) / 64), (unsigned) (ne12 * ne13));
     cudaStream_t stream = ctx.stream();
