@@ -824,6 +824,10 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
                 VK_LOG_DEBUG(pipeline->name << " " << s.name << ": " << s.value.u64 << " registers");
                 pipeline->register_count = (uint32_t)s.value.u64;
             }
+            // "LDS size" is reported by RADV, "ldsUsageSizeInBytes" by AMDVLK.
+            if (strcmp(s.name, "LDS size") == 0 || strcmp(s.name, "ldsUsageSizeInBytes") == 0) {
+                pipeline->shmem_size = (uint32_t)s.value.u64;
+            }
         }
     }
 
@@ -1424,7 +1428,7 @@ static std::vector<uint32_t> get_fa_spec_constants(const vk_fa_pipeline_state& s
     };
 }
 
-static uint32_t ggml_vk_matmul_shmem_size(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
+static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
 
     uint32_t lut_size = 0;
     switch (src0_type) {
@@ -1475,12 +1479,6 @@ static uint32_t ggml_vk_matmul_shmem_size(const vk_device& device, const std::ve
     const uint32_t coopmat_stage = device->coopmat_support ? warptile[7] * warptile[8] / warps * sizeof(float) : 0;
 
     const uint32_t total_size = load_bufs + mmid_row_ids + coopmat_stage + lut_size;
-    return total_size;
-}
-
-static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
-    const uint32_t total_size = ggml_vk_matmul_shmem_size(device, warptile, mul_mat_id, src0_type);
-
     const bool supported = total_size <= device->properties.limits.maxComputeSharedMemorySize;
 
     VK_LOG_DEBUG("ggml_vk_matmul_shmem_support(warptile=(" << warptile[0] << "," << warptile[1] << "," << warptile[2] << "), "
@@ -1554,7 +1552,7 @@ static bool ggml_vk_matmul_int_shmem_support(const vk_device& device, const std:
     return supported;
 }
 
-static uint32_t ggml_vk_matmul_cm1_int_shmem_size(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
+static bool ggml_vk_matmul_cm1_int_shmem_support(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
 
     bool kscales2 = false;    // two scale sets per block
     bool has_dm   = false;    // d+m as vec2 + b-side sum
@@ -1572,7 +1570,7 @@ static uint32_t ggml_vk_matmul_cm1_int_shmem_size(const vk_device& device, const
         case GGML_TYPE_NVFP4:
             kscales2 = true; has_kvalues = true;    break;
         default:
-            return 0;
+            return false;
     }
 
     const uint32_t BM         = warptile[1];
@@ -1601,12 +1599,8 @@ static uint32_t ggml_vk_matmul_cm1_int_shmem_size(const vk_device& device, const
     if (mul_mat_id) {
         total += BN * 2u * (uint32_t)sizeof(uint16_t);   // row_ids[BN] (u16vec2)
     }
-    return total;
-}
 
-static bool ggml_vk_matmul_cm1_int_shmem_support(const vk_device& device, const std::vector<uint32_t>& warptile, bool mul_mat_id, ggml_type src0_type) {
-    const uint32_t total = ggml_vk_matmul_cm1_int_shmem_size(device, warptile, mul_mat_id, src0_type);
-    const bool supported = total != 0 && total <= device->properties.limits.maxComputeSharedMemorySize;
+    const bool supported = total <= device->properties.limits.maxComputeSharedMemorySize;
 
     VK_LOG_DEBUG("ggml_vk_matmul_cm1_int_shmem_support(warptile=(" << warptile[0] << "," << warptile[1] << "," << warptile[2] << "), "
                  "mul_mat_id=" << mul_mat_id << ", src0_type=" << ggml_type_name(src0_type) << ", total=" << total << ", supported=" << supported);
@@ -1969,8 +1963,7 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 
     auto const &ggml_vk_create_pipeline = [&](vk_device& device, vk_pipeline& base_pipeline, const char *name, size_t spv_size, const void* spv_data, const char *entrypoint,
                                               uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, const std::vector<uint32_t>& specialization_constants,
-                                              uint32_t align, bool disable_robustness = false, bool require_full_subgroups = false, uint32_t required_subgroup_size = 0,
-                                              uint32_t shmem_size = 0) {
+                                              uint32_t align, bool disable_robustness = false, bool require_full_subgroups = false, uint32_t required_subgroup_size = 0) {
 
         if (!require_full_subgroups && required_subgroup_size == 0) {
             required_subgroup_size = get_subgroup_size(name, device->architecture);
@@ -1995,7 +1988,6 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
                 pipeline->push_constant_size = push_constant_size;
                 pipeline->wg_denoms = wg_denoms;
                 pipeline->align = align;
-                pipeline->shmem_size = shmem_size;
                 pipeline->initialized = true;
 #if defined(VK_EXT_shader_64bit_indexing)
                 pipeline->is_64b_indexing = (i == 1);
@@ -2213,7 +2205,6 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
     const int mul_mat_id_param_count = 5;
 
     using spec_fn_t = std::function<std::vector<uint32_t>(const std::vector<uint32_t>&, bool)>;
-    using shmem_fn_t = std::function<uint32_t(const std::vector<uint32_t>&)>;
     auto const &create_mm_pipelines = [&](
         const vk_matmul_pipeline_key& key,
         const std::vector<vk_tile_config>& tile_configs,
@@ -2221,13 +2212,12 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
         uint32_t push_constant_size, uint32_t param_count,
         const spec_fn_t& spec_fn,
         bool disable_robustness = false, bool require_full_subgroups = false, uint32_t required_subgroup_size = 0,
-        bool create_aligned = true, bool pin_subgroup_to_warp = false, const shmem_fn_t& shmem_fn = {}
+        bool create_aligned = true, bool pin_subgroup_to_warp = false
     ) {
         auto& vec = device->pipeline_matmul[key];
         const bool first_call = vec.empty();
         for (size_t i = 0; i < tile_configs.size(); i++) {
             const auto& tc = tile_configs[i];
-            const uint32_t shmem = shmem_fn ? shmem_fn(tc.warptile) : 0;
 
             // Intel coopmat1 pins the required subgroup size to each warptile's WARP element.
             const uint32_t rsgs = pin_subgroup_to_warp ? tc.warptile[WARP_SIZE_IDX] : required_subgroup_size;
@@ -2248,14 +2238,14 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
                 vec[i].unaligned->name.empty() ? (shader_name + "_" + std::to_string(i)).c_str() : vec[i].unaligned->name.c_str(),
                 spv_len, spv_data, "main", param_count, push_constant_size,
                 tc.wg_denoms, spec_fn(tc.warptile, false), 1,
-                disable_robustness, rfs, rsgs, shmem);
+                disable_robustness, rfs, rsgs);
 
             if (vec[i].aligned) {
                 ggml_vk_create_pipeline(device, vec[i].aligned,
                     vec[i].aligned->name.empty() ? (shader_name + "_aligned_" + std::to_string(i)).c_str() : vec[i].aligned->name.c_str(),
                     spv_len, spv_data, "main", param_count, push_constant_size,
                     tc.wg_denoms, spec_fn(tc.warptile, true), tc.align,
-                    disable_robustness, rfs, rsgs, shmem);
+                    disable_robustness, rfs, rsgs);
             }
         }
     };
@@ -2405,25 +2395,22 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 
         auto cm1_create = [&](vk_matmul_pipeline_key key, const std::vector<vk_tile_config>& tc_base,
                               const std::string& name, size_t len, const void* data, uint32_t pc_size, uint32_t pc) {
-            shmem_fn_t shmem = [&, key](const std::vector<uint32_t>& wt) { return ggml_vk_matmul_shmem_size(device, wt, key.mul_mat_id, key.type_a); };
             auto tc = filter_tc(tc_base, key.type_a, key.mul_mat_id);
-            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, cm1_spec, false, true, 0, true, cm1_pin, shmem);
+            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, cm1_spec, false, true, 0, true, cm1_pin);
         };
         auto cm1_create_quant = [&](vk_matmul_pipeline_key key, const std::vector<vk_tile_config>& tc_base,
                                     const std::string& name, size_t len, const void* data, uint32_t pc_size, uint32_t pc) {
             spec_fn_t qs = [&, type_a=key.type_a](const std::vector<uint32_t>& wt, bool a) { return ggml_vk_mul_mm_spec_quant(wt, a, (uint32_t)type_a); };
-            shmem_fn_t shmem = [&, key](const std::vector<uint32_t>& wt) { return ggml_vk_matmul_shmem_size(device, wt, key.mul_mat_id, key.type_a); };
             auto tc = filter_tc(tc_base, key.type_a, key.mul_mat_id);
-            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, qs, false, true, 0, true, cm1_pin, shmem);
+            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, qs, false, true, 0, true, cm1_pin);
         };
         // int8 MMQ helper: per-type cm1 shader, warptile passed as-is (carries DEVICE_ARCH in
         // spec constant WARP_SIZE_IDX+1), subgroup size pinned to the warptile WARP element, no aligned variant.
         auto cm1_create_mmq = [&](vk_matmul_pipeline_key key, const std::vector<vk_tile_config>& tc_base,
                                   const std::string& name, size_t len, const void* data, uint32_t pc_size, uint32_t pc) {
             spec_fn_t identity = [](const std::vector<uint32_t>& wt, bool) { return wt; };
-            shmem_fn_t shmem = [&, key](const std::vector<uint32_t>& wt) { return ggml_vk_matmul_cm1_int_shmem_size(device, wt, key.mul_mat_id, key.type_a); };
             auto tc = filter_tc(tc_base, key.type_a, key.mul_mat_id, true);
-            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, identity, false, false, 0, false, true, shmem);
+            if (!tc.empty()) create_mm_pipelines(key, tc, name, len, data, pc_size, pc, identity, false, false, 0, false, true);
         };
 
         std::vector<vk_tile_config> tc_mmq_cm1_int = {
@@ -5890,13 +5877,16 @@ static uint32_t ggml_vk_guess_split_k_large_tile(const vk_device& device, uint64
     }
 
     // One partial wave and a long K. Splitting does not reduce the work of any busy CU here, it only
-    // pays off if a second workgroup fits in the 64 KiB LDS of a CU and hides latency.
-    const bool two_per_cu = pipeline->shmem_size == 0 || 2 * pipeline->shmem_size <= 64 * 1024;
+    // pays off if a second workgroup fits in the LDS of a CU and hides latency.
+    const uint32_t lds_limit = device->properties.limits.maxComputeSharedMemorySize;
+    const bool two_per_cu = pipeline->shmem_size != 0 && 2 * pipeline->shmem_size <= lds_limit;
     if (k >= 8192 && workgroups * 6 <= cores * 5 && two_per_cu) {
         return 3;
     }
 
     // Cost in K steps: waves * K per split, plus a small charge per extra split for the reduction.
+    // Empirical cost of writing one more partial result and reducing it, in K steps per wave.
+    constexpr uint64_t split_k_reduce_cost = 64;
     const uint64_t base_waves = CEIL_DIV(workgroups, cores);
     uint64_t best_cost = base_waves * k;
     uint64_t best_compute = best_cost;
@@ -5907,7 +5897,7 @@ static uint32_t ggml_vk_guess_split_k_large_tile(const vk_device& device, uint64
             continue;
         }
         const uint64_t compute = CEIL_DIV(workgroups * candidate, cores) * k_chunk;
-        const uint64_t cost = compute + base_waves * (candidate - 1) * 64;
+        const uint64_t cost = compute + base_waves * (candidate - 1) * split_k_reduce_cost;
         // on equal compute, take the split that fills every wave
         const bool fills_waves = workgroups * split_k % cores != 0 && workgroups * candidate % cores == 0;
         if (cost < best_cost) {
@@ -5977,8 +5967,6 @@ void ggml_vk_matmul(
         uint32_t padded_n) {
         VK_LOG_DEBUG("ggml_vk_matmul(a: (" << a.buffer->buffer << ", " << a.offset << ", " << a.size << "), b: (" << b.buffer->buffer << ", " << b.offset << ", " << b.size << "), d: (" << d.buffer->buffer << ", " << d.offset << ", " << d.size << "), split_k: (" << (split_k_buffer.buffer != nullptr ? split_k_buffer.buffer->buffer : VK_NULL_HANDLE) << ", " << split_k_buffer.offset << ", " << split_k_buffer.size << "), m: " << m << ", n: " << n << ", k: " << k << ", stride_a: " << stride_a << ", stride_b: " << stride_b << ", stride_d: " << stride_d << ", batch_stride_a: " << batch_stride_a << ", batch_stride_b: " << batch_stride_b << ", batch_stride_d: " << batch_stride_d << ", split_k: " << split_k << ", batch: " << batch << ", ne02: " << ne02 << ", ne12: " << ne12 << ", broadcast2: " << broadcast2 << ", broadcast3: " << broadcast3 << ", padded_n: " << padded_n << ")");
     if (split_k == 1) {
-        ggml_pipeline_request_descriptor_sets(ctx, pipeline, CEIL_DIV(batch, ctx->device->properties.limits.maxComputeWorkGroupCount[2]));
-
         uint32_t base_work_group_z = 0;
         while (base_work_group_z < batch) {
             uint32_t groups_z = std::min(batch - base_work_group_z, ctx->device->properties.limits.maxComputeWorkGroupCount[2]);
@@ -5999,8 +5987,6 @@ void ggml_vk_matmul(
     // Round the split size up to a multiple of 256 (k-quant alignment)
     uint32_t k_split = CEIL_DIV(k, split_k);
     k_split = ROUNDUP_POW2(k_split, 256);
-
-    ggml_pipeline_request_descriptor_sets(ctx, pipeline, CEIL_DIV(batch, ctx->device->properties.limits.maxComputeWorkGroupCount[2]));
 
     uint32_t base_work_group_z = 0;
     while (base_work_group_z < batch) {
@@ -6439,6 +6425,9 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
     if (ggml_nbytes(src0) > ctx->device->properties.limits.maxStorageBufferRange) {
         pipeline = ggml_vk_get_64b_indexing_pipeline(ctx, pipeline);
     }
+
+    // the split_k heuristic reads properties of the compiled pipeline
+    ggml_pipeline_request_descriptor_sets(ctx, pipeline, CEIL_DIV(ne12 * ne13, ctx->device->properties.limits.maxComputeWorkGroupCount[2]));
 
     // Reserve extra storage in the N dimension for the Y matrix, so we can avoid bounds-checking
     uint32_t padded_n = qy_needs_dequant ? ROUNDUP_POW2(ne11, pipeline->wg_denoms[1]) : ne11;
