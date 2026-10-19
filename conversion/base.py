@@ -2169,17 +2169,30 @@ class TextModel(ModelBase):
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
 
+    def _is_hybriddna(self) -> bool:
+        tokenizer_config_file = self.dir_model / "tokenizer_config.json"
+        if not tokenizer_config_file.is_file():
+            return False
+        with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            return json.load(f).get("tokenizer_class") == "HybridDNATokenizer"
+
     def _set_vocab_hybriddna(self):
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(self.dir_model, trust_remote_code=True)
-        vocab_size = self.hparams.get("vocab_size", len(tokenizer.vocab))  # ty: ignore[unresolved-attribute]
-        assert max(tokenizer.vocab.values()) < vocab_size  # ty: ignore[unresolved-attribute]
+        vocab = tokenizer.get_vocab()
+        vocab_size = self.hparams.get("vocab_size", len(vocab))
+        assert max(vocab.values()) < vocab_size
 
-        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}  # ty: ignore[unresolved-attribute]
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in vocab.items()}
         # k-mers can share text with a base-vocab BPE token (e.g. CCCCCC) and get
         # dropped by get_vocab(); a reserved marker suffix (U+E000) keeps each
         # k-mer's own id (llama.cpp strips it on detokenization)
-        for kmer in tokenizer.kmers:  # ty: ignore[unresolved-attribute]
+        # tail="pad_n" (Carbon-14B) adds N-padded tail tokens ("CT" -> "CTNNNN") that get the same marker; llama.cpp
+        # detects them to pad with N and strips the padding on detokenization. tail="char" has no llama.cpp support.
+        tail = getattr(tokenizer, "tail", "pad_a")
+        if tokenizer.k != 6 or tail not in ("pad_a", "pad_n"):  # ty: ignore[unresolved-attribute]
+            raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")  # ty: ignore[unresolved-attribute]
+        for kmer in [*tokenizer.kmers, *getattr(tokenizer, "npad_tokens", [])]:  # ty: ignore[unresolved-attribute]
             reverse_vocab[tokenizer.dna_token_to_id[kmer]] = kmer + "\ue000"  # ty: ignore[unresolved-attribute]
         added_vocab = tokenizer.get_added_vocab()  # ty: ignore[unresolved-attribute]
         added_tokens_decoder = tokenizer.added_tokens_decoder  # ty: ignore[unresolved-attribute]
@@ -2204,6 +2217,7 @@ class TextModel(ModelBase):
         tokpre = self.get_vocab_base_pre(tokenizer)
         self.gguf_writer.add_tokenizer_model("hybriddna")
         self.gguf_writer.add_tokenizer_pre(tokpre)
+        self.gguf_writer.add_dna_auto_tags(getattr(tokenizer, "auto_dna_tags", False))
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
