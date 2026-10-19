@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "common.h"
 
@@ -152,7 +152,7 @@ void dequantize_bf16x(device const block_bf16x * xb, short il, thread type4x4 & 
             }
 
             const uint8_t emax = xb->emax[j >> 4];
-            const uint8_t e = emax > d ? emax - d : 0;
+            const uint8_t e = d < 7 ? emax - d : 0; // d==7: zero marker
             const uint16_t bits = (uint16_t)(((xb->sgn[j >> 3] >> (j & 7)) & 1) << 15)
                                 | (uint16_t)(e << 7)
                                 | (uint16_t) m;
@@ -185,7 +185,7 @@ void dequantize_bf16x_t4(device const block_bf16x * xb, short il, thread type4 &
         }
 
         const uint8_t emax = xb->emax[j >> 4];
-        const uint8_t e = emax > d ? emax - d : 0;
+        const uint8_t e = d < 7 ? emax - d : 0; // d==7: zero marker
         const uint16_t bits = (uint16_t)(((xb->sgn[j >> 3] >> (j & 7)) & 1) << 15)
                             | (uint16_t)(e << 7)
                             | (uint16_t) m;

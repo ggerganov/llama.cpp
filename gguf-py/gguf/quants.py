@@ -270,7 +270,7 @@ class BF16X(__Quant, qtype=GGMLQuantizationType.BF16X):
         sign = cls._unpack_bits(blocks[:, 2:6], 1)
         mant = cls._unpack_bits(blocks[:, 6:34], 7)
         delta = cls._unpack_bits(blocks[:, 34:46], 3)
-        expo = np.maximum(emax - delta, 0)
+        expo = np.where(delta == 7, 0, np.maximum(emax - delta, 0))  # d==7: zero marker
         bits = (sign.astype(np.uint16) << 15) | (expo << 7) | mant
         return (bits.astype(np.uint32) << 16).view(np.float32)
 

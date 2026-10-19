@@ -265,7 +265,7 @@ void ggml_vec_dot_bf16x_q8_0_generic(int n, float * GGML_RESTRICT s, size_t bs, 
             if ((db & 7) + 3 > 8) {
                 dlt |= (x[i].delta[(db >> 3) + 1] << (8 - (db & 7))) & 0x7;
             }
-            const uint8_t e = emax > dlt ? emax - dlt : 0;
+            const uint8_t e = dlt < 7 ? emax - dlt : 0; // dlt==7: zero marker
             const uint32_t bits = ((uint32_t)sg << 31) | ((uint32_t)e << 23) | ((uint32_t)m << 16);
             float wf;
             memcpy(&wf, &bits, sizeof(wf));

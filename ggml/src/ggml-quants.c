@@ -2201,7 +2201,7 @@ void dequantize_row_bf16x(const block_bf16x * GGML_RESTRICT x, float * GGML_REST
             if ((db & 7) + 3 > 8) {
                 d |= (x[i].delta[(db >> 3) + 1] << (8 - (db & 7))) & 0x7;
             }
-            const uint8_t e = emax > d ? emax - d : 0;
+            const uint8_t e = d < 7 ? emax - d : 0; // d==7: zero marker
             const uint32_t u = ((uint32_t)s << 31) | ((uint32_t)e << 23) | ((uint32_t)m << 16);
             float f;
             memcpy(&f, &u, sizeof(f));

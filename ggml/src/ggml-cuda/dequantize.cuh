@@ -45,7 +45,7 @@ static __device__ __forceinline__ void dequantize_bf16x(const void * vx, const i
             d |= (x[ib].delta[(db >> 3) + 1] << (8 - (db & 7))) & 0x7;
         }
 
-        const uint8_t e = emax > d ? emax - d : 0;
+        const uint8_t e = d < 7 ? emax - d : 0; // d==7: zero marker
         const uint32_t bits = ((((uint32_t)(x[ib].sgn[j >> 3] >> (j & 7))) & 1u) << 31)
                             | ((uint32_t) e << 23)
                             | ((uint32_t) m << 16);

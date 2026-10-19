@@ -1,4 +1,4 @@
-﻿#include "common.h"
+#include "common.h"
 #include "dequantize.h"
 // Q1_0 dot product: dot = d * (2 * 危(yl[i] where bit=1) - sumy)
 inline float block_q_n_dot_y(device const block_q1_0 * qb_curr, float sumy, thread float * yl, int il) {
@@ -482,7 +482,7 @@ inline float block_bf16x_dot_y(device const block_bf16x * qb, thread float * yl,
             d |= (qb->delta[(db >> 3) + 1] << (8 - (db & 7))) & 0x7;
         }
 
-        const uint8_t e = emax > d ? emax - d : 0;
+        const uint8_t e = d < 7 ? emax - d : 0; // d==7: zero marker
         const uint16_t bits = (uint16_t)(((qb->sgn[j >> 3] >> (j & 7)) & 1) << 15)
                             | (uint16_t)(e << 7)
                             | (uint16_t) m;

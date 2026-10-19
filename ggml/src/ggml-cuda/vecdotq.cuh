@@ -831,8 +831,11 @@ static __device__ __forceinline__ float vec_dot_bf16x_q8_1(
 
         const uint32_t s0 = (sw >> j) & 1u;
         const uint32_t s1 = (sw >> (j + 1)) & 1u;
-        const uint32_t w0 = ((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | (s0 << 15)) << 16;
-        const uint32_t w1 = ((em7 + (v14 >> 7)    - ((v6 >> 3)    << 7)) | (s1 << 15)) << 16;
+        // d==7 is the zero marker: scale the assembled word to zero
+        const uint32_t nz0 = ((v6 & 0x7u) != 7u) ? 0xFFFFFFFFu : 0u;
+        const uint32_t nz1 = (((v6 >> 3) & 0x7u) != 7u) ? 0xFFFFFFFFu : 0u;
+        const uint32_t w0 = (((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | (s0 << 15)) & nz0) << 16;
+        const uint32_t w1 = (((em7 + (v14 >> 7)    - (((v6 >> 3) & 0x7u) << 7)) | (s1 << 15)) & nz1) << 16;
 
         sum0 = fmaf(__uint_as_float(w0), (float) q8[iqs * 16 + j + 0], sum0);
         sum1 = fmaf(__uint_as_float(w1), (float) q8[iqs * 16 + j + 1], sum1);
