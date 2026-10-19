@@ -1666,6 +1666,36 @@ ggml_tensor * llm_graph_context::build_lora_mm(
     return res;
 }
 
+// note: the rescale factors are exact powers of two, so the roundtrip `(cur*s_inv) @ w * s` only
+//       loses precision through the F16 narrowing of src1, which is what the matmul would do anyway
+// note: when the values already fit in F16, the factors are exactly 1.0f and the graph is a no-op
+// ref: https://github.com/ggml-org/llama.cpp/pull/26223
+ggml_tensor * llm_graph_context::build_amax_src1_f16(
+          ggml_tensor * cur,
+          ggml_tensor * & scale_s) const {
+    scale_s = nullptr;
+
+    const int64_t n = ggml_nelements(cur);
+
+    // amax = max|cur| -> [1, 1]
+    ggml_tensor * ab = ggml_abs(ctx0, cur);
+    ggml_tensor * amax = ggml_get_rows(ctx0,
+            ggml_reshape_2d(ctx0, ab, 1, n),
+            ggml_argmax(ctx0, ggml_reshape_2d(ctx0, ab, n, 1)));
+
+    // the exponent of the scale is clamped to [0, 127], so that amax values of 0 or NaN do not
+    // produce infinite factors and the scale is 1.0f whenever amax fits in F16 with a 2x margin
+    constexpr float k_log2_e = 1.4426950408889634f; // 1 / ln(2)
+    constexpr float k_ln_2   = 0.6931471805599453f;
+
+    ggml_tensor * e = ggml_ceil(ctx0, ggml_scale(ctx0, ggml_log(ctx0, ggml_scale(ctx0, amax, 1.0f/32768.0f)), k_log2_e));
+    e = ggml_clamp(ctx0, e, 0.0f, 127.0f);
+
+    scale_s = ggml_exp(ctx0, ggml_scale(ctx0, e,  k_ln_2));
+
+    return ggml_mul(ctx0, cur, ggml_exp(ctx0, ggml_scale(ctx0, e, -k_ln_2)));
+}
+
 ggml_tensor * llm_graph_context::build_lora_mm_id(
           ggml_tensor * w,   // ggml_tensor * as
           ggml_tensor * cur, // ggml_tensor * b
@@ -2465,10 +2495,16 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
             GGML_ABORT("fatal error");
     }
 
-    experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s, slots); // [n_embd, n_expert_used, n_tokens]
+    // the src1 of the down projection can exceed the F16 range, so it is rescaled to fit and
+    // the scale is undone on the result - all backends can then narrow src1 to F16 as usual
+    ggml_tensor * f16_scale_s = nullptr;
     if (arch == LLM_ARCH_MISTRAL4 || arch == LLM_ARCH_MELLUM) {
-        // src1 can exceed F16 range
-        ggml_prec_set_src(experts, GGML_PREC_F32, 1);
+        cur = build_amax_src1_f16(cur, f16_scale_s);
+    }
+
+    experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s, slots); // [n_embd, n_expert_used, n_tokens]
+    if (f16_scale_s) {
+        experts = ggml_mul(ctx0, experts, f16_scale_s);
     }
     cb(experts, "ffn_moe_down", il);
 
