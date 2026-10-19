@@ -5,6 +5,7 @@
 #include "common.h"
 #include "fit.h"
 #include "log.h"
+#include "mtmd.h"
 #include "speculative.h"
 
 #include <algorithm>
@@ -34,6 +35,41 @@ int llama_fit_params(int argc, char ** argv) {
     auto cparams = common_context_params_to_llama(params);
 
     if (!params.fit_params_print) {
+        // #30442 — a multimodal projector shares the device memory of the config being fitted.
+        // Measure it the same way the server does for its own config and reserve it per device,
+        // so the fit leaves room for it (the projector is not a llama model, so it cannot be
+        // passed to common_fit_params as a common_fit_extra_model).
+        if (!params.mmproj.path.empty()) {
+            mtmd_context_params mmproj_cparams = mtmd_context_params_default();
+            mmproj_cparams.use_gpu          = params.mmproj_use_gpu;
+            mmproj_cparams.device           = params.mmproj_device;
+            mmproj_cparams.print_timings    = false;
+            mmproj_cparams.n_threads        = params.cpuparams.n_threads;
+            mmproj_cparams.flash_attn_type  = params.flash_attn_type;
+            mmproj_cparams.warmup           = params.warmup;
+            mmproj_cparams.image_min_tokens = params.image_min_tokens;
+            mmproj_cparams.image_max_tokens = params.image_max_tokens;
+            mmproj_cparams.batch_max_tokens = params.mtmd_batch_max_tokens;
+
+            const mtmd_memory_usage mmproj_usage = mtmd_get_memory_usage(params.mmproj.path.c_str(), mmproj_cparams);
+            if (mmproj_usage.backend_mem_usage.empty()) {
+                LOG_WRN("%s: failed to measure the memory of the projector '%s', fitting without it\n",
+                        __func__, params.mmproj.path.c_str());
+            }
+            for (const auto & [dev, size] : mmproj_usage.backend_mem_usage) {
+                for (size_t idev = 0; idev < ggml_backend_dev_count(); idev++) {
+                    if (ggml_backend_dev_get(idev) == dev) {
+                        if (idev < params.fit_params_target.size()) {
+                            LOG_INF("%s: reserving %" PRIu64 " MiB of device %s memory for the projector\n",
+                                    __func__, (uint64_t)(size / (1024 * 1024)), ggml_backend_dev_name(dev));
+                            params.fit_params_target[idev] += size;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         // #30424 — a speculative decoding config changes what has to fit: the draft model is
         // measured alongside the target, and an MTP context runs on the weights of the main
         // model. Fit them together, same as the server does for its own config estimate.

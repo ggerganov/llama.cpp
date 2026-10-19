@@ -62,6 +62,7 @@ static std::initializer_list<enum llama_example> mmproj_examples = {
     LLAMA_EXAMPLE_SERVER,
     LLAMA_EXAMPLE_CLI,
     LLAMA_EXAMPLE_TTS,
+    LLAMA_EXAMPLE_FIT_PARAMS,
 };
 
 static std::string read_file(const std::string & fname) {
