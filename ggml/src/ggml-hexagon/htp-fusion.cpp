@@ -502,7 +502,6 @@ static bool fuse_gdn_cpy(const ggml_hexagon_session * sess, htp_opnode & prev, c
     const ggml_tensor * cpy_src  = cur.src0();
     const ggml_tensor * cpy_dst  = cur.dst();
 
-    if (!cpy_src || !cpy_dst || !cpy_dst->data) return false;
     if (gdn_out->type != GGML_TYPE_F32 || cpy_src->type != GGML_TYPE_F32 || cpy_dst->type != GGML_TYPE_F32) return false;
     if ((gdn_out->flags & GGML_TENSOR_FLAG_OUTPUT) || (cpy_node->flags & GGML_TENSOR_FLAG_OUTPUT)) return false;
 
