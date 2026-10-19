@@ -699,12 +699,12 @@ public:
         int64_t       n;
         ggml_tensor * pool_mask; // F16 [n_pool, n]
         ggml_tensor * tail_idxs; // I32 [kpool - 1, n]
-        ggml_tensor * kq_mask;   //     [n_kv, n], or the full mask with a single chunk
     };
     std::vector<chunk> chunks;
 
     const llama_memory_hybrid_idx_context * mctx;
     const uint32_t kpool;
+    ggml_type type_mask = GGML_TYPE_F16; // the kq_mask type, which the selection takes
     uint32_t n_new = 0; // padded to a stable bound, never below 1
     uint32_t n_sel = 0;
     uint32_t n_kv  = 0;
@@ -735,8 +735,9 @@ llama_model_qwen4exp::llm_graph_input_kpool * llama_model_qwen4exp::graph::build
     ggml_build_forward_expand(gf, inp->pool_mask);
     ggml_build_forward_expand(gf, inp->tail_idxs);
 
-    inp->n_kv  = mctx_idx->get_n_kv();
-    inp->n_new = mctx_hyb->get_n_kpool_new();
+    inp->n_kv      = mctx_idx->get_n_kv();
+    inp->n_new     = mctx_hyb->get_n_kpool_new();
+    inp->type_mask = kq_mask->type;
     // the top blocks plus the tail
     inp->n_sel = kpool*std::min<uint32_t>(n_pool, hparams.indexer_top_k / kpool) + kpool - 1;
 
@@ -753,14 +754,13 @@ llama_model_qwen4exp::llm_graph_input_kpool * llama_model_qwen4exp::graph::build
     // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches; the mask streams are not split
     const int64_t n_chunk = qwen4exp_qsa_n_chunk();
     if (n_chunk == 0 || n_tokens <= n_chunk || kq_mask->ne[1] != n_tokens) {
-        inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, inp->tail_idxs, kq_mask });
+        inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, inp->tail_idxs });
     } else {
         for (int64_t t0 = 0; t0 < n_tokens; t0 += n_chunk) {
             const int64_t n = std::min(n_chunk, n_tokens - t0);
             inp->chunks.push_back({ t0, n,
                     ggml_view_2d(ctx0, inp->pool_mask, n_pool,    n, inp->pool_mask->nb[1], t0*inp->pool_mask->nb[1]),
-                    ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]),
-                    ggml_view_2d(ctx0, kq_mask,         kq_mask->ne[0], n, kq_mask->nb[1],         t0*kq_mask->nb[1]) });
+                    ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]) });
         }
     }
 
@@ -851,8 +851,9 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
     const int64_t n_idx_h  = hparams.indexer_n_head;
     const int64_t kpool    = inp_kpool->kpool;
     const int64_t n_pool   = inp_kpool->pool_cells->ne[0];
+    const int64_t n_kv     = inp_kpool->n_kv;
 
-    ggml_tensor * kq_mask = chunk.kq_mask;
+    const ggml_type type_mask = inp_kpool->type_mask;
 
     q = ggml_view_3d(ctx0, q, q->ne[0], q->ne[1], n_tokens, q->nb[1], q->nb[2], chunk.t0*q->nb[2]);
 
@@ -867,11 +868,13 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
     ggml_tensor * top_k = ggml_top_k(ctx0, score, n_top_pool); // [n_top_pool, n_tokens], unordered
     cb(top_k, "indexer_top_k", il);
 
-    // keep the kq_mask cells of the live picked pools and the tail, -inf elsewhere
+    // keep the cells of the live picked pools and the tail, -inf elsewhere: a token sees only the pools that end
+    // at or before it and the tail up to itself, all of its own sequence, so the selection needs no kq_mask
     if (cparams.fused_kpool_mask) {
         GGML_ASSERT(kpool*n_top_pool + inp_kpool->tail_idxs->ne[0] == inp_kpool->n_sel);
 
-        ggml_tensor * sel = ggml_kpool_mask(ctx0, kq_mask, score, top_k, inp_kpool->pool_idxs, chunk.tail_idxs);
+        ggml_tensor * keep = ggml_fill(ctx0, ggml_new_tensor_1d(ctx0, type_mask, n_kv), 0.0f);
+        ggml_tensor * sel  = ggml_kpool_mask(ctx0, keep, score, top_k, inp_kpool->pool_idxs, chunk.tail_idxs);
         res->add_fused_node({LLM_FUSED_OP_KPOOL_MASK, sel, il});
         cb(sel, "indexer_sel", il);
 
@@ -892,14 +895,12 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
 
     // scatter zeros for the selected cells into an all -inf row, each dead slot into its own dump row n_kv + slot
     // seeding from sel_idx ties the scatter storage lifetime to this layer
-    const int64_t n_kv = inp_kpool->n_kv;
-
-    ggml_tensor * mask_all = ggml_new_tensor_4d(ctx0, kq_mask->type, n_kv + n_sel, 1, 1, 1);
+    ggml_tensor * mask_all = ggml_new_tensor_4d(ctx0, type_mask, n_kv + n_sel, 1, 1, 1);
     mask_all = ggml_fill(ctx0, mask_all, -INFINITY);
     mask_all = ggml_repeat_4d(ctx0, mask_all, n_kv + n_sel, n_tokens, 1, 1);
     mask_all = ggml_reshape_3d(ctx0, mask_all, 1, n_kv + n_sel, n_tokens);
 
-    ggml_tensor * zeros = ggml_new_tensor_4d(ctx0, kq_mask->type, n_sel, 1, 1, 1);
+    ggml_tensor * zeros = ggml_new_tensor_4d(ctx0, type_mask, n_sel, 1, 1, 1);
     zeros = ggml_fill(ctx0, zeros, 0.0f);
     zeros = ggml_repeat_4d(ctx0, zeros, n_sel, n_tokens, 1, 1);
     zeros = ggml_reshape_3d(ctx0, zeros, 1, n_sel, n_tokens);
@@ -924,11 +925,7 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
 
     ggml_tensor * sel = ggml_set_rows(ctx0, mask_all, zeros, ggml_reshape_3d(ctx0, sel_idx, n_sel, n_tokens, 1));
 
-    GGML_ASSERT(kq_mask->ne[0] == n_kv && kq_mask->ne[1]*kq_mask->ne[2]*kq_mask->ne[3] == n_tokens);
-    const size_t row = sel->nb[2];
-    sel = ggml_view_4d(ctx0, sel, n_kv, kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3],
-            row, row*kq_mask->ne[1], row*kq_mask->ne[1]*kq_mask->ne[2], 0);
-    sel = ggml_add(ctx0, sel, kq_mask);
+    sel = ggml_cont(ctx0, ggml_view_2d(ctx0, sel, n_kv, n_tokens, sel->nb[2], 0));
     cb(sel, "indexer_sel", il);
 
     return sel;
@@ -978,14 +975,18 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
     ggml_tensor * k = mctx_cur->get_k(ctx0, il);
     ggml_tensor * v = mctx_cur->get_v(ctx0, il);
 
+    // QSA reads only the layout of kq_mask, so a graph without dense attention leaves the mask unallocated
+    const ggml_tensor * kq_mask = inp->get_kq_mask();
+    GGML_ASSERT(kq_mask->ne[2] == 1);
+
     // build_attn_mha expands each chunk, so the next chunk can reuse the memory of its selection mask
     ggml_tensor * cur = nullptr;
     for (size_t ic = 0; ic < inp_kpool->chunks.size(); ++ic) {
         const auto & chunk = inp_kpool->chunks[ic];
 
-        // the selection already carries the causal mask, and it comes in the mask layout
+        // the selection is causal on its own, it takes the kq_mask layout, see build_inp_kpool for the streams
         ggml_tensor * sel = build_qsa_sel(inp_kpool, q_idx, k_pool, ic, il);
-        GGML_ASSERT(ggml_are_same_shape(sel, chunk.kq_mask));
+        sel = ggml_reshape_4d(ctx0, sel, kq_mask->ne[0], chunk.n/kq_mask->ne[3], 1, kq_mask->ne[3]);
         cb(sel, "kq_mask_qsa", il);
 
         ggml_tensor * q_chunk = ggml_view_3d(ctx0, q, q->ne[0], q->ne[1], chunk.n, q->nb[1], q->nb[2], chunk.t0*q->nb[2]);
