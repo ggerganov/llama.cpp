@@ -85,10 +85,18 @@ static void fill_resid_gate(std::vector<float> & dst, const char * name, const t
     }
 }
 
+// a random router bias can tie within the noise between the backends, a ramp keeps the top-k selection the same
+static void fill_exp_probs_b(std::vector<float> & dst, const char *, const tensor_data_params &) {
+    for (size_t i = 0; i < dst.size(); i++) {
+        dst[i] = 2.0f*i;
+    }
+}
+
 // a tensor whose values hold a property of their own, matched on a substring of its name, first match wins
 static const struct { const char * match; tensor_filler fill; } TENSOR_FILLERS[] = {
-    { "ssm_a",   fill_ssm_a      },
-    { "_resid_", fill_resid_gate },
+    { "ssm_a",       fill_ssm_a       },
+    { "_resid_",     fill_resid_gate  },
+    { "exp_probs_b", fill_exp_probs_b },
 };
 
 static void set_tensor_data(struct ggml_tensor * tensor, void * userdata) {
