@@ -9,6 +9,7 @@
 
 // TODO: replace with #include "llama-ext.h" in the future
 #include "../src/llama-arch.h"
+#include "../src/llama-ext.h"
 #include "../src/llama-model-saver.h"
 
 #include <cinttypes>
@@ -729,6 +730,74 @@ static int32_t get_logits_mixed(
     return 0;
 }
 
+static bool check_gigachat35_layer_outputs(llama_model * model, const std::vector<llama_token> & tokens) {
+    std::vector<std::vector<float>> outputs(llama_model_n_layer(model));
+    llama_context_params params = llama_context_default_params();
+    params.n_ctx = 0;
+    params.n_batch = params.n_ubatch = 8;
+    params.n_threads = params.n_threads_batch = 4;
+    params.cb_eval_user_data = &outputs;
+    params.cb_eval = [](ggml_tensor * t, bool ask, void * user_data) {
+        auto & outputs = *static_cast<std::vector<std::vector<float>> *>(user_data);
+        int il = -1;
+        char suffix;
+        const bool match = sscanf(t->name, "l_out-%d%c", &il, &suffix) == 1 && il >= 0 && (size_t) il < outputs.size();
+        if (ask) {
+            return match;
+        }
+        if (match) {
+            GGML_ASSERT(t->type == GGML_TYPE_F32);
+            outputs[il].resize(ggml_nelements(t));
+            ggml_backend_tensor_get(t, outputs[il].data(), 0, outputs[il].size() * sizeof(float));
+        }
+        return true;
+    };
+    llama_context_ptr ctx(llama_init_from_model(model, params));
+    if (!ctx) {
+        return false;
+    }
+    common_batch batch(ctx.get());
+    GGML_ASSERT(tokens.size() >= params.n_batch);
+    for (uint32_t i = 0; i < params.n_batch; i++) {
+        batch.add(tokens[i], i, 0, i == params.n_batch - 1);
+    }
+
+    // Check ordinary decode, masked MTP output, and all-token MTP output.
+    for (int mode = 0; mode < 3; mode++) {
+        llama_memory_clear(llama_get_memory(ctx.get()), true);
+        llama_set_embeddings_nextn(ctx.get(), mode != 0, mode != 2);
+        for (auto & output : outputs) {
+            output.clear();
+        }
+        if (llama_process(ctx.get(), LLAMA_PROCESS_TYPE_DECODE, batch.get()) != 0) {
+            return false;
+        }
+        for (size_t il = 0; il < outputs.size(); il++) {
+            if (outputs[il].empty()) {
+                LOG_ERR("%s: missing l_out-%zu (mode %d)\n", __func__, il, mode);
+                return false;
+            }
+            for (const float value : outputs[il]) {
+                if (!std::isfinite(value)) {
+                    LOG_ERR("%s: non-finite l_out-%zu (mode %d)\n", __func__, il, mode);
+                    return false;
+                }
+            }
+        }
+        if (mode != 0) {
+            const float * h_nextn = llama_get_embeddings_nextn(ctx.get());
+            const auto & last = outputs.back();
+            const size_t n_rows = mode == 2 ? params.n_batch : 1;
+            if (!h_nextn || last.size() != n_rows * llama_model_n_embd(model) ||
+                    memcmp(h_nextn, last.data(), last.size() * sizeof(float)) != 0) {
+                LOG_ERR("%s: MTP hidden state differs from the final layer output (mode %d)\n", __func__, mode);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool check_causal_attn_toggle(
         llama_model * model, llama_context * lctx, const std::vector<llama_token> & tokens) {
     const uint32_t n_vocab  = llama_vocab_n_tokens(llama_model_get_vocab(model));
@@ -1179,6 +1248,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                                     status_mixed = "\033[1;31mFAIL\033[0m";
                                 }
                             }
+                        }
+
+                        if (arch == LLM_ARCH_GIGACHAT35 && !check_gigachat35_layer_outputs(model_and_ctx_dev.first.get(), tokens)) {
+                            test_ok = false;
+                            status_nmse = "\033[1;31mFAIL\033[0m (capture)";
                         }
 
                         // runs after the mixed batch check, as it leaves the context with non-causal attention

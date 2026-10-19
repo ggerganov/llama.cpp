@@ -324,9 +324,8 @@ llama_model_gigachat35::graph::graph(const llama_model & model, const llm_graph_
         inpL = cur;
     }
 
-    // the MTP head reads the hidden state before the final norm
+    // keep the last l_out name; MTP reads this pre-norm tensor by pointer
     res->t_h_nextn = inpL;
-    cb(inpL, "h_nextn", -1);
 
     ggml_tensor * cur = build_zero_centered_gated_norm(
             inpL, model.output_norm, model.output_norm_gate_up, model.output_norm_gate_down, -1);
