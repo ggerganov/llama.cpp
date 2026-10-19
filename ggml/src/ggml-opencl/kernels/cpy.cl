@@ -183,6 +183,7 @@ kernel void kernel_cpy_f32_f32(
     }
 }
 
+#ifndef GGML_CL_NO_CPY_PACK
 kernel void kernel_cpy_f32_f32_pack(
         global float * src0,
         ulong offset0,
@@ -241,6 +242,7 @@ kernel void kernel_cpy_f32_f32_pack(
         dst_data[i00] = src[0];
     }
 }
+#endif // GGML_CL_NO_CPY_PACK
 
 kernel void kernel_cpy_i32_i32(
         global int * src0,
@@ -284,5 +286,30 @@ kernel void kernel_cpy_i32_i32(
         global const int * src = (global int *)((global char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
 
         dst_data[i00] = src[0];
+    }
+}
+
+// Contiguous f32 copy, one work item per float4 over the whole tensor. The kernels above map
+// one workgroup to each row, which leaves a tensor with few long rows on a single compute unit.
+// vload4/vstore4 rather than a float4 cast: these buffers carry an arbitrary 4-byte view offset.
+kernel void kernel_cpy_f32_f32_flat(
+        global float * src0,
+        ulong offset0,
+        global float * dst,
+        ulong offsetd,
+        ulong ne,
+        ulong n4
+) {
+    src0 = (global float*)((global char*)src0 + offset0);
+    dst  = (global float*)((global char*)dst  + offsetd);
+
+    const ulong i = get_global_id(0);
+
+    if (i < n4) {
+        vstore4(vload4(i, src0), i, dst);
+    } else if (i == n4) {
+        for (ulong t = n4 * 4; t < ne; ++t) {
+            dst[t] = src0[t];
+        }
     }
 }

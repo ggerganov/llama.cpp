@@ -52,7 +52,7 @@ export function useProcessingState(): UseProcessingStateReturn {
 		}
 
 		// Read directly from the reactive state
-		return chatStore.activeProcessingState;
+		return chatStore.processing.activeState;
 	});
 
 	$effect(() => {

@@ -3,20 +3,20 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import { Play, Square, Undo, Redo } from '@lucide/svelte';
-	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { settingsStore } from '$lib/stores/settings/index.svelte';
 	import {
 		ChatFormContextGauge,
 		ChatMessageStatistics,
 		DialogChatError,
 		KeyboardShortcutInfo,
-		ModelsSelectorDropdown
+		ModelsSelector
 	} from '$lib/components/app';
 	import ContextGaugePopup from '$lib/components/app/chat/ChatForm/ChatFormContextGauge/ContextGaugePopup.svelte';
 	import { ErrorDialogType } from '$lib/enums';
 
-	import { chatStore } from '$lib/stores/chat.svelte';
-	import { contextStatsStore } from '$lib/stores/context-stats.svelte';
-	import { modelsStore } from '$lib/stores/models.svelte';
+	import { chatStore } from '$lib/stores/chat/index.svelte';
+	import { contextStatsStore } from '$lib/stores/chat/context-stats.svelte';
+	import { modelsStore } from '$lib/stores/models/index.svelte';
 	import { serverStore } from '$lib/stores/server.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
@@ -163,7 +163,7 @@
 	}
 
 	onMount(() => {
-		chatStore.setActiveProcessingConversation('notebook');
+		chatStore.processing.setActiveConversation('notebook');
 		contextStatsStore.notebookMode = true;
 		if (notebookStore.content.length > 0) {
 			notebookStore.updateTokenCount(activeModelId ?? undefined);
@@ -333,7 +333,7 @@
 						</Tooltip.Content>
 					</Tooltip.Root>
 
-					<ModelsSelectorDropdown
+					<ModelsSelector
 						forceForegroundText={true}
 						useGlobalSelection={true}
 						disabled={notebookStore.isGenerating}

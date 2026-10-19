@@ -15,6 +15,7 @@ from .llama import LlamaModel
     "Mistral3ForConditionalGeneration",
     "Ministral3ForCausalLM",
 )
+@ModelBase.example("mistralai/Mistral-Small-3.1-24B-Instruct-2503", "hf-tiny-v2/tiny-random-Ministral3ForCausalLM")
 class Mistral3Model(TextModel):
     class Ministral3Model(LlamaModel):
         model_arch = gguf.MODEL_ARCH.MISTRAL3
@@ -65,3 +66,13 @@ class Mistral3Model(TextModel):
 
     def write(self):
         self.impl.write()
+
+
+@ModelBase.register("VoxtralRealtimeForConditionalGeneration")
+@ModelBase.example("mistralai/Voxtral-Mini-4B-Realtime-2602")
+class VoxtralRealtimeModel(LlamaModel):
+    model_arch = gguf.MODEL_ARCH.MISTRAL3
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_realtime_delay_tokens(self.hparams["default_num_delay_tokens"])

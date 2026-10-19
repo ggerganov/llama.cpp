@@ -3,13 +3,13 @@
  *
  */
 import { CompletionService } from '$lib/services/completion.service';
-import { settingsStore } from '$lib/stores/settings.svelte';
+import { settingsStore } from '$lib/stores/settings/index.svelte';
 import { tokenize } from '$lib/services/tokenize.service';
 import { STATS_UNITS } from '$lib/constants';
-import { modelsStore } from '$lib/stores/models.svelte';
+import { modelsStore } from '$lib/stores/models/index.svelte';
 import { ErrorDialogType } from '$lib/enums';
 import { getETASecs } from '$lib/hooks/use-processing-state.svelte';
-import { chatStore } from '$lib/stores/chat.svelte';
+import { chatStore } from '$lib/stores/chat/index.svelte';
 
 import type {
 	ChatMessageTimings,
@@ -115,10 +115,10 @@ export class NotebookStore {
 		cache_n: number;
 		prompt_progress?: ChatMessagePromptProgress;
 	}): void {
-		this.processingState = chatStore.parseTimingData(timingData);
+		this.processingState = chatStore.processing.parseTimingData(timingData);
 		this.totalTokens = this.processingState?.contextUsed ?? 0;
 		if (this.processingState) {
-			chatStore.setProcessingState('notebook', this.processingState);
+			chatStore.processing.setState('notebook', this.processingState);
 		}
 	}
 
@@ -157,7 +157,7 @@ export class NotebookStore {
 		this.isGenerating = false;
 		if (this.processingState) {
 			this.processingState.status = 'idle';
-			chatStore.setProcessingState('notebook', this.processingState);
+			chatStore.processing.setState('notebook', this.processingState);
 		}
 	}
 
@@ -170,7 +170,7 @@ export class NotebookStore {
 			if (this.content.length === 0) {
 				this.totalTokens = 0;
 				this.processingState = null;
-				chatStore.clearProcessingState('notebook');
+				chatStore.processing.setState('notebook', null);
 				return;
 			}
 			const tokens = await tokenize(this.content, model);
@@ -202,7 +202,7 @@ export class NotebookStore {
 					};
 					this.processingState = state;
 				}
-				chatStore.setProcessingState('notebook', this.processingState);
+				chatStore.processing.setState('notebook', this.processingState);
 			}
 		}, 500);
 	}

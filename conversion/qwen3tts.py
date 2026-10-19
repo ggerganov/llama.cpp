@@ -37,6 +37,7 @@ _ACT2FN = {
 
 
 @ModelBase.register("Qwen3TTSForConditionalGeneration")
+@ModelBase.example("Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 class Qwen3TTSTalkerModel(TextModel):
     model_arch = gguf.MODEL_ARCH.QWEN3TTS
 
@@ -185,6 +186,7 @@ class Qwen3TTSTalkerModel(TextModel):
 
 
 @ModelBase.register("Qwen3TTSForConditionalGeneration")
+@ModelBase.example("Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 class Qwen3TTSSpeakerEncoderModel(MmprojModel):
     has_vision_encoder = False
     has_audio_encoder = True
@@ -216,8 +218,10 @@ class Qwen3TTSSpeakerEncoderModel(MmprojModel):
         if hparams is None:
             hparams = ModelBase.load_hparams(dir_model, is_mistral_format=False)
         hparams["text_config"] = {"hidden_size": hparams["talker_config"]["hidden_size"]}
-        # ECAPA-TDNN has a fixed 4-stage backbone, but MmprojModel.__init__ needs a n_block_keys
-        hparams["speaker_encoder_config"]["n_layers"] = 4
+        # ECAPA-TDNN has a fixed 4-stage backbone, but MmprojModel.__init__ needs a n_block_keys.
+        # The CustomVoice variant ships no speaker encoder, so its config lacks this key entirely.
+        if "speaker_encoder_config" in hparams:
+            hparams["speaker_encoder_config"]["n_layers"] = 4
         super().__init__(dir_model, *args, hparams=hparams, **kwargs)
         self._wav_config_cache = None
 
@@ -273,6 +277,10 @@ class Qwen3TTSSpeakerEncoderModel(MmprojModel):
             return gguf.GGMLQuantizationType.F16
         # ConvTranspose1d kernels: only F16/F32 are implemented, no BF16
         if new_name.endswith(".conv.weight") and (".up.blk." in new_name or ".dac.blk." in new_name):
+            return gguf.GGMLQuantizationType.F32
+        # the code predictor FFN intermediate peaks around 1.5e5, above the F16 range, and mul_mat
+        # casts its input to the weight type
+        if new_name.startswith("a.gen.code.blk.") and new_name.endswith(".ffn_down.weight"):
             return gguf.GGMLQuantizationType.F32
         return super().tensor_force_quant(name, new_name, bid, n_dims)
 

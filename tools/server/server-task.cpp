@@ -12,8 +12,6 @@
 
 #include <sstream>
 
-using json = nlohmann::ordered_json;
-
 //
 // task_params
 //
@@ -75,10 +73,10 @@ json task_params::to_json(bool only_metrics) const {
             {"stream",                    stream},
             {"n_probs",                   sampling.n_probs},
             {"min_keep",                  sampling.min_keep},
-            {"chat_format",               common_chat_format_name(chat_parser_params.format)},
-            {"reasoning_format",          common_reasoning_format_name(chat_parser_params.reasoning_format)},
-            {"reasoning_in_content",      chat_parser_params.reasoning_in_content},
-            {"generation_prompt",         chat_parser_params.generation_prompt},
+            {"chat_format",               common_chat_format_name(chat_format)},
+            {"reasoning_format",          common_reasoning_format_name(reasoning_format)},
+            {"reasoning_in_content",      stream && reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY},
+            {"generation_prompt",         sampling.generation_prompt},
             {"samplers",                  samplers},
             {"speculative.types",         common_speculative_type_name_str(speculative.types)},
             {"timings_per_token",         timings_per_token},
@@ -134,10 +132,10 @@ json task_params::to_json(bool only_metrics) const {
         {"grammar_lazy",              sampling.grammar_lazy},
         {"grammar_triggers",          grammar_triggers},
         {"preserved_tokens",          sampling.preserved_tokens},
-        {"chat_format",               common_chat_format_name(chat_parser_params.format)},
-        {"reasoning_format",          common_reasoning_format_name(chat_parser_params.reasoning_format)},
-        {"reasoning_in_content",      chat_parser_params.reasoning_in_content},
-        {"generation_prompt",         chat_parser_params.generation_prompt},
+        {"chat_format",               common_chat_format_name(chat_format)},
+        {"reasoning_format",          common_reasoning_format_name(reasoning_format)},
+        {"reasoning_in_content",      stream && reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY},
+        {"generation_prompt",         sampling.generation_prompt},
         {"samplers",                  samplers},
         {"speculative.types",         common_speculative_type_name_str(speculative.types)},
         {"timings_per_token",         timings_per_token},
@@ -150,29 +148,21 @@ json task_params::to_json(bool only_metrics) const {
 //
 // task_result_state
 //
-task_result_state::task_result_state(const common_chat_parser_params & chat_parser_params)
-    : chat_parser_params(chat_parser_params)
+task_result_state::task_result_state(common_chat_session session)
+    : chat_session(std::move(session))
+    , chat_msg(chat_session.msg())
     , oai_resp_id("resp_" + random_string())
     , oai_resp_reasoning_id("rs_" + random_string())
     , oai_resp_message_id("msg_" + random_string()) {
-    if (chat_parser_params.is_continuation && !chat_parser_params.echo) {
-        // initialize chat_msg to avoid emitting a delta containing the assistant prefill
-        chat_msg = common_chat_parse("", true, chat_parser_params);
-    }
 }
 
 common_chat_msg task_result_state::update_chat_msg(
-        const std::string & text_added,
+        const common_chat_input & added,
         bool is_partial,
         std::vector<common_chat_msg_diff> & diffs,
         bool filter_tool_calls) {
-    generated_text += text_added;
     auto msg_prv_copy = chat_msg;
-    //SRV_DBG("Parsing chat message: %s\n", generated_text.c_str());
-    auto new_msg = common_chat_parse(
-        generated_text,
-        is_partial,
-        chat_parser_params);
+    auto new_msg = is_partial ? chat_session.feed(added) : chat_session.finish(added);
     if (!new_msg.empty()) {
         new_msg.set_tool_call_ids(generated_tool_call_ids, gen_tool_call_id);
         chat_msg = new_msg;
@@ -304,7 +294,7 @@ json completion_token_output::probs_vector_to_json(const std::vector<completion_
 }
 
 float completion_token_output::logarithm(float x) {
-    // nlohmann::json converts -inf to null, so we need to prevent that
+    // the JSON library converts -inf to null, so we need to prevent that
     return x == 0.0f ? std::numeric_limits<float>::lowest() : std::log(x);
 }
 
@@ -342,7 +332,7 @@ json server_task_result_cmpl_final::to_json() {
 json server_task_result_cmpl_final::to_json_non_oaicompat() {
     json res = json {
         {"index",               index},
-        {"content",             content},
+        {"content",             content.text},
         {"tokens",              tokens},
         {"id_slot",             id_slot},
         {"stop",                true},
@@ -388,7 +378,7 @@ json server_task_result_cmpl_final::to_json_oaicompat() {
     json res = json {
         {"choices",            json::array({
             json{
-                {"text",          content},
+                {"text",          content.text},
                 {"index",         index},
                 {"logprobs",      logprobs},
                 {"finish_reason", finish_reason},
@@ -407,7 +397,7 @@ json server_task_result_cmpl_final::to_json_oaicompat() {
         res["__verbose"] = to_json_non_oaicompat();
     }
     if (stats.is_set()) {
-        res.push_back({"timings", stats.to_json()});
+        res["timings"] = stats.to_json();
     }
 
     return res;
@@ -420,7 +410,7 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat() {
         msg = oaicompat_msg;
     } else {
         msg.role = "assistant";
-        msg.content = content;
+        msg.content = content.text;
     }
     if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
         finish_reason = msg.tool_calls.empty() ? "stop" : "tool_calls";
@@ -455,7 +445,7 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat() {
         res["__verbose"] = to_json_non_oaicompat();
     }
     if (stats.is_set()) {
-        res.push_back({"timings", stats.to_json()});
+        res["timings"] = stats.to_json();
     }
 
     return res;
@@ -516,7 +506,7 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat_stream() {
     }
 
     if (stats.is_set()) {
-        deltas.back().push_back({"timings", stats.to_json()});
+        deltas.back()["timings"] = stats.to_json();
     }
 
     // extra fields for debugging purposes
@@ -533,7 +523,7 @@ json server_task_result_cmpl_final::to_json_oaicompat_resp() {
         msg = oaicompat_msg;
     } else {
         msg.role = "assistant";
-        msg.content = content;
+        msg.content = content.text;
     }
 
     std::vector<json> output;
@@ -709,7 +699,7 @@ json server_task_result_cmpl_final::to_json_oaicompat_resp_stream() {
     });
 
     if (stats.is_set()) {
-        server_sent_events.back().at("data").push_back({"timings", stats.to_json()});
+        server_sent_events.back().at("data")["timings"] = stats.to_json();
     }
 
     return server_sent_events;
@@ -743,7 +733,7 @@ json server_task_result_cmpl_final::to_json_anthropic() {
         msg = oaicompat_msg;
     } else {
         msg.role = "assistant";
-        msg.content = content;
+        msg.content = content.text;
     }
 
     // thinking block comes first (Anthropic extended thinking format)
@@ -1052,7 +1042,7 @@ json server_task_result_cmpl_partial::to_json_non_oaicompat() {
     // non-OAI-compat JSON
     json res = json {
         {"index",            index},
-        {"content",          content},
+        {"content",          content.text},
         {"tokens",           tokens},
         {"stop",             false},
         {"id_slot",          id_slot},
@@ -1061,10 +1051,10 @@ json server_task_result_cmpl_partial::to_json_non_oaicompat() {
     };
     // populate the timings object when needed (usually for the last response or with timings_per_token enabled)
     if (stats.is_set()) {
-        res.push_back({"timings", stats.to_json()});
+        res["timings"] = stats.to_json();
     }
     if (is_progress) {
-        res.push_back({"prompt_progress", progress.to_json()});
+        res["prompt_progress"] = progress.to_json();
     }
     if (!prob_output.probs.empty()) {
         res["completion_probabilities"] = completion_token_output::probs_vector_to_json({prob_output}, post_sampling_probs);
@@ -1083,7 +1073,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat() {
     json res = json {
         {"choices",            json::array({
             json{
-                {"text",          content},
+                {"text",          content.text},
                 {"index",         index},
                 {"logprobs",      logprobs},
                 {"finish_reason", nullptr},
@@ -1101,10 +1091,10 @@ json server_task_result_cmpl_partial::to_json_oaicompat() {
         res["__verbose"] = to_json_non_oaicompat();
     }
     if (stats.is_set()) {
-        res.push_back({"timings", stats.to_json()});
+        res["timings"] = stats.to_json();
     }
     if (is_progress) {
-        res.push_back({"prompt_progress", progress.to_json()});
+        res["prompt_progress"] = progress.to_json();
     }
 
     return res;
@@ -1155,10 +1145,10 @@ json server_task_result_cmpl_partial::to_json_oaicompat_chat() {
         }
 
         if (stats.is_set()) {
-            last_json.push_back({"timings", stats.to_json()});
+            last_json["timings"] = stats.to_json();
         }
         if (is_progress) {
-            last_json.push_back({"prompt_progress", progress.to_json()});
+            last_json["prompt_progress"] = progress.to_json();
         }
     }
 
@@ -1305,10 +1295,10 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
     if (!events.empty()) {
         json & data = events.back().at("data");
         if (stats.is_set()) {
-            data.push_back({"timings", stats.to_json()});
+            data["timings"] = stats.to_json();
         }
         if (is_progress) {
-            data.push_back({"prompt_progress", progress.to_json()});
+            data["prompt_progress"] = progress.to_json();
         }
     }
 
@@ -1318,7 +1308,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
 json server_task_result_cmpl_partial::to_json_oaicompat_asr() {
     json event = json {
         {"type", "transcript.text.delta"},
-        {"delta", content},
+        {"delta", content.text},
     };
     return event;
 }
@@ -1498,6 +1488,17 @@ json server_task_result_rerank::to_json() {
 }
 
 //
+// server_task_result_decision
+//
+json server_task_result_decision::to_json() {
+    return json {
+        {"index",            index},
+        {"scores",           scores},
+        {"tokens_evaluated", n_tokens},
+    };
+}
+
+//
 // server_task_result_error
 //
 json server_task_result_error::to_json() {
@@ -1512,8 +1513,13 @@ json server_task_result_error::to_json() {
 //
 // server_task_result_metrics
 //
-json server_task_result_metrics::to_json() {
+json server_task_result_slots::to_json() {
     return slots_data;
+}
+
+json server_task_result_metrics::to_json() {
+    // not used, /metrics renders prometheus text via to_metrics()
+    return json{};
 }
 
 // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names

@@ -29,10 +29,10 @@ enum patch_merge_type {
     PATCH_MERGE_SPATIAL_UNPAD,
 };
 
+// all algos are Pillow-compatible (matching PIL.Image.resize output)
 enum resize_algo {
-    RESIZE_ALGO_BILINEAR, // stretch to target resolution
-    RESIZE_ALGO_BICUBIC, // center-crop when aspect ratio doesn't match
-    RESIZE_ALGO_BICUBIC_PILLOW,
+    RESIZE_ALGO_BILINEAR,
+    RESIZE_ALGO_BICUBIC,
     RESIZE_ALGO_LANCZOS,
 };
 
@@ -71,9 +71,10 @@ struct clip_hparams {
     std::vector<clip_image_size> image_res_candidates;
     int32_t preproc_min_tiles = 0;
     int32_t preproc_max_tiles = 0;
+    int32_t max_slice_nums = 9; // llava-uhd slice cap; per-model, carried in the GGUF
     int32_t preproc_tile_size = 0; // local tile size (deepseek-ocr)
     resize_algo image_resize_algo_rf = RESIZE_ALGO_BICUBIC;
-    resize_algo image_resize_algo_ov = RESIZE_ALGO_BILINEAR;
+    resize_algo image_resize_algo_ov = RESIZE_ALGO_BICUBIC;
     pad_style image_pad_rf = PAD_CEIL;  // padding style for the refined image (e.g. llava-1.6)
     pad_style image_pad_ov = PAD_NONE;  // padding style for the overview image (e.g. llava-1.6)
     std::array<uint8_t, 3> image_pad_color_rf = {0, 0, 0}; // padding color for refined image
@@ -93,11 +94,18 @@ struct clip_hparams {
 
     float eps = 1e-6;
     float rope_theta = 0.0;
+
+    float swiglu_clamp = 0.0f;
+    int32_t n_expert_used = 0;
     std::vector<int32_t> feature_layers;
     int32_t attn_window_size = 0;
     int32_t n_wa_pattern = 0;
     std::unordered_set<int32_t> wa_layer_indexes; // explicit layer indexes that use full attention (for irregular patterns like YoutuVL)
     std::vector<int32_t> wa_pattern_mode; // mimovl: per-layer window-attention mode
+
+    // deepseek4v: resize solver caps the LLM token count of the aligner grid
+    int32_t dsv4_max_n_token  = 0;
+    int32_t dsv4_max_wh_ratio = 0;
 
     // deepseek-ocr (sam)
     int32_t sam_n_layer = 0;
@@ -125,6 +133,20 @@ struct clip_hparams {
     int32_t audio_proj_window_size     = 0;
     int32_t audio_proj_downsample_rate = 0;
     int32_t audio_proj_head_count      = 0;
+
+    // audio pyramid (muse-spark): widths, folded samples and blocks per stage
+    std::vector<int32_t> audio_hidden_sizes;
+    std::vector<int32_t> audio_patch_sizes;
+    std::vector<int32_t> audio_depths;
+
+    int32_t audio_samples_per_token() const {
+        int64_t n = 1;
+        for (int32_t p : audio_patch_sizes) {
+            n *= p;
+            GGML_ASSERT(n >= 1 && n <= (1 << 20));
+        }
+        return (int32_t) n;
+    }
 
     // audio-to-mel preprocessor params
     int32_t audio_chunk_len   = -1; // in seconds
@@ -203,8 +225,11 @@ struct clip_hparams {
     void set_warmup_n_tokens(int n_tokens) {
         int n_tok_per_side = static_cast<int>(std::sqrt(n_tokens));
         GGML_ASSERT(n_tok_per_side * n_tok_per_side == n_tokens && "n_tokens must be n*n");
+        // do not warmup with more tokens than the max allowed
+        if (custom_image_max_tokens > 0 && n_tokens > custom_image_max_tokens) {
+            n_tok_per_side = std::max(1, static_cast<int>(std::sqrt(custom_image_max_tokens)));
+        }
         warmup_image_size = n_tok_per_side * patch_size * n_merge;
-        // TODO: support warmup size for custom token numbers
     }
     // sam vit deepseek-ocr
     std::vector<int32_t> global_attn_indices() const {
@@ -259,11 +284,22 @@ struct clip_layer {
     ggml_tensor * ff_down_w = nullptr;
     ggml_tensor * ff_down_b = nullptr;
 
+    // MoE FFN (dots3note vision pyramid blocks)
+    ggml_tensor * ff_gate_inp_w  = nullptr;
+    ggml_tensor * ff_gate_exps_w = nullptr;
+    ggml_tensor * ff_up_exps_w   = nullptr;
+    ggml_tensor * ff_down_exps_w = nullptr;
+    ggml_tensor * ff_exp_probs_b = nullptr;
+
     // layernorm 2 (or pre-FFN norm)
     ggml_tensor * ln_2_w = nullptr;
     ggml_tensor * ln_2_b = nullptr;
 
     ggml_tensor * ff_post_norm_w = nullptr;
+
+    // depthwise causal conv block (muse-spark audio), conv_norm_w is declared below
+    ggml_tensor * conv_w = nullptr;
+    ggml_tensor * conv_b = nullptr;
 
     // layer scale (no bias)
     ggml_tensor * ls_1_w   = nullptr;
@@ -548,7 +584,7 @@ struct clip_model {
     // embeddings
     ggml_tensor * class_embedding = nullptr;
     ggml_tensor * patch_embeddings_0 = nullptr;
-    ggml_tensor * patch_embeddings_1 = nullptr;  // second Conv2D kernel when we decouple Conv3D along temporal dimension (Qwen2VL)
+    ggml_tensor * patch_embeddings_1 = nullptr;  // additional patch kernel; interpretation is model-specific (Qwen2VL, Nemotron Omni)
     ggml_tensor * patch_bias = nullptr;
     ggml_tensor * position_embeddings = nullptr;
     ggml_tensor * norm_embd_w = nullptr;
@@ -566,6 +602,14 @@ struct clip_model {
     ggml_tensor * pre_ln_b = nullptr;
 
     std::vector<clip_layer> layers;
+
+    // one patch embedder per audio pyramid stage (muse-spark)
+    struct audio_patch {
+        ggml_tensor * proj_w = nullptr;
+        ggml_tensor * proj_b = nullptr;
+        ggml_tensor * norm_w = nullptr;
+    };
+    std::vector<audio_patch> a_patches;
 
     int32_t n_deepstack_layers = 0; // used by Qwen3-VL, calculated from clip_layer
 
@@ -597,6 +641,7 @@ struct clip_model {
 
     ggml_tensor * image_newline = nullptr;
     ggml_tensor * view_seperator = nullptr;
+    ggml_tensor * tok_embd_sep = nullptr; // [n_embd_text, n_sep] rows of the text model tok_embd (MiniCPM-V 4.7)
 
 
     // Yi type models with mlp+normalization projection
@@ -606,6 +651,10 @@ struct clip_model {
     ggml_tensor * mm_3_b = nullptr;
     ggml_tensor * mm_4_w = nullptr;
     ggml_tensor * mm_4_b = nullptr;
+    ggml_tensor * mm_5_w = nullptr;
+    ggml_tensor * mm_5_b = nullptr;
+    ggml_tensor * mm_6_w = nullptr;
+    ggml_tensor * mm_6_b = nullptr;
 
     // GLMV-Edge projection
     ggml_tensor * mm_model_adapter_conv_w = nullptr;
@@ -716,6 +765,11 @@ struct clip_model {
 
     // pixtral, glm4v
     ggml_tensor * token_embd_img_break = nullptr;
+
+    // deepseek4v sentinel embeddings (image_newline is reused for IMAGE_NEW_LINE)
+    ggml_tensor * token_embd_img_start = nullptr;
+    ggml_tensor * token_embd_img_end   = nullptr;
+    ggml_tensor * token_embd_img_pad   = nullptr;
     ggml_tensor * mm_patch_merger_w = nullptr;
     ggml_tensor * mm_patch_merger_b = nullptr;
 

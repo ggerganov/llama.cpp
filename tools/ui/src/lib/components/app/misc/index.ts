@@ -22,13 +22,6 @@
 export { default as ConversationSelection } from './ConversationSelection.svelte';
 
 /**
- * Horizontal scrollable carousel with navigation arrows.
- * Used for displaying items in a horizontally scrollable container
- * with left/right navigation buttons that appear on hover.
- */
-export { default as HorizontalScrollCarousel } from './HorizontalScrollCarousel.svelte';
-
-/**
  * **TruncatedText** - Text with ellipsis and tooltip
  *
  * Displays text with automatic truncation and full content in tooltip.
@@ -43,6 +36,13 @@ export { default as TruncatedText } from './TruncatedText.svelte';
  * Supports special keys like shift, cmd, and custom text.
  */
 export { default as KeyboardShortcutInfo } from './KeyboardShortcutInfo.svelte';
+
+/**
+ * **ScrollCarousel** - Feature/carousel with center-aligned overflow controls
+ *
+ * Horizontal scrollable container with arrows that center the focused item.
+ */
+export { default as ScrollCarousel } from './ScrollCarousel.svelte';
 
 /**
  * **ProcessingText** - Display for simple processing text using shine animation
@@ -71,3 +71,12 @@ export { default as CodeBlockActions } from './CodeBlockActions.svelte';
  * `class` and `style` props and inherits color via `currentColor`.
  */
 export { default as Logo } from './Logo.svelte';
+
+/** Section with a trigger that expands in place. */
+export { default as CollapsibleSection } from './CollapsibleSection.svelte';
+export {
+	default as GroupedList,
+	type GroupedListGroup,
+	GroupedListUnit
+} from './GroupedList.svelte';
+export { default as CollapsibleRegion } from './CollapsibleRegion.svelte';
