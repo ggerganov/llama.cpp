@@ -1918,8 +1918,8 @@ private:
         bpe(text.substr(prev));
     }
 
-    // HybridDNATokenizer._process_dna_sequence: strip, uppercase, then one token per k bases; a k-mer with anything
-    // but ACGT is <oov>, and a trailing partial k-mer is right-padded with pad_char
+    // HybridDNATokenizer._process_dna_sequence: strip, uppercase, then one token per k bases
+    // a k-mer with anything but ACGT is <oov>, and a trailing partial k-mer is right-padded with pad_char
     void tokenize_dna(const std::string & content, bool has_start, bool has_end, std::vector<llama_token> & output) {
         if (has_start) {
             output.push_back(dna_begin_id);
