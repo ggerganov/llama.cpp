@@ -2187,8 +2187,8 @@ class TextModel(ModelBase):
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in vocab.items()}
         # k-mers can share text with a base-vocab BPE token (e.g. CCCCCC) and get dropped by get_vocab()
         # a reserved marker suffix (U+E000) keeps each k-mer's own id (llama.cpp strips it on detokenization)
-        # tail="pad_n" (Carbon-14B) adds N-padded tail tokens ("CT" -> "CTNNNN") that get the same marker; llama.cpp
-        # detects them to pad with N and strips the padding on detokenization. tail="char" has no llama.cpp support.
+        # tail="pad_n" (Carbon-14B) adds N-padded tail tokens ("CT" -> "CTNNNN") that get the same marker
+        # llama.cpp detects them to pad with N and strips the padding on detokenization, tail="char" is unsupported
         tail = getattr(tokenizer, "tail", "pad_a")
         if tokenizer.k != 6 or tail not in ("pad_a", "pad_n"):  # ty: ignore[unresolved-attribute]
             raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")  # ty: ignore[unresolved-attribute]
