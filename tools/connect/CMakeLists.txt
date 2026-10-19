@@ -76,8 +76,8 @@ add_custom_target(${TARGET} ALL
 )
 
 # building llama-server should also pull the binary (for convenience)
-if (TARGET llama-server)
-    add_dependencies(llama-server ${TARGET})
+if (TARGET llama-server-impl)
+    add_dependencies(llama-server-impl ${TARGET})
 endif()
 
 if (LLAMA_TOOLS_INSTALL)
