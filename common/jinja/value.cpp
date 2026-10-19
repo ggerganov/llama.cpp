@@ -1028,10 +1028,6 @@ const func_builtins & value_bool_t::get_builtins() const {
     return builtins;
 }
 
-[[noreturn]] static value array_unique_not_implemented(const func_args &) {
-    throw not_implemented_exception("Array unique builtin not implemented");
-}
-
 const func_builtins & value_array_t::get_builtins() const {
     static const func_builtins builtins = {
         {"default", default_value},
@@ -1257,7 +1253,36 @@ const func_builtins & value_array_t::get_builtins() const {
             }
             return result;
         }},
-        {"unique", array_unique_not_implemented},
+        {"unique", [](const func_args & args) -> value {
+            args.ensure_count(1, 3);
+            args.ensure_vals<value_array>();
+            value val         = args.get_pos(0);
+            value val_case    = args.get_kwarg_or_pos("case_sensitive", 1);
+            value attribute   = args.get_kwarg_or_pos("attribute",      2);
+            // FIXME: unique is currently always case sensitive
+            //const bool case_sensitive = val_case->as_bool(); // undefined == false
+            value undef = mk_val<value_undefined>();
+            auto key_of = [&](const value & item) -> value {
+                return attribute->is_undefined() ? item : get_attribute(item, attribute, undef);
+            };
+            std::vector<value> result;
+            std::vector<value> seen;
+            for (const auto & item : val->as_array()) {
+                value key = key_of(item);
+                bool dup = false;
+                for (const auto & s : seen) {
+                    if (value_compare(s, key, value_compare_op::eq)) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) {
+                    seen.push_back(key);
+                    result.push_back(item);
+                }
+            }
+            return mk_val<value_array>(std::move(result));
+        }},
     };
     return builtins;
 }
