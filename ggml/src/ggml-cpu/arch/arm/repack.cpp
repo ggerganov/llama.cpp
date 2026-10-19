@@ -1793,12 +1793,13 @@ void ggml_gemv_q8_0_4x8_q8_0(int                        n,
 
 #if defined(__aarch64__) && defined(__ARM_FEATURE_SVE)
     // 256-bit SVE: 32 x int8 -> 8 x int32
-    if (svcntb() == 32) {
+    if (ggml_cpu_get_sve_cnt() == QK8_0) {
         const block_q8_0x4 * GGML_RESTRICT b_ptr = (const block_q8_0x4 *) vx;
 
         const svbool_t pg   = svptrue_b8();
-        const svbool_t pg4w = svwhilelt_b32((uint64_t) 0, (uint64_t) 4);
+        const svbool_t pg4w = svptrue_pat_b32(SV_VL4);
 
+        // after svtbl + svcvt the scale lanes are [d0,d0,d1,d1,d2,d2,d3,d3]: lane pair j = row j
         const svuint16_t d_idx = svreinterpret_u16_u32(svlsr_n_u32_x(pg, svindex_u32(0, 1), 1));
 
         for (int c = 0; c < nc; c += ncols_interleaved) {
