@@ -59,10 +59,10 @@ static __device__ __forceinline__ uint32_t bfx_pair(
 }
 
 // decode 4 bf16 elements forming one lane's A-fragment half:
-// af[0] = row g,   pair tig     (k = tig*2, tig*2+1)
-// af[1] = row g+8, pair tig     (same k, row g+8)
-// af[2] = row g,   pair tig+4   (k = tig*2+8, tig*2+9)
-// af[3] = row g+8, pair tig+4   (same k, row g+8)
+// af[0] = row g,   pair tig     (k = tig*2, tig*2+1)      ← PTX reg0
+// af[1] = row g,   pair tig+4   (k = tig*2+8, tig*2+9)    ← PTX reg1 (SAME ROW)
+// af[2] = row g+8, pair tig     (k = tig*2, tig*2+1)      ← PTX reg2 (SAME K-PAIR, row g+8)
+// af[3] = row g+8, pair tig+4   (k = tig*2+8, tig*2+9)    ← PTX reg3
 // (uses iqs to select the half within the block)
 __device__ __forceinline__ void bfx_af16(
         const block_bf16x * GGML_RESTRICT w0,   // row g stream
@@ -70,8 +70,8 @@ __device__ __forceinline__ void bfx_af16(
         const int iqs, const int tig,
         uint32_t * GGML_RESTRICT af /* [4] */) {
     af[0] = bfx_pair(w0, iqs, tig);
-    af[1] = bfx_pair(w1, iqs, tig);
-    af[2] = bfx_pair(w0, iqs, tig + 4);
+    af[1] = bfx_pair(w0, iqs, tig + 4);
+    af[2] = bfx_pair(w1, iqs, tig);
     af[3] = bfx_pair(w1, iqs, tig + 4);
 }
 
