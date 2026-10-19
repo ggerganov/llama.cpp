@@ -343,6 +343,8 @@ struct common_params_speculative_draft {
 
     int32_t n_gpu_layers = -1; // number of layers to store in VRAM for the draft model (-1 - use default)
 
+    int32_t n_ubatch = 0; // physical batch size of the draft context (0 - use the target's n_ubatch)
+
     ggml_type cache_type_k = GGML_TYPE_F16; // KV cache data type for the K
     ggml_type cache_type_v = GGML_TYPE_F16; // KV cache data type for the V
 
@@ -638,6 +640,7 @@ struct common_params {
     int32_t kv_unified_per_slot = 0;     // max context per parallel slot; 0 = unset
     int32_t checkpoint_min_step = 8192;  // minimum spacing between context checkpoints
     int32_t cache_ram_mib       = 8192;  // -1 = no limit, 0 - disable, 1 = 1 MiB, etc.
+    bool    cache_ram_explicit  = false; // set by --cache-ram, decision models disable the cache otherwise
 
     std::string public_path   = "";                                                                         // NOLINT
     std::string api_prefix    = "";                                                                         // NOLINT
@@ -967,6 +970,7 @@ enum common_decision_type {
     COMMON_DECISION_TYPE_VLLM_D3, // same as pplx-decider, non-causal attention
     COMMON_DECISION_TYPE_LFM2_D1, // same as openjev, the labels depend on the question type
     COMMON_DECISION_TYPE_LFM2_D1_OMNI, // same as laya, other prompt layout
+    COMMON_DECISION_TYPE_GRANITE_SWITCH, // same as openjev, run by the decision aLoRA of granite switch
     COMMON_DECISION_TYPE_UNKNOWN, // a decision model of a type that is not supported
 };
 

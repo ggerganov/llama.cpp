@@ -39,6 +39,7 @@ struct server_decision_context {
     bool can_share_prompt() const {
         switch (type) {
             case COMMON_DECISION_TYPE_OPENJEV:
+            case COMMON_DECISION_TYPE_GRANITE_SWITCH:
             case COMMON_DECISION_TYPE_LEV:
             case COMMON_DECISION_TYPE_KEV:
             case COMMON_DECISION_TYPE_NIMBLE:
@@ -161,3 +162,6 @@ private:
 // each group is one parent and its children, it takes at most n_slots slots
 // note: the order of the tasks is preserved
 std::vector<server_task> server_decision_group_tasks(std::vector<server_task> && tasks, size_t n_slots);
+
+// write "<|name|>" with U+00A6 in place of "|", so text from the request is not parsed as special tokens
+std::string server_decision_escape_special_tokens(const std::string & text);

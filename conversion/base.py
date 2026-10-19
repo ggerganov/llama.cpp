@@ -568,7 +568,7 @@ class ModelBase:
                                 tensors_to_remove.append(base_name + "_zero_point")
                 else:
                     raise NotImplementedError(f"Quant format {quant_format!r} for method {quant_method!r} is not yet supported")
-            elif quant_method == "modelopt":
+            elif quant_method in ("modelopt", "modelopt_mixed"):
                 dequant_fp8()
             elif quant_method is not None:
                 raise NotImplementedError(f"Quant method is not yet supported: {quant_method!r}")
@@ -1643,6 +1643,8 @@ class TextModel(ModelBase):
                 self.gguf_writer.add_rope_scaling_type(rope_gguf_type)
                 self.gguf_writer.add_rope_scaling_factor(rope_factor)
                 self.gguf_writer.add_rope_scaling_orig_ctx_len(rope_params["original_max_position_embeddings"])
+                if (truncate := rope_params.get("truncate")) is not None:
+                    self.gguf_writer.add_rope_scaling_yarn_truncate(truncate)
                 if (yarn_ext_factor := rope_params.get("extrapolation_factor")) is not None:
                     self.gguf_writer.add_rope_scaling_yarn_ext_factor(yarn_ext_factor)
                 if (yarn_attn_factor := rope_params.get("attention_factor", rope_params.get("attn_factor"))) is not None:
@@ -1867,6 +1869,12 @@ class TextModel(ModelBase):
         if chkhsh == "66b8d4e19ab16c3bfd89bce5d785fb7e0155e8648708a1f42077cb9fe002c273":
             # ref: https://huggingface.co/alvarobartt/grok-2-tokenizer
             res = "grok-2"
+        if chkhsh == "f5c965e4198da6e7525072d87d1ecf4c51d981fd486c7c4ec728ef9cec7e03fc":
+            # ref: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+            res = "gpt-4o"
+        if chkhsh == "6e040dfe72e4b85855588c53acf4909ac4e98e55bc3a33cd7db499180dc42a78":
+            # ref: https://huggingface.co/Aleph-Alpha/Kolibri-1
+            res = "qwen2"
         if chkhsh == "b3d1dd861f1d4c5c0d2569ce36baf3f90fe8a102db3de50dd71ff860d91be3df":
             # ref: https://huggingface.co/aari1995/German_Semantic_V3
             res = "jina-v2-de"

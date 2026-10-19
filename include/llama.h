@@ -405,7 +405,7 @@ extern "C" {
         void *              abort_callback_data;
 
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
-        bool embeddings;  // if true, extract embeddings (together with logits)
+        bool embeddings;  // if true, extract embeddings (together with logits, except for a pooling type other than NONE)
         bool offload_kqv; // offload the KQV ops (including the KV cache) to GPU
         bool no_perf;     // measure performance timings
         bool op_offload;  // offload host tensor operations to device
@@ -1056,7 +1056,8 @@ extern "C" {
     // "state" here means extra hidden state carried over from a previous stage, e.g.:
     //   - MTP: state from N layers of the target model
     //   - Qwen3 VL (deepstack): state from N layers of the vision encoder
-    // Returns false if the context does not take a state embedding (currently only MTP contexts do)
+    //   - LiliCorr: context embeddings for the transformers
+    // Returns false if the context does not take a state embedding (MTP and LiliCorr contexts do)
     LLAMA_API bool llama_batch_ext_set_embd_state(
                                 struct llama_batch_ext * batch,
                                                int32_t   idx,

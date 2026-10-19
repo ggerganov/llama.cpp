@@ -312,10 +312,14 @@ llama_kv_cache::llama_kv_cache(
         n_rot_k = other->n_rot_k;
         n_rot_v = other->n_rot_v;
     } else {
-        const char * LLAMA_ATTN_ROT_DISABLE = getenv("LLAMA_ATTN_ROT_DISABLE");
-        const bool attn_rot_disable = LLAMA_ATTN_ROT_DISABLE ? atoi(LLAMA_ATTN_ROT_DISABLE) : false;
+        // two knobs turn the same thing off: the environment variable, for the whole process, and
+        //   the model setting, for the contexts of one model - see llama_model_set_attn_rot
+        const char * env_rot_disable = getenv("LLAMA_ATTN_ROT_DISABLE");
+
+        const bool attn_rot_disable = !model.attn_rot || (env_rot_disable != nullptr && atoi(env_rot_disable) != 0);
         if (attn_rot_disable) {
-            LLAMA_LOG_WARN("%s: attention rotation force disabled (LLAMA_ATTN_ROT_DISABLE)\n", __func__);
+            LLAMA_LOG_WARN("%s: attention rotation force disabled (%s)\n", __func__,
+                    model.attn_rot ? "LLAMA_ATTN_ROT_DISABLE" : "llama_model_set_attn_rot");
         }
 
         bool attn_rot_k =
@@ -2005,7 +2009,7 @@ public:
 void llm_graph_input_k_shift::set_input(const llama_ubatch * ubatch) {
     GGML_UNUSED(ubatch);
 
-    if (k_shift) {
+    if (k_shift && k_shift->buffer) {
         kv_self->set_input_k_shift(k_shift);
     }
 
@@ -2072,7 +2076,9 @@ void llama_kv_cache::state_write(llama_io_write_i & io, llama_seq_id seq_id, lla
         return;
     }
 
-    GGML_UNUSED(flags);
+    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) && swa_type == LLAMA_SWA_TYPE_NONE) {
+        return;
+    }
 
     io.write(&n_stream, sizeof(n_stream));
 
@@ -2151,7 +2157,9 @@ const slot_info_vec_t *   sinfos_in) {
         return;
     }
 
-    GGML_UNUSED(flags);
+    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) && swa_type == LLAMA_SWA_TYPE_NONE) {
+        return;
+    }
 
     // TODO: fix incosistent handling of `seq_id < 0` and `seq_id == -1` in the codebase [TAG_LLAMA_SEQ_ID_NEG]
     GGML_ASSERT(seq_id == -1 || (seq_id >= 0 && (size_t) seq_id < seq_to_stream.size()));
