@@ -218,7 +218,7 @@ int32_t common_cpu_get_num_math() {
             }
         }
     }
-#elif defined(__linux__) && defined(__riscv)
+#elif defined(__riscv) && defined(__linux__)
     std::ifstream cpuinfo("/proc/cpuinfo");
     std::string line;
     int32_t n_a100 = 0;
