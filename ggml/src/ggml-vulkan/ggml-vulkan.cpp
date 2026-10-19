@@ -8212,6 +8212,20 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
                             (int64_t)KV >= std::max<int64_t>(4096, min_ratio * (int64_t)n_kv_max) &&
                             (gqa_ratio > 1 || (tuning_params.path == FA_SCALAR && N == 1));
 
+    // GGML_VK_FA_QTOK_FOLD: 2 query tokens share one 16-row GQA tile, so each K/V tile is read once per token pair
+    const uint32_t fa_qtok_rows = 8; // rows per token: 6 heads + 2 padding, same as GQA_TOK_ROWS in the shader
+    uint32_t gqa_tok = 1;
+    static const bool fa_qtok_fold = getenv("GGML_VK_FA_QTOK_FOLD") != nullptr;
+    if (fa_qtok_fold && mask != nullptr && !use_sparse && sinks == nullptr && max_bias == 0.0f && logit_softcap == 0.0f &&
+        gqa_ratio == 6 && neq1 >= 2 && neq3 == 1 && HSK == 256 && HSV == 256 &&
+        k->type == GGML_TYPE_F16 && v->type == GGML_TYPE_F16 &&
+        tuning_params.path == FA_COOPMAT1 && tuning_params.block_rows == 2 * fa_qtok_rows) {
+        gqa_tok = 2;
+        N = fa_qtok_rows * gqa_tok;
+        workgroups_x = (uint32_t)CEIL_DIV(neq1, gqa_tok);
+        tuning_params = get_fa_tuning_params(ctx->device, HSK, HSV, N, KV, k_type_eff, v_type_eff, f32acc);
+    }
+
     const uint32_t q_stride = (uint32_t)(nbq1 / ggml_type_size(q->type));
     uint32_t k_stride = (uint32_t)(nbk1 / ggml_type_size(k->type));
     uint32_t v_stride = (uint32_t)(nbv1 / ggml_type_size(v->type));
@@ -8531,6 +8545,17 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
                                   { mask_buf, sparse_buf }, sc_pc,
                                   { nem1, nem2, nem3 });
         ggml_vk_sync_buffers(ctx, subctx);
+    }
+
+    if (gqa_tok > 1 && split_k < 2) {
+        // the folded store needs split_k > 1
+        gqa_tok = 1;
+        N = gqa_ratio;
+        workgroups_x = (uint32_t)neq1;
+    }
+    // the push constants are full: pass gqa_tok in bits 25+ of mask_n_head_log2
+    if (gqa_tok > 1) {
+        mask_n_head_log2 |= gqa_tok << 25;
     }
 
     const vk_flash_attn_push_constants pc = { N, KV,

@@ -74,6 +74,12 @@ layout (push_constant) uniform parameter {
     uint32_t k_num;
 } p;
 
+// query tokens per GQA tile, in bits 25+ of mask_n_head_log2; 1 = no fold
+#define GQA_TOK_SHIFT 25
+#define GQA_TOK max(p.mask_n_head_log2 >> GQA_TOK_SHIFT, 1u)
+// rows per folded token, same as fa_qtok_rows on the host
+#define GQA_TOK_ROWS 8u
+
 #define SINK_ENABLE_BIT (1<<24)
 #define N_LOG2_MASK 0xFFFF
 
@@ -224,6 +230,14 @@ void init_indices()
         start_j = min(split_k_index * per_blocks, total_blocks);
         end_j   = min((split_k_index + 1) * per_blocks, total_blocks);
     }
+}
+
+// token and head of row r in a folded tile; a 4-row mask group never crosses a token
+uint32_t row_tok(const in uint32_t r) {
+    return gqa_iq1 * GQA_TOK + r / GQA_TOK_ROWS;
+}
+uint32_t row_head(const in uint32_t r) {
+    return iq2 + min(r % GQA_TOK_ROWS, p.gqa_ratio - 1u);
 }
 
 // Resolve a linear KV slot to a real column; false for inactive (sparse padding/-1, or dense OOB).
