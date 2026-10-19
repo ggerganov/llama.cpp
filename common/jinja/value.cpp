@@ -1256,9 +1256,9 @@ const func_builtins & value_array_t::get_builtins() const {
         {"unique", [](const func_args & args) -> value {
             args.ensure_count(1, 3);
             args.ensure_vals<value_array>();
-            value val         = args.get_pos(0);
-            value val_case    = args.get_kwarg_or_pos("case_sensitive", 1);
-            value attribute   = args.get_kwarg_or_pos("attribute",      2);
+            value val       = args.get_pos(0);
+            value val_case  = args.get_kwarg_or_pos("case_sensitive", 1);
+            value attribute = args.get_kwarg_or_pos("attribute",      2);
             // FIXME: unique is currently always case sensitive
             //const bool case_sensitive = val_case->as_bool(); // undefined == false
             value undef = mk_val<value_undefined>();
