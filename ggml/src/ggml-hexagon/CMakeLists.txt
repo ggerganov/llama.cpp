@@ -83,6 +83,7 @@ build_htp_skel(v73)
 build_htp_skel(v75)
 build_htp_skel(v79)
 build_htp_skel(v81)
+build_htp_skel(v85)
 
 # Install Hexagon skels required at runtime
 install(FILES ${HTP_SKELS} TYPE LIB)
