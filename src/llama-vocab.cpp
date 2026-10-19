@@ -1805,7 +1805,7 @@ struct llm_tokenizer_hybriddna_session : llm_tokenizer_bpe_session {
                 break;
             }
             if (start == std::string::npos || end < start) {
-                // a close tag without an open tag: everything before it is DNA
+                // as in _split_by_dna_tags, text before a </dna> without a matching <dna> is DNA (no begin token)
                 tokenize_dna(text.substr(pos, end - pos), false, true, output);
                 pos = end + close_tag.size();
                 continue;
@@ -1815,6 +1815,7 @@ struct llm_tokenizer_hybriddna_session : llm_tokenizer_bpe_session {
 
             const size_t content_start = start + open_tag.size();
             if (end == std::string::npos) {
+                // an unterminated <dna> runs to the end of the text (no end token)
                 tokenize_dna(text.substr(content_start), true, false, output);
                 break;
             }
@@ -1831,7 +1832,7 @@ private:
     // IUPAC nucleotide codes, either case (HybridDNATokenizer.IUPAC_RUN_RE)
     static bool is_iupac(char c) {
         c = to_upper(c);
-        return c != '\0' && std::string("ACGTRYSWKMBDHVN").find(c) != std::string::npos;
+        return std::string("ACGTRYSWKMBDHVN").find(c) != std::string::npos;
     }
 
     // HybridDNATokenizer._normalize_spaced_dna: join displays like "ACGTA CGTAC ..." when they hold at least twelve bases
@@ -2812,8 +2813,12 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                 if (text.size() > dna_kmer_marker.size()
                         && text.compare(text.size() - dna_kmer_marker.size(), dna_kmer_marker.size(), dna_kmer_marker) == 0) {
                     text.erase(text.size() - dna_kmer_marker.size());
-                    // tail="pad_n": "CTNNNN" detokenizes to its real bases "CT" (full k-mers have no N)
-                    text.erase(text.find_last_not_of('N') + 1);
+                    // tail="pad_n": "CTNNNN" detokenizes to its real bases "CT"
+                    // full k-mers are ACGT only, so only N-padded tail tokens end in N
+                    const size_t last_base = text.find_last_not_of('N');
+                    if (last_base != std::string::npos) {
+                        text.erase(last_base + 1);
+                    }
                 }
             }
         }

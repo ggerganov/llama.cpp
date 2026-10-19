@@ -7,10 +7,10 @@ import ast
 import logging
 import contextlib
 import json
-import tempfile
 import os
 import re
 import sys
+import tempfile
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
@@ -2190,9 +2190,9 @@ class TextModel(ModelBase):
         # tail="pad_n" (Carbon-14B) adds N-padded tail tokens ("CT" -> "CTNNNN") that get the same marker
         # llama.cpp detects them to pad with N and strips the padding on detokenization, tail="char" is unsupported
         tail = getattr(tokenizer, "tail", "pad_a")
-        if tokenizer.k != 6 or tail not in ("pad_a", "pad_n"):  # ty: ignore[unresolved-attribute]
-            raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")  # ty: ignore[unresolved-attribute]
-        for kmer in [*tokenizer.kmers, *getattr(tokenizer, "npad_tokens", [])]:  # ty: ignore[unresolved-attribute]
+        if tokenizer.k != 6 or tail not in ("pad_a", "pad_n"):
+            raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")
+        for kmer in [*tokenizer.kmers, *getattr(tokenizer, "npad_tokens", [])]:
             reverse_vocab[tokenizer.dna_token_to_id[kmer]] = kmer + "\ue000"  # ty: ignore[unresolved-attribute]
         # older HybridDNATokenizer versions (Carbon-500M/3B/8B) do not register the base tokenizer's added tokens (<|im_start|>, <think>, ...) as their own
         # but they are still encoded as special tokens: take their types from the base tokenizer
