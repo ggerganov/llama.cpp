@@ -512,11 +512,11 @@ void main() {
                         }
 
                         PVMat = coopMatMulAdd(KMat, QMat, PVMat);
+                    }
 
+                    // Store PVMat to pvsh and load into Of
+                    coopMatStore(PVMat, pvsh, o_offset + br_tile * MatBc * osh_stride, osh_stride, gl_CooperativeMatrixLayoutRowMajor);
                 }
-
-                // Store PVMat to pvsh and load into Of
-                coopMatStore(PVMat, pvsh, o_offset + br_tile * MatBc * osh_stride, osh_stride, gl_CooperativeMatrixLayoutRowMajor);
             }
 
             barrier();
