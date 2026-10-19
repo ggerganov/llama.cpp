@@ -3609,6 +3609,11 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
     }
 
     ggml_vk_create_pipeline(device, device->pipeline_argmax_f32, "argmax_f32", argmax_f32_len, argmax_f32_data, "main", 2, sizeof(vk_op_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
+    if (device->subgroup_arithmetic && device->subgroup_require_full_support) {
+        ggml_vk_create_pipeline(device, device->pipeline_argmax_partial_f32, "argmax_partial_subgroup_f32", argmax_partial_subgroup_f32_len, argmax_partial_subgroup_f32_data, "main", 4, sizeof(vk_op_push_constants), {1, 1, 1}, { 256 }, 1, true, true);
+    } else {
+        ggml_vk_create_pipeline(device, device->pipeline_argmax_partial_f32, "argmax_partial_f32", argmax_partial_f32_len, argmax_partial_f32_data, "main", 4, sizeof(vk_op_push_constants), {1, 1, 1}, { 256 }, 1);
+    }
 
     ggml_vk_create_pipeline(device, device->pipeline_sum_rows_f32, "sum_rows_f32", sum_rows_f32_len, sum_rows_f32_data, "main", 2, sizeof(vk_op_sum_rows_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
     ggml_vk_create_pipeline(device, device->pipeline_cross_entropy_loss_f32, "cross_entropy_loss_f32", cross_entropy_loss_f32_len, cross_entropy_loss_f32_data, "main", 3, sizeof(vk_op_push_constants), {1, 1, 1}, { device->subgroup_size }, 1);
@@ -11905,6 +11910,41 @@ void ggml_vk_cross_entropy_loss_back(ggml_backend_vk_context * ctx, vk_context& 
 }
 
 void ggml_vk_argmax(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, ggml_tensor * dst) {
+    const uint32_t ncols = src0->ne[0];
+    const uint32_t nrows = ggml_nrows(src0);
+    const uint32_t part_cols_min = 512;
+    const uint32_t n_parts_max = 256;
+
+    if (nrows <= 8 && ncols >= 2 * part_cols_min) {
+        const uint32_t part_cols = std::max(part_cols_min, CEIL_DIV(ncols, n_parts_max));
+        const uint32_t n_parts = CEIL_DIV(ncols, part_cols);
+        const size_t tmp_sz = size_t{nrows} * n_parts * 2 * sizeof(uint32_t);
+
+        if (ctx->prealloc_size_x < tmp_sz) {
+            ctx->prealloc_size_x = tmp_sz;
+            ggml_vk_preallocate_buffers(ctx, subctx);
+        }
+        if (ctx->prealloc_x_need_sync) {
+            ggml_vk_sync_buffers(ctx, subctx);
+        }
+
+        if (!ctx->argmax_counter) {
+            ctx->argmax_counter = ggml_vk_create_buffer_device(ctx->device, 8 * sizeof(uint32_t));
+            ggml_vk_buffer_memset(ctx->argmax_counter, 0, 0, ctx->argmax_counter->size);
+        }
+
+        vk_subbuffer src0_buf = ggml_vk_tensor_subbuffer(ctx, src0);
+        vk_subbuffer dst_buf = ggml_vk_tensor_subbuffer(ctx, dst);
+        vk_subbuffer tmp_buf = { ctx->prealloc_x, 0, ctx->prealloc_x->size };
+        vk_subbuffer cnt_buf = { ctx->argmax_counter, 0, ctx->argmax_counter->size };
+        vk_op_push_constants pc { ncols, nrows, (float) n_parts, (float) part_cols, 0.0f, 0.0f };
+
+        ggml_pipeline_request_descriptor_sets(ctx, ctx->device->pipeline_argmax_partial_f32, 1);
+        ggml_vk_dispatch_pipeline(ctx, subctx, ctx->device->pipeline_argmax_partial_f32, { src0_buf, tmp_buf, dst_buf, cnt_buf }, pc, { n_parts, nrows, 1 });
+        ctx->prealloc_x_need_sync = true;
+        return;
+    }
+
     ggml_vk_op_f32<vk_op_push_constants>(ctx, subctx, src0, nullptr, nullptr, nullptr, dst, GGML_OP_ARGMAX, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], 0.0f, 0.0f, 0.0f, 0.0f });
 }
 
@@ -13121,6 +13161,7 @@ void ggml_vk_cleanup(ggml_backend_vk_context * ctx) {
     ggml_vk_destroy_buffer(ctx->prealloc_split_k);
     ggml_vk_destroy_buffer(ctx->prealloc_add_rms_partials);
     ggml_vk_destroy_buffer(ctx->sync_staging);
+    ggml_vk_destroy_buffer(ctx->argmax_counter);
 
     ctx->prealloc_y_last_pipeline_used = nullptr;
     ctx->prealloc_y_last_tensor_used = nullptr;

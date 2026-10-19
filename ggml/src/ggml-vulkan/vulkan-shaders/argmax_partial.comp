@@ -1,0 +1,141 @@
+#version 450
+
+#include "generic_head.glsl"
+#include "types.glsl"
+
+#extension GL_EXT_control_flow_attributes : enable
+
+#ifdef USE_SUBGROUPS
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#endif
+
+#define FLT_MAX 3.402823466e+38F
+#define NEG_INF uintBitsToFloat(0xFF800000u)
+#define INVALID 0xFFFFFFFFu
+#define UNROLL 4
+
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {float data_a[];};
+layout (binding = 1) coherent buffer T {uint data_t[];};
+layout (binding = 2) writeonly buffer D {int data_d[];};
+layout (binding = 3) coherent buffer C {uint data_c[];};
+
+layout (constant_id = 0) const uint BLOCK_SIZE = 256;
+
+shared uint is_last;
+
+bool take(float a, uint ai, float b, uint bi) {
+    return bi != INVALID && (ai == INVALID || b > a || (b == a && bi > ai));
+}
+
+#ifdef USE_SUBGROUPS
+const uint MAX_SUBGROUPS = BLOCK_SIZE / 8;
+
+shared float sg_max[MAX_SUBGROUPS];
+shared uint sg_idx[MAX_SUBGROUPS];
+
+void subgroup_argmax(inout float v, inout uint idx) {
+    const float m = subgroupMax(v);
+    idx = subgroupMax(idx != INVALID && v == m ? idx + 1 : 0u) - 1;
+    v = m;
+}
+
+void reduce_block(inout float v, inout uint idx) {
+    subgroup_argmax(v, idx);
+    if (gl_SubgroupInvocationID == 0) {
+        sg_max[gl_SubgroupID] = v;
+        sg_idx[gl_SubgroupID] = idx;
+    }
+    barrier();
+    if (gl_SubgroupID == 0) {
+        const bool valid = gl_SubgroupInvocationID < gl_NumSubgroups;
+        v = valid ? sg_max[gl_SubgroupInvocationID] : NEG_INF;
+        idx = valid ? sg_idx[gl_SubgroupInvocationID] : INVALID;
+        subgroup_argmax(v, idx);
+    }
+    barrier();
+}
+#else
+shared float tmpmax[BLOCK_SIZE];
+shared uint tmp[BLOCK_SIZE];
+
+void reduce_block(inout float v, inout uint idx) {
+    const uint col = gl_LocalInvocationID.x;
+    tmp[col] = idx;
+    tmpmax[col] = v;
+    barrier();
+    [[unroll]] for (uint s = BLOCK_SIZE / 2; s > 0; s >>= 1) {
+        if (col < s && take(tmpmax[col], tmp[col], tmpmax[col + s], tmp[col + s])) {
+            tmpmax[col] = tmpmax[col + s];
+            tmp[col] = tmp[col + s];
+        }
+        barrier();
+    }
+    v = tmpmax[0];
+    idx = tmp[0];
+}
+#endif
+
+// param1 = workgroups per row, param2 = columns per workgroup
+// The last workgroup of a row merges the partial results and resets the row counter.
+void main() {
+    const uint col = gl_LocalInvocationID.x;
+    const uint row = gl_WorkGroupID.y;
+    const uint part = gl_WorkGroupID.x;
+    const uint n_parts = uint(p.param1);
+    const uint begin = part * uint(p.param2);
+    const uint end = min(begin + uint(p.param2), p.KX);
+    const uint base_row = row * p.KX;
+
+    float amax = NEG_INF;
+    uint aidx = INVALID;
+    if (begin + col < end) {
+        amax = data_a[base_row + begin + col];
+        aidx = begin + col;
+    }
+
+    for (uint i = begin + col + BLOCK_SIZE; i < end; i += BLOCK_SIZE * UNROLL) {
+        float v[UNROLL];
+        [[unroll]] for (uint u = 0; u < UNROLL; ++u) {
+            const uint j = i + u * BLOCK_SIZE;
+            const float x = data_a[base_row + min(j, end - 1)];
+            v[u] = j < end ? x : NEG_INF;
+        }
+        [[unroll]] for (uint u = 0; u < UNROLL; ++u) {
+            if (i + u * BLOCK_SIZE < end && v[u] >= amax) {
+                amax = v[u];
+                aidx = i + u * BLOCK_SIZE;
+            }
+        }
+    }
+
+    reduce_block(amax, aidx);
+
+    if (col == 0) {
+        const uint o = (row * n_parts + part) * 2;
+        data_t[o] = floatBitsToUint(amax);
+        data_t[o + 1] = aidx;
+        memoryBarrierBuffer();
+        is_last = uint(atomicAdd(data_c[row], 1u) == n_parts - 1);
+    }
+    barrier();
+    if (is_last == 0) {
+        return;
+    }
+    memoryBarrierBuffer();
+
+    amax = NEG_INF;
+    aidx = INVALID;
+    if (col < n_parts) {
+        amax = uintBitsToFloat(data_t[(row * n_parts + col) * 2]);
+        aidx = data_t[(row * n_parts + col) * 2 + 1];
+    }
+    reduce_block(amax, aidx);
+
+    if (col == 0) {
+        data_d[row] = int(aidx);
+        data_c[row] = 0;
+    }
+}
