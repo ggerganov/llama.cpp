@@ -2270,46 +2270,9 @@ static int gated_delta_net_f32_hmx_chunked(
 }
 
 int op_gated_delta_net(struct htp_ops_context * octx) {
-    const struct htp_tensor * q     = octx->src[0];
-    const struct htp_tensor * k     = octx->src[1];
-    const struct htp_tensor * v     = octx->src[2];
-    const struct htp_tensor * g     = octx->src[3];
-    const struct htp_tensor * beta  = octx->src[4];
-    const struct htp_tensor * state = octx->src[5];
-    const struct htp_tensor * dst   = octx->dst;
+    const struct htp_tensor * dst = octx->dst;
 
-    if (q->type != HTP_TYPE_F32 || k->type != HTP_TYPE_F32 || v->type != HTP_TYPE_F32 ||
-        g->type != HTP_TYPE_F32 || beta->type != HTP_TYPE_F32 || state->type != HTP_TYPE_F32 ||
-        dst->type != HTP_TYPE_F32) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
-    const uint32_t S_v      = v->ne[0];
-    const uint32_t H        = v->ne[1];
-    const uint32_t n_tokens = v->ne[2];
-    const uint32_t n_seqs   = v->ne[3];
-    const uint32_t K        = octx->op_params[0];
-
-    if (S_v == 0 || S_v > HTP_GDN_MAX_SV || H == 0 || n_tokens == 0 || n_seqs == 0) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-    if ((g->ne[0] != 1 && g->ne[0] != S_v) || beta->ne[0] != 1) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-    if (q->ne[0] != S_v || k->ne[0] != S_v || q->ne[1] == 0 || k->ne[1] == 0 ||
-        q->ne[2] != n_tokens || k->ne[2] != n_tokens || q->ne[3] == 0 || k->ne[3] == 0 ||
-        (n_seqs % q->ne[3]) != 0 || (n_seqs % k->ne[3]) != 0) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-    // state holds s0 only: [S_v, S_v, H, n_seqs]
-    if (state->ne[0] != S_v || state->ne[1] != S_v || state->ne[2] != H || state->ne[3] != n_seqs) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-    if (dst->ne[0] != S_v * H || dst->ne[1] != n_tokens * n_seqs + S_v * n_seqs * K) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         if (htp_tensor_is_extended(octx->src[i])) {
             return HTP_STATUS_NO_SUPPORT;
         }
@@ -2329,6 +2292,8 @@ int op_gated_delta_net(struct htp_ops_context * octx) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
+    const uint32_t S_v        = kparams->S_v;
+    const uint32_t n_tokens   = kparams->n_tokens;
     const uint32_t total_rows = kparams->total_rows;
     uint32_t row_start = 0;
     uint32_t nrows     = total_rows;
@@ -2375,10 +2340,10 @@ int op_gated_delta_net(struct htp_ops_context * octx) {
 
     FARF(HIGH, "gated-delta-net-f32: q(%ux%ux%ux%u) k(%ux%ux%ux%u) v(%ux%ux%ux%u) state(%ux%ux%ux%u) -> (%ux%ux%ux%u) : "
          "vtcm-size %zu n_threads %u\n",
-         q->ne[0], q->ne[1], q->ne[2], q->ne[3],
-         k->ne[0], k->ne[1], k->ne[2], k->ne[3],
-         v->ne[0], v->ne[1], v->ne[2], v->ne[3],
-         state->ne[0], state->ne[1], state->ne[2], state->ne[3],
+         octx->src[0]->ne[0], octx->src[0]->ne[1], octx->src[0]->ne[2], octx->src[0]->ne[3],
+         octx->src[1]->ne[0], octx->src[1]->ne[1], octx->src[1]->ne[2], octx->src[1]->ne[3],
+         octx->src[2]->ne[0], octx->src[2]->ne[1], octx->src[2]->ne[2], octx->src[2]->ne[3],
+         octx->src[5]->ne[0], octx->src[5]->ne[1], octx->src[5]->ne[2], octx->src[5]->ne[3],
          dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
          gctx.layout.total_bytes, n_threads);
 

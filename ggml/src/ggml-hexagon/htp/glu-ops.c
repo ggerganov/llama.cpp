@@ -594,11 +594,6 @@ static void geglu_f16(const _Float16 * restrict src0,
         size_t dst_spad_half_size  = gctx->dst_spad_half_size;                                                         \
                                                                                                                        \
         const int BLOCK = gctx->block;                                                                                 \
-        if (BLOCK == 0) {                                                                                              \
-            FARF(ERROR, "%s : VTCM reservation %zu is too small, needed %zu\n",                                        \
-                 gctx->op_str, gctx->vtcm_src0_size_per_thread, src0_row_size_aligned);                                \
-            return;                                                                                                    \
-        }                                                                                                              \
                                                                                                                        \
         dma_queue * dma_q = gctx->octx->ctx->dma[ith];                                                                 \
         glu_compute_##SUFFIX##_fn_t compute = (glu_compute_##SUFFIX##_fn_t) gctx->compute;                             \
@@ -655,11 +650,6 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * src1 = octx->src[1];
     const struct htp_tensor * dst  = octx->dst;
-
-    if ((dst->ne[0] * SIZEOF_FP32) != dst->nb[1]) {
-        FARF(ERROR, "Non-contiguous dst is not supported at this time \n");
-        return HTP_STATUS_NO_SUPPORT;
-    }
 
     glu_compute_f32_fn_t compute_fn = NULL;
     const char *         op_type    = NULL;
@@ -801,12 +791,7 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     dma_addr_t data_src0 = src0->data;
     dma_addr_t data_src1 = src1 ? src1->data : 0;
 
-    if (!src1 && (octx->op == HTP_OP_GLU_SWIGLU ||
-                  octx->op == HTP_OP_GLU_SWIGLU_OAI ||
-                  octx->op == HTP_OP_GLU_SWIGLU_CLAMP ||
-                  octx->op == HTP_OP_GLU_GEGLU ||
-                  octx->op == HTP_OP_GLU_GEGLU_QUICK ||
-                  octx->op == HTP_OP_GLU_GEGLU_ERF)) {
+    if (!src1) {
          const int32_t swapped = octx->op_params[1];
          data_src1 = data_src0;
          gctx.src1_row_size = gctx.src0_row_size;
@@ -831,11 +816,6 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * src1 = octx->src[1];
     const struct htp_tensor * dst  = octx->dst;
-
-    if ((dst->ne[0] * SIZEOF_FP16) != dst->nb[1]) {
-        FARF(ERROR, "Non-contiguous dst is not supported at this time \n");
-        return HTP_STATUS_NO_SUPPORT;
-    }
 
     glu_compute_f16_fn_t compute_fn = NULL;
     const char *         op_type    = NULL;
@@ -967,10 +947,7 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     dma_addr_t data_src0 = src0->data;
     dma_addr_t data_src1 = src1 ? src1->data : 0;
 
-    if (!src1 && (octx->op == HTP_OP_GLU_SWIGLU ||
-                  octx->op == HTP_OP_GLU_SWIGLU_OAI ||
-                  octx->op == HTP_OP_GLU_SWIGLU_CLAMP ||
-                  octx->op == HTP_OP_GLU_GEGLU)) {
+    if (!src1) {
          const int32_t swapped = octx->op_params[1];
          data_src1 = data_src0;
          gctx.src1_row_size = gctx.src0_row_size;

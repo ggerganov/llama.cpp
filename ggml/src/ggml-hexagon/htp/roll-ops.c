@@ -247,22 +247,6 @@ int execute_op_roll_f32(struct htp_ops_context * octx) {
     const struct htp_roll_kernel_params * kparams =
         (const struct htp_roll_kernel_params *) octx->kernel_params;
 
-    if (src0->type != HTP_TYPE_F32 || dst->type != HTP_TYPE_F32) {
-        FARF(ERROR, "roll: unsupported type %u -> %u\n", src0->type, dst->type);
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
-    if (src0->nb[0] != sizeof(float) || dst->nb[0] != sizeof(float)) {
-        FARF(ERROR, "roll: unsupported nb0 %u -> %u\n", src0->nb[0], dst->nb[0]);
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
-    if (src0->ne[0] != ne0 || src0->ne[1] != ne1 ||
-        src0->ne[2] != ne2 || src0->ne[3] != ne3) {
-        FARF(ERROR, "roll: shape mismatch\n");
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-
     if (kparams->kernel_type == HTP_ROLL_KERNEL_DMA_CONTIGUOUS) {
         return roll_dma_f32_contiguous(octx);
     }

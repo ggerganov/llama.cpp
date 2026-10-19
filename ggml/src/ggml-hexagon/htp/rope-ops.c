@@ -700,15 +700,6 @@ static int execute_op_rope_f32(struct htp_ops_context * octx) {
     const struct htp_tensor * src2 = octx->src[2];
     const struct htp_tensor * dst  = octx->dst;
 
-    switch (octx->op) {
-        case HTP_OP_ROPE:
-            break;
-
-        default:
-            FARF(ERROR, "Unsupported Op %u\n", octx->op);
-            return HTP_STATUS_NO_SUPPORT;
-    }
-
     const struct htp_rope_kernel_params * kparams = (const struct htp_rope_kernel_params *) octx->kernel_params;
     if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
         return HTP_STATUS_INVAL_PARAMS;

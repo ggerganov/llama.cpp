@@ -2901,10 +2901,11 @@ static bool ggml_hexagon_supported_gated_delta_net(const struct ggml_hexagon_ses
         return false;
     }
     // state holds s0 only [S_v, S_v, H, n_seqs]; K is op param 0.
-    if (ggml_nelements(state) != S_v * S_v * H * n_seqs) {
+    if (state->ne[0] != S_v || state->ne[1] != S_v || state->ne[2] != H || state->ne[3] != n_seqs) {
         return false;
     }
-    if (dst->ne[0] != S_v * H || dst->ne[1] != n_tokens * n_seqs + S_v * n_seqs * K) {
+    if (dst->ne[0] != S_v * H || dst->ne[1] != n_tokens * n_seqs + S_v * n_seqs * K ||
+        dst->ne[2] != 1 || dst->ne[3] != 1) {
         return false;
     }
 
@@ -3550,32 +3551,8 @@ static bool ggml_hexagon_precompute_binary_params(
     if (L.rows_per_buffer == 0 || L.total_bytes > sess->vtcm_size) {
         if (!is_add_id && is_contig && (ggml_are_same_shape(src0, src1) || is_scalar_broadcast)) {
             const uint32_t total_elems = (uint32_t) ggml_nelements(src0);
-            const uint32_t max_threads = sess->n_threads;
-            const uint32_t max_chunk_elems = 32768 / elem_size;
-            const uint32_t min_chunk_elems = 256;
-            const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * max_threads) - 1) / (2 * max_threads), 32);
-            const uint32_t chunk_size = (std::min)(max_chunk_elems, (std::max)(target_chunk_elems, min_chunk_elems));
-            const uint32_t chunk_bytes = hex_round_up(chunk_size * elem_size, 128);
-            const uint32_t total_chunks = (total_elems + chunk_size - 1) / chunk_size;
-            const uint32_t n_threads = (total_chunks >= 2) ? (std::min)(max_threads, total_chunks) : 1;
-
-            kparams->kernel_type           = HTP_BINARY_KERNEL_CHUNKED;
-            kparams->n_threads             = n_threads;
-            kparams->n_srcs                = 2;
-            kparams->rows_per_buffer       = 1;
-            kparams->src1_row_size_aligned = is_scalar_broadcast ? 0 : src1_row_size_aligned;
-            kparams->src1_size             = 0;
-            kparams->chunk_size            = chunk_size;
-            kparams->chunk_bytes           = chunk_bytes;
-            kparams->is_scalar             = is_scalar_broadcast ? 1 : 0;
-
-            htp_binary_vtcm_layout_build(&L, kparams, sess->vtcm_size);
-            if (L.total_bytes == 0 || L.total_bytes > sess->vtcm_size) {
-                return false;
-            }
-
-            kparams->vtcm_size = L.total_bytes;
-            return true;
+            return htp_binary_solve_chunked(&L, kparams, total_elems, (uint32_t) elem_size,
+                                            (uint32_t) sess->n_threads, 2, is_scalar_broadcast, sess->vtcm_size);
         }
         return false;
     }
@@ -3636,13 +3613,20 @@ void htp_precompute_unary_params(
     kparams->src1_row_size_aligned = src1_row_size_aligned;
     kparams->broadcast_weight      = broadcast_weight;
 
+    const bool src0_contig = ggml_is_contiguous_1(src0);
+    const bool src1_contig = (op == HTP_OP_RMS_NORM_MUL && !broadcast_weight) ? ggml_is_contiguous_1(src1) : true;
+    const uint32_t max_block = (src0_contig && src1_contig) ? src0_nrows : (uint32_t) src0->ne[1];
+
+    kparams->src0_contig = src0_contig ? 1 : 0;
+    kparams->src1_contig = src1_contig ? 1 : 0;
+
     struct htp_unary_vtcm_layout L;
     uint32_t col_tile = 0;
     uint32_t vtcm_row_per_thread = 0;
 
     htp_unary_solve_layout(&L, op, src0->ne[0], dst->ne[0],
                            op == HTP_OP_RMS_NORM_MUL ? src1->ne[0] : 0,
-                           broadcast_weight, n_threads, sess->vtcm_size, elem_size,
+                           max_block, broadcast_weight, n_threads, sess->vtcm_size, elem_size,
                            &col_tile, &vtcm_row_per_thread);
 
     kparams->col_tile = col_tile;
@@ -3653,11 +3637,7 @@ void htp_precompute_unary_params(
     kparams->vtcm_src1_size_per_thread = L.src1_bytes;
     kparams->vtcm_dst_size_per_thread  = L.dst_bytes;
 
-    kparams->vtcm_src0_size = L.src0_bytes * n_threads;
-    kparams->vtcm_src1_size = L.src1_bytes * n_threads;
-    kparams->vtcm_dst_size  = L.dst_bytes * n_threads;
-
-    kparams->block = col_tile ? 0 : ((L.src0_bytes / 2) / src0_row_size_aligned);
+    kparams->block = col_tile ? 0 : vtcm_row_per_thread;
 
     const uint32_t tiles_per_row = col_tile > 0 ? (src0->ne[0] + col_tile - 1) / col_tile : 1;
     kparams->tiles_per_row = tiles_per_row;
@@ -4970,7 +4950,9 @@ static bool ggml_hexagon_supported_glu(const struct ggml_hexagon_session * sess,
         return false;
     }
 
-    if (!ggml_is_contiguous_1(src0)) {
+    const size_t elem_size = ggml_type_size(src0->type);
+    if (!ggml_is_contiguous_1(src0) || src0->nb[0] != elem_size ||
+        (src0->ne[1] > 1 && src0->nb[1] < (size_t) src0->ne[0] * elem_size)) {
         return false;
     }
     if (!ggml_is_contiguous(dst)) {
@@ -4984,7 +4966,8 @@ static bool ggml_hexagon_supported_glu(const struct ggml_hexagon_session * sess,
         if (!ggml_are_same_shape(src0, src1)) {
             return false;
         }
-        if (!ggml_is_contiguous_1(src1)) {
+        if (!ggml_is_contiguous_1(src1) || src1->nb[0] != elem_size ||
+            (src1->ne[1] > 1 && src1->nb[1] < (size_t) src1->ne[0] * elem_size)) {
             return false;
         }
     }
@@ -5837,14 +5820,12 @@ static void ggml_hexagon_precompute_fill_params(
     const uint32_t ne2 = (uint32_t) dst->ne[2];
     const uint32_t ne3 = (uint32_t) dst->ne[3];
     const uint32_t nb1 = (uint32_t) dst->nb[1];
-    const uint32_t nb2 = (uint32_t) dst->nb[2];
-    const uint32_t nb3 = (uint32_t) dst->nb[3];
 
     const uint32_t total_rows     = ne1 * ne2 * ne3;
     const uint32_t max_threads    = (std::max)(1u, total_rows);
     const uint32_t n_threads      = (std::min)((uint32_t) sess->n_threads, max_threads);
     const uint32_t elem_size      = (uint32_t) ggml_type_size(dst->type);
-    const bool     opt_path       = (nb2 == nb1 * ne1) && (nb3 == nb2 * ne2);
+    const bool     opt_path       = ggml_is_contiguous(dst);
     const uint32_t rows_per_chunk = (nb1 > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(nb1, HEX_L2_LINE_SIZE)) : 1;
 
     kparams->n_threads      = n_threads;
@@ -6043,6 +6024,11 @@ static bool ggml_hexagon_supported_diag(const struct ggml_hexagon_session * sess
 
     // Output must be square in first two dimensions
     if (dst->ne[0] != dst->ne[1] || dst->ne[0] != src0->ne[0]) {
+        return false;
+    }
+
+    if (!ggml_is_contiguous_rows(src0) || !ggml_is_contiguous_rows(dst) ||
+        ggml_is_permuted(src0) || ggml_is_permuted(dst)) {
         return false;
     }
 
@@ -7054,6 +7040,10 @@ static bool ggml_hexagon_supported_fill(const struct ggml_hexagon_session * sess
     const struct ggml_tensor * dst = op;
 
     if (dst->type != GGML_TYPE_F32 && dst->type != GGML_TYPE_F16) {
+        return false;
+    }
+
+    if (!ggml_is_contiguous_rows(dst) || ggml_is_permuted(dst)) {
         return false;
     }
 

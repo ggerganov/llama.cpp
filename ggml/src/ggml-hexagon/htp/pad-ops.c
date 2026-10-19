@@ -491,11 +491,6 @@ int op_pad(struct htp_ops_context * octx) {
     const struct htp_pad_kernel_params * kparams =
         (const struct htp_pad_kernel_params *) octx->kernel_params;
 
-    if (src0->type != HTP_TYPE_F32) {
-        FARF(ERROR, "pad-hvx: unsupported type %u\n", src0->type);
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     const int32_t lp0 = octx->op_params[0];
     const int32_t rp0 = octx->op_params[1];
     const int32_t lp1 = octx->op_params[2];

@@ -17,9 +17,8 @@ struct htp_unary_kernel_params {
     uint32_t  vtcm_src1_size_per_thread;
     uint32_t  vtcm_dst_size_per_thread;
 
-    uint32_t  vtcm_src0_size;
-    uint32_t  vtcm_src1_size;
-    uint32_t  vtcm_dst_size;
+    uint32_t  src0_contig;
+    uint32_t  src1_contig;
 
     uint32_t  src0_row_size_aligned;
     uint32_t  src1_row_size_aligned;
@@ -87,30 +86,29 @@ static inline bool htp_unary_is_elementwise(uint32_t opcode) {
     }
 }
 
-#define HTP_UNARY_COLLAPSE_DIMS(src_ne, src_nb, dst_ne, dst_nb, elem_size)               \
-    do {                                                                                 \
-        while (((src_ne)[1] > 1 || (src_ne)[2] > 1 || (src_ne)[3] > 1) &&                \
-               (size_t) (src_nb)[0] == (elem_size) &&                                    \
-               (size_t) (dst_nb)[0] == (elem_size) &&                                    \
-               (size_t) (src_nb)[1] == (size_t) (src_ne)[0] * (size_t) (src_nb)[0] &&    \
-               (size_t) (dst_nb)[1] == (size_t) (dst_ne)[0] * (size_t) (dst_nb)[0] &&    \
-               ((src_ne)[0] == 1 ||                                                      \
-                (uint64_t) (src_ne)[0] * (uint64_t) (src_ne)[1] * (elem_size) <= 128)) { \
-            (src_ne)[0] *= (src_ne)[1];                                                  \
-            (src_ne)[1]  = (src_ne)[2];                                                  \
-            (src_ne)[2]  = (src_ne)[3];                                                  \
-            (src_ne)[3]  = 1;                                                            \
-            (dst_ne)[0] *= (dst_ne)[1];                                                  \
-            (dst_ne)[1]  = (dst_ne)[2];                                                  \
-            (dst_ne)[2]  = (dst_ne)[3];                                                  \
-            (dst_ne)[3]  = 1;                                                            \
-            (src_nb)[1]  = (src_nb)[2];                                                  \
-            (src_nb)[2]  = (src_nb)[3];                                                  \
-            (src_nb)[3]  = (src_nb)[2] * (src_ne)[2];                                    \
-            (dst_nb)[1]  = (dst_nb)[2];                                                  \
-            (dst_nb)[2]  = (dst_nb)[3];                                                  \
-            (dst_nb)[3]  = (dst_nb)[2] * (dst_ne)[2];                                    \
-        }                                                                                \
+#define HTP_UNARY_COLLAPSE_DIMS(src_ne, src_nb, dst_ne, dst_nb, elem_size)                   \
+    do {                                                                                     \
+        while (((src_ne)[1] > 1 || (src_ne)[2] > 1 || (src_ne)[3] > 1) &&                    \
+               (size_t) (src_nb)[0] == (elem_size) &&                                        \
+               (size_t) (dst_nb)[0] == (elem_size) &&                                        \
+               (((src_ne)[1] == 1 && (dst_ne)[1] == 1) ||                                    \
+                ((size_t) (src_nb)[1] == (size_t) (src_ne)[0] * (size_t) (src_nb)[0] &&      \
+                 (size_t) (dst_nb)[1] == (size_t) (dst_ne)[0] * (size_t) (dst_nb)[0] &&      \
+                 ((src_ne)[0] == 1 ||                                                        \
+                  (uint64_t) (src_ne)[0] * (uint64_t) (src_ne)[1] * (elem_size) <= 128)))) { \
+            (src_ne)[0] *= (src_ne)[1];                                                      \
+            (src_ne)[1]  = (src_ne)[2];                                                      \
+            (src_ne)[2]  = (src_ne)[3];                                                      \
+            (src_ne)[3]  = 1;                                                                \
+            (dst_ne)[0] *= (dst_ne)[1];                                                      \
+            (dst_ne)[1]  = (dst_ne)[2];                                                      \
+            (dst_ne)[2]  = (dst_ne)[3];                                                      \
+            (dst_ne)[3]  = 1;                                                                \
+            (src_nb)[1]  = (src_nb)[2];                                                      \
+            (src_nb)[2]  = (src_nb)[3];                                                      \
+            (dst_nb)[1]  = (dst_nb)[2];                                                      \
+            (dst_nb)[2]  = (dst_nb)[3];                                                      \
+        }                                                                                    \
     } while (0)
 
 struct htp_unary_vtcm_layout {
@@ -148,6 +146,7 @@ static inline void htp_unary_solve_layout(
     uint32_t ne00,
     uint32_t ne10,
     uint32_t ne11,
+    uint32_t max_block,
     bool broadcast_weight,
     uint32_t n_threads,
     size_t vtcm_size,
@@ -190,6 +189,10 @@ static inline void htp_unary_solve_layout(
     } else {
         vtcm_size_per_row   = 2 * (src0_row_size_aligned + dst_row_size_aligned);
         vtcm_row_per_thread = vtcm_size / (n_threads * vtcm_size_per_row);
+    }
+
+    if (max_block > 0 && vtcm_row_per_thread > max_block) {
+        vtcm_row_per_thread = max_block;
     }
 
     const bool is_reduction = (op == HTP_OP_NORM || op == HTP_OP_RMS_NORM ||

@@ -31,9 +31,7 @@
                                                \
     const uint32_t nb1 = dst->nb[1];           \
     const uint32_t nb2 = dst->nb[2];           \
-    const uint32_t nb3 = dst->nb[3];           \
-                                               \
-    const uint32_t nr = ne1 * ne2 * ne3;
+    const uint32_t nb3 = dst->nb[3];
 
 struct htp_fill_context {
     struct htp_ops_context * octx;
@@ -86,13 +84,9 @@ static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
 }
 
 int op_fill(struct htp_ops_context * octx) {
-    fill_preamble;
+    const struct htp_tensor * dst = octx->dst;
     const struct htp_fill_kernel_params * kparams =
         (const struct htp_fill_kernel_params *) octx->kernel_params;
-
-    if (dst->type != HTP_TYPE_F32 && dst->type != HTP_TYPE_F16) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
 
     if (htp_tensor_is_extended(dst)) {
         return HTP_STATUS_NO_SUPPORT;

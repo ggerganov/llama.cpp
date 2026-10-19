@@ -205,25 +205,6 @@ int op_solve_tri(struct htp_ops_context * octx) {
     const struct htp_solve_tri_kernel_params * kparams =
         (const struct htp_solve_tri_kernel_params *) octx->kernel_params;
 
-    if (src0->type != HTP_TYPE_F32 || src1->type != HTP_TYPE_F32 || dst->type != HTP_TYPE_F32) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
-    // left=true, lower=true, uni=false only
-    if (src0->ne[0] != src0->ne[1]) {
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-    if (src0->ne[1] != src1->ne[1]) {
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-    if (src0->ne[2] != src1->ne[2] || src0->ne[3] != src1->ne[3]) {
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-    if (dst->ne[0] != src1->ne[0] || dst->ne[1] != src1->ne[1] || dst->ne[2] != src1->ne[2] ||
-        dst->ne[3] != src1->ne[3]) {
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-
     if (htp_tensor_is_extended(src0) || htp_tensor_is_extended(src1) || htp_tensor_is_extended(dst)) {
         return HTP_STATUS_NO_SUPPORT;
     }

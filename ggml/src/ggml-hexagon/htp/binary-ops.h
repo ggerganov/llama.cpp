@@ -193,4 +193,53 @@ static inline void htp_binary_vtcm_layout_build(
     L->total_bytes = off;
 }
 
+static inline bool htp_binary_solve_chunked(
+    struct htp_binary_vtcm_layout * L,
+    struct htp_binary_kernel_params * kparams,
+    uint32_t total_elems,
+    uint32_t elem_size,
+    uint32_t max_threads,
+    uint32_t n_srcs,
+    bool is_scalar,
+    size_t vtcm_size
+) {
+    const size_t n_bufs = is_scalar ? 2 : (size_t) n_srcs + 1;
+    const size_t scalar_bytes = is_scalar ? 128 : 0;
+    const size_t budget_per_buf = (max_threads > 0 && vtcm_size > scalar_bytes)
+        ? hex_align_down((vtcm_size - scalar_bytes) / (2 * max_threads * n_bufs), 128)
+        : 0;
+    const uint32_t max_chunk_bytes = (budget_per_buf > 0 && budget_per_buf < 32768) ? (uint32_t) budget_per_buf : 32768u;
+    const uint32_t max_chunk_elems = max_chunk_bytes / elem_size;
+    if (max_chunk_elems == 0) {
+        return false;
+    }
+
+    const uint32_t min_chunk_elems = 256 < max_chunk_elems ? 256 : max_chunk_elems;
+    const uint32_t target_chunk_elems = hex_round_up((total_elems + (2 * max_threads) - 1) / (2 * max_threads), 32);
+    const uint32_t chunk_size  = (target_chunk_elems < min_chunk_elems) ? min_chunk_elems
+                               : (target_chunk_elems > max_chunk_elems) ? max_chunk_elems
+                               : target_chunk_elems;
+    const uint32_t chunk_bytes  = hex_round_up(chunk_size * elem_size, 128);
+    const uint32_t total_chunks = (total_elems + chunk_size - 1) / chunk_size;
+    const uint32_t n_threads    = (total_chunks >= 2) ? (max_threads < total_chunks ? max_threads : total_chunks) : 1;
+
+    kparams->kernel_type           = HTP_BINARY_KERNEL_CHUNKED;
+    kparams->n_threads             = n_threads;
+    kparams->n_srcs                = (uint8_t) n_srcs;
+    kparams->rows_per_buffer       = 1;
+    kparams->src1_row_size_aligned = is_scalar ? 0 : kparams->src0_row_size_aligned;
+    kparams->src1_size             = 0;
+    kparams->chunk_size            = chunk_size;
+    kparams->chunk_bytes           = chunk_bytes;
+    kparams->is_scalar             = is_scalar ? 1 : 0;
+
+    htp_binary_vtcm_layout_build(L, kparams, vtcm_size);
+    if (L->total_bytes == 0 || L->total_bytes > vtcm_size) {
+        return false;
+    }
+
+    kparams->vtcm_size = (uint32_t) L->total_bytes;
+    return true;
+}
+
 #endif

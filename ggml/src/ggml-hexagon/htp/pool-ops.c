@@ -342,11 +342,6 @@ int op_pool_2d(struct htp_ops_context * octx) {
     const struct htp_pool_2d_kernel_params * p =
         (const struct htp_pool_2d_kernel_params *) octx->kernel_params;
 
-    if (src0->type != HTP_TYPE_F32 || dst->type != HTP_TYPE_F32 ||
-        (p->pool_op != HTP_POOL_AVG && p->pool_op != HTP_POOL_MAX)) {
-        return HTP_STATUS_NO_SUPPORT;
-    }
-
     uint32_t plane_start = 0;
     uint32_t plane_count = p->planes;
     if (octx->ctx->mdev.count > 1) {
