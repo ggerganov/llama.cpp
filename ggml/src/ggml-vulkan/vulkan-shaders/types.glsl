@@ -227,6 +227,24 @@ struct block_q2_0_packed16
     uint16_t qs[QUANT_K_Q2_0 / 8];
 };
 
+#define QUANT_K_BF16X 32
+#define QUANT_R_BF16X 2
+
+struct block_bf16x
+{
+    uint8_t emax[2];   // shared max exponent per 16-element half
+    uint8_t sgn[4];    // 32 sign bits, LSB first
+    uint8_t mant[28];  // 32 x 7-bit mantissas, LSB-first bit order
+    uint8_t delta[12]; // 32 x 3-bit exponent deltas; 7 = zero marker
+};
+
+#if defined(DATA_A_BF16X)
+#define QUANT_K QUANT_K_BF16X
+#define QUANT_R QUANT_R_BF16X
+#define QUANT_AUXF 1
+#define A_TYPE block_bf16x
+#endif
+
 #if defined(DATA_A_Q2_0)
 #define QUANT_K QUANT_K_Q2_0
 #define QUANT_R QUANT_R_Q2_0

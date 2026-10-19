@@ -1,0 +1,43 @@
+#version 450
+
+#include "dequant_head.glsl"
+
+layout (binding = 0) readonly buffer A {block_bf16x data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
+
+void main() {
+    const uint ib = gl_WorkGroupID.x * 8 + gl_LocalInvocationID.x / 32;
+    const uint t  = gl_LocalInvocationID.x % 32;
+
+    if (ib >= p.nel / 32) {
+        return;
+    }
+
+    const uint hidx = t / 16;
+    const uint pos  = t % 16;
+
+    const uint b7 = 112u*hidx + 14u*pos;
+    const uint j0 = b7 >> 3;
+    const uint sh = b7 & 7u;
+    uint mw;
+    if (sh <= 2u) {
+        mw = uint(data_a[ib].mant[j0]) | (uint(data_a[ib].mant[j0 + 1]) << 8);
+    } else {
+        mw = uint(data_a[ib].mant[j0]) | (uint(data_a[ib].mant[j0 + 1]) << 8) | (uint(data_a[ib].mant[j0 + 2]) << 16);
+    }
+    const uint m = (mw >> sh) & 0x7Fu;
+
+    const uint b3 = 48u*hidx + 6u*pos;
+    const uint j3 = b3 >> 3;
+    const uint w3 = uint(data_a[ib].delta[j3]) | (uint(data_a[ib].delta[j3 + 1]) << 8);
+    const uint d = (w3 >> (b3 & 7u)) & 7u;
+
+    const uint sbits = 16u*hidx + pos;
+    const uint s = (uint(data_a[ib].sgn[sbits >> 3]) >> (sbits & 7u)) & 1u;
+
+    uint w = (uint(data_a[ib].emax[hidx]) << 7) + m - (d << 7);
+    if (d == 7u) w = 0u;   // zero marker
+    w |= s << 15;
+
+    data_b[ib * 32 + t] = D_TYPE(uintBitsToFloat(w << 16));
+}

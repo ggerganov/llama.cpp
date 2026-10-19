@@ -73,6 +73,62 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
 }
 #endif
 
+#if defined(DATA_A_BF16X)
+// BF16X decode. The mmv framework's QUANT_R=2 convention is interleaved:
+// dequantize(iqs) yields (element[iqs], element[iqs+16]) �?element iqs lives
+// in the low 16-weight half, element iqs+16 in the high half, both at
+// bit-stream position iqs. Same conventions as the CUDA implementation: the
+// quantizer floors the half-block exponent at 7, so the bf16 word assembles
+// with pure integer adds, (e<<7)|m = (emax<<7) + m - (d<<7), and d==7 is the
+// zero marker.
+float bf16x_decode_elem(const uint ib, const uint hidx, const uint pos, const uint a_offset) {
+    const block_bf16x blk = data_a[a_offset + ib];
+
+    // 7-bit mantissa at bit 14*pos of the half's 14-byte stream
+    const uint b7 = 112u*hidx + 14u*pos;
+    const uint j0 = b7 >> 3;
+    const uint sh = b7 & 7u;
+    uint mw;
+    if (sh <= 2u) {
+        mw = uint(blk.mant[j0]) | (uint(blk.mant[j0 + 1]) << 8);
+    } else {
+        mw = uint(blk.mant[j0]) | (uint(blk.mant[j0 + 1]) << 8) | (uint(blk.mant[j0 + 2]) << 16);
+    }
+    const uint m = (mw >> sh) & 0x7Fu;
+
+    // 3-bit exponent delta at bit 6*pos of the half's 6-byte stream
+    const uint b3 = 48u*hidx + 6u*pos;
+    const uint j3 = b3 >> 3;
+    const uint w3 = uint(blk.delta[j3]) | (uint(blk.delta[j3 + 1]) << 8);
+    const uint d = (w3 >> (b3 & 7u)) & 7u;
+
+    const uint sbits = 16u*hidx + pos;
+    const uint s = (uint(blk.sgn[sbits >> 3]) >> (sbits & 7u)) & 1u;
+
+    uint w = (uint(blk.emax[hidx]) << 7) + m - (d << 7);
+    if (d == 7u) w = 0u;   // zero marker
+    w |= s << 15;
+
+    return uintBitsToFloat(w << 16);
+}
+
+vec2 dequantize(uint ib, uint iqs, uint a_offset) {
+    // (element[iqs], element[iqs+16]) �?same position in both halves
+    return vec2(bf16x_decode_elem(ib, 0u, iqs,      a_offset),
+                bf16x_decode_elem(ib, 1u, iqs,      a_offset));
+}
+vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
+    // (e[iqs], e[iqs+16], e[iqs+1], e[iqs+17])
+    return vec4(bf16x_decode_elem(ib, 0u, iqs,       a_offset),
+                bf16x_decode_elem(ib, 1u, iqs,       a_offset),
+                bf16x_decode_elem(ib, 0u, iqs + 1u,  a_offset),
+                bf16x_decode_elem(ib, 1u, iqs + 1u,  a_offset));
+}
+vec2 get_dm(uint ib, uint a_offset) {
+    return vec2(1.0f, 0.0f);   // BF16X weights are absolute values
+}
+#endif
+
 #if defined(DATA_A_Q4_1)
 vec2 dequantize(uint ib, uint iqs, uint a_offset) {
     const uint vui = uint(data_a[a_offset + ib].qs[iqs]);

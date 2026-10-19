@@ -1774,4 +1774,77 @@ vec_dot_iq4_xs_q8_1(const void *__restrict__ vbq,
 #endif
 }
 
+// ============================ BF16X ============================
+// 32 weights per 46-byte block, one block aligning with one Q8_1 block.
+// Same conventions as the CUDA implementation in ggml-cuda/vecdotq.cuh:
+// the quantizer floors the half-block exponent at 7, so the bf16 word
+// assembles with pure integer adds, (e<<7)|m = (emax<<7) + m - (d<<7),
+// and d==7 is the zero marker.
+
+#define VDR_BF16X_Q8_1_MMVQ 8
+
+static __dpct_inline__ uint32_t bf16x_load_u32_u16(const uint8_t * p) {
+    // half-block stream offsets are always even, so a 2-byte aligned
+    // u16 pair assembles a u32 portably
+    const uint16_t lo = *(const uint16_t *) p;
+    const uint16_t hi = *(const uint16_t *) (p + 2);
+    return (uint32_t) lo | ((uint32_t) hi << 16);
+}
+
+static __dpct_inline__ uint32_t bf16x_funnel_r(uint32_t a, uint32_t b, uint32_t sh) {
+    return sh == 0 ? a : ((a >> sh) | (b << (32 - sh)));
+}
+
+static __dpct_inline__ float
+vec_dot_bf16x_q8_1(const void *__restrict__ vbq,
+                   const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
+    // the generic mul_mat_vec_q template issues one call per 16-weight half:
+    // iqs is 0 for the low half and 8 (one vdr of q8 bytes) for the high half
+    const block_bf16x * bx = (const block_bf16x *) vbq;
+    const int half = (iqs != 0) ? 1 : 0;
+
+    const uint8_t * mb = bx->mant  + half * 14;
+    const uint8_t * db = bx->delta + half * 6;
+    const uint8_t * sb = bx->sgn   + half * 2;
+
+    const uint32_t mw0 = bf16x_load_u32_u16(mb +  0);
+    const uint32_t mw1 = bf16x_load_u32_u16(mb +  4);
+    const uint32_t mw2 = bf16x_load_u32_u16(mb +  8);
+    const uint32_t mw3 = bf16x_load_u32_u16(mb + 12);
+    const uint32_t dw0 = bf16x_load_u32_u16(db +  0);
+    const uint32_t dw1 = bf16x_load_u32_u16(db +  4);
+    const uint32_t sw  = bf16x_load_u32_u16(sb);
+
+    const uint32_t em7 = (uint32_t) bx->emax[half] << 7;
+    const int8_t * q8 = bq8_1->qs + half * 16;
+
+    float sum0 = 0.0f;
+    float sum1 = 0.0f;
+#pragma unroll
+    for (int j = 0; j < 16; j += 2) {
+        const int b7 = 7 * j;       // mantissa bit offset of the pair
+        const int b3 = 3 * j;       // delta bit offset of the pair
+
+        const uint32_t mw_sel[4] = {mw0, mw1, mw2, mw3};
+        const uint32_t dw_sel[2] = {dw0, dw1};
+
+        const uint32_t v14 = bf16x_funnel_r(mw_sel[b7 / 32], mw_sel[b7 / 32 + 1], b7 % 32) & 0x3FFF;
+        const uint32_t v6  = bf16x_funnel_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32) & 0x3F;
+
+        const uint32_t s0 = (sw >> j) & 1u;
+        const uint32_t s1 = (sw >> (j + 1)) & 1u;
+        // d==7 is the zero marker: mask the assembled word to zero
+        const uint32_t nz0 = ((v6 & 0x7u) != 7u) ? 0xFFFFFFFFu : 0u;
+        const uint32_t nz1 = (((v6 >> 3) & 0x7u) != 7u) ? 0xFFFFFFFFu : 0u;
+        const uint32_t w0 = (((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | (s0 << 15)) & nz0) << 16;
+        const uint32_t w1 = (((em7 + (v14 >> 7)    - (((v6 >> 3) & 0x7u) << 7)) | (s1 << 15)) & nz1) << 16;
+
+        sum0 = fmaf(sycl::bit_cast<float>(w0), (float) q8[j + 0], sum0);
+        sum1 = fmaf(sycl::bit_cast<float>(w1), (float) q8[j + 1], sum1);
+    }
+
+    const sycl::float2 ds8f = bq8_1->ds.convert<float, sycl::rounding_mode::automatic>();
+    return ds8f.x() * (sum0 + sum1);
+}
+
 #endif // GGML_SYCL_VECDOTQ_HPP

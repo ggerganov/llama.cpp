@@ -653,6 +653,39 @@ static void convert_unary_sycl(const void * vx, dst_t * y, const int64_t k, dpct
 }
 
 
+// BF16X: one work-group per 32-element block, one thread per element
+template <typename dst_t>
+static void dequantize_row_bf16x_sycl(const void * vx, dst_t * y, const int64_t k,
+                                      dpct::queue_ptr stream) {
+    const int64_t nb = k / QK_BF16X;
+    stream->parallel_for(
+        sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 32),
+                          sycl::range<3>(1, 1, 32)),
+        [=](sycl::nd_item<3> item_ct1) {
+            const int64_t ib = item_ct1.get_group(2);
+            const int t      = item_ct1.get_local_id(2);
+
+            const block_bf16x * x = (const block_bf16x *) vx + ib;
+            const int half = t / 16;
+
+            const int b7 = 7 * t;
+            const uint32_t m = (((uint32_t) x->mant[b7 / 8] |
+                                 ((uint32_t) x->mant[b7 / 8 + 1] << 8)) >> (b7 & 7)) & 0x7F;
+            const int b3 = 3 * t;
+            const uint32_t d = (((uint32_t) x->delta[b3 / 8] |
+                                 ((uint32_t) x->delta[b3 / 8 + 1] << 8)) >> (b3 & 7)) & 0x7;
+            const uint32_t s = (x->sgn[t / 8] >> (t & 7)) & 1u;
+
+            float v = 0.0f;
+            if (d != 7) {   // d==7 is the zero marker
+                const uint32_t bits = (s << 15) | (((uint32_t) x->emax[half] - d) << 7) | m;
+                const uint32_t fbits = bits << 16;
+                v = sycl::bit_cast<float>(fbits);
+            }
+            y[ib * QK_BF16X + t] = v;
+        });
+}
+
 to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type, ggml_tensor * dst) {
     switch (type) {
         case GGML_TYPE_Q1_0:
@@ -731,6 +764,8 @@ to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type, ggml_tensor * dst) {
             return dequantize_row_mxfp4_sycl;
         case GGML_TYPE_NVFP4:
             return dequantize_row_nvfp4_sycl;
+        case GGML_TYPE_BF16X:
+            return dequantize_row_bf16x_sycl;
         case GGML_TYPE_F32:
             return convert_unary_sycl<float>;
 #ifdef GGML_SYCL_HAS_BF16
@@ -822,6 +857,8 @@ to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type, ggml_tensor *dst) {
             return dequantize_row_mxfp4_sycl;
         case GGML_TYPE_NVFP4:
             return dequantize_row_nvfp4_sycl;
+        case GGML_TYPE_BF16X:
+            return dequantize_row_bf16x_sycl;
         case GGML_TYPE_F16:
             return convert_unary_sycl<sycl::half>;
 #ifdef GGML_SYCL_HAS_BF16
