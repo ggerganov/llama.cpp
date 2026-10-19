@@ -26,7 +26,8 @@ struct server_connect {
 
     static std::string resolve_code(const std::string & code);
 
-    bool start(const common_params & params);
+    // port is the bound one, it differs from params.port with --port 0 or the GCP override
+    bool start(const common_params & params, int port);
 
     // idempotent, also called by the destructor
     void stop();

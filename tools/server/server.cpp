@@ -544,9 +544,9 @@ int llama_server(common_params & params, int argc, char ** argv, server_child & 
         SRV_INF("listening on %s\n", address.c_str());
     }
 
-    // spawn only once listening, so the child health check passes. the destructor stops it
+    // spawn only once listening, so the port is bound and the child startup health check reaches us. the destructor stops it
     server_connect connect_proc;
-    if (params.server_connect && !connect_proc.start(params)) {
+    if (params.server_connect && !connect_proc.start(params, ctx_http.port)) {
         SRV_ERR("%s", "exiting due to llama-connect error\n");
         ctx_http.stop();
         ctx_http.join();

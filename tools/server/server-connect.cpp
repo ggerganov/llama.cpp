@@ -106,6 +106,28 @@ static void forward_child_log(const std::string & line) {
     }
 }
 
+// the child dials over TCP: a wildcard bind is reached on loopback, a specific address on itself
+// empty when every listener is a unix socket
+static std::string upstream_host(const std::vector<std::string> & hosts) {
+    for (const auto & host : hosts) {
+        if (string_ends_with(host, ".sock")) {
+            continue;
+        }
+        if (host == "0.0.0.0") {
+            return "127.0.0.1";
+        }
+        if (host == "::") {
+            return "[::1]";
+        }
+        // llama-connect builds http://host:port, so an IPv6 literal needs brackets
+        if (host.find(':') != std::string::npos && host[0] != '[') {
+            return "[" + host + "]";
+        }
+        return host;
+    }
+    return "";
+}
+
 static bool path_is_file(const std::filesystem::path & p) {
     std::error_code ec;
     return std::filesystem::is_regular_file(p, ec);
@@ -152,6 +174,10 @@ std::string server_connect::unavailable_reason(const common_params & params) {
              + " characters from '" + CONNECT_CODE_CHARS + "'";
     }
 
+    if (upstream_host(params.hostnames).empty()) {
+        return "llama-connect reaches the server over TCP, add a TCP address to --host";
+    }
+
     if (find_binary().empty()) {
         return "could not find '" + CONNECT_EXE_NAME + "' next to llama-server or in PATH.\n"
                "    it is a separate binary: download it from https://github.com/ggml-org/llama-connect/releases\n"
@@ -165,7 +191,7 @@ std::string server_connect::resolve_code(const std::string & code) {
     return code.empty() ? gen_share_code() : normalize_share_code(code);
 }
 
-bool server_connect::start(const common_params & params) {
+bool server_connect::start(const common_params & params, int port) {
     const std::string bin = find_binary();
     if (bin.empty()) {
         SRV_ERR("%s", "llama-connect binary not found\n");
@@ -176,11 +202,10 @@ bool server_connect::start(const common_params & params) {
     const std::string & code = params.server_connect_code;
     GGML_ASSERT(!code.empty());
 
-    // always loopback, params.hostnames may hold 0.0.0.0 or a unix socket which the child cannot dial
     const std::vector<std::string> args = {
         bin,
-        "--host", "127.0.0.1",
-        "--port", std::to_string(params.port),
+        "--host", upstream_host(params.hostnames),
+        "--port", std::to_string(port),
         "--code", code,
         // the kernel closes our end of this pipe even if we are killed without cleanup
         // this is what stops the child from outliving us
