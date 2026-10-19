@@ -1404,6 +1404,13 @@ inline static float32x4_t ggml_v_silu(float32x4_t v_x) {
     return vec_div(v_x, v_one_plus_exp_neg_x);
 }
 
+// gelu_quick(x) = x / (1 + exp(-1.702 x)); x stays the numerator so it cannot overflow
+inline static float32x4_t ggml_v_gelu_quick(float32x4_t x) {
+    const float32x4_t one = vec_splats(1.0f);
+    const float32x4_t exp_cx = ggml_v_expf(vec_mul(x, vec_splats(GELU_QUICK_COEF)));
+    return vec_div(x, vec_add(one, exp_cx));
+}
+
 #elif defined(__riscv_v_intrinsic)
 
 // adapted from arm limited optimized routine

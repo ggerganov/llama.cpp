@@ -486,6 +486,10 @@ void ggml_vec_gelu_quick_f32(const int n, float * y, const float * x) {
     for (; i + 3 < n; i += 4) {
         vst1q_f32(y + i, ggml_v_gelu_quick(vld1q_f32(x + i)));
     }
+#elif defined(__VXE__) || defined(__VXE2__)
+    for (; i + 3 < n; i += 4) {
+        vec_xst(ggml_v_gelu_quick(vec_xl(0, x + i)), 0, y + i);
+    }
 #elif defined(__riscv_v_intrinsic)
     for (int vl; i < n; i += vl) {
         vl = __riscv_vsetvl_e32m2(n - i);
@@ -522,6 +526,10 @@ void ggml_vec_geglu_quick_f32(const int n, float * y, const float * x, const flo
 #elif defined(__ARM_NEON) && defined(__aarch64__)
     for (; i + 3 < n; i += 4) {
         vst1q_f32(y + i, vmulq_f32(ggml_v_gelu_quick(vld1q_f32(x + i)), vld1q_f32(g + i)));
+    }
+#elif defined(__VXE__) || defined(__VXE2__)
+    for (; i + 3 < n; i += 4) {
+        vec_xst(vec_mul(ggml_v_gelu_quick(vec_xl(0, x + i)), vec_xl(0, g + i)), 0, y + i);
     }
 #elif defined(__riscv_v_intrinsic)
     for (int vl; i < n; i += vl) {
