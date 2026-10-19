@@ -7,6 +7,7 @@ import ast
 import logging
 import contextlib
 import json
+import tempfile
 import os
 import re
 import sys
@@ -2194,8 +2195,11 @@ class TextModel(ModelBase):
             raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")  # ty: ignore[unresolved-attribute]
         for kmer in [*tokenizer.kmers, *getattr(tokenizer, "npad_tokens", [])]:  # ty: ignore[unresolved-attribute]
             reverse_vocab[tokenizer.dna_token_to_id[kmer]] = kmer + "\ue000"  # ty: ignore[unresolved-attribute]
-        added_vocab = tokenizer.get_added_vocab()  # ty: ignore[unresolved-attribute]
-        added_tokens_decoder = tokenizer.added_tokens_decoder  # ty: ignore[unresolved-attribute]
+        # older HybridDNATokenizer versions (Carbon-500M/3B/8B) do not register the base tokenizer's added tokens
+        # (<|im_start|>, <think>, ...) as their own, but still encode them as special tokens: take their types from
+        # the base tokenizer
+        base_tokenizer = getattr(tokenizer, "_base_tokenizer", tokenizer)
+        added_tokens_decoder = {**base_tokenizer.added_tokens_decoder, **tokenizer.added_tokens_decoder}  # ty: ignore[unresolved-attribute]
 
         tokens: list[str] = []
         toktypes: list[int] = []
@@ -2205,7 +2209,7 @@ class TextModel(ModelBase):
                 toktypes.append(gguf.TokenType.UNUSED)
             else:
                 token: str = reverse_vocab[i]
-                if token in added_vocab:
+                if i in added_tokens_decoder:
                     if added_tokens_decoder[i].special or self.does_token_look_special(token):
                         toktypes.append(gguf.TokenType.CONTROL)
                     else:
@@ -2222,6 +2226,14 @@ class TextModel(ModelBase):
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
+        if not special_vocab.merges:
+            # Carbon-500M/3B/8B ship only tokenizer.py, no tokenizer.json: take the merges and special token ids from
+            # the base BPE tokenizer it wraps, keeping the model's own chat template (none for these base models)
+            with tempfile.TemporaryDirectory() as tmp:
+                base_tokenizer.save_pretrained(tmp)
+                base_special_vocab = gguf.SpecialVocab(Path(tmp), load_merges=True)
+            base_special_vocab.chat_template = special_vocab.chat_template
+            special_vocab = base_special_vocab
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_qwen(self):
