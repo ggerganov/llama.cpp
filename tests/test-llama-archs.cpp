@@ -942,6 +942,18 @@ static int save_models(const std::string & arch_filter, const size_t seed, const
     return 0;
 }
 
+// the CPU and the GPU of an Apple SoC carry the same description, the name tells them apart (CPU, MTL0)
+static std::string get_device_label(ggml_backend_dev_t dev) {
+    const char * desc = ggml_backend_dev_description(dev);
+    const char * name = ggml_backend_dev_name(dev);
+
+    if (strcmp(desc, name) == 0) {
+        return desc;
+    }
+
+    return std::string(desc) + " (" + name + ")";
+}
+
 static int test_backends(const std::string & arch_filter, const size_t seed, const float stdev, const int verbosity, const char * target_backend) {
     struct user_data_t {
         struct {
@@ -994,7 +1006,7 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                 if (target_backend != nullptr && strcmp(target_backend, ggml_backend_dev_name(dev)) != 0) {
                     continue;
                 }
-                dev_configs.emplace_back(std::vector<ggml_backend_dev_t>{dev}, ggml_backend_dev_description(dev), LLAMA_SPLIT_MODE_LAYER);
+                dev_configs.emplace_back(std::vector<ggml_backend_dev_t>{dev}, get_device_label(dev), LLAMA_SPLIT_MODE_LAYER);
                 max_device_label_length = std::max(max_device_label_length, dev_configs.back().label.length());
 
                 // cpu-based devices cannot be used in tensor split mode
