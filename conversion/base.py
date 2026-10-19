@@ -2226,8 +2226,8 @@ class TextModel(ModelBase):
 
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
         if not special_vocab.merges:
-            # Carbon-500M/3B/8B ship only tokenizer.py, no tokenizer.json: take the merges and special token ids from
-            # the base BPE tokenizer it wraps, keeping the model's own chat template (none for these base models)
+            # Carbon-500M/3B/8B ship only tokenizer.py, no tokenizer.json
+            # take the merges and special token ids from the base BPE tokenizer, keeping the model's own chat template (if any)
             with tempfile.TemporaryDirectory() as tmp:
                 base_tokenizer.save_pretrained(tmp)
                 base_special_vocab = gguf.SpecialVocab(Path(tmp), load_merges=True)
