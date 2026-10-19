@@ -1,13 +1,16 @@
 #pragma once
 
-// BF16X batched GEMM, phase 1: fused-decode tiled FFMA baseline.
+// BF16X batched GEMM, phase 2: fused decode + half-MMA (m16n8k16).
 //
-// Weights stay compressed in VRAM; each thread block decodes its BF16X tile
-// (128 x 32 weights, one 16-weight half per thread) into shared memory and
-// consumes it with plain FFMAs. No decompressed weight ever reaches HBM.
+// Weights stay compressed in VRAM. Each warp owns a 16-row m-tile; per lane,
+// the 8 A-fragment weights are decoded directly out of the bit stream into
+// mma fragment registers (funnel-shift extraction, no weight smem at all).
+// Activations are staged through shared memory as half and packed into
+// B-fragments. Accumulators are FP32.
 //
-// Phase 2 (planned) replaces the FFMA stage with half-precision MMA fragments
-// (Marlin-style dequantize-into-fragments); the decode stage is unchanged.
+//   warp layout : warp w -> m-tile w (16 rows), n-tiles 0..BN/8-1
+//   k loop      : BK=32 per block column = two k16 MMA steps (one bf16x half each)
+//   decode/lane : 4 pair-extractions (2 rows x 2 adjacent-k pairs) per k16 step
 
 #include "common.cuh"
 
@@ -20,13 +23,15 @@ static __device__ __forceinline__ uint32_t bf16x_mm_load_u32(const uint8_t * p) 
     return sh == 0 ? pa[0] : __funnelshift_r(pa[0], pa[1], sh);
 }
 
-// decode one 16-weight half of a block_bf16x into float dst[16]
-static __device__ __forceinline__ void bf16x_decode_half_to_f32(
-        const block_bf16x * GGML_RESTRICT bx, const int iqs, float * GGML_RESTRICT dst) {
+// decode two adjacent bf16xl/BF16X weights (k = 2*pair_idx and +1) of one
+// 16-weight half into a packed half2 register (w_lo | w_hi << 16)
+static __device__ __forceinline__ uint32_t bf16x_decode_pair(
+        const block_bf16x * GGML_RESTRICT row,   // row stream base (block start)
+        const int iqs, const int pair_idx) {
 
-    const uint8_t * mb = bx->mant  + iqs * 14;
-    const uint8_t * db = bx->delta + iqs * 6;
-    const uint8_t * sb = bx->sgn   + iqs * 2;
+    const uint8_t * mb = row->mant  + iqs * 14;
+    const uint8_t * db = row->delta + iqs * 6;
+    const uint8_t * sb = row->sgn   + iqs * 2;
 
     const uint32_t mw0 = bf16x_mm_load_u32(mb +  0);
     const uint32_t mw1 = bf16x_mm_load_u32(mb +  4);
@@ -36,40 +41,35 @@ static __device__ __forceinline__ void bf16x_decode_half_to_f32(
     const uint32_t dw1 = bf16x_mm_load_u32(db +  4);
     const uint32_t sw  = bf16x_mm_load_u32(sb);
 
-    // quantize floors the half-block exponent at 7: pure add/sub assembly
-    const uint32_t em7 = (uint32_t) bx->emax[iqs] << 7;
+    const uint32_t mw_sel[4] = {mw0, mw1, mw2, mw3};
+    const uint32_t dw_sel[2] = {dw0, dw1};
 
-#pragma unroll
-    for (int j = 0; j < 16; j += 2) {
-        const int b7 = 7 * j;
-        const int b3 = 3 * j;
+    const int b7 = 7 * (2 * pair_idx);
+    const int b3 = 3 * (2 * pair_idx);
 
-        const uint32_t mw_sel[4] = {mw0, mw1, mw2, mw3};
-        const uint32_t dw_sel[2] = {dw0, dw1};
+    const uint32_t v14 = ((b7 % 32 + 14 <= 32)
+        ? (mw_sel[b7 / 32] >> (b7 % 32))
+        : __funnelshift_r(mw_sel[b7 / 32], mw_sel[b7 / 32 + 1], b7 % 32)) & 0x3FFF;
+    const uint32_t v6 = ((b3 % 32 + 6 <= 32)
+        ? (dw_sel[b3 / 32] >> (b3 % 32))
+        : __funnelshift_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32)) & 0x3F;
 
-        const uint32_t v14 = ((b7 % 32 + 14 <= 32)
-            ? (mw_sel[b7 / 32] >> (b7 % 32))
-            : __funnelshift_r(mw_sel[b7 / 32], mw_sel[b7 / 32 + 1], b7 % 32)) & 0x3FFF;
-        const uint32_t v6 = ((b3 % 32 + 6 <= 32)
-            ? (dw_sel[b3 / 32] >> (b3 % 32))
-            : __funnelshift_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32)) & 0x3F;
+    // emax floor of 7 at quantize time: add/sub assembly, no clamp
+    const uint32_t em7 = (uint32_t) row->emax[iqs] << 7;
 
-        const uint32_t s0 = (sw >> j) & 1u;
-        const uint32_t s1 = (sw >> (j + 1)) & 1u;
-        const uint32_t w0 = ((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | (s0 << 15)) << 16;
-        const uint32_t w1 = ((em7 + (v14 >> 7)    - ((v6 >> 3)    << 7)) | (s1 << 15)) << 16;
+    const uint32_t s01 = (sw >> (2 * pair_idx)) & 3u;
+    const uint32_t w_lo = ((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | ((s01 & 1u) << 15));
+    const uint32_t w_hi = ((em7 + (v14 >> 7)    - ((v6 >> 3)    << 7)) | ((s01 >> 1) << 15));
 
-        dst[j + 0] = __uint_as_float(w0);
-        dst[j + 1] = __uint_as_float(w1);
-    }
+    return w_lo | (w_hi << 16);
 }
 
-// C[m = BM tile rows][n = BN tile cols] += W(m, k) * X(k, n), X in F32
+// C[m, n] = sum_k W(m, k) * X(k, n); W = BF16X (decoded in-register), X = F32
 template <int BM, int BN, int BK, int NTHREADS>
-static __global__ void k_mul_mm_bf16x_f32(
-        const char * __restrict__ src0,            // BF16X weights, [ne00=k, ne01=m]
-        const float * __restrict__ src1,           // F32 activations, [ne10=k, ne11=n]
-        float * __restrict__ dst,                  // F32 out,       [ne01=m, ne11=n]
+static __global__ void k_mul_mm_bf16x_mma(
+        const char * __restrict__ src0,            // BF16X weights [ne00=k, ne01=m]
+        const float * __restrict__ src1,           // F32 activations [ne10=k, ne11=n]
+        float * __restrict__ dst,                  // F32 out [ne01=m, ne11=n]
         const int64_t ne00, const int64_t ne01,
         const int64_t ne10, const int64_t ne11,
         const int64_t ne12,
@@ -78,11 +78,13 @@ static __global__ void k_mul_mm_bf16x_f32(
         const size_t nb1,  const size_t nb2,  const size_t nb3,
         const int r2, const int r3) {
 
-    constexpr int HALVES_PER_ROW = BK / 16;
-    constexpr int N_HALVES       = BM * HALVES_PER_ROW;   // == NTHREADS
+    static_assert(BM % 128 == 0);            // one 16-row m-tile per warp
+    static_assert(BN % 8 == 0);
+    constexpr int NWARP  = NTHREADS / 32;
+    constexpr int MTILES = BM / 16;          // m-tiles per block == NWARP
+    constexpr int NTILES = BN / 8;           // n-tiles per warp
 
-    __shared__ float sW[BM][BK];
-    __shared__ float sX[BK][BN];
+    __shared__ __nv_bfloat16 sX[BK][BN];
 
     const int64_t m0 = (int64_t) blockIdx.x * BM;
     const int64_t n0 = (int64_t) blockIdx.y * BN;
@@ -93,89 +95,113 @@ static __global__ void k_mul_mm_bf16x_f32(
     const uint32_t i02 = i12 / r2;
     const uint32_t i03 = i13 / r3;
 
-    const int tid = threadIdx.x;
+    const int tid  = threadIdx.x;
+    const int warp = tid / 32;
+    const int lane = tid % 32;
+    const int g    = lane >> 2;              // fragment row group
+    const int tig  = lane & 3;               // fragment column group
 
-    // rows beyond ne01 decode to nothing: their smem rows stay zero forever
-    for (int i = tid; i < BM * BK; i += NTHREADS) {
-        sW[i / BK][i % BK] = 0.0f;
-    }
+    const int64_t row_base_m = m0 + warp * 16;   // this warp's 16 m-rows
 
-    const int nn = tid % BN;
-    const int m_grp = tid / BN;
-
-    constexpr int ROWS_PER_THREAD = BM / (NTHREADS / BN);
-    float acc[ROWS_PER_THREAD];
+    // per-lane accumulators: NTILES x 4
+    float c[NTILES][4];
 #pragma unroll
-    for (int q = 0; q < ROWS_PER_THREAD; ++q) {
-        acc[q] = 0.0f;
+    for (int t = 0; t < NTILES; ++t) {
+        c[t][0] = c[t][1] = c[t][2] = c[t][3] = 0.0f;
     }
+
+    // row pointers for the two fragment rows (g, g+8) of this lane
+    const char * rowp[2];
 
     const int kblocks = (int) (ne00 / BK);
 
-    // ---- main loop: decode one block-column of weights, consume, repeat ----
     for (int kb = 0; kb < kblocks; ++kb) {
-        // decode: one 16-weight half per thread (BM x 2 halves per block column)
-        if (tid < N_HALVES) {
-            const int m_local = tid / HALVES_PER_ROW;
-            const int hb      = tid % HALVES_PER_ROW;   // half index in block
-            const int64_t i01 = m0 + m_local;
-
-            if (i01 < ne01) {
-                const block_bf16x * bx = (const block_bf16x *)
-                    ((const char *) src0 + i01*nb01 + i02*nb02 + i03*nb03) + kb;
-
-                float f[16];
-                bf16x_decode_half_to_f32(bx, hb, f);
-
-                const int kbase = hb * 16;
-#pragma unroll
-                for (int j = 0; j < 16; ++j) {
-                    sW[m_local][kbase + j] = f[j];
-                }
-            }
-        }
-
-        // ---- load X tile (F32 activations, contiguous rows asserted) ----
+        // ---- load X slice for this block column, as half ----
         for (int i = tid; i < BK * BN; i += NTHREADS) {
             const int kk = i / BN;
-            const int nn_l = i % BN;
-            const int64_t n_abs = n0 + nn_l;
+            const int nn = i % BN;
+            const int64_t n_abs = n0 + nn;
             const int64_t k_abs = (int64_t) kb * BK + kk;
-            const size_t row = (size_t) n_abs * nb11;
-            sX[kk][nn_l] = (n_abs < ne11)
-                ? *(const float *) ((const char *) src1 + k_abs * 4 + row
+            const size_t rowb = (size_t) n_abs * nb11;
+            const float v = (n_abs < ne11)
+                ? *(const float *) ((const char *) src1 + k_abs * 4 + rowb
                                     + (size_t) i12 * nb12 + (size_t) i13 * nb13)
                 : 0.0f;
+            sX[kk][nn] = __float2bfloat16(v);
         }
-
         __syncthreads();
 
+        // ---- two k16 MMA steps, one per 16-weight half (iqs = 0, 1) ----
 #pragma unroll
-        for (int kk = 0; kk < BK; ++kk) {
-            const float xv = sX[kk][nn];
+        for (int iqs = 0; iqs < 2; ++iqs) {
+            // ---- A fragments: decode this lane's 8 weights ----
+            uint32_t a[4];
+
+            const int64_t r0 = row_base_m + g;
+            const int64_t r1 = r0 + 8;
+            rowp[0] = (const char *) src0 + (r0 < ne01 ? r0 : 0) * nb01
+                    + (size_t) i02 * nb02 + (size_t) i03 * nb03 + kb * sizeof(block_bf16x);
+            rowp[1] = (const char *) src0 + (r1 < ne01 ? r1 : 0) * nb01
+                    + (size_t) i02 * nb02 + (size_t) i03 * nb03 + kb * sizeof(block_bf16x);
+            const bool ok0 = r0 < ne01;
+            const bool ok1 = r1 < ne01;
+
+            const int kp0 = tig;              // pair p covers k = 2p, 2p+1
+            const int kp1 = tig + 4;          // k = tig*2 + 8, +9
+
+            const uint32_t p00 = bf16x_decode_pair((const block_bf16x *) rowp[0], iqs, kp0);
+            const uint32_t p01 = bf16x_decode_pair((const block_bf16x *) rowp[0], iqs, kp1);
+            const uint32_t p10 = bf16x_decode_pair((const block_bf16x *) rowp[1], iqs, kp0);
+            const uint32_t p11 = bf16x_decode_pair((const block_bf16x *) rowp[1], iqs, kp1);
+
+            a[0] = ok0 ? p00 : 0u;
+            a[1] = ok1 ? p10 : 0u;
+            a[2] = ok0 ? p01 : 0u;
+            a[3] = ok1 ? p11 : 0u;
+
+            // ---- B fragments from smem (k-adjacent half2 pairs) ----
 #pragma unroll
-            for (int q = 0; q < ROWS_PER_THREAD; ++q) {
-                acc[q] = fmaf(sW[m_grp + q * (NTHREADS / BN)][kk], xv, acc[q]);
+            for (int t = 0; t < NTILES; ++t) {
+                const int n_col = t * 8 + g;
+                const __nv_bfloat16 x00 = sX[iqs * 16 + tig * 2    ][n_col];
+                const __nv_bfloat16 x01 = sX[iqs * 16 + tig * 2 + 1][n_col];
+                const __nv_bfloat16 x10 = sX[iqs * 16 + tig * 2 + 8][n_col];
+                const __nv_bfloat16 x11 = sX[iqs * 16 + tig * 2 + 9][n_col];
+                const uint32_t b0 = (__bfloat16_as_ushort(x00)) | (__bfloat16_as_ushort(x01) << 16);
+                const uint32_t b1 = (__bfloat16_as_ushort(x10)) | (__bfloat16_as_ushort(x11) << 16);
+
+                float d[4] = { c[t][0], c[t][1], c[t][2], c[t][3] };
+                asm volatile(
+                    "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
+                    "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+                    : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+                    : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+                c[t][0] = d[0]; c[t][1] = d[1]; c[t][2] = d[2]; c[t][3] = d[3];
             }
         }
-
         __syncthreads();
     }
 
-    // ---- store ----
+    // ---- store: C fragment layout c0,c1 -> row g, cols tig*2,+1; c2,c3 -> row g+8 ----
 #pragma unroll
-    for (int q = 0; q < ROWS_PER_THREAD; ++q) {
-        const int64_t m_abs = m0 + m_grp + q * (NTHREADS / BN);
-        const int64_t n_abs = n0 + nn;
-        if (m_abs < ne01 && n_abs < ne11) {
-            float * d = (float *) ((char *) dst + m_abs * 4 + n_abs * nb1
-                                   + (size_t) i12 * nb2 + (size_t) i13 * nb3);
-            *d = acc[q];
+    for (int t = 0; t < NTILES; ++t) {
+        const int64_t n0t = n0 + t * 8 + tig * 2;
+        const int64_t m0r = row_base_m + g;
+        const int64_t m8  = m0r + 8;
+        if (n0t < ne11) {
+            if (m0r < ne01) {
+                *((float *) ((char *) dst + m0r * 4 + n0t * nb1 + (size_t) i12 * nb2 + (size_t) i13 * nb3)) = c[t][0];
+                *((float *) ((char *) dst + m0r * 4 + (n0t + 1) * nb1 + (size_t) i12 * nb2 + (size_t) i13 * nb3)) = c[t][1];
+            }
+            if (m8 < ne01) {
+                *((float *) ((char *) dst + m8 * 4 + n0t * nb1 + (size_t) i12 * nb2 + (size_t) i13 * nb3)) = c[t][2];
+                *((float *) ((char *) dst + m8 * 4 + (n0t + 1) * nb1 + (size_t) i12 * nb2 + (size_t) i13 * nb3)) = c[t][3];
+            }
         }
     }
 }
 
-static bool ggml_cuda_mul_mat_bf16x_v1(
+static bool ggml_cuda_mul_mat_bf16x_mma(
         ggml_backend_cuda_context & ctx,
         const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
 
@@ -192,17 +218,10 @@ static bool ggml_cuda_mul_mat_bf16x_v1(
         return false;
     }
 
-    constexpr int BM = 128;
-    constexpr int BN = 32;
-    constexpr int BK = 32;   // exactly one BF16X block per row per k-step
+    constexpr int BM = 128;   // 8 warps x 16 rows
+    constexpr int BN = 32;    // 4 n-tiles of 8 per warp
+    constexpr int BK = 32;    // one BF16X block column
     constexpr int NTHREADS = 256;
-
-    GGML_ASSERT(nb00 == sizeof(block_bf16x));
-    GGML_ASSERT(nb10 == 4);
-    GGML_ASSERT(nb0  == 4);
-
-    const int64_t ne00l = ne00, ne01l = ne01;
-    const int64_t ne10l = ne10, ne11l = ne11;
 
     const int r2 = ne12 / ne02;
     const int r3 = ne13 / ne03;
@@ -213,9 +232,9 @@ static bool ggml_cuda_mul_mat_bf16x_v1(
 
     cudaStream_t stream = ctx.stream();
 
-    k_mul_mm_bf16x_f32<BM, BN, BK, NTHREADS><<<grid, NTHREADS, 0, stream>>>(
+    k_mul_mm_bf16x_mma<BM, BN, BK, NTHREADS><<<grid, NTHREADS, 0, stream>>>(
         (const char *) src0->data, (const float *) src1->data, (float *) dst->data,
-        ne00l, ne01l, ne10l, ne11l, ne12,
+        ne00, ne01, ne10, ne11, ne12,
         nb01, nb02, nb03,
         nb11, nb12, nb13,
         nb1, nb2, nb3,

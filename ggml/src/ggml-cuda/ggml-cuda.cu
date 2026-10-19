@@ -1926,7 +1926,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
         return;
     }
     if (src0->type == GGML_TYPE_BF16X) {
-        if (ggml_cuda_mul_mat_bf16x_v1(ctx, src0, src1, dst)) {
+        if (ggml_cuda_mul_mat_bf16x_mma(ctx, src0, src1, dst)) {
             return;
         }
     }
