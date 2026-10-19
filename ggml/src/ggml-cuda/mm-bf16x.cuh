@@ -1,16 +1,16 @@
 #pragma once
 
-// BF16X batched GEMM, phase 2: fused decode + half-MMA (m16n8k16).
+// BF16X batched GEMM, phase 2b: fused decode + half-MMA (m16n8k16), double-buffered.
 //
 // Weights stay compressed in VRAM. Each warp owns a 16-row m-tile; per lane,
 // the 8 A-fragment weights are decoded directly out of the bit stream into
 // mma fragment registers (funnel-shift extraction, no weight smem at all).
-// Activations are staged through shared memory as half and packed into
-// B-fragments. Accumulators are FP32.
+// Activations are staged through a double-buffered shared-memory tile as
+// bf16 B-fragments. Accumulators are FP32.
 //
 //   warp layout : warp w -> m-tile w (16 rows), n-tiles 0..BN/8-1
 //   k loop      : BK=32 per block column = two k16 MMA steps (one bf16x half each)
-//   decode/lane : 4 pair-extractions (2 rows x 2 adjacent-k pairs) per k16 step
+//   amortization: A decode once per k-block, reused across all BN/8 n-tiles
 
 #include "common.cuh"
 
@@ -20,11 +20,11 @@ static __device__ __forceinline__ uint32_t bf16x_mm_load_u32(const uint8_t * p) 
     const uintptr_t a = (uintptr_t) p;
     const uint32_t * pa = (const uint32_t *) (a & ~(uintptr_t) 3);
     const int sh = (int) (a & 3) * 8;
-    return sh == 0 ? pa[0] : __funnelshift_r(pa[0], pa[1], sh);
+    return sh == 0 ? __ldg(pa) : __funnelshift_r(__ldg(pa), __ldg(pa + 1), sh);
 }
 
-// decode two adjacent bf16xl/BF16X weights (k = 2*pair_idx and +1) of one
-// 16-weight half into a packed half2 register (w_lo | w_hi << 16)
+// decode two adjacent BF16X weights (k = 2*pair_idx and +1) of one 16-weight
+// half into a packed bf16x2 register (w_lo | w_hi << 16)
 static __device__ __forceinline__ uint32_t bf16x_decode_pair(
         const block_bf16x * GGML_RESTRICT row,   // row stream base (block start)
         const int iqs, const int pair_idx) {
@@ -54,12 +54,15 @@ static __device__ __forceinline__ uint32_t bf16x_decode_pair(
         ? (dw_sel[b3 / 32] >> (b3 % 32))
         : __funnelshift_r(dw_sel[b3 / 32], dw_sel[b3 / 32 + 1], b3 % 32)) & 0x3F;
 
-    // emax floor of 7 at quantize time: add/sub assembly, no clamp
+    // quantize floors the half-block exponent at 7: pure add/sub assembly;
+    // d == 7 is the zero marker -> scale the assembled word to zero
     const uint32_t em7 = (uint32_t) row->emax[iqs] << 7;
 
     const uint32_t s01 = (sw >> (2 * pair_idx)) & 3u;
-    const uint32_t w_lo = ((em7 + (v14 & 0x7Fu) - ((v6 & 0x7u) << 7)) | ((s01 & 1u) << 15));
-    const uint32_t w_hi = ((em7 + (v14 >> 7)    - ((v6 >> 3)    << 7)) | ((s01 >> 1) << 15));
+    const uint32_t d0 = v6 & 0x7u;
+    const uint32_t d1 = (v6 >> 3) & 0x7u;
+    const uint32_t w_lo = (((em7 + (v14 & 0x7Fu) - (d0 << 7)) | ((s01 & 1u) << 15)) & ((d0 != 7u) ? 0xFFFFFFFFu : 0u));
+    const uint32_t w_hi = (((em7 + (v14 >> 7)    - (d1 << 7)) | ((s01 >> 1) << 15)) & ((d1 != 7u) ? 0xFFFFFFFFu : 0u));
 
     return w_lo | (w_hi << 16);
 }
@@ -80,11 +83,9 @@ static __global__ void k_mul_mm_bf16x_mma(
 
     static_assert(BM % 128 == 0);            // one 16-row m-tile per warp
     static_assert(BN % 8 == 0);
-    constexpr int NWARP  = NTHREADS / 32;
-    constexpr int MTILES = BM / 16;          // m-tiles per block == NWARP
     constexpr int NTILES = BN / 8;           // n-tiles per warp
 
-    __shared__ __nv_bfloat16 sX[BK][BN];
+    __shared__ __nv_bfloat16 sX[2][BK][BN];
 
     const int64_t m0 = (int64_t) blockIdx.x * BM;
     const int64_t n0 = (int64_t) blockIdx.y * BN;
@@ -110,13 +111,9 @@ static __global__ void k_mul_mm_bf16x_mma(
         c[t][0] = c[t][1] = c[t][2] = c[t][3] = 0.0f;
     }
 
-    // row pointers for the two fragment rows (g, g+8) of this lane
-    const char * rowp[2];
-
     const int kblocks = (int) (ne00 / BK);
 
-    for (int kb = 0; kb < kblocks; ++kb) {
-        // ---- load X slice for this block column, as half ----
+    auto load_x = [&](int kb, int buf) {
         for (int i = tid; i < BK * BN; i += NTHREADS) {
             const int kk = i / BN;
             const int nn = i % BN;
@@ -127,56 +124,72 @@ static __global__ void k_mul_mm_bf16x_mma(
                 ? *(const float *) ((const char *) src1 + k_abs * 4 + rowb
                                     + (size_t) i12 * nb12 + (size_t) i13 * nb13)
                 : 0.0f;
-            sX[kk][nn] = __float2bfloat16(v);
+            sX[buf][kk][nn] = __float2bfloat16(v);
         }
-        __syncthreads();
+    };
 
-        // ---- two k16 MMA steps, one per 16-weight half (iqs = 0, 1) ----
+    load_x(0, 0);
+    __syncthreads();
+
+    for (int kb = 0; kb < kblocks; ++kb) {
+        const int cur = kb & 1;
+
+        // prefetch the next block column into the other smem buffer; the
+        // trailing __syncthreads() of the previous iteration ordered this
+        // after all reads of the buffer being overwritten
+        if (kb + 1 < kblocks) {
+            load_x(kb + 1, cur ^ 1);
+        }
+
+        // ---- A fragments: 4 regs per k16 step x 2 steps = 8 regs ----
+        // per PTX m16n8k16: reg0={row g, pair tig}, reg1={row g+8, pair tig},
+        //                   reg2={row g, pair tig+4}, reg3={row g+8, pair tig+4}
+        const int64_t roff = (size_t) i02 * nb02 + (size_t) i03 * nb03
+                           + kb * sizeof(block_bf16x);
+        const int64_t r0 = row_base_m + g;
+        const int64_t r1 = r0 + 8;
+        const char * rp0 = (const char *) src0 + (r0 < ne01 ? r0 : 0) * nb01 + roff;
+        const char * rp1 = (const char *) src0 + (r1 < ne01 ? r1 : 0) * nb01 + roff;
+        const bool ok0 = r0 < ne01;
+        const bool ok1 = r1 < ne01;
+
+        uint32_t af0[4] = {0u, 0u, 0u, 0u};   // iqs=0 A-fragment
+        uint32_t af1[4] = {0u, 0u, 0u, 0u};   // iqs=1 A-fragment
+        if (ok0 || ok1) {
+            // reg0 = row g,   pair tig     {A[g][tig*2], A[g][tig*2+1]}
+            af0[0] = ok0 ? bf16x_decode_pair((const block_bf16x *) rp0, 0, tig)     : 0u;
+            // reg1 = row g+8, pair tig     {A[g+8][tig*2], A[g+8][tig*2+1]}
+            af0[1] = ok1 ? bf16x_decode_pair((const block_bf16x *) rp1, 0, tig)     : 0u;
+            // reg2 = row g,   pair tig+4   {A[g][tig*2+8], A[g][tig*2+9]}
+            af0[2] = ok0 ? bf16x_decode_pair((const block_bf16x *) rp0, 0, tig + 4) : 0u;
+            // reg3 = row g+8, pair tig+4   {A[g+8][tig*2+8], A[g+8][tig*2+9]}
+            af0[3] = ok1 ? bf16x_decode_pair((const block_bf16x *) rp1, 0, tig + 4) : 0u;
+            // same layout for iqs=1
+            af1[0] = ok0 ? bf16x_decode_pair((const block_bf16x *) rp0, 1, tig)     : 0u;
+            af1[1] = ok1 ? bf16x_decode_pair((const block_bf16x *) rp1, 1, tig)     : 0u;
+            af1[2] = ok0 ? bf16x_decode_pair((const block_bf16x *) rp0, 1, tig + 4) : 0u;
+            af1[3] = ok1 ? bf16x_decode_pair((const block_bf16x *) rp1, 1, tig + 4) : 0u;
+        }
+
+        // ---- 2 k16 steps x NTILES n-tiles of mma on sX[cur] ----
 #pragma unroll
         for (int iqs = 0; iqs < 2; ++iqs) {
-            // ---- A fragments: decode this lane's 8 weights ----
-            uint32_t a[4];
-
-            const int64_t r0 = row_base_m + g;
-            const int64_t r1 = r0 + 8;
-            rowp[0] = (const char *) src0 + (r0 < ne01 ? r0 : 0) * nb01
-                    + (size_t) i02 * nb02 + (size_t) i03 * nb03 + kb * sizeof(block_bf16x);
-            rowp[1] = (const char *) src0 + (r1 < ne01 ? r1 : 0) * nb01
-                    + (size_t) i02 * nb02 + (size_t) i03 * nb03 + kb * sizeof(block_bf16x);
-            const bool ok0 = r0 < ne01;
-            const bool ok1 = r1 < ne01;
-
-            const int kp0 = tig;              // pair p covers k = 2p, 2p+1
-            const int kp1 = tig + 4;          // k = tig*2 + 8, +9
-
-            const uint32_t p00 = bf16x_decode_pair((const block_bf16x *) rowp[0], iqs, kp0);
-            const uint32_t p01 = bf16x_decode_pair((const block_bf16x *) rowp[0], iqs, kp1);
-            const uint32_t p10 = bf16x_decode_pair((const block_bf16x *) rowp[1], iqs, kp0);
-            const uint32_t p11 = bf16x_decode_pair((const block_bf16x *) rowp[1], iqs, kp1);
-
-            a[0] = ok0 ? p00 : 0u;
-            a[1] = ok1 ? p10 : 0u;
-            a[2] = ok0 ? p01 : 0u;
-            a[3] = ok1 ? p11 : 0u;
-
-            // ---- B fragments from smem (k-adjacent half2 pairs) ----
+            const uint32_t * af = (iqs == 0) ? af0 : af1;
 #pragma unroll
             for (int t = 0; t < NTILES; ++t) {
                 const int n_col = t * 8 + g;
-                const __nv_bfloat16 x00 = sX[iqs * 16 + tig * 2    ][n_col];
-                const __nv_bfloat16 x01 = sX[iqs * 16 + tig * 2 + 1][n_col];
-                const __nv_bfloat16 x10 = sX[iqs * 16 + tig * 2 + 8][n_col];
-                const __nv_bfloat16 x11 = sX[iqs * 16 + tig * 2 + 9][n_col];
+                const __nv_bfloat16 x00 = sX[cur][iqs * 16 + tig * 2    ][n_col];
+                const __nv_bfloat16 x01 = sX[cur][iqs * 16 + tig * 2 + 1][n_col];
+                const __nv_bfloat16 x10 = sX[cur][iqs * 16 + tig * 2 + 8][n_col];
+                const __nv_bfloat16 x11 = sX[cur][iqs * 16 + tig * 2 + 9][n_col];
                 const uint32_t b0 = (__bfloat16_as_ushort(x00)) | (__bfloat16_as_ushort(x01) << 16);
                 const uint32_t b1 = (__bfloat16_as_ushort(x10)) | (__bfloat16_as_ushort(x11) << 16);
 
-                float d[4] = { c[t][0], c[t][1], c[t][2], c[t][3] };
                 asm volatile(
                     "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
                     "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
-                    : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
-                    : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
-                c[t][0] = d[0]; c[t][1] = d[1]; c[t][2] = d[2]; c[t][3] = d[3];
+                    : "+f"(c[t][0]), "+f"(c[t][1]), "+f"(c[t][2]), "+f"(c[t][3])
+                    : "r"(af[0]), "r"(af[1]), "r"(af[2]), "r"(af[3]), "r"(b0), "r"(b1));
             }
         }
         __syncthreads();
@@ -219,7 +232,7 @@ static bool ggml_cuda_mul_mat_bf16x_mma(
     }
 
     constexpr int BM = 128;   // 8 warps x 16 rows
-    constexpr int BN = 32;    // 4 n-tiles of 8 per warp
+    constexpr int BN = 64;    // 8 n-tiles of 8 per warp
     constexpr int BK = 32;    // one BF16X block column
     constexpr int NTHREADS = 256;
 
