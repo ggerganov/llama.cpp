@@ -8481,11 +8481,14 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
         }
     }
 
-    if (!use_sparse && split_k > 1) {
-        // Try to evenly split KV into split_k chunks, but it needs to be a multiple
-        // of "align", so recompute split_k based on that.
-        split_kv = ROUNDUP_POW2(std::max(1u, KV / split_k), alignment);
-        split_k = CEIL_DIV(KV, split_kv);
+    const bool xe_fa_small_n = neq1 <= 16 && xe_fa_supported_platform && xe_fa_supported_usage && xe_fa_supported_dtype;
+    if (!use_sparse && (split_k > 1 || xe_fa_small_n)) {
+        if (split_k > 1) {
+            // Try to evenly split KV into split_k chunks, but it needs to be a multiple
+            // of "align", so recompute split_k based on that.
+            split_kv = ROUNDUP_POW2(std::max(1u, KV / split_k), alignment);
+            split_k = CEIL_DIV(KV, split_kv);
+        }
         xe_fa_opt = xe_fa_supported_platform && xe_fa_supported_usage && xe_fa_supported_dtype;
         if (xe_fa_opt) {
             const uint32_t split_p_size = 32;
@@ -8711,7 +8714,7 @@ void ggml_vk_flash_attn(ggml_backend_vk_context * ctx, vk_context& subctx, const
                                               mask_n_head_log2, m0, m1,
                                               gqa_ratio, split_kv, split_k };
 
-    if (xe_fa_opt && split_k > 1) {
+    if (xe_fa_opt) {
         auto upper_power_of_2 = [&](uint32_t in) {
             GGML_ASSERT(in != 0);
             if (in <= 1) return 1u;
