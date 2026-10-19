@@ -1834,8 +1834,8 @@ private:
         return c != '\0' && std::string("ACGTRYSWKMBDHVN").find(c) != std::string::npos;
     }
 
-    // HybridDNATokenizer._normalize_spaced_dna: join displays like "ACGTA CGTAC ..." (at least six chunks of 1-5
-    // uppercase ACGT separated by spaces or tabs, not touching a letter) when they hold at least twelve bases
+    // HybridDNATokenizer._normalize_spaced_dna: join displays like "ACGTA CGTAC ..." when they hold at least twelve bases
+    // (at least six chunks of 1-5 uppercase ACGT separated by spaces or tabs, not touching a letter)
     static std::string normalize_spaced_dna(const std::string & text) {
         const auto is_blank = [](char c) { return c == ' ' || c == '\t'; };
         std::string out;
