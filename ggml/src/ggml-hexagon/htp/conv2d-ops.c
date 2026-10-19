@@ -84,82 +84,6 @@ static inline float conv2d_read_kernel(const struct htp_tensor * k, uint32_t kw,
     return *(const float *) p;
 }
 
-static void conv2d_scalar_thread(unsigned int nth, unsigned int ith, void * data) {
-    struct htp_conv2d_context * ctx = (struct htp_conv2d_context *) data;
-    struct htp_ops_context * octx = ctx->octx;
-
-    const struct htp_tensor * kernel = octx->src[0];
-    const struct htp_tensor * input  = octx->src[1];
-    const struct htp_tensor * dst    = octx->dst;
-
-    const uint32_t KW   = kernel->ne[0];
-    const uint32_t KH   = kernel->ne[1];
-    const uint32_t Cin  = kernel->ne[2];
-    const uint32_t Cout = kernel->ne[3];
-    const uint32_t OW   = dst->ne[0];
-    const uint32_t OH   = dst->ne[1];
-    const uint32_t N    = dst->ne[3];
-
-    const int32_t s0 = octx->op_params[0];
-    const int32_t s1 = octx->op_params[1];
-    const int32_t p0 = octx->op_params[2];
-    const int32_t p1 = octx->op_params[3];
-    const int32_t d0 = octx->op_params[4];
-    const int32_t d1 = octx->op_params[5];
-
-    const uint32_t total_rows = ctx->kparams->total_rows;
-    const uint32_t dr = (total_rows + nth - 1) / nth;
-    const uint32_t r0 = dr * ith;
-    const uint32_t r1 = MIN(r0 + dr, total_rows);
-
-    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
-    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ith);
-
-    for (uint32_t r = r0; r < r1; ++r) {
-        const uint32_t oh   = r % OH;
-        const uint32_t tmp0 = r / OH;
-        const uint32_t cout = tmp0 % Cout;
-        const uint32_t n    = tmp0 / Cout;
-
-        for (uint32_t ow = 0; ow < OW; ++ow) {
-            float sum = 0.0f;
-
-            for (uint32_t kh = 0; kh < KH; ++kh) {
-                const int32_t ih = (int32_t) oh * s1 + (int32_t) kh * d1 - p1;
-                if (ih < 0 || ih >= (int32_t) input->ne[1]) {
-                    continue;
-                }
-
-                for (uint32_t kw = 0; kw < KW; ++kw) {
-                    const int32_t iw = (int32_t) ow * s0 + (int32_t) kw * d0 - p0;
-                    if (iw < 0 || iw >= (int32_t) input->ne[0]) {
-                        continue;
-                    }
-
-                    for (uint32_t cin = 0; cin < Cin; ++cin) {
-                        const uint8_t * xp = (const uint8_t *) (uintptr_t) input->data
-                            + (size_t) iw  * input->nb[0]
-                            + (size_t) ih  * input->nb[1]
-                            + (size_t) cin * input->nb[2]
-                            + (size_t) n   * input->nb[3];
-
-                        sum += conv2d_read_kernel(kernel, kw, kh, cin, cout) * *(const float *) xp;
-                    }
-                }
-            }
-
-            uint8_t * yp = (uint8_t *) (uintptr_t) dst->data
-                + (size_t) ow   * dst->nb[0]
-                + (size_t) oh   * dst->nb[1]
-                + (size_t) cout * dst->nb[2]
-                + (size_t) n    * dst->nb[3];
-            *(float *) yp = sum;
-        }
-    }
-
-    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ith);
-}
-
 static void conv2d_hvx_width_thread(unsigned int nth, unsigned int ith, void * data) {
     struct htp_conv2d_context * ctx = (struct htp_conv2d_context *) data;
     struct htp_ops_context * octx = ctx->octx;
@@ -1273,7 +1197,7 @@ static void conv2d_hmx_run_phase(struct htp_conv2d_hmx_context * hc, int32_t pac
 }
 
 static int conv2d_hmx(struct htp_ops_context * octx, const struct htp_conv2d_kernel_params * kp) {
-    const bool use_hmx = kp->kernel_type == HTP_CONV2D_KERNEL_HMX;
+    const bool use_hmx = kp->kernel_type == HTP_CONV2D_KERNEL_HMX_TILED;
     if (use_hmx && !octx->ctx->hmx_enabled) {
         return HTP_STATUS_NO_SUPPORT;
     }
@@ -2548,14 +2472,14 @@ int op_conv_2d(struct htp_ops_context * octx) {
         return HTP_STATUS_OK;
     }
 
-    if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX_WIN) {
+    if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX_WINDOW) {
         const int status = conv2d_win(octx, (const struct htp_conv2d_win_params *) octx->kernel_params);
         if (status == HTP_STATUS_OK) {
             return HTP_STATUS_OK;
         }
     }
 
-    if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX || kparams->kernel_type == HTP_CONV2D_KERNEL_HVX_TILES) {
+    if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX_TILED || kparams->kernel_type == HTP_CONV2D_KERNEL_HVX_TILED) {
         const int status = conv2d_hmx(octx, kparams);
         if (status == HTP_STATUS_OK) {
             return HTP_STATUS_OK;
@@ -2575,16 +2499,15 @@ int op_conv_2d(struct htp_ops_context * octx) {
             octx->src0_spad.size_per_thread = wbuf_bytes + VLEN;
             octx->src0_spad.size = n_threads * octx->src0_spad.size_per_thread;
             if (octx->src0_spad.size > octx->ctx->vtcm_size) {
-                work_queue_run(octx->ctx->work_queue, conv2d_scalar_thread, &ctx, n_threads);
-                return HTP_STATUS_OK;
+                return HTP_STATUS_NO_SUPPORT;
             }
             octx->src0_spad.data = octx->ctx->vtcm_base;
             octx->src0_spad.src  = NULL;
         }
 
         work_queue_run(octx->ctx->work_queue, conv2d_hvx_width_thread, &ctx, n_threads);
-    } else {
-        work_queue_run(octx->ctx->work_queue, conv2d_scalar_thread, &ctx, n_threads);
+        return HTP_STATUS_OK;
     }
-    return HTP_STATUS_OK;
+
+    return HTP_STATUS_NO_SUPPORT;
 }

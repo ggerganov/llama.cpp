@@ -7,14 +7,14 @@
 #include "htp-ops.h"
 
 enum htp_conv2d_kernel_type {
-    HTP_CONV2D_KERNEL_SCALAR    = 1,
-    HTP_CONV2D_KERNEL_HMX       = 2,
-    HTP_CONV2D_KERNEL_HVX_WIDTH = 3,
-    HTP_CONV2D_KERNEL_HVX_TILES = 4,
-    HTP_CONV2D_KERNEL_HMX_WIN   = 5,
+    HTP_CONV2D_KERNEL_UNSUPPORTED = 0,
+    HTP_CONV2D_KERNEL_HVX_WIDTH,        // direct convolution across the output width
+    HTP_CONV2D_KERNEL_HVX_TILED,        // tiled implicit-GEMM convolution on HVX
+    HTP_CONV2D_KERNEL_HMX_WINDOW,       // HMX convolution with sliding-window staging
+    HTP_CONV2D_KERNEL_HMX_TILED,        // tiled implicit-GEMM convolution on HMX
 };
 
-// HMX_WIN output staging buffers per thread
+// HMX_WINDOW output staging buffers per thread
 #define HTP_CONV2D_WIN_OBUF 2
 
 // HVX_TILES keeps fp16 weight pairs in the DDR scratchpad: 32 * rt_block * k_pad * 2 bytes
@@ -57,7 +57,7 @@ struct htp_conv2d_kernel_params {
     struct fastdiv_values div_oh;
 };
 
-// HMX_WIN path: the input is a virtual image of N * IHS rows of SR pixels (zero padding included), pixel u = vr * SR + col.
+// HMX_WINDOW path: the input is a virtual image of N * IHS rows of SR pixels (zero padding included), pixel u = vr * SR + col.
 // Output pixel q = vr * SR + ow reads input pixel q + kh * d1 * SR + kw * d0, so each tap is a shifted window over fp16
 // croutons (32 pixels x 32 channels). One col tile = 32 consecutive q. Rows vr % IHS >= OH are not written.
 // Header fields must match htp_conv2d_kernel_params.
