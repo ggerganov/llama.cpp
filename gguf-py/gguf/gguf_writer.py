@@ -924,6 +924,9 @@ class GGUFWriter:
     def add_moe_latent_size(self, value: int) -> None:
         self.add_uint32(Keys.LLM.MOE_LATENT_SIZE.format(arch=self.arch), value)
 
+    def add_post_norm_eps(self, value: float) -> None:
+        self.add_float32(Keys.LLM.POST_NORM_EPS.format(arch=self.arch), value)
+
     def add_nextn_predict_layers(self, count: int) -> None:
         self.add_uint32(Keys.LLM.NEXTN_PREDICT_LAYERS.format(arch=self.arch), count)
 
@@ -1135,6 +1138,9 @@ class GGUFWriter:
     def add_attn_temperature_scale(self, value: float) -> None:
         self.add_float32(Keys.Attention.TEMPERATURE_SCALE.format(arch=self.arch), value)
 
+    def add_realtime_delay_tokens(self, value: int) -> None:
+        self.add_uint32(Keys.LLM.REALTIME_DELAY_TOKENS.format(arch=self.arch), value)
+
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
@@ -1178,6 +1184,9 @@ class GGUFWriter:
 
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
+
+    def add_rope_scaling_yarn_truncate(self, value: bool) -> None:
+        self.add_bool(Keys.Rope.SCALING_YARN_TRUNCATE.format(arch=self.arch), value)
 
     def add_rope_scaling_yarn_log_mul(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_YARN_LOG_MUL.format(arch=self.arch), value)
@@ -1232,6 +1241,30 @@ class GGUFWriter:
 
     def add_kda_gate_lower_bound(self, value: float) -> None:
         self.add_float32(Keys.KDA.GATE_LOWER_BOUND.format(arch=self.arch), value)
+
+    def add_lilicorr_hidden_size(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.HIDDEN_SIZE, value)
+
+    def add_lilicorr_candidate_topk(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.CANDIDATE_TOPK, value)
+
+    def add_lilicorr_num_heads(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.NUM_HEADS, value)
+
+    def add_lilicorr_num_layers(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.NUM_LAYERS, value)
+
+    def add_lilicorr_factor_dim(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.FACTOR_DIM, value)
+
+    def add_lilicorr_mlp_hidden_size(self, value: int) -> None:
+        self.add_uint32(Keys.LiliCorr.MLP_HIDDEN_SIZE, value)
+
+    def add_lilicorr_vector_eps(self, value: float) -> None:
+        self.add_float32(Keys.LiliCorr.VECTOR_EPS, value)
+
+    def add_lilicorr_logit_scale(self, value: float) -> None:
+        self.add_float32(Keys.LiliCorr.LOGIT_SCALE, value)
 
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
@@ -1326,6 +1359,9 @@ class GGUFWriter:
     def add_suppress_tokens(self, tokens: Sequence[int]) -> None:
         self.add_array(Keys.Tokenizer.SUPPRESS_TOKENS, tokens)
 
+    def add_normalizer_nfc(self, value: bool) -> None:
+        self.add_bool(Keys.Tokenizer.NORMALIZER_NFC, value)
+
     def add_normalizer_lowercase(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.NORMALIZER_LOWERCASE, value)
 
@@ -1364,6 +1400,10 @@ class GGUFWriter:
 
     def add_decision_temperature(self, name: str, value: float) -> None:
         self.add_float32(Keys.Decision.TEMPERATURE.format(arch=self.arch, name=name), value)
+
+    def add_decision_score_bias(self, values: Sequence[float]) -> None:
+        for i, value in enumerate(values):
+            self.add_float32(Keys.Decision.SCORE_BIAS.format(arch=self.arch, n=len(values), i=i), value)
 
     # for vision models
 
@@ -1542,6 +1582,9 @@ class GGUFWriter:
     def add_audio_head_count(self, value: int) -> None:
         self.add_uint32(Keys.ClipAudio.Attention.HEAD_COUNT, value)
 
+    def add_audio_head_dim(self, value: int) -> None:
+        self.add_uint32(Keys.ClipAudio.Attention.HEAD_DIM, value)
+
     def add_audio_attention_layernorm_eps(self, value: float) -> None:
         self.add_float32(Keys.ClipAudio.Attention.LAYERNORM_EPS, value)
 
@@ -1556,6 +1599,15 @@ class GGUFWriter:
 
     def add_audio_wa_pattern_mode(self, modes: Sequence[int]) -> None:
         self.add_array(Keys.ClipAudio.WA_PATTERN_MODE, modes)
+
+    def add_audio_hidden_sizes(self, values: Sequence[int]) -> None:
+        self.add_array(Keys.ClipAudio.HIDDEN_SIZES, values)
+
+    def add_audio_patch_sizes(self, values: Sequence[int]) -> None:
+        self.add_array(Keys.ClipAudio.PATCH_SIZES, values)
+
+    def add_audio_depths(self, values: Sequence[int]) -> None:
+        self.add_array(Keys.ClipAudio.DEPTHS, values)
 
     def add_audio_window_size(self, value: int) -> None:
         self.add_uint32(Keys.ClipAudio.WINDOW_SIZE, value)
