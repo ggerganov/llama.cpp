@@ -1776,10 +1776,8 @@ private:
 // text at load
 static const std::string dna_kmer_marker = "\xee\x80\x80";
 
-// HybridDNATokenizer (HuggingFaceBio/Carbon-*): text inside <dna>...</dna> is cut into fixed 6-mers, everything else
-// goes through the base BPE. Mirrors HybridDNATokenizer.encode, including its optional tagging of untagged DNA
-// (auto_dna_tags, Carbon-14B) and its tail="pad_n" vocab, whose dedicated tokens pad a trailing partial k-mer with N
-// instead of A ("CT" -> "CTNNNN").
+// HybridDNATokenizer (HuggingFaceBio/Carbon-*): text inside <dna>...</dna> is cut into fixed 6-mers, everything else goes through the base BPE
+// Mirrors HybridDNATokenizer.encode, with optional tagging of untagged DNA  (auto_dna_tags, Carbon-14B) and tail="pad_n" vocab, whose dedicated tokens pad a trailing partial k-mer with N instead of A ("CT" -> "CTNNNN")
 struct llm_tokenizer_hybriddna_session : llm_tokenizer_bpe_session {
     llm_tokenizer_hybriddna_session(const llama_vocab & vocab, const llm_tokenizer_bpe & tokenizer) : llm_tokenizer_bpe_session{vocab, tokenizer}, vocab{vocab} {}
 
