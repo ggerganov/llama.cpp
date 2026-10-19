@@ -1,9 +1,8 @@
-import { getJsonHeaders } from '$lib/utils';
 import { ChatService } from '$lib/services/chat.service';
-
 import type { ApiCompletionRequest, ApiCompletionStreamChunk } from '$lib/types/api';
 import type { ChatMessageTimings } from '$lib/types/chat';
 import type { CompletionServiceCallbacks, SettingsChatServiceOptions } from '$lib/types/settings';
+import { getJsonHeaders } from '$lib/utils';
 
 /**
  * CompletionService - Low-level API communication layer for raw text completions.
@@ -27,43 +26,41 @@ export class CompletionService {
 		signal?: AbortSignal
 	): Promise<string | void> {
 		const {
-			// Generation parameters
-			temperature,
-			max_tokens,
+			backend_sampling,
+			customJson,
+			dry_allowed_length,
+			dry_base,
+			dry_multiplier,
+			dry_penalty_last_n,
+			dynatemp_exponent,
 			// Sampling parameters
 			dynatemp_range,
-			dynatemp_exponent,
-			top_k,
-			top_p,
+			frequency_penalty,
+			max_tokens,
 			min_p,
-			xtc_probability,
-			xtc_threshold,
-			typ_p,
+			presence_penalty,
 			// Penalty parameters
 			repeat_last_n,
 			repeat_penalty,
-			presence_penalty,
-			frequency_penalty,
-			dry_multiplier,
-			dry_base,
-			dry_allowed_length,
-			dry_penalty_last_n,
 			// Other parameters
 			samplers,
-			backend_sampling,
-			customJson,
-			timings_per_token
+			// Generation parameters
+			temperature,
+			timings_per_token,
+			top_k,
+			top_p,
+			typ_p,
+			xtc_probability,
+			xtc_threshold
 		} = options;
-
 		// We only support streaming responses
 		const stream: boolean = true;
 		const cache_prompt: boolean = true;
 		const return_progress: boolean = true;
-
 		const requestBody: ApiCompletionRequest = {
 			cache_prompt,
-			return_progress,
 			prompt,
+			return_progress,
 			stream
 		};
 
@@ -73,29 +70,44 @@ export class CompletionService {
 		}
 
 		if (temperature !== undefined) requestBody.temperature = temperature;
+
 		if (max_tokens !== undefined) {
 			requestBody.max_tokens = max_tokens !== null && max_tokens !== 0 ? max_tokens : -1;
 		}
 
 		if (dynatemp_range !== undefined) requestBody.dynatemp_range = dynatemp_range;
+
 		if (dynatemp_exponent !== undefined) requestBody.dynatemp_exponent = dynatemp_exponent;
+
 		if (top_k !== undefined) requestBody.top_k = top_k;
+
 		if (top_p !== undefined) requestBody.top_p = top_p;
+
 		if (min_p !== undefined) requestBody.min_p = min_p;
+
 		if (xtc_probability !== undefined) requestBody.xtc_probability = xtc_probability;
+
 		if (xtc_threshold !== undefined) requestBody.xtc_threshold = xtc_threshold;
+
 		if (typ_p !== undefined) {
 			// On the completion endpoint, typ_p is called typical_p
 			requestBody.typical_p = typ_p;
 		}
 
 		if (repeat_last_n !== undefined) requestBody.repeat_last_n = repeat_last_n;
+
 		if (repeat_penalty !== undefined) requestBody.repeat_penalty = repeat_penalty;
+
 		if (presence_penalty !== undefined) requestBody.presence_penalty = presence_penalty;
+
 		if (frequency_penalty !== undefined) requestBody.frequency_penalty = frequency_penalty;
+
 		if (dry_multiplier !== undefined) requestBody.dry_multiplier = dry_multiplier;
+
 		if (dry_base !== undefined) requestBody.dry_base = dry_base;
+
 		if (dry_allowed_length !== undefined) requestBody.dry_allowed_length = dry_allowed_length;
+
 		if (dry_penalty_last_n !== undefined) requestBody.dry_penalty_last_n = dry_penalty_last_n;
 
 		if (samplers !== undefined) {
@@ -106,11 +118,13 @@ export class CompletionService {
 		}
 
 		if (backend_sampling !== undefined) requestBody.backend_sampling = backend_sampling;
+
 		if (timings_per_token !== undefined) requestBody.timings_per_token = timings_per_token;
 
 		if (customJson) {
 			try {
 				const customParams = typeof customJson === 'string' ? JSON.parse(customJson) : customJson;
+
 				Object.assign(requestBody, customParams);
 			} catch (error) {
 				console.warn('Failed to parse custom parameters:', error);
@@ -119,23 +133,27 @@ export class CompletionService {
 
 		try {
 			const response = await fetch(`./completion`, {
-				method: 'POST',
-				headers: getJsonHeaders(),
 				body: JSON.stringify(requestBody),
+				headers: getJsonHeaders(),
+				method: 'POST',
 				signal
 			});
 
 			if (!response.ok) {
 				const error = await ChatService.parseErrorResponse(response);
+
 				callbacks.onError?.(error);
+
 				throw error;
 			}
 
 			await CompletionService.handleCompletionStreamResponse(response, callbacks, signal);
+
 			return;
 		} catch (error) {
 			if (error instanceof Error && error.name === 'AbortError') {
 				console.log('Completion request was aborted');
+
 				return;
 			}
 
@@ -162,6 +180,7 @@ export class CompletionService {
 
 			console.error('Error in sendCompletion:', error);
 			callbacks.onError?.(userFriendlyError);
+
 			throw userFriendlyError;
 		}
 	}
@@ -181,6 +200,7 @@ export class CompletionService {
 		}
 
 		const decoder = new TextDecoder();
+
 		let aggregatedContent = '';
 		let lastTimings: ChatMessageTimings | undefined;
 		let streamFinished = false;
@@ -188,12 +208,14 @@ export class CompletionService {
 
 		try {
 			let chunk = '';
+
 			while (true) {
 				if (abortSignal?.aborted) {
 					break;
 				}
 
 				const { done, value } = await reader.read();
+
 				if (done) {
 					break;
 				}
@@ -204,6 +226,7 @@ export class CompletionService {
 
 				chunk += decoder.decode(value, { stream: true });
 				const lines = chunk.split('\n');
+
 				chunk = lines.pop() || '';
 
 				for (const line of lines) {
@@ -241,6 +264,7 @@ export class CompletionService {
 
 							if (content) {
 								aggregatedContent += content;
+
 								if (!abortSignal?.aborted) {
 									callbacks.onChunk?.(content);
 								}
@@ -265,7 +289,9 @@ export class CompletionService {
 			}
 		} catch (error) {
 			const err = error instanceof Error ? error : new Error('Stream error');
+
 			callbacks.onError?.(err);
+
 			throw err;
 		} finally {
 			reader.releaseLock();

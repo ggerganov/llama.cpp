@@ -6,7 +6,7 @@
 	import { ChatMessageStatisticsMode, ChatMessageStatsView } from '$lib/enums';
 	import type { ChatMessageAgenticTimings } from '$lib/types/chat';
 	import { formatPerformanceTime } from '$lib/utils';
-	import type { Component } from 'svelte';
+	import { type Component, untrack } from 'svelte';
 
 	interface Props {
 		predictedTokens?: number;
@@ -38,7 +38,8 @@
 
 	let isSwitchable = $derived(mode === ChatMessageStatisticsMode.SWITCHABLE);
 
-	let activeView = $state<ChatMessageStatsView>(ChatMessageStatsView.GENERATION);
+	// seeded once from initialView; the effects below drive it afterwards
+	let activeView = $state<ChatMessageStatsView>(untrack(() => initialView));
 	let hasAutoSwitchedToGeneration = $state(false);
 
 	$effect(() => {
@@ -70,6 +71,7 @@
 			} else if (!hasAutoSwitchedToGeneration || isProcessingPrompt) {
 				// Stay on READING while prompt is still being processed
 				activeView = ChatMessageStatsView.READING;
+
 				if (isProcessingPrompt) {
 					hasAutoSwitchedToGeneration = false;
 				}

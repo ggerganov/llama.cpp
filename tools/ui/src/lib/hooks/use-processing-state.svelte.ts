@@ -21,6 +21,7 @@ export function getETASecs(done: number, total: number, elapsedMs: number): numb
 		done === 0 || elapsedSecs < 0.5
 			? undefined // can be the case for the 0% progress report
 			: elapsedSecs * (total / done - 1);
+
 	return progressETASecs;
 }
 
@@ -80,7 +81,6 @@ export function useProcessingState(): UseProcessingStateReturn {
 			}
 		}
 	});
-
 
 	function startMonitoring(): void {
 		if (isMonitoring) return;

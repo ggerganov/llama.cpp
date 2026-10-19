@@ -1,9 +1,5 @@
 <script lang="ts">
-	import { notebookStore } from '$lib/stores/notebook.svelte';
-	import Button from '$lib/components/ui/button/button.svelte';
-	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
-	import { Play, Square, Undo, Redo } from '@lucide/svelte';
-	import { settingsStore } from '$lib/stores/settings/index.svelte';
+	import { Play, Redo, Square, Undo } from '@lucide/svelte';
 	import {
 		ChatFormContextGauge,
 		ChatMessageStatistics,
@@ -12,24 +8,23 @@
 		ModelsSelector
 	} from '$lib/components/app';
 	import ContextGaugePopup from '$lib/components/app/chat/ChatForm/ChatFormContextGauge/ContextGaugePopup.svelte';
-	import { ErrorDialogType } from '$lib/enums';
-
-	import { chatStore } from '$lib/stores/chat/index.svelte';
-	import { contextStatsStore } from '$lib/stores/chat/context-stats.svelte';
-	import { modelsStore } from '$lib/stores/models/index.svelte';
-	import { serverStore } from '$lib/stores/server.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-
-	import {
-		AUTO_SCROLL_AT_BOTTOM_THRESHOLD,
-		AUTO_SCROLL_INTERVAL
-	} from '$lib/constants';
+	import { AUTO_SCROLL_AT_BOTTOM_THRESHOLD, AUTO_SCROLL_INTERVAL } from '$lib/constants';
+	import { ErrorDialogType } from '$lib/enums';
+	import { contextStatsStore } from '$lib/stores/chat/context-stats.svelte';
+	import { chatStore } from '$lib/stores/chat/index.svelte';
+	import { modelsStore } from '$lib/stores/models/index.svelte';
+	import { notebookStore } from '$lib/stores/notebook.svelte';
+	import { serverStore } from '$lib/stores/server.svelte';
+	import { settingsStore } from '$lib/stores/settings/index.svelte';
 
 	// Note: this constant was previously in the constants/auto-scroll file above but was
 	// removed in the PR #20999
 	const INITIAL_SCROLL_DELAY = 50;
 
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	let disableAutoScroll = $derived(Boolean(settingsStore.config.disableAutoScroll));
 	let showMessageStats = $derived(settingsStore.config.showMessageStats);
@@ -54,8 +49,10 @@
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLTextAreaElement;
+
 		notebookStore.content = target.value;
 		notebookStore.resetUndoRedo();
+
 		if (activeModelId || !isRouter) {
 			notebookStore.updateTokenCount(activeModelId ?? undefined);
 		}
@@ -99,8 +96,10 @@
 		}
 
 		const selectedId = modelsStore.selectedModelId;
+
 		if (selectedId) {
 			const model = options.find((m) => m.id === selectedId);
+
 			if (model) return model.model;
 		}
 
@@ -127,7 +126,7 @@
 	function handleScroll() {
 		if (disableAutoScroll || !scrollContainer) return;
 
-		const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+		const { clientHeight, scrollHeight, scrollTop } = scrollContainer;
 		const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 		const isAtBottom = distanceFromBottom < AUTO_SCROLL_AT_BOTTOM_THRESHOLD;
 
@@ -157,17 +156,19 @@
 		if (disableAutoScroll) return;
 
 		scrollContainer?.scrollTo({
-			top: scrollContainer?.scrollHeight,
-			behavior
+			behavior,
+			top: scrollContainer?.scrollHeight
 		});
 	}
 
 	onMount(() => {
 		chatStore.processing.setActiveConversation('notebook');
 		contextStatsStore.notebookMode = true;
+
 		if (notebookStore.content.length > 0) {
 			notebookStore.updateTokenCount(activeModelId ?? undefined);
 		}
+
 		if (!disableAutoScroll) {
 			setTimeout(() => scrollToBottom('instant'), INITIAL_SCROLL_DELAY);
 		}
@@ -180,10 +181,12 @@
 	$effect(() => {
 		if (disableAutoScroll) {
 			autoScrollEnabled = false;
+
 			if (scrollInterval) {
 				clearInterval(scrollInterval);
 				scrollInterval = undefined;
 			}
+
 			return;
 		}
 
@@ -208,6 +211,7 @@
 
 		if (event.shiftKey && event.key === 'Enter') {
 			event.preventDefault();
+
 			if (notebookStore.isGenerating) {
 				handleStop();
 			} else if (canGenerate) {
@@ -217,6 +221,7 @@
 
 		if (isCtrlOrCmd && event.key === 'z') {
 			event.preventDefault();
+
 			if (canUndo) {
 				handleUndo();
 			}
@@ -224,6 +229,7 @@
 
 		if (isCtrlOrCmd && event.key === 'y') {
 			event.preventDefault();
+
 			if (canRedo) {
 				handleRedo();
 			}
@@ -243,23 +249,23 @@
 	<div class="min-h-0 min-w-0 flex-1 overflow-hidden px-2 pt-2 pb-0 md:px-4 md:pt-4">
 		<Textarea
 			bind:ref={scrollContainer}
-			onscroll={handleScroll}
-			value={notebookStore.content}
-			oninput={handleInput}
-			style="display: block !important; field-sizing: normal !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow-x: hidden !important; overflow-y: auto !important; word-break: normal !important; overflow-wrap: anywhere !important;"
 			class="h-full min-h-[100px] w-full max-w-full min-w-0 resize-none rounded-xl border-none bg-muted p-4 text-base focus-visible:ring-0 md:p-6"
+			oninput={handleInput}
+			onscroll={handleScroll}
 			placeholder="Enter your text here..."
+			style="display: block !important; field-sizing: normal !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow-x: hidden !important; overflow-y: auto !important; word-break: normal !important; overflow-wrap: anywhere !important;"
+			value={notebookStore.content}
 		/>
 	</div>
 
 	<div class="relative bg-background p-2 md:p-4" data-gauge-container>
 		{#snippet generateButton()}
 			<Button
+				class="min-w-[120px] gap-2"
 				disabled={isDisabled}
 				onclick={notebookStore.isGenerating ? handleStop : handleGenerate}
 				size="sm"
 				variant={notebookStore.isGenerating ? 'destructive' : 'default'}
-				class="min-w-[120px] gap-2"
 			>
 				{#if notebookStore.isGenerating}
 					<Square class="h-4 w-4 fill-current" />
@@ -274,12 +280,12 @@
 		{#snippet statisticsWidget()}
 			{#if processingState}
 				<ChatMessageStatistics
-					promptTokens={processingState.promptTokens}
-					promptMs={processingState.promptMs}
-					predictedTokens={processingState.tokensDecoded}
-					predictedMs={processingState.predictedMs}
 					isLive={notebookStore.isGenerating}
 					isProcessingPrompt={notebookStore.isGenerating && processingState.tokensDecoded === 0}
+					predictedMs={processingState.predictedMs}
+					predictedTokens={processingState.tokensDecoded}
+					promptMs={processingState.promptMs}
+					promptTokens={processingState.promptTokens}
 				/>
 			{/if}
 		{/snippet}
@@ -295,25 +301,29 @@
 				<div class="flex flex-wrap items-center gap-2">
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<Button variant="ghost" size="icon" disabled={!canUndo} onclick={handleUndo}>
+							<Button disabled={!canUndo} onclick={handleUndo} size="icon" variant="ghost">
 								<Undo class="h-4 w-4" />
 							</Button>
 						</Tooltip.Trigger>
+
 						<Tooltip.Content>
 							<p>Undo last generation</p>
-							<KeyboardShortcutInfo keys={['cmd', 'z']} class="w-full justify-center opacity-100" />
+
+							<KeyboardShortcutInfo class="w-full justify-center opacity-100" keys={['cmd', 'z']} />
 						</Tooltip.Content>
 					</Tooltip.Root>
 
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<Button variant="ghost" size="icon" disabled={!canRedo} onclick={handleRedo}>
+							<Button disabled={!canRedo} onclick={handleRedo} size="icon" variant="ghost">
 								<Redo class="h-4 w-4" />
 							</Button>
 						</Tooltip.Trigger>
+
 						<Tooltip.Content>
 							<p>Redo last generation</p>
-							<KeyboardShortcutInfo keys={['cmd', 'y']} class="w-full justify-center opacity-100" />
+
+							<KeyboardShortcutInfo class="w-full justify-center opacity-100" keys={['cmd', 'y']} />
 						</Tooltip.Content>
 					</Tooltip.Root>
 
@@ -327,16 +337,16 @@
 								<p>{generateTooltip}</p>
 							{:else}
 								<div class="flex items-center justify-center py-1">
-									<KeyboardShortcutInfo keys={['shift', 'enter']} class="opacity-100" />
+									<KeyboardShortcutInfo class="opacity-100" keys={['shift', 'enter']} />
 								</div>
 							{/if}
 						</Tooltip.Content>
 					</Tooltip.Root>
 
 					<ModelsSelector
+						disabled={notebookStore.isGenerating}
 						forceForegroundText={true}
 						useGlobalSelection={true}
-						disabled={notebookStore.isGenerating}
 					/>
 				</div>
 
@@ -356,8 +366,8 @@
 	</div>
 
 	<DialogChatError
-		message={errorDialog?.message ?? ''}
 		contextInfo={errorDialog?.contextInfo}
+		message={errorDialog?.message ?? ''}
 		onOpenChange={handleErrorDialogOpenChange}
 		open={Boolean(errorDialog)}
 		type={errorDialog?.type ?? ErrorDialogType.SERVER}

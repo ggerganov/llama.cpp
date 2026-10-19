@@ -1,14 +1,14 @@
 <script lang="ts">
 	let {
-		visible,
-		processingDetails
+		processingDetails,
+		visible
 	}: {
 		visible: boolean;
 		processingDetails: string[];
 	} = $props();
 </script>
 
-<div class="processing-info-container pointer-events-none" class:visible>
+<div class:visible class="processing-info-container pointer-events-none">
 	<div class="processing-info-content">
 		{#each processingDetails as detail (detail)}
 			<span class="processing-info-detail pointer-events-auto backdrop-blur-sm">{detail}</span>

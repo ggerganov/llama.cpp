@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
 	let {
-		processingText,
-		cls
+		cls,
+		processingText
 	}: {
 		processingText: string;
 		cls: string;
 	} = $props();
 </script>
 
-<div class="{cls} w-full max-w-[48rem]" in:fade>
+<div in:fade class="{cls} w-full max-w-[48rem]">
 	<div class="processing-container">
 		<span class="processing-text">
 			{processingText}

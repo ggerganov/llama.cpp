@@ -15,14 +15,15 @@ export async function tokenize(
 ): Promise<number[]> {
 	try {
 		const body: { content: string; model?: string } = { content };
+
 		if (model) {
 			body.model = model;
 		}
 
 		const response = await fetch('./tokenize', {
-			method: 'POST',
-			headers: getJsonHeaders(),
 			body: JSON.stringify(body),
+			headers: getJsonHeaders(),
+			method: 'POST',
 			signal
 		});
 
@@ -31,9 +32,11 @@ export async function tokenize(
 		}
 
 		const data = await response.json();
+
 		return data.tokens;
 	} catch (error) {
 		console.error('Tokenize error:', error);
+
 		return [];
 	}
 }
