@@ -16,12 +16,6 @@ layout (binding = 2) readonly buffer S {float data_s[];};
 void main() {
     uint idx = get_idx();
 
-#ifdef RESCALE
-    const float rescale = data_s[0];
-#else
-    const float rescale = 1.0f;
-#endif
-
     // num_threads * num_iter must equal 512, to match the wg_denoms and get_idx calculation
     const uint num_iter = 4;
 
@@ -32,10 +26,16 @@ void main() {
 #if defined(DATA_A_BF16)
             data_d[get_doffset() + idx] = D_TYPE(bf16_to_fp32(uint32_t(data_a[get_aoffset() + idx])));
 #elif defined(DATA_D_BF16)
-            float f = float(data_a[get_aoffset() + idx]) * rescale;
+#ifdef RESCALE
+            float f = float(data_a[get_aoffset() + idx]) * data_s[0];
+#else
+            float f = float(data_a[get_aoffset() + idx]);
+#endif
             data_d[get_doffset() + idx] = D_TYPE(fp32_to_bf16(f));
+#elif defined(RESCALE)
+            data_d[get_doffset() + idx] = D_TYPE(float(data_a[get_aoffset() + idx]) * data_s[0]);
 #elif !defined(OPTIMIZATION_ERROR_WORKAROUND)
-            data_d[get_doffset() + idx] = D_TYPE(float(data_a[get_aoffset() + idx]) * rescale);
+            data_d[get_doffset() + idx] = D_TYPE(data_a[get_aoffset() + idx]);
 #else
             data_d[get_doffset() + idx] = data_a[get_aoffset() + idx];
 #endif
@@ -50,10 +50,16 @@ void main() {
 #if defined(DATA_A_BF16)
             data_d[get_doffset() + idx] = D_TYPE(bf16_to_fp32(uint32_t(data_a[get_aoffset() + idx])));
 #elif defined(DATA_D_BF16)
-            float f = float(data_a[get_aoffset() + idx]) * rescale;
+#ifdef RESCALE
+            float f = float(data_a[get_aoffset() + idx]) * data_s[0];
+#else
+            float f = float(data_a[get_aoffset() + idx]);
+#endif
             data_d[get_doffset() + idx] = D_TYPE(fp32_to_bf16(f));
+#elif defined(RESCALE)
+            data_d[get_doffset() + idx] = D_TYPE(float(data_a[get_aoffset() + idx]) * data_s[0]);
 #elif !defined(OPTIMIZATION_ERROR_WORKAROUND)
-            data_d[get_doffset() + idx] = D_TYPE(float(data_a[get_aoffset() + idx]) * rescale);
+            data_d[get_doffset() + idx] = D_TYPE(data_a[get_aoffset() + idx]);
 #else
             data_d[get_doffset() + idx] = data_a[get_aoffset() + idx];
 #endif
