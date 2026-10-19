@@ -29,8 +29,6 @@ export {
 	backendFaviconUrl,
 	backendModelsUrl,
 	createLocalBackend,
-	findBackendPreset,
-	getBackendCapabilities,
 	parseBackendsSettings
 } from './backend';
 

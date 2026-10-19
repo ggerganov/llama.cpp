@@ -20,8 +20,6 @@ import {
 	groupProviderOptions,
 	type ModelItem
 } from '$lib/utils';
-import { getBackend } from '$lib/utils/api-base';
-import { getBackendCapabilities } from '$lib/utils/backend';
 import { nameOf } from '$lib/utils/model-names';
 import { rawModelId } from '$lib/utils/model-option-id';
 import { onMount } from 'svelte';
@@ -34,7 +32,6 @@ export interface UseModelsSelectorOptions {
 	currentModel: () => string | null;
 	useGlobalSelection?: () => boolean;
 	/** The caller's model outranks the active backend's selection, e.g. a message's own. */
-	preferCurrentModel?: () => boolean;
 	onModelChange?: () =>
 		| ((
 				modelId: string,
@@ -58,8 +55,6 @@ export interface UseModelsSelectorReturn {
 	readonly isCurrentModelInCache: boolean;
 	readonly favoriteItems: ModelItem[];
 	readonly loadedItems: ModelItem[];
-	/** The selected model of a compat backend, which cannot report a load state. */
-	readonly selectedItems: ModelItem[];
 	readonly filteredOptions: ModelOption[];
 	readonly isEmpty: boolean;
 	readonly isProviderView: boolean;
@@ -117,7 +112,6 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 	const isRouter = $derived(serverStore.isRouterMode);
 	const serverModel = $derived(modelsStore.singleModelName);
 	const currentModel = $derived(opts.currentModel());
-	const preferCurrentModel = $derived(opts.preferCurrentModel?.() ?? false);
 	const onModelChange = $derived(opts.onModelChange?.());
 	const isHighlightedCurrentModelActive = $derived.by(() => {
 		if (!isRouter || !currentModel) return false;
@@ -158,50 +152,28 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 				};
 			})
 	);
-	// loaded models lead the list, from any llama-compat backend
-	const isLoadedLlamaCompat = (option: ModelOption) =>
-		modelsStore.isModelLoaded(option.model) &&
-		getBackendCapabilities(getBackend(option.backendId)).loadUnload;
-	// a compat backend cannot load or unload: the selection is its state, so the
-	// selected model leads the list in its own section
-	const selectedItems = $derived.by(() => {
-		if (isProviderView) return [];
-
-		const option = activeId
-			? allOptions.find((item) => item.id === activeId)
-			: currentModel
-				? allOptions.find((item) => item.model === currentModel)
-				: undefined;
-
-		if (!option || getBackendCapabilities(getBackend(option.backendId)).loadUnload) return [];
-
-		return [{ option }];
-	});
+	// loaded models lead the list, whichever backend serves them
+	const isLoadedHere = (option: ModelOption) => modelsStore.isModelLoaded(option.model);
 	const loadedItems = $derived.by(() => {
 		if (isProviderView) return [];
 
 		return filteredAllOptions
-			.filter((option) => isLoadedLlamaCompat(option))
+			.filter((option) => isLoadedHere(option))
 			.map((option) => ({ option }));
 	});
 	const loadedIds = $derived(new SvelteSet(loadedItems.map((item) => item.option.id)));
-	const selectedIds = $derived(new SvelteSet(selectedItems.map((item) => item.option.id)));
-	// loaded, selected and favorite models are listed once, at the top: the
-	// sections and the favorites skip all three
+	// loaded models lead the list: their own sections list them once, so a
+	// loaded favorite shows there and not twice
 	const favoriteItems = $derived(
 		groupFavoriteOptions(
-			filteredAllOptions.filter(
-				(option) => !loadedIds.has(option.id) && !selectedIds.has(option.id)
-			),
+			filteredAllOptions.filter((option) => !loadedIds.has(option.id)),
 			modelsStore.favoriteModelIds
 		)
 	);
+	// loaded models and favorites are listed once, at the top: the sections skip both
 	const sectionOptions = $derived(
 		filteredOptions.filter(
-			(option) =>
-				!modelsStore.favoriteModelIds.has(option.model) &&
-				!loadedIds.has(option.id) &&
-				!selectedIds.has(option.id)
+			(option) => !modelsStore.favoriteModelIds.has(option.model) && !loadedIds.has(option.id)
 		)
 	);
 	const providerSections = $derived(
@@ -329,33 +301,6 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 
 	function getDisplayOption(): ModelOption | undefined {
 		if (!isRouter) {
-			// External backend: the selection is backend-scoped, so it wins over
-			// the conversation's model, which may belong to another backend.
-			if (!serverStore.capabilities.props) {
-				// the caller's model leads when it says so: a message's own model must
-				// not follow the active backend's selection
-				if (currentModel && preferCurrentModel) {
-					const match = allOptions.find((option) => option.model === currentModel);
-
-					return (
-						match ?? {
-							capabilities: [],
-							id: 'message-model',
-							model: currentModel,
-							name: currentModel.split('/').pop() || currentModel
-						}
-					);
-				}
-
-				const selected = activeId ? allOptions.find((option) => option.id === activeId) : undefined;
-
-				if (selected) return selected;
-
-				return currentModel
-					? allOptions.find((option) => option.model === currentModel)
-					: undefined;
-			}
-
 			const displayModel = serverModel || currentModel;
 
 			if (displayModel) {
@@ -453,6 +398,7 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 		get loadedItems() {
 			return loadedItems;
 		},
+
 		get loading() {
 			return loading;
 		},
@@ -465,10 +411,6 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 
 		get searchTerm() {
 			return searchTerm;
-		},
-
-		get selectedItems() {
-			return selectedItems;
 		},
 
 		get serverModel() {

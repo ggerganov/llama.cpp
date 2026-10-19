@@ -7,37 +7,30 @@
  */
 
 import {
-	BACKEND_CAPABILITIES,
-	BACKEND_COMPAT,
 	BACKEND_ID_PREFIX,
-	BACKEND_PRESETS,
-	BACKEND_PROTOCOLS,
-	BackendProtocol,
 	DEFAULT_BACKEND_CHAT_PATH,
 	DEFAULT_BACKEND_MODELS_PATH,
 	FAVICON_SERVICE_URL,
-	LOCAL_BACKEND_ID,
-	MaxTokensField,
-	MODEL_CONTEXT_LENGTH_FIELDS
+	LOCAL_BACKEND_ID
 } from '$lib/constants';
-import type { Backend, BackendCapabilities, BackendCompat, BackendPreset } from '$lib/types';
+import type { Backend } from '$lib/types';
 
 /** Absolute chat completions URL for a backend. */
 export function backendChatUrl(backend: Backend): string {
-	return joinBackendUrl(backend.baseUrl, backend.chatPath ?? DEFAULT_BACKEND_CHAT_PATH);
+	return joinBackendUrl(backend.baseUrl, DEFAULT_BACKEND_CHAT_PATH);
 }
 
 /** Absolute models listing URL for a backend. */
 export function backendModelsUrl(backend: Backend): string {
-	return joinBackendUrl(backend.baseUrl, backend.modelsPath ?? DEFAULT_BACKEND_MODELS_PATH);
+	return joinBackendUrl(backend.baseUrl, DEFAULT_BACKEND_MODELS_PATH);
 }
 
 /** Icon size requested from the favicon service, shown at 16px. */
 const FAVICON_SIZE = 64;
 
 /**
- * Favicon of a backend's root domain, used when no bundled mark matches. API
- * hosts rarely serve a favicon themselves, so the subdomain is dropped
+ * Favicon of a backend's root domain, used when no bundled mark matches. Hosts
+ * rarely serve a favicon themselves, so the subdomain is dropped
  * (`api.z.ai` -> `z.ai`) and the icon is requested through a favicon service.
  * Returns null when the URL carries no usable host.
  */
@@ -52,48 +45,6 @@ export function backendFaviconUrl(baseUrl: string): string | null {
 	}
 }
 
-/**
- * Preset a backend was created from, matched on origin and path so a saved
- * backend keeps its branding. Returns undefined for edited or custom URLs.
- */
-export function findBackendPreset(baseUrl: string): BackendPreset | undefined {
-	const target = normalizeBaseUrl(baseUrl);
-
-	if (!target) return undefined;
-
-	return BACKEND_PRESETS.find((preset) => normalizeBaseUrl(preset.baseUrl) === target);
-}
-
-/** Origin and path of a URL, without a trailing slash; null when unparsable. */
-function normalizeBaseUrl(url: string): string | null {
-	try {
-		const parsed = new URL(url);
-
-		return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase();
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Features a backend supports, derived from its protocol. A missing backend
- * (unknown model, early startup) gets the plain compatible defaults.
- */
-export function getBackendCapabilities(backend?: Backend): BackendCapabilities {
-	return (
-		BACKEND_CAPABILITIES[backend?.protocol ?? BackendProtocol.OPENAI] ??
-		BACKEND_CAPABILITIES[BackendProtocol.OPENAI]
-	);
-}
-
-/** Wire quirks for a backend: protocol defaults overridden by the backend. */
-export function getBackendCompat(backend: Backend): BackendCompat {
-	return {
-		...(BACKEND_COMPAT[backend.protocol] ?? BACKEND_COMPAT[BackendProtocol.OPENAI]),
-		...backend.compat
-	};
-}
-
 /** The built-in backend pointing at the server that serves this UI. */
 export function createLocalBackend(apiKey?: string, enabled = true): Backend {
 	return {
@@ -101,8 +52,7 @@ export function createLocalBackend(apiKey?: string, enabled = true): Backend {
 		baseUrl: '',
 		enabled,
 		id: LOCAL_BACKEND_ID,
-		name: 'Local',
-		protocol: BackendProtocol.COMPAT
+		name: 'Local'
 	};
 }
 
@@ -155,9 +105,6 @@ function parseBackendEntry(entry: unknown, index: number): Backend | null {
 	// the local backend is built in and never persisted
 	if (!baseUrl || raw.id === LOCAL_BACKEND_ID) return null;
 
-	const protocol = BACKEND_PROTOCOLS.includes(raw.protocol as BackendProtocol)
-		? (raw.protocol as BackendProtocol)
-		: BackendProtocol.OPENAI;
 	const id =
 		typeof raw.id === 'string' && raw.id.trim()
 			? raw.id.trim()
@@ -169,48 +116,11 @@ function parseBackendEntry(entry: unknown, index: number): Backend | null {
 	return {
 		apiKey,
 		baseUrl,
-		chatPath: parseOptionalPath(raw.chatPath),
-		compat: parseBackendCompat(raw.compat, protocol),
 		enabled: raw.enabled !== false,
 		headers: parseBackendHeaders(raw.headers),
 		id,
-		modelsPath: parseOptionalPath(raw.modelsPath),
-		name,
-		protocol
+		name
 	};
-}
-
-// only keep the override keys the protocol understands, so a stale persisted
-// value can never inject an unknown field into a request
-function parseBackendCompat(
-	raw: unknown,
-	protocol: BackendProtocol
-): Partial<BackendCompat> | undefined {
-	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-
-	const entry = raw as Record<string, unknown>;
-	const defaults = BACKEND_COMPAT[protocol] ?? BACKEND_COMPAT.openai;
-	const overrides: Partial<BackendCompat> = {};
-
-	if (
-		entry.maxTokensField === MaxTokensField.COMPLETION ||
-		entry.maxTokensField === MaxTokensField.CHAT_COMPLETION
-	) {
-		overrides.maxTokensField = entry.maxTokensField;
-	}
-
-	if (typeof entry.supportsUsageInStreaming === 'boolean') {
-		overrides.supportsUsageInStreaming = entry.supportsUsageInStreaming;
-	}
-
-	// drop a no-op override so an unmodified backend stays undefined
-	const isDefault =
-		(overrides.maxTokensField === undefined ||
-			overrides.maxTokensField === defaults.maxTokensField) &&
-		(overrides.supportsUsageInStreaming === undefined ||
-			overrides.supportsUsageInStreaming === defaults.supportsUsageInStreaming);
-
-	return isDefault ? undefined : overrides;
 }
 
 function parseBackendHeaders(raw: unknown): Record<string, string> | undefined {
@@ -223,65 +133,26 @@ function parseBackendHeaders(raw: unknown): Record<string, string> | undefined {
 	return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function parseOptionalPath(raw: unknown): string | undefined {
-	return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
-}
-
 /**
- * Read a model's context size out of one `/v1/models` entry. Providers use
- * different field names, and OpenRouter nests the authoritative value under
- * `top_provider`, so try the flat fields first and the nested one after.
+ * Read a model's context size out of one `/v1/models` entry. A server leaves it
+ * unknown when it has not loaded the model, and a model-mode listing reports the
+ * trained size under `meta.n_ctx_train` instead.
  */
 export function readModelContextLength(value: unknown): number | undefined {
 	if (!value || typeof value !== 'object') return undefined;
 
 	const entry = value as Record<string, unknown>;
-	const flat = readContextField(entry);
 
-	if (flat !== undefined) return flat;
-
-	const topProvider = entry.top_provider;
-
-	if (topProvider && typeof topProvider === 'object') {
-		const nested = readContextField(topProvider as Record<string, unknown>);
-
-		if (nested !== undefined) return nested;
+	if (typeof entry.context_length === 'number' && entry.context_length > 0) {
+		return entry.context_length;
 	}
 
-	// Hugging Face lists one entry per inference provider, and they disagree on
-	// the budget; take the largest so the gauge does not undersell the model.
-	const providers = entry.providers;
-
-	if (Array.isArray(providers)) {
-		const sizes = providers
-			.map((provider) =>
-				provider && typeof provider === 'object'
-					? readContextField(provider as Record<string, unknown>)
-					: undefined
-			)
-			.filter((size): size is number => size !== undefined);
-
-		if (sizes.length > 0) return Math.max(...sizes);
-	}
-
-	// 0 is the server's way of leaving the trained context unknown; a model-mode
-	// listing reports it as meta.n_ctx_train instead
 	const meta = entry.meta;
 
 	if (meta && typeof meta === 'object') {
 		const trained = (meta as Record<string, unknown>).n_ctx_train;
 
 		if (typeof trained === 'number' && trained > 0) return trained;
-	}
-
-	return undefined;
-}
-
-function readContextField(entry: Record<string, unknown>): number | undefined {
-	for (const field of MODEL_CONTEXT_LENGTH_FIELDS) {
-		const value = entry[field];
-
-		if (typeof value === 'number' && value > 0) return value;
 	}
 
 	return undefined;

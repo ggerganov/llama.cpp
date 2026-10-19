@@ -13,8 +13,6 @@
 	import { modelsStore, settingsStore } from '$lib/stores';
 	import type { ModelOption } from '$lib/types/models';
 	import { modelLoadFraction, modelLoadProgressText } from '$lib/utils';
-	import { getBackend } from '$lib/utils/api-base';
-	import { getBackendCapabilities } from '$lib/utils/backend';
 
 	interface Props {
 		option: ModelOption;
@@ -38,9 +36,6 @@
 		option
 	}: Props = $props();
 
-	// row actions follow the backend that serves the row, not the selected one
-	let rowBackend = $derived(getBackend(option.backendId));
-	let canLoad = $derived(rowBackend ? getBackendCapabilities(rowBackend).loadUnload : false);
 	let serverStatus = $derived(modelsStore.getModelStatus(option.model));
 	let isOperationInProgress = $derived(modelsStore.status.isOperationInProgress(option.model));
 	let isFailed = $derived(serverStatus === ServerModelStatus.FAILED);
@@ -102,15 +97,7 @@
 	<div class="flex shrink-0 items-center gap-1 max-md:gap-2.5">
 		<ModelRowActions {isFav} {option} />
 
-		<ModelLoadControl
-			{canLoad}
-			{isFailed}
-			{isLoaded}
-			{isLoading}
-			{isSleeping}
-			{option}
-			showBackendMark
-		/>
+		<ModelLoadControl {isFailed} {isLoaded} {isLoading} {isSleeping} {option} />
 	</div>
 
 	{#if isLoading}

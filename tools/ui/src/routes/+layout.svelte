@@ -147,11 +147,6 @@
 	});
 
 	function checkApiKey() {
-		// the stored key authenticates the llama.cpp server serving this UI
-		if (!serverStore.capabilities.props) {
-			return;
-		}
-
 		const apiKey = settingsStore.config.apiKey;
 
 		// Without a stored key there is nothing to re-validate here; the keyless

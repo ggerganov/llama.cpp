@@ -2,40 +2,17 @@
 	import { Plus } from '@lucide/svelte';
 	import { BackendCard, DialogBackendForm } from '$lib/components/app/backends';
 	import { Button } from '$lib/components/ui/button';
-	import { BackendProtocol } from '$lib/constants';
 	import { backendsModelsStore, backendsStore, serverStore } from '$lib/stores';
 	import type { Backend } from '$lib/types';
 	import { fade } from 'svelte/transition';
 
 	interface Props {
 		class?: string;
-		/** Narrows the list to one protocol; omit it to list every provider at once. */
-		protocol?: BackendProtocol;
 	}
 
-	let { class: className, protocol }: Props = $props();
+	let { class: className }: Props = $props();
 
-	let backends = $derived(
-		protocol
-			? backendsStore.external.filter((b) => b.protocol === protocol)
-			: backendsStore.external
-	);
-	// the bundled server belongs to the list whenever llama.cpp providers are in it
-	let showsLocal = $derived(protocol === undefined || protocol === BackendProtocol.COMPAT);
-	let addTitle = $derived(
-		protocol === BackendProtocol.OPENAI
-			? 'Add a backend'
-			: protocol === BackendProtocol.COMPAT
-				? 'Add a Llama-compatible backend'
-				: 'Add new provider'
-	);
-	let addDescription = $derived(
-		protocol === BackendProtocol.OPENAI
-			? 'Connect an OpenAI-compatible endpoint.'
-			: protocol === BackendProtocol.COMPAT
-				? 'Point at another llama-server.'
-				: 'External llama-server or connect an OpenAI-compatible API.'
-	);
+	let backends = $derived(backendsStore.external);
 
 	let isAdding = $state(false);
 	let editing = $state<Backend | null>(null);
@@ -67,12 +44,11 @@
 	<DialogBackendForm
 		bind:open={isAdding}
 		backend={editing}
-		defaultProtocol={protocol ?? BackendProtocol.COMPAT}
 		onOpenChange={handleOpenChange}
 		onSaved={() => void backendsModelsStore.loadAll()}
 	/>
 
-	{#if showsLocal && !serverStore.localServerMissing}
+	{#if !serverStore.localServerMissing}
 		<BackendCard
 			backend={backendsStore.local}
 			isLocal
@@ -101,9 +77,9 @@
 		<Button onclick={handleAdd} size="sm">
 			<Plus />
 
-			{addTitle}
+			Add new provider
 		</Button>
 
-		<p class="text-xs text-muted-foreground">{addDescription}</p>
+		<p class="text-xs text-muted-foreground">Point at another llama-server.</p>
 	</div>
 </div>

@@ -3,7 +3,7 @@
 	import ModelDraftSidecars from '../ModelDraftSidecars.svelte';
 	import ModelsManagerStatusCell from './ModelsManagerStatusCell.svelte';
 	import { modelRowActions, type ModelRowDraftTarget } from './row-actions';
-	import { canLoadOption, configuredContext, modelDraftBadges, type ModelOverride } from './utils';
+	import { configuredContext, modelDraftBadges, type ModelOverride } from './utils';
 	import { MoreHorizontal } from '@lucide/svelte';
 	import { DropdownMenuActions } from '$lib/components/app';
 	import { Badge } from '$lib/components/ui/badge';
@@ -85,7 +85,7 @@
 		<DropdownMenuActions
 			actions={modelRowActions(
 				option,
-				{ canLoad: canLoadOption(option), draftTarget, favorite, isHidden },
+				{ draftTarget, favorite, isHidden },
 				{ onDelete, onUseAsDraft }
 			)}
 			align="end"

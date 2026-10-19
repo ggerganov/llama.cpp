@@ -6,7 +6,7 @@
  * consumed by the backends settings UI and the per-backend model cache.
  */
 
-import { API_MODELS, BackendProtocol, LOCAL_BACKEND_ID } from '$lib/constants';
+import { API_MODELS, LOCAL_BACKEND_ID } from '$lib/constants';
 import { ModelsService } from '$lib/services/models.service';
 import type { ApiModelsListResponse, Backend, ModelOption } from '$lib/types';
 import { isAbortError } from '$lib/utils/abort';
@@ -28,7 +28,6 @@ export interface BackendModelsResult {
 export interface BackendProbe {
 	/** The endpoint refused the request for want of a key, so it wants one. */
 	authRequired: boolean;
-	protocol: BackendProtocol;
 }
 
 /** Outcome of a backend connectivity check. */
@@ -46,40 +45,6 @@ export class BackendsService {
 	 * @param backend - Backend to query. Does not need to be registered yet.
 	 * @param signal - Optional abort signal for a cancelled request.
 	 */
-	static async detectProtocol(backend: Backend): Promise<BackendProbe> {
-		const base = backend.baseUrl.trim().replace(/\/+$/, '');
-
-		if (!base) return { authRequired: false, protocol: BackendProtocol.OPENAI };
-
-		try {
-			// llama-server answers /props with its build and generation defaults; a
-			// plain OpenAI-compatible endpoint answers 404 there, or not at all
-			const response = await fetch(`${base}/props`, {
-				headers: getAuthHeadersForBackend(backend),
-				signal: AbortSignal.timeout(5000)
-			});
-
-			// a llama-server behind a key refuses before it says anything else, while
-			// an OpenAI-compatible endpoint has no /props to guard in the first place
-			if (response.status === 401) {
-				return { authRequired: true, protocol: BackendProtocol.COMPAT };
-			}
-
-			if (!response.ok) return { authRequired: false, protocol: BackendProtocol.OPENAI };
-
-			const body = (await response.json()) as Record<string, unknown>;
-			const isLlamaCpp =
-				'default_generation_settings' in body || 'build_info' in body || body.role === 'router';
-
-			return {
-				authRequired: false,
-				protocol: isLlamaCpp ? BackendProtocol.COMPAT : BackendProtocol.OPENAI
-			};
-		} catch {
-			return { authRequired: false, protocol: BackendProtocol.OPENAI };
-		}
-	}
-
 	static async listModels(backend: Backend, signal?: AbortSignal): Promise<BackendModelsResult> {
 		// the local backend has no base URL; its models endpoint is base relative
 		const url = backend.baseUrl.trim()
@@ -123,6 +88,27 @@ export class BackendsService {
 				ok: false,
 				status: null
 			};
+		}
+	}
+
+	/**
+	 * Ask a backend whether it wants an API key. A llama-server guards /props with
+	 * the key it was started with, so a 401 there means the form needs one.
+	 */
+	static async probe(backend: Backend): Promise<BackendProbe> {
+		const base = backend.baseUrl.trim().replace(/\/+$/, '');
+
+		if (!base) return { authRequired: false };
+
+		try {
+			const response = await fetch(`${base}/props`, {
+				headers: getAuthHeadersForBackend(backend),
+				signal: AbortSignal.timeout(5000)
+			});
+
+			return { authRequired: response.status === 401 };
+		} catch {
+			return { authRequired: false };
 		}
 	}
 

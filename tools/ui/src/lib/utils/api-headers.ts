@@ -2,7 +2,6 @@ import { getBackend } from './api-base';
 import { redactValue } from './redact';
 import { CORS_PROXY, HEADERS } from '$lib/constants';
 import { MimeTypeApplication } from '$lib/enums';
-import { getProtocolAdapter } from '$lib/services/protocols';
 import { settingsStore } from '$lib/stores/settings/index.svelte';
 import type { Backend } from '$lib/types';
 
@@ -23,11 +22,15 @@ export function getAuthHeaders(backendId?: string): Record<string, string> {
 
 /**
  * Get authorization headers for a backend object, including one that is not
- * registered yet (used by the connection test on the add-backend form).
- * The protocol adapter owns the credential scheme and any required headers.
+ * registered yet (used on the add-backend form).
  */
 export function getAuthHeadersForBackend(backend: Backend): Record<string, string> {
-	return getProtocolAdapter(backend).authHeaders(backend);
+	const headers: Record<string, string> = { ...(backend.headers ?? {}) };
+	const apiKey = backend.apiKey?.trim();
+
+	if (apiKey) headers[HEADERS.AUTHORIZATION] = `${HEADERS.BEARER}${apiKey}`;
+
+	return headers;
 }
 
 /**

@@ -7,8 +7,7 @@ export const MODELS_TABLE_GROUP_LABELS: Record<ModelsTableGroupKind, string> = {
 	[ModelsTableGroupKind.FAVORITES]: 'Favorites',
 	[ModelsTableGroupKind.HIDDEN]: 'Hidden models',
 	[ModelsTableGroupKind.LOADED]: 'Loaded models',
-	[ModelsTableGroupKind.LOCAL]: 'Local models',
-	[ModelsTableGroupKind.SELECTED]: 'Selected model'
+	[ModelsTableGroupKind.LOCAL]: 'Local models'
 };
 
 /**

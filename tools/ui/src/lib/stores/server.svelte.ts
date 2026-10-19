@@ -6,13 +6,11 @@
  * PropsService for the /props fetch.
  */
 
-import { BACKEND_CAPABILITIES, BackendProtocol, LOCAL_BACKEND_ID } from '$lib/constants';
+import { LOCAL_BACKEND_ID } from '$lib/constants';
 import { ServerRole } from '$lib/enums';
 import { PropsService } from '$lib/services/props.service';
-import type { BackendCapabilities } from '$lib/types';
 import { ApiError } from '$lib/utils';
 import { getBackend } from '$lib/utils/api-base';
-import { getBackendCapabilities } from '$lib/utils/backend';
 
 const LOADING_RETRY_INTERVAL_MS = 1000;
 
@@ -33,13 +31,6 @@ class ServerStore {
 	private localState: { props: ApiLlamaCppServerProps | null; role: ServerRole | null } | null =
 		null;
 	private retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-	/** Features of the active backend. Defaults to full llama.cpp support. */
-	get capabilities(): BackendCapabilities {
-		const backend = getBackend();
-
-		return backend ? getBackendCapabilities(backend) : BACKEND_CAPABILITIES[BackendProtocol.COMPAT];
-	}
 
 	get contextSize(): number | null {
 		const nCtx = this.props?.default_generation_settings?.n_ctx;
@@ -135,15 +126,6 @@ class ServerStore {
 		if (this.fetchPromise && this.fetchBackendId === backendId) return this.fetchPromise;
 
 		this.clearRetryTimer();
-
-		// External backends expose no /props endpoint. Keep MODEL-mode defaults so
-		// role detection and generation defaults degrade instead of failing.
-		if (!this.capabilities.props) {
-			this.clear();
-			this.role = ServerRole.MODEL;
-
-			return;
-		}
 
 		if (!background) {
 			this.loading = true;

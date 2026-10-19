@@ -20,7 +20,6 @@ import {
 	SSE_DATA_PREFIX,
 	SSE_DONE_MARKER,
 	SSE_LINE_SEPARATOR,
-	STREAM_LIVE_TIMINGS_INTERVAL_MS,
 	STREAM_QUERY_PARAMS,
 	STREAM_RESUME_LOCALSTORAGE_KEY_PREFIX,
 	STREAM_VISIBILITY_KICK_MS
@@ -33,10 +32,8 @@ import {
 	ReasoningFormat,
 	StreamConnectionState
 } from '$lib/enums';
-import { getProtocolAdapter } from '$lib/services/protocols';
-import { extractModelName } from '$lib/services/protocols/openai';
+import { createChatStreamReader, extractModelName } from '$lib/services/chat-wire';
 import { modelsStore } from '$lib/stores/models/index.svelte';
-import { serverStore } from '$lib/stores/server.svelte';
 import { settingsStore } from '$lib/stores/settings/index.svelte';
 import type { DatabaseMessageExtraMcpPrompt, DatabaseMessageExtraMcpResource } from '$lib/types';
 import type {
@@ -46,12 +43,11 @@ import type {
 	ApiStreamSession
 } from '$lib/types/api';
 import { isAbortError } from '$lib/utils/abort';
-import { apiChatUrl, apiUrl, getBackend } from '$lib/utils/api-base';
+import { apiChatUrl, apiUrl } from '$lib/utils/api-base';
 import { ApiError } from '$lib/utils/api-fetch';
 import { getAuthHeaders, getJsonHeaders } from '$lib/utils/api-headers';
 import { formatAttachmentText } from '$lib/utils/formatters';
 import { streamIdentity } from '$lib/utils/stream-identity';
-import { buildTimingsFromUsage } from '$lib/utils/timings';
 
 interface ResumableStreamState {
 	bytesReceived: number;
@@ -92,9 +88,6 @@ export class ChatService {
 	 * @returns {Promise<boolean>} Promise that resolves to true if all slots are idle, false if any is processing
 	 */
 	static async areAllSlotsIdle(model?: string | null, signal?: AbortSignal): Promise<boolean> {
-		// the /slots endpoint only exists on llama.cpp servers
-		if (!serverStore.capabilities.slots) return true;
-
 		try {
 			const url = model ? `${API_SLOTS.LIST}?model=${encodeURIComponent(model)}` : API_SLOTS.LIST;
 			const res = await fetch(apiUrl(url), { signal });
@@ -114,8 +107,6 @@ export class ChatService {
 	 */
 	static async cancelServerStream(conversationId: string, model?: string | null): Promise<void> {
 		if (!conversationId) return;
-
-		if (!serverStore.capabilities.resumableStreams) return;
 
 		try {
 			const id = streamIdentity(conversationId, model);
@@ -350,10 +341,6 @@ export class ChatService {
 	 * caller can pipe it through the SSE parser like a fresh stream.
 	 */
 	static async fetchStreamReplay(streamId: string): Promise<Response> {
-		if (!serverStore.capabilities.resumableStreams) {
-			return new Response(null, { status: 501, statusText: 'Not Implemented' });
-		}
-
 		const resp = await fetch(ChatService.buildStreamUrl(streamId, 0), {
 			headers: getAuthHeaders()
 		});
@@ -496,18 +483,10 @@ export class ChatService {
 		let idEmitted = false;
 		let toolCallIndexOffset = 0;
 		let hasOpenToolCallBatch = false;
-
-		// client side clock for backends that do not stream their own timings
-		const startedAt = Date.now();
-
 		let firstTokenAt: number | null = null;
-		let lastTokenAt: number | null = null;
-		let streamedTokens = 0;
-		let liveTimingsAt = 0;
 		let usage: ApiChatCompletionUsage | undefined;
 
-		// the protocol decides how payloads map onto canonical events
-		const streamReader = getProtocolAdapter(getBackend()).createStreamReader();
+		const streamReader = createChatStreamReader();
 		const finalizeOpenToolCallBatch = () => {
 			if (!hasOpenToolCallBatch) {
 				return;
@@ -547,31 +526,8 @@ export class ChatService {
 				onToolCallChunk?.(serializedToolCalls);
 			}
 		};
-		// backends that do not stream their own timings report progress from wall
-		// clock time and the streamed delta count, throttled to keep updates cheap
 		const markToken = () => {
 			firstTokenAt ??= Date.now();
-			lastTokenAt = Date.now();
-			streamedTokens++;
-
-			if (
-				serverStore.capabilities.props ||
-				Date.now() - liveTimingsAt < STREAM_LIVE_TIMINGS_INTERVAL_MS
-			) {
-				return;
-			}
-
-			liveTimingsAt = Date.now();
-
-			const liveTimings = buildTimingsFromUsage(
-				usage,
-				{ firstTokenAt, lastTokenAt, startedAt },
-				streamedTokens
-			);
-
-			if (liveTimings) {
-				ChatService.notifyTimings(liveTimings, undefined, onTimings);
-			}
 		};
 		const onVisibilityChange = () => {
 			if (typeof document === 'undefined') return;
@@ -827,20 +783,6 @@ export class ChatService {
 			if (streamFinished) {
 				finalizeOpenToolCallBatch();
 
-				// external backends report token counts only in the final usage chunk
-				if (!lastTimings && !serverStore.capabilities.props) {
-					lastTimings =
-						buildTimingsFromUsage(
-							usage,
-							{ firstTokenAt, lastTokenAt, startedAt },
-							streamedTokens
-						) ?? undefined;
-
-					if (lastTimings) {
-						ChatService.notifyTimings(lastTimings, undefined, onTimings);
-					}
-				}
-
 				if (conversationId) {
 					ChatService.clearStreamState(conversationId);
 				}
@@ -880,8 +822,6 @@ export class ChatService {
 	 * conv::model identity when a model was bound at POST time.
 	 */
 	static async lookupStreamSessions(conversationIds: string[]): Promise<ApiStreamSession[]> {
-		if (!serverStore.capabilities.resumableStreams) return [];
-
 		const resp = await fetch(apiUrl(API_STREAM.LOOKUP), {
 			body: JSON.stringify({ conversation_ids: conversationIds }),
 			headers: getJsonHeaders(),
@@ -944,9 +884,6 @@ export class ChatService {
 		excludeReasoning?: boolean,
 		signal?: AbortSignal
 	): Promise<void> {
-		// pre-encode warms the llama.cpp KV cache and posts llama.cpp-only fields
-		if (!serverStore.capabilities.props) return;
-
 		const normalizedMessages: ApiChatMessageData[] =
 			await ChatService.normalizeMessagesForApi(messages);
 		const requestBody: Record<string, unknown> = {
@@ -991,8 +928,6 @@ export class ChatService {
 	static async probeResumeStatus(streamId: string): Promise<number> {
 		if (!streamId) return 0;
 
-		if (!serverStore.capabilities.resumableStreams) return 0;
-
 		const ac = new AbortController();
 
 		try {
@@ -1015,8 +950,6 @@ export class ChatService {
 		model?: string | null
 	): Promise<Response | null> {
 		if (!conversationId) return null;
-
-		if (!serverStore.capabilities.resumableStreams) return null;
 
 		const state = ChatService.getStreamState(conversationId);
 		const from = state?.bytesReceived ?? 0;
@@ -1330,26 +1263,16 @@ export class ChatService {
 
 			// tag streaming requests with the conversation id, this single header is the opt in for the
 			// server side replay buffer and powers discoverActiveStream on tab reopen. with an explicit
-			// model the ::model suffix keeps the per model session distinct. external providers do not
-			// know the header and their CORS preflight rejects it, so only llama.cpp gets it
-			if (stream && conversationId && serverStore.capabilities.resumableStreams) {
+			// model the ::model suffix keeps the per model session distinct.
+			if (stream && conversationId) {
 				headers[HEADERS.X_CONVERSATION_ID_HEADER] = streamIdentity(conversationId, options.model);
 				// persist the pending stream before the fetch: a reload during the model load or
 				// the prompt processing must still find its way back to the session once it exists
 				ChatService.saveStreamState(conversationId, 0, options.model ?? null);
 			}
 
-			// the protocol adapter owns the wire format: it strips llama.cpp-only
-			// fields, applies the backend's token cap field and adds the usage chunk
-			const backend = getBackend();
-			const wireBody = backend
-				? getProtocolAdapter(backend).buildChatRequest(
-						requestBody as unknown as Record<string, unknown>,
-						backend
-					)
-				: (requestBody as unknown as Record<string, unknown>);
 			const response = await fetch(apiChatUrl(), {
-				body: JSON.stringify(wireBody),
+				body: JSON.stringify(requestBody),
 				headers,
 				method: 'POST',
 				signal

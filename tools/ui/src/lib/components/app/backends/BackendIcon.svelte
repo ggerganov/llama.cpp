@@ -1,7 +1,6 @@
 <script lang="ts">
-	import BackendPresetIcon from './BackendPresetIcon.svelte';
 	import type { Backend } from '$lib/types';
-	import { backendFaviconUrl, findBackendPreset } from '$lib/utils';
+	import { backendFaviconUrl } from '$lib/utils';
 	import type { Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -11,19 +10,16 @@
 	interface Props {
 		backend?: Backend;
 		class?: string;
-		/** Rendered when the backend has neither a bundled mark nor a favicon. */
+		/** Rendered when the backend serves no favicon. */
 		fallback?: Snippet;
 	}
 
 	let { backend, class: className = 'size-4', fallback }: Props = $props();
 
-	let preset = $derived(backend ? findBackendPreset(backend.baseUrl) : undefined);
-	let faviconUrl = $derived(preset || !backend ? null : backendFaviconUrl(backend.baseUrl));
+	let faviconUrl = $derived(backend ? backendFaviconUrl(backend.baseUrl) : null);
 </script>
 
-{#if preset}
-	<BackendPresetIcon class={className} {preset} />
-{:else if faviconUrl && !failedFavicons.has(faviconUrl)}
+{#if faviconUrl && !failedFavicons.has(faviconUrl)}
 	<img
 		alt=""
 		class={['shrink-0 rounded-sm object-contain', className]}

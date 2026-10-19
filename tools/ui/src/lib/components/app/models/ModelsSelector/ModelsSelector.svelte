@@ -326,7 +326,6 @@
 			onSelect={ms.handleSelect}
 			renderOption={modelOption}
 			sectionHeaderClass="[&:not(:first-child)]:mt-2 mb-1 px-2 py-2.5 text-sm font-semibold text-foreground/80 select-none"
-			selected={ms.selectedItems}
 			{showOrgName}
 		/>
 	</div>

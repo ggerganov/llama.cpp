@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ModelLoadControl from '../ModelLoadControl.svelte';
 	import ModelsManagerDownloadControl from './ModelsManagerDownloadControl.svelte';
-	import { canLoadOption } from './utils';
 	import { LOCAL_BACKEND_ID } from '$lib/constants';
 	import type { ModelRowDownloadState } from '$lib/enums';
 	import { ServerModelStatus } from '$lib/enums';
@@ -20,14 +19,10 @@
 	let status = $derived(modelsStore.getModelStatus(option.model));
 	let isOperationInProgress = $derived(modelsStore.status.isOperationInProgress(option.model));
 	let isLoaded = $derived(modelsStore.isModelRunning(option.model));
-	// a llama-compat row loads through its own server: the local one takes load
-	// requests in router mode only, whatever backend is active, and a provider
-	// row never reports a load state
+	// a row served by this UI loads through it in router mode only; a row of
+	// another server always loads through that server
 	let canToggleLoad = $derived(
-		canLoadOption(option) &&
-			(!option.backendId || option.backendId === LOCAL_BACKEND_ID
-				? serverStore.localIsRouter
-				: true)
+		!option.backendId || option.backendId === LOCAL_BACKEND_ID ? serverStore.localIsRouter : true
 	);
 </script>
 
@@ -35,21 +30,12 @@
 	<ModelsManagerDownloadControl class="justify-self-center {className}" {option} state={download} />
 {:else if canToggleLoad}
 	<ModelLoadControl
-		canLoad
 		class="justify-self-center {className}"
 		isFailed={status === ServerModelStatus.FAILED}
 		{isLoaded}
 		isLoading={status === ServerModelStatus.LOADING || isOperationInProgress}
 		isSleeping={status === ServerModelStatus.SLEEPING}
 		{option}
-	/>
-{:else if option.backendId && option.backendId !== LOCAL_BACKEND_ID}
-	<ModelLoadControl
-		canLoad={false}
-		class="justify-self-center {className}"
-		isLoaded={false}
-		{option}
-		showRemoteMark
 	/>
 {:else}
 	<span

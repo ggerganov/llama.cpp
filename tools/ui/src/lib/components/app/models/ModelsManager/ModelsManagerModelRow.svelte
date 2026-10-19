@@ -8,7 +8,6 @@
 	import ModelsManagerStatusCell from './ModelsManagerStatusCell.svelte';
 	import { modelRowActions, type ModelRowDraftTarget } from './row-actions';
 	import {
-		canLoadOption,
 		configuredContext,
 		downloadProgressFor,
 		modelDraftBadges,
@@ -153,7 +152,7 @@
 		<DropdownMenuActions
 			actions={modelRowActions(
 				option,
-				{ canLoad: canLoadOption(option), download, draftTarget, favorite, isHidden },
+				{ download, draftTarget, favorite, isHidden },
 				{ onDelete, onUseAsDraft }
 			)}
 			align="end"

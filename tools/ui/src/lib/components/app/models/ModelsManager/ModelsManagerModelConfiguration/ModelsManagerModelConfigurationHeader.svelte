@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { canLoadOption } from '../utils';
 	import ModelsManagerModelConfigurationActions from './ModelsManagerModelConfigurationActions.svelte';
 	import { X } from '@lucide/svelte';
 	import { ModelAvatar, ModelId } from '$lib/components/app';
@@ -123,7 +122,6 @@
 	<!-- a phone floats the actions at the bottom of the pane, where the thumb is -->
 	{#if !isMobile}
 		<ModelsManagerModelConfigurationActions
-			canToggleLoad={canLoadOption(option)}
 			{isDownload}
 			{isDownloadPaused}
 			{isLoaded}

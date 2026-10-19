@@ -13,7 +13,6 @@
 	import type { ModelOption } from '$lib/types/models';
 	import { nearViewport, orgOf } from '$lib/utils';
 	import { getBackend } from '$lib/utils/api-base';
-	import { getBackendCapabilities } from '$lib/utils/backend';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -48,10 +47,9 @@
 
 	let parsedId = $derived(ModelsService.parseModelId(option.model));
 	let orgName = $derived(parsedId.orgName);
-	// a llama-compat model whose id carries no `org/name` is not a Hugging Face repo,
-	// so the provider's own mark identifies it better than an initial
-	let isLlamaCompat = $derived(getBackendCapabilities(getBackend(option.backendId)).props);
-	let useProviderIcon = $derived(isLlamaCompat && !orgName);
+	// a model whose id carries no `org/name` is not a Hugging Face repo, so the
+	// provider's own mark identifies it better than an initial
+	let useProviderIcon = $derived(!orgName);
 	// the bundled server has no favicon to resolve, its mark is the llama.cpp logo
 	let isLocal = $derived(getBackend(option.backendId)?.id === LOCAL_BACKEND_ID);
 	// A row names neither flag: a family heading already carries the base org, so a
@@ -85,12 +83,6 @@
 		if (!isNearViewport || !baseOrgMain || !orgName || tagBaseModel) return;
 
 		if (!hubEnabled) return;
-
-		// external provider ids (`~openai/gpt-...`, `deepseek/deepseek-chat`) are
-		// not HF repos; their org is already the provider slug
-		const backend = getBackend(option.backendId);
-
-		if (backend && !getBackendCapabilities(backend).props) return;
 
 		let cancelled = false;
 

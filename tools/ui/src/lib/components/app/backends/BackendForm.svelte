@@ -1,60 +1,17 @@
 <script lang="ts">
-	import { ChevronDown, ChevronRight } from '@lucide/svelte';
-	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Input } from '$lib/components/ui/input';
-	import * as Select from '$lib/components/ui/select';
-	import {
-		BackendProtocol,
-		DEFAULT_BACKEND_CHAT_PATH,
-		DEFAULT_BACKEND_MODELS_PATH
-	} from '$lib/constants';
 	import type { Backend } from '$lib/types';
-
-	const PROTOCOL_OPTIONS: Array<{ label: string; value: BackendProtocol }> = [
-		{ label: 'OpenAI-compatible', value: BackendProtocol.OPENAI },
-		{ label: 'Llama-compatible (llama-server)', value: BackendProtocol.COMPAT }
-	];
 
 	interface Props {
 		backend: Backend;
 		/** The endpoint refused the probe for want of a key. */
 		apiKeyRequired?: boolean;
-		/** Protocol the endpoint reported, once it has been probed. */
-		detected?: BackendProtocol | null;
-		detecting?: boolean;
 		id: string;
 		onChange: (patch: Partial<Backend>) => void;
 		urlError?: string | null;
 	}
 
-	let {
-		apiKeyRequired = false,
-		backend,
-		detected = null,
-		detecting = false,
-		id,
-		onChange,
-		urlError = null
-	}: Props = $props();
-
-	let showAdvanced = $state(false);
-
-	let protocolLabel = $derived(
-		PROTOCOL_OPTIONS.find((option) => option.value === backend.protocol)?.label ?? ''
-	);
-	let detectionLabel = $derived.by(() => {
-		if (detecting) return 'Checking what the endpoint speaks...';
-
-		if (detected === BackendProtocol.COMPAT) {
-			return apiKeyRequired
-				? 'llama.cpp server detected. It asks for an API key.'
-				: 'llama.cpp server detected.';
-		}
-
-		if (detected === BackendProtocol.OPENAI) return 'OpenAI-compatible endpoint detected.';
-
-		return null;
-	});
+	let { apiKeyRequired = false, backend, id, onChange, urlError = null }: Props = $props();
 </script>
 
 <div class="grid gap-5">
@@ -74,8 +31,6 @@
 
 		{#if urlError}
 			<p class="mt-1.5 text-xs text-destructive">{urlError}</p>
-		{:else if detectionLabel}
-			<p class="mt-1.5 text-xs text-muted-foreground">{detectionLabel}</p>
 		{/if}
 	</div>
 
@@ -117,78 +72,4 @@
 			</p>
 		</div>
 	</div>
-
-	<Collapsible.Root bind:open={showAdvanced}>
-		<Collapsible.Trigger
-			class="flex items-center gap-1 text-xs font-medium text-muted-foreground select-none hover:text-foreground"
-		>
-			{#if showAdvanced}
-				<ChevronDown class="h-3.5 w-3.5" />
-			{:else}
-				<ChevronRight class="h-3.5 w-3.5" />
-			{/if}
-
-			Advanced
-		</Collapsible.Trigger>
-
-		<Collapsible.Content>
-			<div class="mt-4 grid gap-5">
-				<div>
-					<span class="mb-2 block text-xs font-medium select-none">API format</span>
-
-					<Select.Root
-						onValueChange={(value) =>
-							onChange({ compat: undefined, protocol: value as BackendProtocol })}
-						type="single"
-						value={backend.protocol}
-					>
-						<Select.Trigger class="w-full">{protocolLabel}</Select.Trigger>
-
-						<Select.Content>
-							{#each PROTOCOL_OPTIONS as option (option.value)}
-								<Select.Item label={option.label} value={option.value}>{option.label}</Select.Item>
-							{/each}
-						</Select.Content>
-					</Select.Root>
-
-					<p class="mt-1.5 text-xs text-muted-foreground">
-						Detected from the endpoint. Override it when a server answers unusually.
-					</p>
-				</div>
-
-				<div class="grid gap-5 sm:grid-cols-2">
-					<div>
-						<label class="mb-2 block text-xs font-medium select-none" for="backend-chat-path-{id}">
-							Chat completions path
-						</label>
-
-						<Input
-							id="backend-chat-path-{id}"
-							oninput={(e) => onChange({ chatPath: e.currentTarget.value || undefined })}
-							placeholder={DEFAULT_BACKEND_CHAT_PATH}
-							type="text"
-							value={backend.chatPath ?? ''}
-						/>
-					</div>
-
-					<div>
-						<label
-							class="mb-2 block text-xs font-medium select-none"
-							for="backend-models-path-{id}"
-						>
-							Models path
-						</label>
-
-						<Input
-							id="backend-models-path-{id}"
-							oninput={(e) => onChange({ modelsPath: e.currentTarget.value || undefined })}
-							placeholder={DEFAULT_BACKEND_MODELS_PATH}
-							type="text"
-							value={backend.modelsPath ?? ''}
-						/>
-					</div>
-				</div>
-			</div>
-		</Collapsible.Content>
-	</Collapsible.Root>
 </div>

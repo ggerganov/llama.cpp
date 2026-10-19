@@ -12,8 +12,6 @@ export interface ModelRowDraftTarget {
 }
 
 interface RowState {
-	/** Backend can load and unload the model. */
-	canLoad: boolean;
 	/** Download state, when the row stands for a tracked download. */
 	download?: ModelRowDownloadState | null;
 	/** Model the pane has open, when one is selected. */
@@ -29,8 +27,8 @@ interface RowHandlers {
 
 /** Row actions follow the app's dropdown pattern: icon, label, separators, variants. */
 export function modelRowActions(option: ModelOption, state: RowState, handlers: RowHandlers) {
-	const { canLoad, download, draftTarget, favorite, isHidden } = state;
-	const canBeDraft = canLoad && !!draftTarget && draftTarget.id !== option.id;
+	const { download, draftTarget, favorite, isHidden } = state;
+	const canBeDraft = !!draftTarget && draftTarget.id !== option.id;
 	const viewInDiscover = {
 		icon: Compass,
 		label: 'See in Discover',
@@ -78,17 +76,13 @@ export function modelRowActions(option: ModelOption, state: RowState, handlers: 
 			label: favorite ? 'Remove from favorites' : 'Add to favorites',
 			onclick: () => modelsStore.toggleFavorite(option.model)
 		},
-		...(canLoad
-			? [
-					{
-						icon: Trash2,
-						label: 'Delete from disk',
-						onclick: () => handlers.onDelete(option),
-						separator: true,
-						variant: 'destructive' as const
-					}
-				]
-			: []),
+		{
+			icon: Trash2,
+			label: 'Delete from disk',
+			onclick: () => handlers.onDelete(option),
+			separator: true,
+			variant: 'destructive' as const
+		},
 		{
 			icon: isHidden ? Eye : EyeOff,
 			label: isHidden ? 'Unhide model' : 'Hide model',

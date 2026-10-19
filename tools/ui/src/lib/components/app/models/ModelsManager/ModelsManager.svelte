@@ -26,8 +26,6 @@
 	} from '$lib/stores';
 	import type { ModelOption } from '$lib/types/models';
 	import { filterModelOptions } from '$lib/utils';
-	import { getBackend } from '$lib/utils/api-base';
-	import { getBackendCapabilities } from '$lib/utils/backend';
 	import { type Snippet, untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
@@ -208,35 +206,18 @@
 	let entries = $derived(byRecency(groupModelQuants(visible)));
 	let groups = $derived.by(() => {
 		// a loaded quant is a model of its own: its repo keeps the quants left behind.
-		// Only llama-compat servers report a load state.
-		const isLoaded = (option: ModelOption) =>
-			getBackendCapabilities(getBackend(option.backendId)).loadUnload &&
-			modelsStore.isModelLoaded(option.model);
+		const isLoaded = (option: ModelOption) => modelsStore.isModelLoaded(option.model);
 		// a tracked download stands in its own section, so it is not listed twice
 		const isDownload = (option: ModelOption) =>
 			modelsStore.status.isDownloadInProgress(option.model) ||
 			modelsStore.status.isDownloadPaused(option.model);
-		// a compat backend serves the selection itself: its selected model is a
-		// section of its own, since it never reports a load state
-		const isProviderSelected = (option: ModelOption) =>
-			option.id === modelsStore.selectedModelId &&
-			!getBackendCapabilities(getBackend(option.backendId)).loadUnload;
-		const selected: ModelQuantGroup[] = [];
 		const loaded: ModelQuantGroup[] = [];
 		const rest: ModelQuantGroup[] = [];
 
 		for (const entry of entries) {
-			const remaining = entry.quants.filter(
-				(quant) => !isLoaded(quant) && !isDownload(quant) && !isProviderSelected(quant)
-			);
+			const remaining = entry.quants.filter((quant) => !isLoaded(quant) && !isDownload(quant));
 
 			for (const quant of entry.quants) {
-				if (isProviderSelected(quant)) {
-					selected.push({ ...entry, base: quant, key: quant.id, quants: [quant] });
-
-					continue;
-				}
-
 				if (!isLoaded(quant)) continue;
 
 				loaded.push({ ...entry, base: quant, key: quant.id, quants: [quant] });
@@ -280,8 +261,7 @@
 		}
 
 		const ordered: ModelsTableGroup[] = [];
-		// the selected compat model leads the table, then the loaded models, then
-		// favorites, then one block per backend
+		// loaded models lead the table, then favorites, then one block per backend
 		const pushSection = (
 			kind: ModelsTableGroup['kind'],
 			items: ModelQuantGroup[],
@@ -301,7 +281,6 @@
 			});
 		};
 
-		pushSection(ModelsTableGroupKind.SELECTED, selected);
 		pushSection(ModelsTableGroupKind.LOADED, loaded);
 		pushSection(ModelsTableGroupKind.DOWNLOADING, downloads);
 		pushSection(ModelsTableGroupKind.FAVORITES, favorites);

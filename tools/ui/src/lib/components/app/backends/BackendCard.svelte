@@ -7,14 +7,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { BackendProtocol } from '$lib/constants';
 	import { backendsModelsStore } from '$lib/stores/backendsModels.svelte';
 	import type { Backend } from '$lib/types';
-
-	const PROTOCOL_LABELS: Record<BackendProtocol, string> = {
-		[BackendProtocol.COMPAT]: 'Llama-compatible',
-		[BackendProtocol.OPENAI]: 'OpenAI-compatible'
-	};
 
 	const CARD_ICON_CLASS = 'h-5 w-5';
 
@@ -29,7 +23,6 @@
 	let { backend, isLocal = false, onDelete, onEdit, onToggle }: Props = $props();
 
 	let showDelete = $state(false);
-	let protocolLabel = $derived(PROTOCOL_LABELS[backend.protocol]);
 	let displayUrl = $derived(backend.baseUrl || 'This server');
 
 	// the model listing doubles as the reachability probe
@@ -39,7 +32,7 @@
 	let isOffline = $derived(backend.enabled && !!modelsState.error);
 	let hasStatus = $derived(isChecking || isOnline || isOffline);
 	let modelCount = $derived(modelsState.models.length);
-	let metaText = $derived(isLocal ? `Built-in · ${protocolLabel}` : protocolLabel);
+	let metaText = $derived(isLocal ? 'Built-in' : 'llama.cpp server');
 
 	// kick off the probe for backends the prefetch has not covered yet
 	$effect(() => {

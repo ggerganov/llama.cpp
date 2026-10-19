@@ -161,9 +161,6 @@ export class ModelPropsManager {
 	 * @returns Props data or null if fetch failed or model not loaded
 	 */
 	async fetchModelProps(modelId: string): Promise<ApiLlamaCppServerProps | null> {
-		// /props only exists on llama.cpp servers
-		if (!serverStore.capabilities.props) return null;
-
 		// props not loaded yet (mid backend switch): the server role and model
 		// load state are not trustworthy, so do not guess
 		if (!serverStore.props) return null;

@@ -24,7 +24,6 @@ import type {
 } from '$lib/types/models';
 import { detectThinkingSupport, detectToolUseSupport, repoOf } from '$lib/utils';
 import { getBackend } from '$lib/utils/api-base';
-import { getBackendCapabilities } from '$lib/utils/backend';
 import { formatFileSize, formatParameters } from '$lib/utils/formatters';
 import { rawModelId } from '$lib/utils/model-option-id';
 import { SvelteMap } from 'svelte/reactivity';
@@ -256,9 +255,6 @@ export function draftFromSetting(option: ModelOption, value?: string | null): Mo
  * settings name, then any other sidecar the model's own repo ships.
  */
 export function modelDraftsFor(option: ModelOption, settingValue?: string | null): ModelDraft[] {
-	// speculative decoding is a llama.cpp feature
-	if (!getBackendCapabilities(getBackend(option.backendId)).loadUnload) return [];
-
 	const args = modelsStore.routerModels.find((model) => model.id === option.model)?.status?.args;
 	const configured = draftFromArgs(args, option) ?? draftFromSetting(option, settingValue);
 
@@ -362,11 +358,6 @@ export function configuredContext(
 	return modelsStore.isModelRunning(option.model)
 		? modelsStore.props.getModelContextSize(option.model)
 		: null;
-}
-
-/** True when the backend that serves the model can load and unload it. */
-export function canLoadOption(option: ModelOption): boolean {
-	return getBackendCapabilities(getBackend(option.backendId)).loadUnload;
 }
 
 export function servedByLabel(option: ModelOption): string {
