@@ -383,7 +383,7 @@ struct htp_opformat {
             snprintf(str, max_size, "%s vtcm %d", kparams->n_t == 1 ? "decode" : "prefill", (int) kparams->vtcm_size);
         } else if (node.opcode == HTP_OP_SOFTMAX) {
             const auto * kparams = (const struct htp_softmax_kernel_params *) node.kernel_params;
-            snprintf(str, max_size, "k%d nth %d vtcm %d", (int) kparams->kernel_id, (int) kparams->n_threads, (int) kparams->vtcm_size);
+            snprintf(str, max_size, "k%d nth %d vtcm %d", (int) kparams->kernel_type, (int) kparams->n_threads, (int) kparams->vtcm_size);
         } else if (node.opcode == HTP_OP_GATED_DELTA_NET) {
             const auto * kparams = (const struct htp_gdn_kernel_params *) node.kernel_params;
             const char * path = (kparams->kernel_type == HTP_GDN_KERNEL_HMX_CHUNKED) ? "hmx-chunked" : "hvx-recurrent";
@@ -419,7 +419,7 @@ struct htp_opformat {
             snprintf(str, max_size, "%s nth %d vtcm %u", kparams->use_dma ? "dma" : "hvx", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
         } else if (node.opcode == HTP_OP_FILL) {
             const auto * kparams = (const struct htp_fill_kernel_params *) node.kernel_params;
-            snprintf(str, max_size, "%s nth %d", kparams->opt_path ? "opt" : "strided", (int) kparams->n_threads);
+            snprintf(str, max_size, "%s nth %d", kparams->kernel_type == HTP_FILL_KERNEL_CONTIGUOUS ? "contig" : "strided", (int) kparams->n_threads);
         } else if (node.opcode == HTP_OP_ROLL) {
             const auto * kparams = (const struct htp_roll_kernel_params *) node.kernel_params;
             snprintf(str, max_size, "k%d nth %d", (int) kparams->kernel_type, (int) kparams->n_threads);

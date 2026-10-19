@@ -21,7 +21,15 @@ enum htp_binary_kernel_type {
 };
 
 struct htp_binary_kernel_params {
-    uint32_t kernel_type;
+    uint8_t  kernel_type;
+    uint8_t  split_at_ne01;
+    uint8_t  split_at_ne02;
+    uint8_t  src1_strided;
+
+    uint8_t  n_srcs;
+    uint8_t  is_scalar;
+    uint8_t  pad[2];
+
     uint32_t n_threads;
     uint32_t rows_per_buffer;
 
@@ -35,12 +43,6 @@ struct htp_binary_kernel_params {
 
     uint32_t chunk_size;
     uint32_t chunk_bytes;
-    uint32_t is_scalar;
-
-    uint8_t  split_at_ne01;
-    uint8_t  split_at_ne02;
-    uint8_t  src1_strided;
-    uint8_t  n_srcs;
 
     struct fastdiv_values src0_dim1_div;
     struct fastdiv_values src0_dim2_div;

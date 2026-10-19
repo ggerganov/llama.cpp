@@ -9,7 +9,16 @@
 #include "hex-common.h"
 #include "htp-vtcm.h"
 
+enum htp_pool_kernel_type {
+    HTP_POOL_KERNEL_GENERAL = 0,
+    HTP_POOL_KERNEL_HVX,
+    HTP_POOL_KERNEL_HVX_NARROW,
+    HTP_POOL_KERNEL_GLOBAL,
+    HTP_POOL_KERNEL_BLOCK,
+};
+
 struct htp_pool_2d_kernel_params {
+    uint8_t  kernel_type;
     uint32_t src_x;
     uint32_t src_y;
     uint32_t dst_x;
@@ -27,10 +36,6 @@ struct htp_pool_2d_kernel_params {
     uint32_t n_threads;
     uint32_t planes;
     uint32_t pool_op;
-    uint32_t fast_path;
-    uint32_t narrow_path;
-    uint32_t global_path;
-    uint32_t block_path;
     uint32_t avg_divide_count;
     uint32_t ox_lo;
     uint32_t ox_hi;

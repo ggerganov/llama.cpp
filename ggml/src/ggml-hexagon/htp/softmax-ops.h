@@ -9,7 +9,7 @@
 #include "hex-common.h"
 #include "htp-vtcm.h"
 
-enum htp_softmax_kernel_id {
+enum htp_softmax_kernel_type {
     HTP_SOFTMAX_KERNEL_NOMASK = 0,
     HTP_SOFTMAX_KERNEL_MASK_F32,
     HTP_SOFTMAX_KERNEL_MASK_F16,
@@ -17,6 +17,7 @@ enum htp_softmax_kernel_id {
 };
 
 struct htp_softmax_kernel_params {
+    uint8_t  kernel_type;
     uint32_t n_threads;
     uint32_t src0_nrows;
     uint32_t src0_nrows_per_thread;
@@ -38,7 +39,6 @@ struct htp_softmax_kernel_params {
     uint32_t n_head_log2;
     uint32_t use_src1;
     uint32_t use_f16;
-    uint32_t kernel_id;
 
     float    scale;
     float    max_bias;

@@ -3790,11 +3790,11 @@ static void ggml_hexagon_precompute_softmax_params(
     kparams->src1_spad_half_size       = (uint32_t) layout.src1_spad_half_size;
     kparams->dst_spad_half_size        = (uint32_t) layout.dst_spad_half_size;
     if (!kparams->use_src1) {
-        kparams->kernel_id = HTP_SOFTMAX_KERNEL_NOMASK;
+        kparams->kernel_type = HTP_SOFTMAX_KERNEL_NOMASK;
     } else if (kparams->use_f16) {
-        kparams->kernel_id = HTP_SOFTMAX_KERNEL_MASK_F16;
+        kparams->kernel_type = HTP_SOFTMAX_KERNEL_MASK_F16;
     } else {
-        kparams->kernel_id = HTP_SOFTMAX_KERNEL_MASK_F32;
+        kparams->kernel_type = HTP_SOFTMAX_KERNEL_MASK_F32;
     }
 
     if (src0->ne[1] > 0) kparams->div_ne01 = init_fastdiv_values(src0->ne[1]);
@@ -4212,27 +4212,34 @@ static void ggml_hexagon_precompute_pool_2d_params(
     kparams->n_threads = n_threads;
     kparams->planes = planes;
     kparams->pool_op = (uint32_t) ggml_get_op_params_i32(dst, 0);
-    // Fast HVX path requires exact tiling and a supported kernel width.
-    kparams->fast_path = (kparams->pad_x == 0 && kparams->pad_y == 0 &&
-                           kparams->stride_x == kparams->kernel_x && kparams->stride_y == kparams->kernel_y &&
-                           (kparams->kernel_x == 1 || kparams->kernel_x == 2)) ? 1 : 0;
-    kparams->global_path = (kparams->pad_x == 0 && kparams->pad_y == 0 &&
-                            kparams->stride_x == kparams->kernel_x &&
-                            kparams->stride_y == kparams->kernel_y &&
-                            kparams->kernel_x == kparams->src_x &&
-                            kparams->kernel_y == kparams->src_y &&
-                            kparams->dst_x == 1 && kparams->dst_y == 1) ? 1 : 0;
-    kparams->block_path = (kparams->pad_x == 0 && kparams->pad_y == 0 &&
-                           kparams->kernel_y == 1 && kparams->stride_y == 1 &&
-                           kparams->stride_x == kparams->kernel_x &&
-                           kparams->kernel_x >= 32) ? 1 : 0;
+
+    const bool exact_tiling = (kparams->pad_x == 0 && kparams->pad_y == 0 &&
+                               kparams->stride_x == kparams->kernel_x && kparams->stride_y == kparams->kernel_y);
+    const bool fast_ok      = exact_tiling && (kparams->kernel_x == 1 || kparams->kernel_x == 2);
+    const bool narrow_ok    = fast_ok && ((uint64_t) kparams->dst_x * kparams->kernel_x <= 32);
+    const bool global_ok    = exact_tiling &&
+                              kparams->kernel_x == kparams->src_x && kparams->kernel_y == kparams->src_y &&
+                              kparams->dst_x == 1 && kparams->dst_y == 1;
+    const bool block_ok     = exact_tiling &&
+                              kparams->kernel_y == 1 && kparams->stride_y == 1 &&
+                              kparams->kernel_x >= 32;
+
+    if (global_ok) {
+        kparams->kernel_type = HTP_POOL_KERNEL_GLOBAL;
+    } else if (block_ok) {
+        kparams->kernel_type = HTP_POOL_KERNEL_BLOCK;
+    } else if (narrow_ok) {
+        kparams->kernel_type = HTP_POOL_KERNEL_HVX_NARROW;
+    } else if (fast_ok) {
+        kparams->kernel_type = HTP_POOL_KERNEL_HVX;
+    } else {
+        kparams->kernel_type = HTP_POOL_KERNEL_GENERAL;
+    }
+
     kparams->avg_divide_count = (is_pool_1d && kparams->pool_op == GGML_OP_POOL_AVG) ? 1 : 0;
     ggml_hexagon_pool_interior_range(kparams->src_x, kparams->dst_x, kparams->kernel_x,
                                      kparams->stride_x, kparams->pad_x,
                                      &kparams->ox_lo, &kparams->ox_hi);
-
-    const bool narrow_ok = (uint64_t) kparams->dst_x * kparams->kernel_x <= 32;
-    kparams->narrow_path = (kparams->fast_path && narrow_ok) ? 1 : 0;
     kparams->inv_kernel_area = 1.0f / (float) (kparams->kernel_x * kparams->kernel_y);
 }
 
@@ -5825,13 +5832,12 @@ static void ggml_hexagon_precompute_fill_params(
     const uint32_t max_threads    = (std::max)(1u, total_rows);
     const uint32_t n_threads      = (std::min)((uint32_t) sess->n_threads, max_threads);
     const uint32_t elem_size      = (uint32_t) ggml_type_size(dst->type);
-    const bool     opt_path       = ggml_is_contiguous(dst);
     const uint32_t rows_per_chunk = (nb1 > 0) ? (HEX_L2_LINE_SIZE / hex_gcd_u32(nb1, HEX_L2_LINE_SIZE)) : 1;
 
     kparams->n_threads      = n_threads;
     kparams->total_rows     = total_rows;
     kparams->elem_size      = elem_size;
-    kparams->opt_path       = opt_path ? 1 : 0;
+    kparams->kernel_type    = ggml_is_contiguous(dst) ? HTP_FILL_KERNEL_CONTIGUOUS : HTP_FILL_KERNEL_STRIDED;
     kparams->rows_per_chunk = rows_per_chunk;
     kparams->div_ne1        = init_fastdiv_values(ne1);
     kparams->div_ne1_ne2    = init_fastdiv_values(ne1 * ne2);

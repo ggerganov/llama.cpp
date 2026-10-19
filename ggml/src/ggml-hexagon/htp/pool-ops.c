@@ -364,16 +364,12 @@ int op_pool_2d(struct htp_ops_context * octx) {
     const uint32_t planes_per_thread = fastdiv(plane_count + n_threads - 1, &octx->n_threads_div);
 
     pool_plane_fn_t pool_plane;
-    if (p->global_path) {
-        pool_plane = pool_plane_global;
-    } else if (p->block_path) {
-        pool_plane = pool_plane_block;
-    } else if (p->narrow_path) {
-        pool_plane = pool_plane_hvx_narrow;
-    } else if (p->fast_path) {
-        pool_plane = pool_plane_hvx;
-    } else {
-        pool_plane = pool_plane_general;
+    switch (p->kernel_type) {
+        case HTP_POOL_KERNEL_GLOBAL:     pool_plane = pool_plane_global;     break;
+        case HTP_POOL_KERNEL_BLOCK:      pool_plane = pool_plane_block;      break;
+        case HTP_POOL_KERNEL_HVX_NARROW: pool_plane = pool_plane_hvx_narrow; break;
+        case HTP_POOL_KERNEL_HVX:        pool_plane = pool_plane_hvx;        break;
+        default:                         pool_plane = pool_plane_general;    break;
     }
 
     struct pool_2d_context ctx = {

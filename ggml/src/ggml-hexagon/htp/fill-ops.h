@@ -4,11 +4,16 @@
 #include "hex-fastdiv.h"
 #include <stdint.h>
 
+enum htp_fill_kernel_type {
+    HTP_FILL_KERNEL_CONTIGUOUS = 0,
+    HTP_FILL_KERNEL_STRIDED    = 1,
+};
+
 struct htp_fill_kernel_params {
+    uint8_t  kernel_type;
     uint32_t n_threads;
     uint32_t total_rows;
     uint32_t elem_size;
-    uint32_t opt_path;
     uint32_t rows_per_chunk;
 
     struct fastdiv_values div_ne1;

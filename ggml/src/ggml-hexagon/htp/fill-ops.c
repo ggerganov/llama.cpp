@@ -39,12 +39,36 @@ struct htp_fill_context {
     uint32_t nrows_per_thread;
     uint32_t total_rows;  // ne1 * ne2 * ne3
     uint32_t row_start;
-    bool     opt_path;
     HVX_Vector splat_vec;
     uint32_t   elem_size;
 };
 
-static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
+static void fill_thread_contiguous(unsigned int nth, unsigned int ith, void * data) {
+    const struct htp_fill_context * fctx = (const struct htp_fill_context *) data;
+    struct htp_ops_context        * octx = fctx->octx;
+    fill_preamble;
+
+    // Parallelise over the flat row index spanning ne1*ne2*ne3
+    const uint32_t ir0 = fctx->row_start + fctx->nrows_per_thread * ith;
+    const uint32_t ir1 = MIN(ir0 + fctx->nrows_per_thread, fctx->row_start + fctx->total_rows);
+
+    if (ir0 >= ir1) {
+        return;
+    }
+
+    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir0);
+
+    const uint32_t elem_start = ir0 * ne0;
+    const uint32_t elem_end   = ir1 * ne0;
+    uint8_t * dst_ptr = (uint8_t *) dst->data + elem_start * fctx->elem_size;
+    hvx_splat_u(dst_ptr, fctx->splat_vec, elem_end - elem_start, fctx->elem_size);
+
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir1);
+    FARF(HIGH, "fill-contig %u/%u: rows %u:%u\n", ith, nth, ir0, ir1);
+}
+
+static void fill_thread_strided(unsigned int nth, unsigned int ith, void * data) {
     const struct htp_fill_context * fctx = (const struct htp_fill_context *) data;
     struct htp_ops_context        * octx = fctx->octx;
     const struct htp_fill_kernel_params * kparams = fctx->kparams;
@@ -61,26 +85,17 @@ static void fill_thread(unsigned int nth, unsigned int ith, void * data) {
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
     htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir0);
 
-    if (fctx->opt_path) {
-        // Opt path: tensor is fully contiguous, treat as flat array
-        const uint32_t elem_start = ir0 * ne0;
-        const uint32_t elem_end = ir1 * ne0;
-        uint8_t * dst_ptr = (uint8_t *) dst->data + elem_start * fctx->elem_size;
-        hvx_splat_u(dst_ptr, fctx->splat_vec, elem_end - elem_start, fctx->elem_size);
-    } else {
-        // Non-contiguous path: must respect strides
-        for (uint32_t ir = ir0; ir < ir1; ++ir) {
-            const uint32_t i3  = fastdiv(ir, &kparams->div_ne1_ne2);
-            const uint32_t rem = ir - i3 * (ne1 * ne2);
-            const uint32_t i2  = fastdiv(rem, &kparams->div_ne1);
-            const uint32_t i1  = rem - i2 * ne1;
-            uint8_t * dst_ptr = (uint8_t *) dst->data + i1*nb1 + i2*nb2 + i3*nb3;
-            hvx_splat_u(dst_ptr, fctx->splat_vec, ne0, fctx->elem_size);
-        }
+    for (uint32_t ir = ir0; ir < ir1; ++ir) {
+        const uint32_t i3  = fastdiv(ir, &kparams->div_ne1_ne2);
+        const uint32_t rem = ir - i3 * (ne1 * ne2);
+        const uint32_t i2  = fastdiv(rem, &kparams->div_ne1);
+        const uint32_t i1  = rem - i2 * ne1;
+        uint8_t * dst_ptr = (uint8_t *) dst->data + i1*nb1 + i2*nb2 + i3*nb3;
+        hvx_splat_u(dst_ptr, fctx->splat_vec, ne0, fctx->elem_size);
     }
 
     htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) ir1);
-    FARF(HIGH, "fill %u/%u: rows %u:%u\n", ith, nth, ir0, ir1);
+    FARF(HIGH, "fill-strided %u/%u: rows %u:%u\n", ith, nth, ir0, ir1);
 }
 
 int op_fill(struct htp_ops_context * octx) {
@@ -110,10 +125,9 @@ int op_fill(struct htp_ops_context * octx) {
     }
 
     const uint32_t n_threads = octx->n_threads;
-    const bool     opt_path  = (kparams->opt_path != 0);
 
-    FARF(HIGH, "fill: (%ux%ux%ux%u) type=%u opt=%d\n",
-         dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], dst->type, (int) opt_path);
+    FARF(HIGH, "fill: (%ux%ux%ux%u) type=%u ktype=%u\n",
+         dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], dst->type, kparams->kernel_type);
 
     float val_f32 = 0.f;
     memcpy(&val_f32, &octx->op_params[0], sizeof(float));
@@ -124,7 +138,6 @@ int op_fill(struct htp_ops_context * octx) {
         .nrows_per_thread = fastdiv(nrows + n_threads - 1, &octx->n_threads_div),
         .total_rows       = nrows,
         .row_start        = row_start,
-        .opt_path         = opt_path,
         .elem_size        = kparams->elem_size,
     };
 
@@ -139,7 +152,11 @@ int op_fill(struct htp_ops_context * octx) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
-    work_queue_run(octx->ctx->work_queue, fill_thread, &fctx, n_threads);
+    work_queue_func_t worker = (kparams->kernel_type == HTP_FILL_KERNEL_CONTIGUOUS)
+        ? fill_thread_contiguous
+        : fill_thread_strided;
+
+    work_queue_run(octx->ctx->work_queue, worker, &fctx, n_threads);
 
     return HTP_STATUS_OK;
 }

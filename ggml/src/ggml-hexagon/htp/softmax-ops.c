@@ -496,7 +496,7 @@ static int execute_op_softmax_f32(struct htp_ops_context * octx) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
-    if (kparams->kernel_id >= HTP_SOFTMAX_KERNEL_COUNT) {
+    if (kparams->kernel_type >= HTP_SOFTMAX_KERNEL_COUNT) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
@@ -543,7 +543,7 @@ static int execute_op_softmax_f32(struct htp_ops_context * octx) {
     struct htp_softmax_context smctx = {
         .octx                  = octx,
         .kparams               = kparams,
-        .compute               = (void *) softmax_kernels[kparams->kernel_id],
+        .compute               = (void *) softmax_kernels[kparams->kernel_type],
 
         .data_src0             = src0->data,
         .data_src1             = kparams->use_src1 ? octx->src[1]->data : 0,

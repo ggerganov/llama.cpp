@@ -38,9 +38,9 @@ static inline void htp_pad_vtcm_layout_build(
 }
 
 struct htp_pad_kernel_params {
+    uint8_t  kernel_type;
     uint32_t n_threads;
     uint32_t total_dst_rows;
-    uint32_t kernel_type;
     uint32_t use_dma;
     uint32_t type_size;
     uint32_t src_row_size;
