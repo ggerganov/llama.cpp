@@ -11750,16 +11750,19 @@ void ggml_compute_forward_kpool_mask(
     GGML_ASSERT(dst->type == mask->type);
     GGML_ASSERT(dst->nb[0] == ggml_type_size(dst->type));
 
-    const int64_t n_kv     = mask->ne[0];
-    const int64_t ne1      = mask->ne[1];
-    const int64_t ne2      = mask->ne[2];
-    const int64_t n_tokens = ne1*ne2*mask->ne[3];
+    const int64_t n_kv     = dst->ne[0];
+    const int64_t ne1      = dst->ne[1];
+    const int64_t ne2      = dst->ne[2];
+    const int64_t n_tokens = ne1*ne2*dst->ne[3];
     const int64_t kpool    = pools->ne[0];
     const int64_t n_pool   = pools->ne[1];
     const int64_t n_top    = top_k->ne[0];
     const int64_t n_tail   = tail ? tail->ne[0] : 0;
 
     const size_t ts = ggml_type_size(dst->type);
+
+    // a single mask row applies to every token, the result is 2D then
+    const size_t sm1 = mask->ne[1] == 1 ? 0 : mask->nb[1];
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -11769,7 +11772,7 @@ void ggml_compute_forward_kpool_mask(
         const int64_t i2 = (t / ne1) % ne2;
         const int64_t i3 = t / (ne1*ne2);
 
-        const char * src_row = (const char *) mask->data + i1*mask->nb[1] + i2*mask->nb[2] + i3*mask->nb[3];
+        const char * src_row = (const char *) mask->data + i1*sm1 + i2*mask->nb[2] + i3*mask->nb[3];
         char       * dst_row = (char       *) dst->data  + i1*dst->nb[1]  + i2*dst->nb[2]  + i3*dst->nb[3];
 
         if (dst->type == GGML_TYPE_F16) {

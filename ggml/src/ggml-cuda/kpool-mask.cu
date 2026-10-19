@@ -78,8 +78,8 @@ static void kpool_mask_cuda(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
     const ggml_tensor * pools = dst->src[3];
     const ggml_tensor * tail  = dst->src[4];
 
-    const int64_t n_kv     = mask->ne[0];
-    const int64_t n_tokens = mask->ne[1]*mask->ne[2]*mask->ne[3];
+    const int64_t n_kv     = dst->ne[0];
+    const int64_t n_tokens = dst->ne[1]*dst->ne[2]*dst->ne[3];
 
     GGML_ASSERT(dst->nb[0] == sizeof(T) && mask->nb[0] == sizeof(T));
     GGML_ASSERT(dst->nb[1] % sizeof(T) == 0 && mask->nb[1] % sizeof(T) == 0);
@@ -91,6 +91,9 @@ static void kpool_mask_cuda(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
 
     const int32_t * tail_d = tail ? (const int32_t *) tail->data : nullptr;
 
+    // a single mask row applies to every token, the result is 2D then
+    const int64_t sm1 = mask->ne[1] == 1 ? 0 : mask->nb[1]/sizeof(T);
+
     const dim3 block_dims(CUDA_KPOOL_MASK_BLOCK_SIZE, 1, 1);
     const dim3 grid_dims(n_tokens, 1, 1);
     const ggml_cuda_kernel_launch_params launch_params = ggml_cuda_kernel_launch_params(grid_dims, block_dims, 0, ctx.stream());
@@ -98,9 +101,9 @@ static void kpool_mask_cuda(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
     ggml_cuda_kernel_launch(kpool_mask_kernel<T>, launch_params,
             (const T *) mask->data, (const float *) score->data, (const int32_t *) top_k->data, (const int32_t *) pools->data,
             tail_d, (T *) dst->data,
-            n_kv, mask->ne[1], mask->ne[2],
+            n_kv, dst->ne[1], dst->ne[2],
             pools->ne[1], pools->ne[0], top_k->ne[0], tail ? tail->ne[0] : 0,
-            mask->nb[1]/sizeof(T), mask->nb[2]/sizeof(T), mask->nb[3]/sizeof(T),
+            sm1,                   mask->nb[2]/sizeof(T), mask->nb[3]/sizeof(T),
             dst->nb[1]/sizeof(T),  dst->nb[2]/sizeof(T),  dst->nb[3]/sizeof(T),
             score->nb[0]/sizeof(float), score->nb[1]/sizeof(float),
             top_k->nb[0]/sizeof(int32_t), top_k->nb[1]/sizeof(int32_t),

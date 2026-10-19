@@ -2736,11 +2736,12 @@ extern "C" {
     // k-pool sparse attention mask: keep the mask cells of the picked pools and the tail, set the rest to -inf
     //
     // mask:  [n_kv,   ne1,      ne2, ne3] f16 or f32, one row per token, n_tokens = ne1*ne2*ne3
+    //        or [n_kv, 1, 1, 1], one row for all tokens, n_tokens = score->ne[1]
     // score: [n_pool, n_tokens]           f32, a picked pool is live when its score is above -inf
     // top_k: [n_top,  n_tokens]           i32, picked pools
     // pools: [kpool,  n_pool]             i32, member cells of each pool
     // tail:  [n_tail, n_tokens]           i32, extra cells of each token, can be NULL
-    // res:   same shape and type as mask
+    // res:   same shape and type as mask, or [n_kv, n_tokens] for the single row
     //
     // res[c, t] = mask[c, t] when c is a member of a live picked pool of t or a tail cell of t, else -inf
     // cells and pools out of range are skipped

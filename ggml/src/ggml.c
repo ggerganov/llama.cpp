@@ -6647,7 +6647,9 @@ struct ggml_tensor * ggml_kpool_mask(
     GGML_ASSERT(pools->type == GGML_TYPE_I32);
     GGML_ASSERT(mask->nb[0] == ggml_type_size(mask->type));
 
-    const int64_t n_tokens = mask->ne[1]*mask->ne[2]*mask->ne[3];
+    // a single mask row applies to every token
+    const bool    bcast    = ggml_nrows(mask) == 1;
+    const int64_t n_tokens = bcast ? score->ne[1] : mask->ne[1]*mask->ne[2]*mask->ne[3];
 
     GGML_ASSERT(score->ne[1] == n_tokens && score->ne[2] == 1 && score->ne[3] == 1);
     GGML_ASSERT(top_k->ne[1] == n_tokens && top_k->ne[2] == 1 && top_k->ne[3] == 1);
@@ -6658,7 +6660,9 @@ struct ggml_tensor * ggml_kpool_mask(
         GGML_ASSERT(tail->ne[1] == n_tokens && tail->ne[2] == 1 && tail->ne[3] == 1);
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, mask->type, GGML_MAX_DIMS, mask->ne);
+    struct ggml_tensor * result = bcast ?
+        ggml_new_tensor_2d(ctx, mask->type, mask->ne[0], n_tokens) :
+        ggml_new_tensor(ctx, mask->type, GGML_MAX_DIMS, mask->ne);
 
     result->op     = GGML_OP_KPOOL_MASK;
     result->src[0] = mask;

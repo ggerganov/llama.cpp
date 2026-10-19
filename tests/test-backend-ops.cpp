@@ -9011,9 +9011,10 @@ struct test_kpool_mask : public test_case {
     const int64_t nb;     // tokens per stream
     const int64_t ns;     // streams
     const bool    real;   // pools of consecutive cells and visible picks, as in a real cache
+    const bool    bcast;  // one mask row for all tokens
 
     std::string vars() override {
-        return VARS_TO_STR9(type, n_kv, n_pool, kpool, n_top, n_tail, nb, ns, real);
+        return VARS_TO_STR10(type, n_kv, n_pool, kpool, n_top, n_tail, nb, ns, real, bcast);
     }
 
     // the result is a copy of the mask or -inf, so the finite values must match exactly
@@ -9037,11 +9038,11 @@ struct test_kpool_mask : public test_case {
     }
 
     test_kpool_mask(ggml_type type = GGML_TYPE_F16, int64_t n_kv = 256, int64_t n_pool = 64, int64_t kpool = 4,
-            int64_t n_top = 16, int64_t n_tail = 3, int64_t nb = 32, int64_t ns = 1, bool real = false)
-        : type(type), n_kv(n_kv), n_pool(n_pool), kpool(kpool), n_top(n_top), n_tail(n_tail), nb(nb), ns(ns), real(real) {}
+            int64_t n_top = 16, int64_t n_tail = 3, int64_t nb = 32, int64_t ns = 1, bool real = false, bool bcast = false)
+        : type(type), n_kv(n_kv), n_pool(n_pool), kpool(kpool), n_top(n_top), n_tail(n_tail), nb(nb), ns(ns), real(real), bcast(bcast) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
-        ggml_tensor * m = ggml_new_tensor_4d(ctx, type, n_kv, nb, 1, ns);
+        ggml_tensor * m = bcast ? ggml_new_tensor_1d(ctx, type, n_kv) : ggml_new_tensor_4d(ctx, type, n_kv, nb, 1, ns);
         ggml_set_name(m, "m");
 
         ggml_tensor * score = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_pool, nb*ns);
@@ -9920,6 +9921,10 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         test_cases.emplace_back(new test_kpool_mask(type, 512, 16, 8, 32, 7, 5, 4));
         test_cases.emplace_back(new test_kpool_mask(type, 4096, 1024, 4, 512, 3, 1, 1));
         test_cases.emplace_back(new test_kpool_mask(type, 4096, 1024, 4, 512, 3, 64, 2));
+        // one mask row for all tokens
+        test_cases.emplace_back(new test_kpool_mask(type, 1001, 70, 4, 16, 3, 7, 1, false, true));
+        test_cases.emplace_back(new test_kpool_mask(type, 4096, 1024, 4, 512, 3, 64, 1, false, true));
+        test_cases.emplace_back(new test_kpool_mask(type, 4096, 1024, 4, 512, 3, 64, 1, true, true));
     }
 
     // glu ops
@@ -12740,7 +12745,9 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
     // kpool_mask, Flash-Next QSA shapes: 512 pools of 4 + a 3-cell tail
     for (int64_t n_kv : { 18432, 131072 }) {
         for (int64_t nb : { 1, 2048 }) {
-            test_cases.emplace_back(new test_kpool_mask(GGML_TYPE_F16, n_kv, n_kv/4, 4, 512, 3, nb, 1, true));
+            for (bool bcast : { false, true }) {
+                test_cases.emplace_back(new test_kpool_mask(GGML_TYPE_F16, n_kv, n_kv/4, 4, 512, 3, nb, 1, true, bcast));
+            }
         }
     }
 
