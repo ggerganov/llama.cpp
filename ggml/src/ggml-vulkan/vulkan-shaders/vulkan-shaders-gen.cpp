@@ -360,7 +360,7 @@ void string_to_spv_func(std::string name, std::string in_path, std::string out_p
     // disable spirv-opt for bf16 shaders for https://github.com/ggml-org/llama.cpp/issues/15344
     // disable spirv-opt for rope shaders for https://github.com/ggml-org/llama.cpp/issues/16860
     // disable spirv-opt for dot2 shaders (spirv-opt doesn't recognize SPV_VALVE_mixed_float_dot_product capability)
-    if (!coopmat && name.find("bf16") == std::string::npos && name.find("rope") == std::string::npos && name.find("_dot2") == std::string::npos) {
+    if (!coopmat && name.find("bf16") == std::string::npos && name.find("rope") == std::string::npos && name.find("_dot2") == std::string::npos && name.find("mul_mat_vec_cm1") == std::string::npos) {
         cmd.push_back("-O");
     }
 
@@ -935,6 +935,12 @@ void process_shaders() {
 #if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
     string_to_spv("fa_decode_ph1", "flash_attn_decode_phase_1.comp", {}, true, true, false, false);
     string_to_spv("fa_decode_ph2", "flash_attn_decode_phase_2.comp", {}, true, true, false, false);
+#endif
+#if defined(GGML_VULKAN_COOPMAT_GLSLC_SUPPORT)
+    string_to_spv("dequant_f32_reshape", "dequant_f32_reshape.comp", {{"D_TYPE", "float16_t"}});
+    for (const std::string tname : {"q4_k", "q6_k"}) {
+        string_to_spv("mul_mat_vec_cm1_" + tname, "mul_mat_vec_cm1.comp", {{"DATA_A_" + to_uppercase(tname), "1"}}, true, false, false, false);
+    }
 #endif
 
     string_to_spv("fa_sparse_compact", "flash_attn_sparse_compact.comp", {});

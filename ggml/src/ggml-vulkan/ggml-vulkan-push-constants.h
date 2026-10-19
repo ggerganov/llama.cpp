@@ -57,6 +57,13 @@ struct vk_mat_vec_nc_push_constants {
     uint32_t fusion_flags;
 };
 
+struct vk_mat_vec_cm1_push_constants {
+    uint32_t M;
+    uint32_t K;
+    uint32_t N;
+    uint32_t blocks_per_row;
+};
+
 struct vk_mat_mat_id_push_constants {
     uint32_t M; uint32_t N; uint32_t K;
     uint32_t stride_a; uint32_t stride_b; uint32_t stride_d;

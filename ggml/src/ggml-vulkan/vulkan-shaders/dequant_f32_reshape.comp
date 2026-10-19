@@ -1,0 +1,48 @@
+#version 450
+
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_clustered : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
+#include "dequant_head.glsl"
+
+layout (constant_id = 0) const uint BLOCK_SIZE = 256;
+layout (constant_id = 1) const uint NUM_ITER = 4;
+layout (constant_id = 2) const uint SUM_K = 32;
+layout (constant_id = 3) const uint ACT_SUM_ORDER = 0;
+layout (constant_id = 4) const uint SUBBLOCKS_PER_BATCH = 1;
+layout (constant_id = 5) const uint PARTS_PER_BLOCK = 1;
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {vec4 data_a4[];};
+layout (binding = 1) writeonly buffer D {f16vec4 data_b4[];};
+layout (binding = 1) writeonly buffer DS {float data_act_sums[];};
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x * NUM_ITER;
+
+    [[unroll]] for (uint l = 0; l < NUM_ITER; l += 4u) {
+        const uint e = i + l;
+        const uint n = e / p.M;
+        const uint k = e - n * p.M;
+        const bool ok = e < p.nel;
+        f16vec4 h = f16vec4(0.0);
+        if (ok) {
+            h = f16vec4(data_a4[e >> 2u]);
+            data_b4[((k >> 4u) * (p.K * 16u) + n * 16u + (k & 15u)) >> 2u] = h;
+        }
+        const vec4 f = vec4(h);
+        const float sum4 = (f.x + f.y) + (f.z + f.w);
+        const float act_sum = SUM_K == 16u ? subgroupClusteredAdd(sum4, 4u) : subgroupClusteredAdd(sum4, 8u);
+        if (ok && (gl_SubgroupInvocationID % (SUM_K / 4u)) == 0u) {
+            const uint block_sub_block = (k & 255u) / SUM_K;
+            const uint q6_k_position   = (block_sub_block & 8u) | ((block_sub_block & 1u) << 2u) | ((block_sub_block >> 1u) & 3u);
+            const uint batch_position  = ACT_SUM_ORDER == 2u ? q6_k_position : block_sub_block;
+            const uint batch           = batch_position / SUBBLOCKS_PER_BATCH;
+            const uint row_position    = (batch % PARTS_PER_BLOCK) * (256u / SUM_K / PARTS_PER_BLOCK) +
+                                         (batch / PARTS_PER_BLOCK) * SUBBLOCKS_PER_BATCH + batch_position % SUBBLOCKS_PER_BATCH;
+            const uint sum_offset = ((k >> 8u) * 16u + n) * (256u / SUM_K) + row_position;
+            data_act_sums[8u * p.M + sum_offset] = act_sum;
+        }
+    }
+}

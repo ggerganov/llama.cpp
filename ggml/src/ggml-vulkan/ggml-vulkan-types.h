@@ -718,6 +718,11 @@ struct vk_device_struct {
     bool integer_dot_product;
     // 0: default, 1: force mmvq, -1: disable mmvq
     int32_t mmvq_mode;
+    bool cm1_gemv_support {};
+    uint32_t cm1_gemv_tn {};
+    uint32_t cm1_gemv_block_k[GGML_TYPE_COUNT] {};
+    uint32_t cm1_gemv_max_n {};
+    uint32_t cm1_gemv_acc_rows[4] {};
 
     bool subgroup_size_control;
     uint32_t subgroup_min_size;
@@ -790,6 +795,8 @@ struct vk_device_struct {
 
     vk_pipeline pipeline_dequant[GGML_TYPE_COUNT];
     vk_pipeline pipeline_dequant_transpose[GGML_TYPE_COUNT]; // fused dequant+transpose for FA quant-KV
+    vk_pipeline pipeline_cm1_to_tile[GGML_TYPE_COUNT][2];
+    vk_pipeline pipeline_cm1_mul_mat_vec[GGML_TYPE_COUNT][2][3][4];
     vk_pipeline pipeline_dequant_mul_mat_vec_f32_f32[DMMV_WG_SIZE_COUNT][GGML_TYPE_COUNT][mul_mat_vec_max_cols];
     vk_pipeline pipeline_dequant_mul_mat_vec_f16_f32[DMMV_WG_SIZE_COUNT][GGML_TYPE_COUNT][mul_mat_vec_max_cols];
     vk_pipeline pipeline_dequant_mul_mat_vec_id_f32[DMMV_WG_SIZE_COUNT][GGML_TYPE_COUNT];

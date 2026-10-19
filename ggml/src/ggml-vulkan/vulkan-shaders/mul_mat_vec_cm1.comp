@@ -1,0 +1,205 @@
+#version 450
+
+#extension GL_EXT_control_flow_attributes : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_KHR_memory_scope_semantics : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_shuffle : enable
+#extension GL_EXT_shared_memory_block : enable
+
+layout (constant_id = 6) const uint PARTS_PER_BLOCK = 1;
+#include "mul_mat_vec_cm1_funcs.glsl"
+
+layout (constant_id = 0) const uint BLOCK_SIZE = 64;
+layout (constant_id = 1) const uint NUM_WARPS = 4;
+layout (constant_id = 2) const uint ACC_ROWS = 16;
+layout (constant_id = 3) const uint ACT_ROWS = 16;
+layout (constant_id = 4) const uint BLOCKS_PER_CHUNK = 1;
+layout (constant_id = 5) const uint EVEN_BLOCKS_PER_ROW = 0;
+
+const uint TK = 16;
+layout (constant_id = 7) const uint TN = 16;
+const uint MAX_ACT_ROWS = 16;
+
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+layout (push_constant) uniform parameter
+{
+    uint M;
+    uint K;
+    uint N;
+    uint blocks_per_row;
+} p;
+
+layout (binding = 1) readonly buffer B { float16_t data_b[]; };
+layout (binding = 1) readonly buffer BS { float data_act_sums[]; };
+layout (binding = 1) readonly buffer BS2 { vec2 data_act_sums2[]; };
+layout (binding = 1) readonly buffer BS4 { vec4 data_act_sums4[]; };
+layout (binding = 2) writeonly buffer D { vec4 data_d4[]; };
+
+shared reduce_buf_block {
+    float reduce_buf[NUM_WARPS * ACC_ROWS * TN];
+} reduce_buf_wrap;
+
+shared reduce4_block {
+    vec4 reduce4[NUM_WARPS * ACC_ROWS * TN / 4u];
+} reduce4_wrap;
+
+#define reduce_buf reduce_buf_wrap.reduce_buf
+#define reduce4 reduce4_wrap.reduce4
+#define reduce4_load(i) reduce4[i]
+
+const uint SLICES_PER_BLOCK     = QUANT_K / TK;
+const uint BATCHES_PER_BLOCK    = SLICES_PER_BLOCK / SLICES_PER_BATCH;
+const uint SUBBLOCKS_PER_BATCH  = SLICES_PER_BATCH / SLICES_PER_SUBBLOCK;
+const uint SUBBLOCKS_PER_BLOCK  = SLICES_PER_BLOCK / SLICES_PER_SUBBLOCK;
+const uint MAX_ACC_ELEMENTS     = ACC_ROWS * TN / 8u;
+
+const uint SUBBLOCKS_PER_PART   = SUBBLOCKS_PER_BLOCK / PARTS_PER_BLOCK;
+const uint PART_SUM_VECTORS     = (SUBBLOCKS_PER_PART + 3u) / 4u;
+
+uvec2 acc_element_coord(const uint i) {
+    return uvec2((2u * i) | ((gl_SubgroupInvocationID >> 4u) & 1u), gl_SubgroupInvocationID & 15u);
+}
+
+uvec2 weight_element_coord(const uint e) {
+    return uvec2((2u * e) | (gl_SubgroupInvocationID & 1u), (gl_SubgroupInvocationID >> 1u) & 15u);
+}
+
+uint act_sums_offset() {
+    return MAX_ACT_ROWS / 2u * p.K;
+}
+
+vec4 part_act_sums(const uint block, const uint part, const uint row, const uint v) {
+    const uint first = act_sums_offset() + (block * MAX_ACT_ROWS + row) * SUBBLOCKS_PER_BLOCK + part * SUBBLOCKS_PER_PART + v * 4u;
+    if (SUBBLOCKS_PER_PART >= 4u) return data_act_sums4[first >> 2u];
+    if (SUBBLOCKS_PER_PART == 2u) return vec4(data_act_sums2[first >> 1u], 0.0, 0.0);
+    return vec4(data_act_sums[first], 0.0, 0.0, 0.0);
+}
+
+vec4 batch_act_sums(const vec4 sums[PART_SUM_VECTORS], const uint batch_in_part) {
+    const uint first = batch_in_part * SUBBLOCKS_PER_BATCH;
+    vec4 batch_sums = vec4(0.0);
+    [[unroll]] for (uint sub = 0; sub < SUBBLOCKS_PER_BATCH; ++sub) batch_sums[sub] = sums[(first + sub) / 4u][(first + sub) % 4u];
+    return batch_sums;
+}
+
+void process_block(inout coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator> acc,
+                   const uint col_base, const uint first_block, const uint block_in_chunk, const uint block_parity,
+                   const uint part, const uint act_slice_stride) {
+    const uint block = first_block + block_in_chunk;
+    uint header[MAX_ACC_ELEMENTS][HEADER_DWORDS];
+    [[unroll]] for (uint i = 0; i < acc.length(); ++i) {
+        const uvec2 coord = acc_element_coord(i);
+        load_header((col_base + coord.y) * p.blocks_per_row + block, block_parity, part, header[i]);
+    }
+    vec4 row_part_sums[PART_SUM_VECTORS];
+    [[unroll]] for (uint v = 0; v < PART_SUM_VECTORS; ++v)
+        row_part_sums[v] = part_act_sums(block, part, gl_SubgroupInvocationID % ACC_ROWS, v);
+    coopmat<float16_t, gl_ScopeSubgroup, TK, TN, gl_MatrixUseB> matW;
+    const uint PAIRS = TK * TN / 2u / 8u;
+    pair_t block_data[PAIRS][BLOCK_PAIR_DWORDS];
+    [[unroll]] for (uint e = 0; e < matW.length(); e += 2u) {
+        const uvec2 coord0 = weight_element_coord(e);
+        const uvec2 coord1 = weight_element_coord(e + 1u);
+        load_block_pair((col_base + coord0.y) * p.blocks_per_row + block, (col_base + coord1.y) * p.blocks_per_row + block,
+                        coord0.x, coord1.x, block_parity, block_data[e / 2u]);
+    }
+    [[unroll]] for (uint b = 0; b < BATCHES_PER_BLOCK / PARTS_PER_BLOCK; ++b) {
+        const uint batch = b * PARTS_PER_BLOCK + part;
+        coopmat<float16_t, gl_ScopeSubgroup, ACC_ROWS, TK, gl_MatrixUseA> matAct[SLICES_PER_BATCH];
+        [[unroll]] for (uint j = 0; j < SLICES_PER_BATCH; ++j)
+            coopMatLoad(matAct[j], data_b, (block * SLICES_PER_BLOCK + batch_slice(batch, j)) * act_slice_stride, TK, gl_CooperativeMatrixLayoutRowMajor);
+        vec4 act_sums_of_element[MAX_ACC_ELEMENTS];
+        const vec4 row_act_sums = batch_act_sums(row_part_sums, b);
+        [[unroll]] for (uint i = 0; i < acc.length(); ++i) {
+            const uvec2 coord = acc_element_coord(i);
+            const vec4 even_row = subgroupShuffle(row_act_sums, coord.x & ~1u);
+            const vec4 odd_row  = subgroupShuffle(row_act_sums, coord.x | 1u);
+            act_sums_of_element[i] = (coord.x & 1u) != 0u ? odd_row : even_row;
+        }
+        pair_t pair_data[PAIRS][PAIR_DWORDS];
+        [[unroll]] for (uint e = 0; e < matW.length(); e += 2u) {
+            const uvec2 coord0 = weight_element_coord(e);
+            const uvec2 coord1 = weight_element_coord(e + 1u);
+            load_pair((col_base + coord0.y) * p.blocks_per_row + block, (col_base + coord1.y) * p.blocks_per_row + block,
+                      coord0.x, coord1.x, block_parity, batch, pair_data[e / 2u]);
+        }
+        coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator> product;
+        [[unroll]] for (uint j = 0; j < SLICES_PER_BATCH; ++j) {
+            [[unroll]] for (uint e = 0; e < matW.length(); e += 2u) {
+                const pair_t packed = dequant_pair(pair_data[e / 2u], block_data[e / 2u], batch, j);
+                const f16vec2 pair = pair_to_f16(packed);
+                matW[e]      = pair.x;
+                matW[e + 1u] = pair.y;
+            }
+            const uint sub = j / SLICES_PER_SUBBLOCK;
+            if (j % SLICES_PER_SUBBLOCK == 0u)
+                product = coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator>(0.0);
+            product = coopMatMulAdd(matAct[j], matW, product);
+            if (j % SLICES_PER_SUBBLOCK == SLICES_PER_SUBBLOCK - 1u) {
+                [[unroll]] for (uint i = 0; i < acc.length(); ++i) {
+                    uint element_header[HEADER_DWORDS];
+                    [[unroll]] for (uint h = 0; h < HEADER_DWORDS; ++h) element_header[h] = header[i][h];
+                    const vec2 scale_min = subblock_scale_min(element_header, batch_slice(batch, sub * SLICES_PER_SUBBLOCK));
+                    acc[i] = fma(product[i], scale_min.x, fma(act_sums_of_element[i][sub], scale_min.y, acc[i]));
+                }
+            }
+        }
+    }
+}
+
+void run_chunks(inout coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator> acc,
+                const uint col_base, const uint first_block_start, const uint num_iters, const uint part, const uint act_slice_stride) {
+    uint first_block = first_block_start;
+    for (uint it = 0; it < num_iters; ++it) {
+        if (EVEN_BLOCKS_PER_ROW != 0u && BLOCKS_PER_CHUNK == 2u) {
+            process_block(acc, col_base, first_block, 0u, 0u, part, act_slice_stride);
+            process_block(acc, col_base, first_block, 1u, 1u, part, act_slice_stride);
+        } else {
+            [[unroll]] for (uint b = 0; b < BLOCKS_PER_CHUNK; ++b)
+                process_block(acc, col_base, first_block, b, 2u, part, act_slice_stride);
+        }
+
+        first_block += NUM_WARPS / PARTS_PER_BLOCK * BLOCKS_PER_CHUNK;
+        first_block = first_block >= p.blocks_per_row ? first_block - p.blocks_per_row : first_block;
+    }
+}
+
+void main() {
+    const uint col_base = gl_WorkGroupID.x * TN;
+    const uint warp_id  = gl_SubgroupID;
+
+    const uint num_chunks       = p.blocks_per_row / BLOCKS_PER_CHUNK * PARTS_PER_BLOCK;
+    const uint act_slice_stride = ACT_ROWS * TK;
+
+    coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator> acc =
+        coopmat<float, gl_ScopeSubgroup, ACC_ROWS, TN, gl_MatrixUseAccumulator>(0.0);
+
+    uint rotation, rotation_low;
+    umulExtended(gl_WorkGroupID.x * 0x9E3779B9u, num_chunks, rotation, rotation_low);
+    const uint first_chunk = warp_id + rotation < num_chunks ? warp_id + rotation : warp_id + rotation - num_chunks;
+    const uint part        = first_chunk % PARTS_PER_BLOCK;
+    const uint num_iters   = warp_id < num_chunks ? (num_chunks - warp_id + NUM_WARPS - 1u) / NUM_WARPS : 0u;
+    uint first_block = first_chunk / PARTS_PER_BLOCK * BLOCKS_PER_CHUNK;
+
+    run_chunks(acc, col_base, first_block, num_iters, part, act_slice_stride);
+
+    coopMatStore(acc, reduce_buf, warp_id * ACC_ROWS * TN, TN, gl_CooperativeMatrixLayoutRowMajor);
+    barrier();
+
+    const uint tid = gl_LocalInvocationID.x;
+    for (uint item = tid; item < ACC_ROWS * (TN / 4u); item += BLOCK_SIZE) {
+        const uint batch_row = item / (TN / 4u);
+        const uint col_quad  = item % (TN / 4u);
+        if (batch_row < p.N) {
+            vec4 total = vec4(0.0);
+            [[unroll]] for (uint w = 0; w < NUM_WARPS; ++w)
+                total += reduce4_load(w * (ACC_ROWS * TN / 4u) + batch_row * (TN / 4u) + col_quad);
+            data_d4[(batch_row * p.M + col_base + col_quad * 4u) >> 2u] = total;
+        }
+    }
+}
