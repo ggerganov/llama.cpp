@@ -62,7 +62,7 @@ For vulnerabilities that fall within the `vendor` directory, please report them 
 ### Untrusted models
 Be careful when running untrusted models. This classification includes models created by unknown developers or utilizing data obtained from unknown sources.
 
-*Always execute untrusted models within a secure, isolated environment such as a sandbox* (e.g., containers, virtual machines). This helps protect your system from potentially malicious code.
+*Always execute untrusted models within a secure, isolated environment such as a sandbox* (e.g., containers, virtual machines). This helps to protect your system from potentially malicious code.
 
 > [!NOTE]
 > The trustworthiness of a model is not binary. You must always determine the proper level of caution depending on the specific model and how it matches your use case and risk tolerance.
