@@ -5727,6 +5727,18 @@ void server_routes::init_routes() {
         return res;
     };
 
+    this->get_model = [this](const server_http_req & req) {
+        auto res = create_response(true);
+        const std::string name = req.get_param("name");
+        const bool is_alias = meta->model_aliases.count(name) > 0;
+        if (name != meta->model_name && !is_alias) {
+            res->error(format_error_response("model not found", ERROR_TYPE_NOT_FOUND));
+            return res;
+        }
+        res->ok(get_res_model_info(*meta));
+        return res;
+    };
+
     this->post_tokenize = [this](const server_http_req & req) {
         auto res = create_response();
         const json body = json::parse(req.body);

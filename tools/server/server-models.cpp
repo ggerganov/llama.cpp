@@ -2349,6 +2349,22 @@ void server_models_routes::init_routes() {
         return models.proxy_request(req, method, name, true, waited && ticket != 0); // update last usage for POST request only
     };
 
+    this->get_router_model = [this](const server_http_req & req) {
+        auto res = std::make_unique<server_http_res>();
+        const std::string name = req.get_param("name");
+        auto meta = models.get_meta(name);
+        if (!meta.has_value()) {
+            res_err(res, format_error_response("model not found", ERROR_TYPE_NOT_FOUND));
+            return res;
+        }
+        if (meta->hidden) {
+            res_err(res, format_error_response("model not found", ERROR_TYPE_NOT_FOUND));
+            return res;
+        }
+        res_ok(res, meta->loaded_info);
+        return res;
+    };
+
     this->post_router_models_load = [this](const server_http_req & req) {
         auto res = std::make_unique<server_http_res>();
         json body = json::parse(req.body);
