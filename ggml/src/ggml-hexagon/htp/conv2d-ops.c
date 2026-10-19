@@ -1376,6 +1376,1160 @@ static int conv2d_hmx(struct htp_ops_context * octx, const struct htp_conv2d_ker
     return HTP_STATUS_OK;
 }
 
+// ---- HMX_WIN: implicit GEMM over sliding crouton windows ----
+
+#define CONV2D_WIN_RT_FULL 0x7FE // spatial mask 11111, channel stop 31
+#define CONV2D_WIN_SCAT_MAX 4    // scatter croutons for Cin <= 2 * CONV2D_WIN_SCAT_MAX
+
+// whcn small Cin: crouton byte offset of word j of a [c | c + 1] pixel pair vector
+static const int32_t conv2d_win_scat_off[32] __attribute__((aligned(VLEN))) = {
+    0 * 128, 1 * 128, 2 * 128,  3 * 128,  4 * 128,  5 * 128,  6 * 128,  7 * 128,
+    8 * 128, 9 * 128, 10 * 128, 11 * 128, 12 * 128, 13 * 128, 14 * 128, 15 * 128,
+    0 * 128 + 4, 1 * 128 + 4, 2 * 128 + 4,  3 * 128 + 4,  4 * 128 + 4,  5 * 128 + 4,  6 * 128 + 4,  7 * 128 + 4,
+    8 * 128 + 4, 9 * 128 + 4, 10 * 128 + 4, 11 * 128 + 4, 12 * 128 + 4, 13 * 128 + 4, 14 * 128 + 4, 15 * 128 + 4,
+};
+
+struct htp_conv2d_win_context {
+    struct htp_ops_context *             octx;
+    const struct htp_conv2d_win_params * kp;
+    __fp16 *                             w_tiles; // [rt][tap][cc] weight tiles
+    __fp16 *                             act[2];  // [cc][b] croutons of a chunk
+    __fp16 *                             out[2];  // [rt][tile] output tiles of a chunk
+    uint8_t *                            thr_base;
+    uint32_t                             t_base;  // device col tile range
+    uint32_t                             t_end;
+    uint32_t                             vr0;     // device virtual output row range
+    uint32_t                             vr1;
+    uint32_t                             rt0;
+    uint32_t                             n_rt;
+    int32_t                              pack_chunk;
+    int32_t                              unpack_chunk;
+    uint32_t                             n_scat;  // small Cin: scatters per crouton into zeroed croutons, else 0
+    uint8_t *                            live[2]; // per chunk: tiles with an output row to write
+};
+
+struct htp_conv2d_win_job {
+    __fp16 *         out;
+    const __fp16 *   w;
+    const __fp16 *   act;
+    const __fp16 *   scales;
+    const uint32_t * taps;       // activation address offset of each tap (crouton + window offset fields)
+    uint32_t         n_taps;
+    uint32_t         n_rt;
+    uint32_t         n_tiles;
+    uint32_t         out_stride; // elements between row tiles in out
+    uint32_t         n_cc;
+    uint32_t         plane;      // bytes between channel chunks in act
+    uint32_t         rt_last;
+    uint32_t         wr_last;
+    const uint8_t *  live;       // tiles with at least one output row to write
+};
+
+// Activation address offset of input pixel offset u: crouton u / 32, window offset u % 32 in Rs[10:7] and Rs[1]
+static inline uint32_t conv2d_win_act_off(uint32_t u) {
+    return ((u >> 5) << 11) | ((u & 30) << 6) | ((u & 1) << 1);
+}
+
+static void conv2d_win_hmx_worker(void * data) {
+    const struct htp_conv2d_win_job * j = (const struct htp_conv2d_win_job *) data;
+
+    asm volatile(HMX_SET_BIAS("%0") :: "r"((unsigned int) j->scales));
+
+    const uint32_t * taps    = j->taps;
+    const uint32_t   T       = j->n_taps;
+    const uint32_t   n_cc    = j->n_cc;
+    const uint32_t   plane   = j->plane;
+    const uint32_t   rt_last = HMX_FP16_TILE_SIZE | j->rt_last;
+    const uint32_t   wr_last = j->wr_last;
+    const uint32_t   n_tiles = j->n_tiles;
+    const uint32_t   n_rt    = j->n_rt;
+    const uint32_t   ostride = j->out_stride;
+    const uint32_t   act     = (uint32_t) j->act;
+    const size_t     wstride = (size_t) T * n_cc * HMX_FP16_TILE_N_ELMS;
+
+    for (uint32_t r = 0; r < n_rt; r++) {
+        __fp16 *       o  = j->out + r * ostride;
+        const __fp16 * w0 = j->w + r * wstride;
+
+        for (uint32_t i = 0; i < n_tiles; i++, o += HMX_FP16_TILE_N_ELMS) {
+            if (!j->live[i]) {
+                continue;
+            }
+            const uint32_t base = act + i * HMX_FP16_TILE_SIZE;
+            const __fp16 * w    = w0;
+
+            asm volatile(HMX_CLRACC_F16());
+            if (n_cc == 1) {
+                for (uint32_t t = 0; t < T; t++) {
+                    asm volatile("{ activation.hf = mxmem(%0, %1):single\n weight.hf = mxmem(%2, %3) }"
+                                 :: "r"(base + taps[t]), "r"(rt_last), "r"(w), "r"(wr_last));
+                    w += HMX_FP16_TILE_N_ELMS;
+                }
+            } else {
+                for (uint32_t t = 0; t < T; t++) {
+                    uint32_t rs = base + taps[t];
+                    for (uint32_t cc = 1; cc < n_cc; cc++) {
+                        asm volatile("{ activation.hf = mxmem(%0, %1):single\n weight.hf = mxmem(%2, %3) }"
+                                     :: "r"(rs), "r"(HMX_FP16_TILE_SIZE | CONV2D_WIN_RT_FULL), "r"(w), "r"(HMX_FP16_TILE_SIZE - 1));
+                        rs += plane;
+                        w  += HMX_FP16_TILE_N_ELMS;
+                    }
+                    asm volatile("{ activation.hf = mxmem(%0, %1):single\n weight.hf = mxmem(%2, %3) }"
+                                 :: "r"(rs), "r"(rt_last), "r"(w), "r"(wr_last));
+                    w += HMX_FP16_TILE_N_ELMS;
+                }
+            }
+            asm volatile(HMX_STORE_AFTER_F16("%0", "%1") : : "r"(o), "r"(0) : "memory");
+        }
+    }
+}
+
+static inline void conv2d_vdeal_w(HVX_Vector * a, HVX_Vector * b) {
+    const HVX_VectorPair p = Q6_W_vdeal_VVR(*b, *a, -4);
+    *a = Q6_V_lo_W(p);
+    *b = Q6_V_hi_W(p);
+}
+
+#define CONV2D_XPOSE_STAGE(v, m, op)                      \
+    _Pragma("unroll") for (uint32_t i = 0; i < 16; i++) { \
+        if (!(i & (m))) {                                 \
+            op(&(v)[i], &(v)[i | (m)]);                   \
+        }                                                 \
+    }
+
+// 16x32 word transpose: in[i] = [rows 2i, 2i + 1 of 16 words each], out[slot(v)] word c = row c word v
+static inline void conv2d_xpose_w16(HVX_Vector * restrict v) {
+    CONV2D_XPOSE_STAGE(v, 8, conv2d_vshuff_w);
+    CONV2D_XPOSE_STAGE(v, 4, conv2d_vshuff_w);
+    CONV2D_XPOSE_STAGE(v, 2, conv2d_vshuff_w);
+    CONV2D_XPOSE_STAGE(v, 1, conv2d_vshuff_w);
+    CONV2D_XPOSE_STAGE(v, 8, conv2d_vshuff_w);
+}
+
+// Inverse of conv2d_xpose_w16
+static inline void conv2d_unxpose_w16(HVX_Vector * restrict v) {
+    CONV2D_XPOSE_STAGE(v, 8, conv2d_vdeal_w);
+    CONV2D_XPOSE_STAGE(v, 1, conv2d_vdeal_w);
+    CONV2D_XPOSE_STAGE(v, 2, conv2d_vdeal_w);
+    CONV2D_XPOSE_STAGE(v, 4, conv2d_vdeal_w);
+    CONV2D_XPOSE_STAGE(v, 8, conv2d_vdeal_w);
+}
+
+// conv2d_xpose_w16 output position of row v
+static inline uint32_t conv2d_xpose_slot(uint32_t v) {
+    return ((v & 1) << 3) | (v >> 1);
+}
+
+static inline uint32_t conv2d_win_chunk_tiles(const struct htp_conv2d_win_context * wc, uint32_t c, uint32_t * ts) {
+    *ts = wc->t_base + c * wc->kp->ct_chunk;
+    return MIN(wc->kp->ct_chunk, wc->t_end - *ts);
+}
+
+// Cout-contiguous kernel: DMA w[t][c][32 cout] rows, tile vector p = (row 2p, row 2p+1) interleaved per cout
+static void conv2d_win_wpack_kmajor(const struct htp_conv2d_win_context * wc, unsigned int nth, unsigned int ith) {
+    struct htp_ops_context *             octx   = wc->octx;
+    const struct htp_conv2d_win_params * kp     = wc->kp;
+    const struct htp_tensor *            kernel = octx->src[0];
+
+    const uint32_t KW     = kernel->ne[0];
+    const uint32_t KH     = kernel->ne[1];
+    const uint32_t Cin    = kernel->ne[2];
+    const uint32_t Cout   = kernel->ne[3];
+    const uint32_t T      = KW * KH;
+    const uint32_t n_cc   = kp->n_cc;
+    const uint32_t TG     = kp->w_cs;
+    const bool     is_f16 = kernel->type == HTP_TYPE_F16;
+    const uint32_t es     = is_f16 ? sizeof(__fp16) : sizeof(float);
+
+    dma_queue *  dmaq = octx->ctx->dma[ith];
+    uint8_t *    raw  = wc->thr_base + (size_t) ith * kp->thr_size;
+    const HVX_Vector zero = Q6_V_vzero();
+
+    const uint32_t n_tg    = (T + TG - 1) / TG;
+    const uint32_t n_units = wc->n_rt * n_cc * n_tg;
+
+    for (uint32_t unit = ith; unit < n_units; unit += nth) {
+        const uint32_t tg  = unit % n_tg;
+        const uint32_t cc  = (unit / n_tg) % n_cc;
+        const uint32_t rt  = unit / (n_tg * n_cc);
+        const uint32_t co0 = (wc->rt0 + rt) * 32;
+        const uint32_t nco = MIN(32, Cout - co0);
+        const uint32_t c0  = cc * 32;
+        const uint32_t nc  = MIN(32, Cin - c0);
+        const uint32_t t0  = tg * TG;
+        const uint32_t nt  = MIN(TG, T - t0);
+
+        for (uint32_t t = 0; t < nt; t++) {
+            const uint32_t   kh  = (t0 + t) / KW;
+            const uint32_t   kw  = (t0 + t) - kh * KW;
+            const dma_addr_t src = kernel->data + (size_t) kw * kernel->nb[0] + (size_t) kh * kernel->nb[1] + (size_t) c0 * kernel->nb[2] + (size_t) co0 * es;
+            while (!conv2d_dma_push(dmaq, dma_make_data(raw + (size_t) t * 32 * VLEN, src), VLEN, kernel->nb[2], nco * es, nc)) {
+                dma_queue_pop(dmaq);
+            }
+        }
+        dma_queue_flush(dmaq);
+
+        const HVX_VectorPred qco = Q6_Q_vsetq2_R(nco * es);
+        if (kp->fold) {
+            // crouton channel kw * Cin + c is row c of tap kw of this kh
+            const HVX_Vector * rows = (const HVX_Vector *) raw;
+            HVX_Vector *       tile = (HVX_Vector *) (wc->w_tiles + ((size_t) (rt * KH + tg) * n_cc + cc) * HMX_FP16_TILE_N_ELMS);
+            uint32_t           kw   = 0;
+            uint32_t           c    = 0;
+            for (uint32_t p = 0; p < 16; p++) {
+                const HVX_Vector a = kw < KW ? Q6_V_vmux_QVV(qco, rows[kw * 32 + c], zero) : zero;
+                if (++c == Cin) {
+                    c = 0;
+                    kw++;
+                }
+                const HVX_Vector b = kw < KW ? Q6_V_vmux_QVV(qco, rows[kw * 32 + c], zero) : zero;
+                if (++c == Cin) {
+                    c = 0;
+                    kw++;
+                }
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+            }
+            continue;
+        }
+        for (uint32_t t = 0; t < nt; t++) {
+            const HVX_Vector * rows = (const HVX_Vector *) (raw + (size_t) t * 32 * VLEN);
+            HVX_Vector *       tile = (HVX_Vector *) (wc->w_tiles + ((size_t) (rt * T + t0 + t) * n_cc + cc) * HMX_FP16_TILE_N_ELMS);
+            for (uint32_t p = 0; p < 16; p++) {
+                const HVX_Vector a = 2 * p + 0 < nc ? Q6_V_vmux_QVV(qco, rows[2 * p + 0], zero) : zero;
+                const HVX_Vector b = 2 * p + 1 < nc ? Q6_V_vmux_QVV(qco, rows[2 * p + 1], zero) : zero;
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+            }
+        }
+    }
+}
+
+// K-contiguous kernel: DMA 32 cout rows of the w_cs cin of a packing unit
+static void conv2d_win_wrows_dma(const struct htp_conv2d_win_context * wc, dma_queue * dmaq, uint8_t * raw, uint32_t unit, uint32_t n_cs) {
+    const struct htp_conv2d_win_params * kp     = wc->kp;
+    const struct htp_tensor *            kernel = wc->octx->src[0];
+
+    const uint32_t T   = kernel->ne[0] * kernel->ne[1];
+    const uint32_t Cin = kernel->ne[2];
+    const uint32_t CS  = kp->w_cs;
+    const uint32_t es  = kernel->type == HTP_TYPE_F16 ? sizeof(__fp16) : sizeof(float);
+    const uint32_t kpw = VLEN / es;
+
+    const uint32_t cs  = unit % n_cs;
+    const uint32_t cc  = (unit / n_cs) % kp->n_cc;
+    const uint32_t rt  = unit / (n_cs * kp->n_cc);
+    const uint32_t co0 = (wc->rt0 + rt) * 32;
+    const uint32_t nco = MIN(32, (uint32_t) kernel->ne[3] - co0);
+    const uint32_t c0  = cc * 32 + cs * CS;
+    const uint32_t nk  = c0 < Cin ? MIN(CS, Cin - c0) * T : 0;
+    if (nk == 0 || (kp->fold && cs > 0)) {
+        return;
+    }
+    conv2d_dma_push(dmaq, dma_make_data(raw, kernel->data + (size_t) co0 * kernel->nb[3] + (size_t) c0 * kernel->nb[2]),
+                    (size_t) ((nk + kpw - 1) / kpw) * VLEN, kernel->nb[3], (size_t) nk * es, nco);
+}
+
+// K-contiguous kernel (k = cin * T + t): DMA 32 cout rows of w_cs cin, transpose to k rows of 32 cout
+static void conv2d_win_wpack_rows(const struct htp_conv2d_win_context * wc, unsigned int nth, unsigned int ith) {
+    struct htp_ops_context *             octx   = wc->octx;
+    const struct htp_conv2d_win_params * kp     = wc->kp;
+    const struct htp_tensor *            kernel = octx->src[0];
+
+    const uint32_t KW     = kernel->ne[0];
+    const uint32_t KH     = kernel->ne[1];
+    const uint32_t Cin    = kernel->ne[2];
+    const uint32_t Cout   = kernel->ne[3];
+    const uint32_t T      = KW * KH;
+    const uint32_t n_cc   = kp->n_cc;
+    const uint32_t CS     = kp->w_cs;
+    const bool     is_f16 = kernel->type == HTP_TYPE_F16;
+    const uint32_t es     = is_f16 ? sizeof(__fp16) : sizeof(float);
+    const uint32_t kpw    = is_f16 ? 64 : 32; // k per vector
+    const uint32_t rstep  = is_f16 ? 64 : 128; // bytes per transposed k row
+
+    const size_t wraw    = (size_t) 32 * ((CS * T + kpw - 1) / kpw) * VLEN;
+    dma_queue *  dmaq    = octx->ctx->dma[ith];
+    uint8_t *    raws[2] = { wc->thr_base + (size_t) ith * kp->thr_size, wc->thr_base + (size_t) ith * kp->thr_size + wraw };
+    uint8_t *    xr      = raws[1] + wraw;
+    HVX_Vector * vin     = (HVX_Vector *) (xr + wraw);
+    HVX_Vector * scratch = vin + 32;
+    const HVX_Vector zero = Q6_V_vzero();
+
+    const uint32_t n_cs    = (32 + CS - 1) / CS;
+    const uint32_t n_units = wc->n_rt * n_cc * n_cs;
+
+    // DMA of the next unit overlaps the transpose of this one
+    conv2d_win_wrows_dma(wc, dmaq, raws[0], ith, n_cs);
+    for (uint32_t unit = ith, k = 0; unit < n_units; unit += nth, k++) {
+        const uint32_t cs  = unit % n_cs;
+        const uint32_t cc  = (unit / n_cs) % n_cc;
+        const uint32_t rt  = unit / (n_cs * n_cc);
+        const uint32_t co0 = (wc->rt0 + rt) * 32;
+        const uint32_t nco = MIN(32, Cout - co0);
+        const uint32_t c0  = cc * 32 + cs * CS;
+        const uint32_t nc   = c0 < Cin ? MIN(CS, Cin - c0) : 0;
+        const uint32_t nk   = nc * T;
+        const uint32_t nvec = (nk + kpw - 1) / kpw;
+        const size_t   rs   = (size_t) nvec * VLEN;
+        uint8_t *      raw  = raws[k & 1];
+
+        dma_queue_flush(dmaq);
+        if (unit + nth < n_units) {
+            conv2d_win_wrows_dma(wc, dmaq, raws[(k + 1) & 1], unit + nth, n_cs);
+        }
+        if (kp->fold && cs > 0) {
+            continue;
+        }
+
+        for (uint32_t b = 0; b < nvec; b++) {
+            for (uint32_t o = 0; o < 32; o++) {
+                vin[o] = o < nco ? *(const HVX_Vector *) (raw + o * rs + (size_t) b * VLEN) : zero;
+            }
+            HVX_Vector * xo = (HVX_Vector *) (xr + (size_t) b * 32 * VLEN);
+            conv2d_transpose_w32(vin, 1, scratch, xo, xo + 16);
+            if (is_f16) {
+                for (uint32_t i = 0; i < 32; i++) {
+                    xo[i] = Q6_Vh_vdeal_Vh(xo[i]);
+                }
+            }
+        }
+
+        if (kp->fold) {
+            // tile kh, crouton channel kw * Cin + c is k row c * T + kh * KW + kw
+            for (uint32_t kh = 0; kh < KH; kh++) {
+                HVX_Vector * tile = (HVX_Vector *) (wc->w_tiles + ((size_t) (rt * KH + kh) * n_cc + cc) * HMX_FP16_TILE_N_ELMS);
+                uint32_t     kw   = 0;
+                uint32_t     c    = 0;
+                for (uint32_t p = 0; p < 16; p++) {
+                    const HVX_Vector a = kw < KW ? hvx_vmemu(xr + (size_t) (c * T + kh * KW + kw) * rstep) : zero;
+                    if (++c == Cin) {
+                        c = 0;
+                        kw++;
+                    }
+                    const HVX_Vector b = kw < KW ? hvx_vmemu(xr + (size_t) (c * T + kh * KW + kw) * rstep) : zero;
+                    if (++c == Cin) {
+                        c = 0;
+                        kw++;
+                    }
+                    tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+                }
+            }
+            continue;
+        }
+
+        // tile (t, cc) vector p takes cin rows 2p, 2p + 1 of this step
+        for (uint32_t t = 0; t < T; t++) {
+            HVX_Vector * tile = (HVX_Vector *) (wc->w_tiles + ((size_t) (rt * T + t) * n_cc + cc) * HMX_FP16_TILE_N_ELMS);
+            for (uint32_t pc = 0; pc < CS; pc += 2) {
+                const uint32_t   c = cs * CS + pc;
+                const uint32_t   p = c / 2;
+                const HVX_Vector a = pc + 0 < nc ? hvx_vmemu(xr + (size_t) ((pc + 0) * T + t) * rstep) : zero;
+                const HVX_Vector b = pc + 1 < nc ? hvx_vmemu(xr + (size_t) ((pc + 1) * T + t) * rstep) : zero;
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+            }
+        }
+    }
+}
+
+static void conv2d_win_wpack_thread(unsigned int nth, unsigned int ith, void * data) {
+    const struct htp_conv2d_win_context * wc = (const struct htp_conv2d_win_context *) data;
+    struct htp_thread_trace *             tr = &wc->octx->ctx->trace[ith];
+
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_W_PREP, (uint16_t) ith);
+    if (wc->kp->w_kmajor) {
+        conv2d_win_wpack_kmajor(wc, nth, ith);
+    } else {
+        conv2d_win_wpack_rows(wc, nth, ith);
+    }
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_W_PREP, (uint16_t) ith);
+}
+
+// Fill stage with input pixels [ua, ub): whcn stage[c][u - ua], cwhn stage[u - ua][c]. Zero outside the image.
+static void conv2d_win_stage(const struct htp_conv2d_win_context * wc, dma_queue * dmaq, float * stage, uint32_t ua, uint32_t ub) {
+    const struct htp_ops_context *       octx  = wc->octx;
+    const struct htp_conv2d_win_params * kp    = wc->kp;
+    const struct htp_tensor *            input = octx->src[1];
+
+    const uint32_t IW   = input->ne[0];
+    const uint32_t IH   = input->ne[1];
+    const uint32_t Cin  = input->ne[2];
+    const uint32_t N    = input->ne[3];
+    const uint32_t SR   = kp->sr;
+    const uint32_t IHS  = kp->ihs;
+    const uint32_t p0   = octx->op_params[2];
+    const uint32_t p1   = octx->op_params[3];
+    const uint32_t span = kp->seg_b * 32;
+    const bool     cwhn = kp->cwhn;
+
+    // rows of one image are contiguous when there is no column padding
+    const bool rows_contig = p0 == 0 && input->nb[1] == (size_t) IW * input->nb[0];
+
+    uint32_t u = ua;
+    while (u < ub) {
+        const uint32_t vr  = fastdiv(u, &kp->div_sr);
+        const uint32_t col = u - vr * SR;
+        const uint32_t n   = fastdiv(vr, &kp->div_ihs);
+        const uint32_t r   = vr - n * IHS;
+        const int32_t  ih  = (int32_t) r - (int32_t) p1;
+
+        uint32_t end = MIN(ub, (vr + 1) * SR);
+        if (n >= N || ih < 0 || ih >= (int32_t) IH) {
+            const uint32_t len = end - u;
+            if (cwhn) {
+                hvx_splat_f32_u(stage + (size_t) (u - ua) * Cin, 0.0f, len * Cin);
+            } else {
+                for (uint32_t c = 0; c < Cin; c++) {
+                    hvx_splat_f32_u(stage + (size_t) c * span + (u - ua), 0.0f, len);
+                }
+            }
+            u = end;
+            continue;
+        }
+
+        if (rows_contig) {
+            end = MIN(ub, (vr + (IH - (uint32_t) ih)) * SR);
+        }
+
+        // valid columns [a, b) of the first row, all columns of the following rows
+        const uint32_t a   = MAX(col, p0);
+        const uint32_t len = end - u;
+        uint32_t       b   = MIN(col + len, p0 + IW);
+        if (rows_contig) {
+            b = col + len;
+        }
+
+        if (a > col) {
+            const uint32_t z = MIN(a, col + len) - col;
+            if (cwhn) {
+                hvx_splat_f32_u(stage + (size_t) (u - ua) * Cin, 0.0f, z * Cin);
+            } else {
+                for (uint32_t c = 0; c < Cin; c++) {
+                    hvx_splat_f32_u(stage + (size_t) c * span + (u - ua), 0.0f, z);
+                }
+            }
+        }
+        if (b < col + len) {
+            const uint32_t z0 = MAX(a, b);
+            const uint32_t z  = col + len - z0;
+            if (cwhn) {
+                hvx_splat_f32_u(stage + (size_t) (u - ua + z0 - col) * Cin, 0.0f, z * Cin);
+            } else {
+                for (uint32_t c = 0; c < Cin; c++) {
+                    hvx_splat_f32_u(stage + (size_t) c * span + (u - ua + z0 - col), 0.0f, z);
+                }
+            }
+        }
+        if (b > a) {
+            const dma_addr_t src = input->data + (size_t) n * input->nb[3] + (size_t) ih * input->nb[1] + (size_t) (a - p0) * input->nb[0];
+            const uint32_t   off = u - ua + (a - col);
+            if (cwhn) {
+                const size_t sz = (size_t) (b - a) * Cin * sizeof(float);
+                while (!dma_queue_push(dmaq, dma_make_data(stage + (size_t) off * Cin, src), sz, sz, sz, 1)) {
+                    dma_queue_pop(dmaq);
+                }
+            } else {
+                while (!conv2d_dma_push(dmaq, dma_make_data(stage + off, src), (size_t) span * sizeof(float), input->nb[2],
+                                        (size_t) (b - a) * sizeof(float), Cin)) {
+                    dma_queue_pop(dmaq);
+                }
+            }
+        }
+        u = end;
+    }
+}
+
+// Fold staging: stage holds the raw input rows of the virtual rows of [ua, ub), after 128 bytes of slack for reads before
+// the first row. whcn: raw[c][vr - vr_a][iw], cwhn: raw[vr - vr_a][iw][c].
+// Folded pixel (kw * Cin + c, u = vr * OW + ow) is input pixel (vr, ow + kw * d0 - p0), channel c.
+static inline float * conv2d_win_fold_raw(float * stage) {
+    return stage + VLEN_FP32;
+}
+
+static inline uint32_t conv2d_win_fold_rplane(const struct htp_conv2d_win_context * wc) {
+    const uint32_t IW = wc->octx->src[1]->ne[0];
+    return ((wc->kp->seg_b * 32 + wc->kp->sr - 1) / wc->kp->sr + 1) * IW;
+}
+
+// DMA the raw input rows of [ua, ub)
+static void conv2d_win_stage_fold(const struct htp_conv2d_win_context * wc, dma_queue * dmaq, float * stage, uint32_t ua, uint32_t ub) {
+    const struct htp_ops_context *       octx  = wc->octx;
+    const struct htp_conv2d_win_params * kp    = wc->kp;
+    const struct htp_tensor *            input = octx->src[1];
+
+    const uint32_t IW   = input->ne[0];
+    const int32_t  IH   = input->ne[1];
+    const uint32_t Cin  = input->ne[2];
+    const uint32_t N    = input->ne[3];
+    const uint32_t IHS  = kp->ihs;
+    const int32_t  p1   = octx->op_params[3];
+    const uint32_t RP   = conv2d_win_fold_rplane(wc);
+    const bool     cont = input->nb[1] == (size_t) IW * input->nb[0];
+    float *        raw  = conv2d_win_fold_raw(stage);
+
+    const uint32_t vr_a = fastdiv(ua, &kp->div_sr);
+    const uint32_t vr_b = fastdiv(ub - 1, &kp->div_sr) + 1;
+
+    for (uint32_t vr = vr_a; vr < vr_b;) {
+        const uint32_t n  = fastdiv(vr, &kp->div_ihs);
+        const int32_t  ih = (int32_t) (vr - n * IHS) - p1;
+        if (n >= N || ih < 0 || ih >= IH) {
+            vr++;
+            continue;
+        }
+        // rows of one image are contiguous in DDR
+        const uint32_t nr = cont ? MIN(vr_b - vr, (uint32_t) (IH - ih)) : 1;
+        const dma_addr_t src = input->data + (size_t) n * input->nb[3] + (size_t) ih * input->nb[1];
+        if (kp->cwhn) {
+            // raw[vr - vr_a][iw][c]
+            const size_t sz = (size_t) nr * IW * Cin * sizeof(float);
+            while (!dma_queue_push(dmaq, dma_make_data(raw + (size_t) (vr - vr_a) * IW * Cin, src), sz, sz, sz, 1)) {
+                dma_queue_pop(dmaq);
+            }
+        } else {
+            while (!conv2d_dma_push(dmaq, dma_make_data(raw + (size_t) (vr - vr_a) * IW, src), (size_t) RP * sizeof(float), input->nb[2],
+                                    (size_t) nr * IW * sizeof(float), Cin)) {
+                dma_queue_pop(dmaq);
+            }
+        }
+        vr += nr;
+    }
+}
+
+// Build croutons [ba, ba + nb) (relative to the chunk crouton base b0) from a filled stage
+static void conv2d_win_croutons(const struct htp_conv2d_win_context * wc, const float * stage, __fp16 * act, uint32_t bo, uint32_t nb) {
+    const struct htp_conv2d_win_params * kp   = wc->kp;
+    const uint32_t                       Cin  = wc->octx->src[1]->ne[2] * (kp->fold ? wc->octx->src[0]->ne[0] : 1);
+    const uint32_t                       n_cc = kp->n_cc;
+    const uint32_t                       span = kp->seg_b * 32;
+    const size_t                         pl   = (size_t) kp->n_bc * HMX_FP16_TILE_N_ELMS;
+    const HVX_Vector                     zero = Q6_V_vzero();
+
+    if (wc->n_scat) {
+        // word j of the [c = 2k | c = 2k + 1] pixel pairs goes to (j % 16) * 128 + (2k + j / 16) * 4
+        const HVX_Vector soff = *(const HVX_Vector *) conv2d_win_scat_off;
+        for (uint32_t i = 0; i < nb; i++) {
+            const size_t dst = (size_t) (act + (size_t) (bo + i) * HMX_FP16_TILE_N_ELMS);
+            for (uint32_t k = 0; k < wc->n_scat; k++) {
+                const HVX_Vector     a = *(const HVX_Vector *) (stage + (size_t) (2 * k) * span + i * 32);
+                const HVX_Vector     b = 2 * k + 1 < Cin ? *(const HVX_Vector *) (stage + (size_t) (2 * k + 1) * span + i * 32) : zero;
+                const HVX_VectorPred q = Q6_Q_vsetq2_R(2 * k + 1 < Cin ? VLEN : VLEN / 2);
+                Q6_vscatter_QRMVwV(q, dst, HMX_FP16_TILE_SIZE - 1, Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(8 * k)), hvx_vec_f32_to_f16(a, b));
+            }
+        }
+        if (nb > 0) {
+            hvx_gather_sync(act + (size_t) (bo + nb - 1) * HMX_FP16_TILE_N_ELMS);
+        }
+        return;
+    }
+
+    if (kp->cwhn) {
+        for (uint32_t cc = 0; cc < n_cc; cc++) {
+            const uint32_t       nc = MIN(32, Cin - cc * 32);
+            const HVX_VectorPred qc = Q6_Q_vsetq2_R(nc * sizeof(float));
+            for (uint32_t i = 0; i < nb; i++) {
+                HVX_Vector *  dst = (HVX_Vector *) (act + cc * pl + (size_t) (bo + i) * HMX_FP16_TILE_N_ELMS);
+                const float * src = stage + (size_t) i * 32 * Cin + cc * 32;
+                for (uint32_t v = 0; v < 16; v++) {
+                    const HVX_Vector a = Q6_V_vmux_QVV(qc, hvx_vmemu(src + (size_t) (2 * v + 0) * Cin), zero);
+                    const HVX_Vector b = Q6_V_vmux_QVV(qc, hvx_vmemu(src + (size_t) (2 * v + 1) * Cin), zero);
+                    dst[v] = hvx_vec_f32_to_f16_shuff(a, b);
+                }
+            }
+        }
+        return;
+    }
+
+    HVX_Vector y[16];
+    for (uint32_t cc = 0; cc < n_cc; cc++) {
+        for (uint32_t i = 0; i < nb; i++) {
+            // channel rows are span apart, walk them with one pointer
+            const uint32_t     nv = MIN(32, Cin - cc * 32);
+            const HVX_Vector * p  = (const HVX_Vector *) (stage + (size_t) cc * 32 * span + i * 32);
+            const uint32_t     sv = span / VLEN_FP32;
+            if (nv == 32) {
+                #pragma unroll
+                for (uint32_t k = 0; k < 16; k++) {
+                    const HVX_Vector a = p[0];
+                    const HVX_Vector b = p[sv];
+                    p += 2 * sv;
+                    y[k] = hvx_vec_f32_to_f16(a, b);
+                }
+            } else {
+                #pragma unroll
+                for (uint32_t k = 0; k < 16; k++) {
+                    const HVX_Vector a = 2 * k + 0 < nv ? p[0] : zero;
+                    const HVX_Vector b = 2 * k + 1 < nv ? p[sv] : zero;
+                    p += 2 * sv;
+                    y[k] = hvx_vec_f32_to_f16(a, b);
+                }
+            }
+            conv2d_xpose_w16(y);
+            HVX_Vector * dst = (HVX_Vector *) (act + cc * pl + (size_t) (bo + i) * HMX_FP16_TILE_N_ELMS);
+            #pragma unroll
+            for (uint32_t v = 0; v < 16; v++) {
+                dst[v] = y[conv2d_xpose_slot(v)];
+            }
+        }
+    }
+}
+
+// Fold: one crouton channel vector (32 pixels u0..u0+31), assembled from the row pieces of the block
+struct conv2d_win_fold_piece {
+    int32_t off; // raw offset of lane 0 for kw = 0, c = 0
+    int32_t l0;  // lanes [l0, l1) of this row
+    int32_t l1;
+    int32_t lb;  // lane of iw = 0 for kw = 0
+};
+
+// Lanes of a row piece that read inside the image for column shift sh
+static inline HVX_VectorPred conv2d_win_fold_q(const struct conv2d_win_fold_piece * pc, int32_t sh, int32_t IW) {
+    const int32_t lo = MAX(pc->l0, pc->lb - sh);
+    const int32_t hi = MIN(pc->l1, pc->lb - sh + IW);
+    if (hi <= lo) {
+        return Q6_Q_vsetq_R(0);
+    }
+    return Q6_Q_and_QQn(Q6_Q_vsetq2_R(hi * sizeof(float)), Q6_Q_vsetq_R(lo * sizeof(float)));
+}
+
+static void conv2d_win_croutons_fold(const struct htp_conv2d_win_context * wc, const float * stage, __fp16 * act, uint32_t bo,
+                                     uint32_t nb, uint32_t ua) {
+    const struct htp_ops_context *       octx  = wc->octx;
+    const struct htp_conv2d_win_params * kp    = wc->kp;
+    const struct htp_tensor *            input = octx->src[1];
+
+    const int32_t  IW  = input->ne[0];
+    const int32_t  IH  = input->ne[1];
+    const uint32_t Cin = input->ne[2];
+    const uint32_t N   = input->ne[3];
+    const uint32_t KW  = octx->src[0]->ne[0];
+    const uint32_t nch = KW * Cin;
+    const uint32_t SR  = kp->sr;
+    const uint32_t IHS = kp->ihs;
+    const int32_t  p0  = octx->op_params[2];
+    const int32_t  p1  = octx->op_params[3];
+    const int32_t  d0  = octx->op_params[4];
+    const uint32_t RP  = conv2d_win_fold_rplane(wc);
+    const float *  raw = conv2d_win_fold_raw((float *) stage);
+
+    const uint32_t   vr_a = fastdiv(ua, &kp->div_sr);
+    const HVX_Vector zero = Q6_V_vzero();
+    const HVX_Vector soff = *(const HVX_Vector *) conv2d_win_scat_off;
+
+    for (uint32_t i = 0; i < nb; i++) {
+        const uint32_t u0 = ua + 32 * i;
+
+        struct conv2d_win_fold_piece pc[4];
+        uint32_t                     np = 0;
+        for (uint32_t vr = fastdiv(u0, &kp->div_sr); vr * SR < u0 + 32 && np < 4; vr++) {
+            const uint32_t n  = fastdiv(vr, &kp->div_ihs);
+            const int32_t  ih = (int32_t) (vr - n * IHS) - p1;
+            if (n >= N || ih < 0 || ih >= IH) {
+                continue;
+            }
+            const int32_t l0  = (int32_t) (MAX(u0, vr * SR) - u0);
+            const int32_t ow0 = (int32_t) (MAX(u0, vr * SR) - vr * SR);
+            pc[np].l0  = l0;
+            pc[np].l1  = (int32_t) (MIN(u0 + 32, (vr + 1) * SR) - u0);
+            pc[np].lb  = l0 - ow0 + p0;
+            pc[np].off = (int32_t) ((vr - vr_a) * IW) + ow0 - l0 - p0;
+            np++;
+        }
+
+        __fp16 * dst = act + (size_t) (bo + i) * HMX_FP16_TILE_N_ELMS;
+        if (np == 0) {
+            HVX_Vector * d = (HVX_Vector *) dst;
+            for (uint32_t v = 0; v < 16; v++) {
+                d[v] = zero;
+            }
+            continue;
+        }
+
+        // channel ch = kw * Cin + c. Channel pairs go to the crouton memory first, the transpose runs on the reloaded rows.
+        // Lanes and offsets of the row pieces depend on kw only.
+        HVX_Vector * d    = (HVX_Vector *) dst;
+        const bool   scat = wc->n_scat != 0;
+        HVX_Vector   pa   = zero;
+        uint32_t     ch   = 0;
+        for (uint32_t kw = 0; kw < KW; kw++) {
+            const int32_t  sh = (int32_t) kw * d0;
+            const HVX_VectorPred q0 = conv2d_win_fold_q(&pc[0], sh, IW);
+            const HVX_VectorPred q1 = np > 1 ? conv2d_win_fold_q(&pc[1], sh, IW) : q0;
+            const HVX_VectorPred q2 = np > 2 ? conv2d_win_fold_q(&pc[2], sh, IW) : q0;
+            const HVX_VectorPred q3 = np > 3 ? conv2d_win_fold_q(&pc[3], sh, IW) : q0;
+            const int32_t        f0 = pc[0].off + sh;
+            const int32_t        f1 = np > 1 ? pc[1].off + sh : f0;
+            const int32_t        f2 = np > 2 ? pc[2].off + sh : f0;
+            const int32_t        f3 = np > 3 ? pc[3].off + sh : f0;
+
+            for (uint32_t c = 0; c < Cin; c++, ch++) {
+                const float * r = raw + (size_t) c * RP;
+                HVX_Vector    x = Q6_V_vmux_QVV(q0, hvx_vmemu(r + f0), zero);
+                if (np > 1) {
+                    x = Q6_V_vmux_QVV(q1, hvx_vmemu(r + f1), x);
+                }
+                if (np > 2) {
+                    x = Q6_V_vmux_QVV(q2, hvx_vmemu(r + f2), x);
+                }
+                if (np > 3) {
+                    x = Q6_V_vmux_QVV(q3, hvx_vmemu(r + f3), x);
+                }
+                if (!(ch & 1)) {
+                    pa = x;
+                    continue;
+                }
+                const HVX_Vector y = hvx_vec_f32_to_f16(pa, x);
+                if (scat) {
+                    Q6_vscatter_QRMVwV(Q6_Q_vsetq2_R(VLEN), (size_t) dst, HMX_FP16_TILE_SIZE - 1,
+                                       Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(4 * (ch - 1))), y);
+                } else {
+                    d[ch / 2] = y;
+                }
+            }
+        }
+        if (ch & 1) {
+            const HVX_Vector y = hvx_vec_f32_to_f16(pa, zero);
+            if (scat) {
+                Q6_vscatter_QRMVwV(Q6_Q_vsetq2_R(VLEN / 2), (size_t) dst, HMX_FP16_TILE_SIZE - 1,
+                                   Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(4 * (ch - 1))), y);
+            } else {
+                d[ch / 2] = y;
+            }
+            ch++;
+        }
+        if (!scat) {
+            for (uint32_t k = ch / 2; k < 16; k++) {
+                d[k] = zero;
+            }
+        }
+        if (scat) {
+            continue;
+        }
+
+        HVX_Vector y[16];
+        #pragma unroll
+        for (uint32_t k = 0; k < 16; k++) {
+            y[k] = d[k];
+        }
+        conv2d_xpose_w16(y);
+        #pragma unroll
+        for (uint32_t v = 0; v < 16; v++) {
+            d[v] = y[conv2d_xpose_slot(v)];
+        }
+    }
+    if (wc->n_scat && nb > 0) {
+        hvx_gather_sync(act + (size_t) (bo + nb - 1) * HMX_FP16_TILE_N_ELMS);
+    }
+}
+
+// Fold, cwhn with d0 = 1: the KW * Cin folded channels of a pixel are contiguous in the raw row
+static void conv2d_win_croutons_fold_cwhn(const struct htp_conv2d_win_context * wc, const float * stage, __fp16 * act, uint32_t bo,
+                                          uint32_t nb, uint32_t ua) {
+    const struct htp_ops_context *       octx  = wc->octx;
+    const struct htp_conv2d_win_params * kp    = wc->kp;
+    const struct htp_tensor *            input = octx->src[1];
+
+    const int32_t  IW  = input->ne[0];
+    const int32_t  IH  = input->ne[1];
+    const int32_t  Cin = input->ne[2];
+    const uint32_t N   = input->ne[3];
+    const int32_t  KW  = octx->src[0]->ne[0];
+    const uint32_t SR  = kp->sr;
+    const uint32_t IHS = kp->ihs;
+    const int32_t  p0  = octx->op_params[2];
+    const int32_t  p1  = octx->op_params[3];
+    const float *  raw = conv2d_win_fold_raw((float *) stage);
+
+    const uint32_t   vr_a = fastdiv(ua, &kp->div_sr);
+    const HVX_Vector zero = Q6_V_vzero();
+
+    uint32_t vr = vr_a;
+    uint32_t ow = ua - vr * SR;
+    bool     ok = false;
+    for (uint32_t i = 0; i < nb; i++) {
+        HVX_Vector * dst = (HVX_Vector *) (act + (size_t) (bo + i) * HMX_FP16_TILE_N_ELMS);
+        HVX_Vector   pa  = zero;
+        for (uint32_t j = 0; j < 32; j++) {
+            if (ow == 0 || (i == 0 && j == 0)) {
+                const uint32_t n  = fastdiv(vr, &kp->div_ihs);
+                const int32_t  ih = (int32_t) (vr - n * IHS) - p1;
+                ok                = n < N && ih >= 0 && ih < IH;
+            }
+            HVX_Vector x = zero;
+            if (ok) {
+                // folded channels kw * Cin + c read input column ow + kw - p0, valid for kw in [p0 - ow, p0 + IW - ow)
+                const int32_t lo = MAX(0, p0 - (int32_t) ow) * Cin;
+                const int32_t hi = MIN(KW, p0 + IW - (int32_t) ow) * Cin;
+                if (hi > lo) {
+                    const float *        src = raw + ((int32_t) ((vr - vr_a) * IW + ow) - p0) * Cin;
+                    const HVX_VectorPred q   = Q6_Q_and_QQn(Q6_Q_vsetq2_R(hi * sizeof(float)), Q6_Q_vsetq_R(lo * sizeof(float)));
+                    x = Q6_V_vmux_QVV(q, hvx_vmemu(src), zero);
+                }
+            }
+            if (j & 1) {
+                dst[j / 2] = hvx_vec_f32_to_f16_shuff(pa, x);
+            } else {
+                pa = x;
+            }
+            if (++ow == SR) {
+                ow = 0;
+                vr++;
+            }
+        }
+    }
+}
+
+static void conv2d_win_pack(const struct htp_conv2d_win_context * wc, unsigned int nth, unsigned int ith) {
+    struct htp_ops_context *             octx = wc->octx;
+    const struct htp_conv2d_win_params * kp   = wc->kp;
+
+    uint32_t       ts;
+    const uint32_t nt  = conv2d_win_chunk_tiles(wc, wc->pack_chunk, &ts);
+    const uint32_t ncb = MIN(kp->n_bc, nt + (kp->max_off >> 5) + 1);
+    const uint32_t bpt = (ncb + nth - 1) / nth;
+    const uint32_t b0  = MIN(ith * bpt, ncb);
+    const uint32_t b1  = MIN(b0 + bpt, ncb);
+
+    dma_queue * dmaq      = octx->ctx->dma[ith];
+    uint8_t *   thr       = wc->thr_base + (size_t) ith * kp->thr_size;
+    float *     stages[2] = { (float *) thr, (float *) (thr + kp->stage_size) };
+    __fp16 *    act       = wc->act[wc->pack_chunk & 1];
+
+    void (*stage_fn)(const struct htp_conv2d_win_context *, dma_queue *, float *, uint32_t, uint32_t) =
+        kp->fold ? conv2d_win_stage_fold : conv2d_win_stage;
+
+    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_A_PREP, (uint16_t) ith);
+
+    // DMA the next segment while HVX builds croutons of this one
+    uint32_t si = 0;
+    if (b0 < b1) {
+        stage_fn(wc, dmaq, stages[0], (ts + b0) * 32, (ts + MIN(b0 + kp->seg_b, b1)) * 32);
+    }
+    for (uint32_t b = b0; b < b1; b += kp->seg_b) {
+        const uint32_t nb = MIN(kp->seg_b, b1 - b);
+        conv2d_hmx_dma_wait(tr, dmaq);
+        if (b + nb < b1) {
+            stage_fn(wc, dmaq, stages[si ^ 1], (ts + b + nb) * 32, (ts + MIN(b + nb + kp->seg_b, b1)) * 32);
+        }
+        if (kp->fold && kp->cwhn) {
+            conv2d_win_croutons_fold_cwhn(wc, stages[si], act, b, nb, (ts + b) * 32);
+        } else if (kp->fold) {
+            conv2d_win_croutons_fold(wc, stages[si], act, b, nb, (ts + b) * 32);
+        } else {
+            conv2d_win_croutons(wc, stages[si], act, b, nb);
+        }
+        si ^= 1;
+    }
+
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_A_PREP, (uint16_t) ith);
+}
+
+// Push an output DMA, popping the oldest in-flight one when the queue is full. pend[] counts in-flight DMAs per buffer.
+static inline void conv2d_win_out_push(dma_queue * dmaq, dma_data d, size_t dst_stride, size_t src_stride, size_t row, size_t nrows,
+                                       uint32_t * pend, uint32_t bi) {
+    while (!conv2d_dma_push(dmaq, d, dst_stride, src_stride, row, nrows)) {
+        dma_queue_pop(dmaq);
+        for (uint32_t k = 1; k <= HTP_CONV2D_WIN_OBUF; k++) {
+            const uint32_t j = (bi + k) % HTP_CONV2D_WIN_OBUF;
+            if (pend[j] > 0) {
+                pend[j]--;
+                break;
+            }
+        }
+    }
+    pend[bi]++;
+}
+
+static void conv2d_win_unpack(const struct htp_conv2d_win_context * wc, unsigned int nth, unsigned int ith) {
+    struct htp_ops_context *             octx = wc->octx;
+    const struct htp_conv2d_win_params * kp   = wc->kp;
+    const struct htp_tensor *            dst  = octx->dst;
+
+    const uint32_t OW   = dst->ne[0];
+    const uint32_t OH   = dst->ne[1];
+    const uint32_t Cout = dst->ne[2];
+    const uint32_t SR   = kp->sr;
+    const uint32_t IHS  = kp->ihs;
+    const uint32_t ST   = kp->seg_t;
+    const uint32_t OS   = ST * 32;
+
+    uint32_t       ts;
+    const uint32_t nt  = conv2d_win_chunk_tiles(wc, wc->unpack_chunk, &ts);
+    const uint32_t tpt = (nt + nth - 1) / nth;
+    const uint32_t i0  = MIN(ith * tpt, nt);
+    const uint32_t i1  = MIN(i0 + tpt, nt);
+
+    dma_queue *    dmaq      = octx->ctx->dma[ith];
+    uint8_t *      thr       = wc->thr_base + (size_t) ith * kp->thr_size + 2 * (size_t) kp->stage_size;
+    float *        obuf      = (float *) thr;
+    const __fp16 * out       = wc->out[wc->unpack_chunk & 1];
+
+    struct htp_thread_trace * tr = &octx->ctx->trace[ith];
+    htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) ith);
+
+    uint32_t pend[HTP_CONV2D_WIN_OBUF] = { 0 };
+    uint32_t bi                        = 0;
+
+    const bool rows_contig = SR == OW && dst->nb[1] == OW * sizeof(float);
+
+    for (uint32_t i = i0; i < i1; i += ST) {
+        const uint32_t ni   = MIN(ST, i1 - i);
+        const uint32_t q_lo = (ts + i) * 32;
+        const uint32_t q_hi = q_lo + ni * 32;
+
+        for (uint32_t rt = 0; rt < wc->n_rt; rt++) {
+            const uint32_t co0 = (wc->rt0 + rt) * 32;
+            const uint32_t nco = MIN(32, Cout - co0);
+            const uint32_t npr = (nco + 1) / 2;
+
+            // DMAs of this buffer were pushed HTP_CONV2D_WIN_OBUF steps ago and are the oldest in the queue
+            while (pend[bi] > 0) {
+                dma_queue_pop(dmaq);
+                pend[bi]--;
+            }
+
+            float * ob = obuf + (size_t) bi * 32 * OS;
+            for (uint32_t g = 0; g < ni; g++) {
+                const HVX_Vector * tv = (const HVX_Vector *) (out + ((size_t) rt * kp->ct_chunk + i + g) * HMX_FP16_TILE_N_ELMS);
+                HVX_Vector         y[16];
+                #pragma unroll
+                for (uint32_t v = 0; v < 16; v++) {
+                    y[conv2d_xpose_slot(v)] = tv[v];
+                }
+                conv2d_unxpose_w16(y);
+                HVX_Vector * o = (HVX_Vector *) (ob + g * 32);
+                #pragma unroll
+                for (uint32_t k = 0; k < 16; k++) {
+                    if (k < npr) {
+                        const HVX_VectorPair pr = hvx_vec_f16_to_f32(y[k]);
+                        o[(2 * k + 0) * (OS / 32)] = Q6_V_lo_W(pr);
+                        o[(2 * k + 1) * (OS / 32)] = Q6_V_hi_W(pr);
+                    }
+                }
+            }
+
+            // write the valid part of each virtual row in [q_lo, q_hi)
+            uint32_t vr = fastdiv(q_lo, &kp->div_sr);
+            for (; vr * SR < q_hi; vr++) {
+                const uint32_t n  = fastdiv(vr, &kp->div_ihs);
+                const uint32_t oh = vr - n * IHS;
+                if (vr < wc->vr0 || vr >= wc->vr1 || oh >= OH) {
+                    continue;
+                }
+                const uint32_t base = vr * SR;
+                const uint32_t a    = q_lo > base ? q_lo - base : 0;
+                uint32_t       b    = MIN(OW, q_hi - base);
+                if (b <= a) {
+                    continue;
+                }
+                const dma_addr_t ddr = dst->data + (size_t) n * dst->nb[3] + (size_t) oh * dst->nb[1] + (size_t) co0 * dst->nb[2] + (size_t) a * sizeof(float);
+
+                // no gap between rows: extend over the following rows of this image
+                if (rows_contig) {
+                    uint32_t r = 1;
+                    while (oh + r < OH && vr + r < wc->vr1 && (vr + r) * SR < q_hi) {
+                        r++;
+                    }
+                    b  = MIN(q_hi - base, (r - 1) * SR + OW);
+                    vr += r - 1;
+                }
+                conv2d_win_out_push(dmaq, dma_make_data(ddr, ob + (base + a - q_lo)), dst->nb[2], (size_t) OS * sizeof(float),
+                                    (size_t) (b - a) * sizeof(float), nco, pend, bi);
+            }
+            bi = bi + 1 == HTP_CONV2D_WIN_OBUF ? 0 : bi + 1;
+        }
+    }
+    dma_queue_flush(dmaq);
+
+    htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_O_PROC, (uint16_t) ith);
+}
+
+static void conv2d_win_phase_thread(unsigned int nth, unsigned int ith, void * data) {
+    const struct htp_conv2d_win_context * wc = (const struct htp_conv2d_win_context *) data;
+
+    if (wc->unpack_chunk >= 0) {
+        conv2d_win_unpack(wc, nth, ith);
+    }
+    if (wc->pack_chunk >= 0) {
+        conv2d_win_pack(wc, nth, ith);
+    }
+    dma_queue_flush(wc->octx->ctx->dma[ith]);
+}
+
+static void conv2d_win_zero_thread(unsigned int nth, unsigned int ith, void * data) {
+    const struct htp_conv2d_win_context * wc = (const struct htp_conv2d_win_context *) data;
+
+    const size_t n   = 2 * (size_t) wc->kp->act_size / sizeof(float);
+    const size_t per = hex_round_up((n + nth - 1) / nth, VLEN_FP32);
+    const size_t i0  = MIN((size_t) ith * per, n);
+    const size_t i1  = MIN(i0 + per, n);
+    if (i1 > i0) {
+        hvx_splat_f32_a((uint8_t *) wc->act[0] + i0 * sizeof(float), 0.0f, i1 - i0);
+    }
+}
+
+static void conv2d_win_run_phase(struct htp_conv2d_win_context * wc, int32_t pack, int32_t unpack) {
+    wc->pack_chunk   = pack;
+    wc->unpack_chunk = unpack;
+    work_queue_run(wc->octx->ctx->work_queue, conv2d_win_phase_thread, wc, wc->kp->n_threads);
+}
+
+
+// live[i] = tile ts + i has a row that is written. Dead tiles lie inside the rows [OH, IHS) of an image.
+static void conv2d_win_live(const struct htp_conv2d_win_context * wc, uint8_t * live, uint32_t ts, uint32_t nt) {
+    const struct htp_conv2d_win_params * kp = wc->kp;
+
+    const uint32_t SR  = kp->sr;
+    const uint32_t IHS = kp->ihs;
+    const uint32_t OH  = wc->octx->dst->ne[1];
+    const uint32_t q0  = ts * 32;
+    const uint32_t q1  = (ts + nt) * 32;
+
+    memset(live, 1, nt);
+    for (uint32_t n = fastdiv(fastdiv(q0, &kp->div_sr), &kp->div_ihs); n * IHS * SR < q1; n++) {
+        const uint32_t g0 = MAX((n * IHS + OH) * SR, q0);
+        const uint32_t g1 = MIN((n + 1) * IHS * SR, q1);
+        const uint32_t t0 = (g0 + 31) / 32;
+        const uint32_t t1 = g1 / 32;
+        if (t1 > t0) {
+            memset(live + (t0 - ts), 0, t1 - t0);
+        }
+    }
+}
+
+static int conv2d_win(struct htp_ops_context * octx, const struct htp_conv2d_win_params * kp) {
+    if (!octx->ctx->hmx_enabled) {
+        return HTP_STATUS_NO_SUPPORT;
+    }
+    if (kp->vtcm_size > octx->ctx->vtcm_size) {
+        return HTP_STATUS_VTCM_TOO_SMALL;
+    }
+
+    const struct htp_tensor * kernel = octx->src[0];
+    const struct htp_tensor * dst    = octx->dst;
+
+    if (hex_round_up((size_t) kernel->ne[0] * kernel->ne[1] * sizeof(uint32_t), 128) + 2 * hex_round_up(kp->ct_chunk, 128) > octx->ctx->ddr_spad_size) {
+        return HTP_STATUS_NO_SUPPORT;
+    }
+
+    const uint32_t KW  = kernel->ne[0];
+    const uint32_t KH  = kernel->ne[1];
+    const uint32_t OW  = dst->ne[0];
+    const uint32_t OH  = dst->ne[1];
+    const uint32_t N   = dst->ne[3];
+    const uint32_t SR  = kp->sr;
+    const uint32_t IHS = kp->ihs;
+    const uint32_t d0  = octx->op_params[4];
+    const uint32_t d1  = octx->op_params[5];
+
+    // output rows [row_base, row_base + n_rows) of N * OH
+    uint32_t row_base = 0;
+    uint32_t n_rows   = N * OH;
+    if (octx->ctx->mdev.count > 1) {
+        uint32_t rows_per_chunk = 0;
+        if (htp_tensor_mdev_data_aligned(dst) && (dst->nb[2] % HTP_TENSOR_MDEV_LINE_SIZE) == 0) {
+            rows_per_chunk = HTP_TENSOR_MDEV_LINE_SIZE / hex_gcd_u32(dst->nb[1], HTP_TENSOR_MDEV_LINE_SIZE);
+            if (N > 1 && OH % rows_per_chunk != 0) {
+                rows_per_chunk = 0;
+            }
+        }
+        const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(
+            n_rows, rows_per_chunk, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
+        row_base = range.start;
+        n_rows   = range.count;
+    }
+    if (n_rows == 0) {
+        return HTP_STATUS_OK;
+    }
+
+    const uint32_t ra  = row_base;
+    const uint32_t rb  = row_base + n_rows - 1;
+    const uint32_t vr0 = (ra / OH) * IHS + ra % OH;
+    const uint32_t vr1 = (rb / OH) * IHS + rb % OH + 1;
+
+    uint8_t * base   = (uint8_t *) octx->ctx->vtcm_base;
+    __fp16 *  scales = (__fp16 *) base;
+    hmx_init_column_scales(scales, Q6_V_vsplat_R(0x3c00));
+
+    struct htp_conv2d_win_context wc = {
+        .octx     = octx,
+        .kp       = kp,
+        .w_tiles  = VTCM_LAYOUT_PTR(__fp16, base, kp->off_w),
+        .act      = { VTCM_LAYOUT_PTR(__fp16, base, kp->off_act), VTCM_LAYOUT_PTR(__fp16, base, kp->off_act + kp->act_size) },
+        .out      = { VTCM_LAYOUT_PTR(__fp16, base, kp->off_out), VTCM_LAYOUT_PTR(__fp16, base, kp->off_out + kp->out_size) },
+        .thr_base = VTCM_LAYOUT_PTR(uint8_t, base, kp->off_thr),
+        .t_base   = (vr0 * SR) / 32,
+        .t_end    = ((vr1 - 1) * SR + OW + 31) / 32,
+        .vr0      = vr0,
+        .vr1      = vr1,
+    };
+
+    // small Cin: croutons are built by scattering the staged values into zeroed croutons
+    const uint32_t n_ch = octx->src[1]->ne[2] * (kp->fold ? KW : 1);
+    if (!kp->cwhn && n_ch <= 2 * CONV2D_WIN_SCAT_MAX) {
+        wc.n_scat = (n_ch + 1) / 2;
+        work_queue_run(octx->ctx->work_queue, conv2d_win_zero_thread, &wc, kp->n_threads);
+    }
+
+    const int32_t  n_chunks = (int32_t) ((wc.t_end - wc.t_base + kp->ct_chunk - 1) / kp->ct_chunk);
+    const uint32_t rem      = n_ch - (kp->n_cc - 1) * 32;
+
+    // fold: kw is in the channels, taps are kh only
+    const uint32_t TW   = kp->fold ? 1 : KW;
+    uint32_t *     taps = (uint32_t *) octx->ctx->ddr_spad_base;
+    for (uint32_t kh = 0; kh < KH; kh++) {
+        for (uint32_t kw = 0; kw < TW; kw++) {
+            taps[kh * TW + kw] = conv2d_win_act_off(kh * d1 * SR + kw * d0);
+        }
+    }
+
+    wc.live[0] = (uint8_t *) octx->ctx->ddr_spad_base + hex_round_up(KH * KW * sizeof(uint32_t), 128);
+    wc.live[1] = wc.live[0] + hex_round_up(kp->ct_chunk, 128);
+
+    struct htp_conv2d_win_job job = {
+        .scales     = scales,
+        .taps       = taps,
+        .n_taps     = TW * KH,
+        .out_stride = kp->ct_chunk * HMX_FP16_TILE_N_ELMS,
+        .n_cc       = kp->n_cc,
+        .plane      = kp->n_bc * HMX_FP16_TILE_SIZE,
+        .rt_last    = kp->act_rt_last,
+        .wr_last    = (hex_round_up(rem, 8) / 2) * VLEN - 1,
+    };
+
+    for (uint32_t rt0 = 0; rt0 < kp->n_row_tiles; rt0 += kp->rt_block) {
+        wc.rt0  = rt0;
+        wc.n_rt = MIN(kp->rt_block, kp->n_row_tiles - rt0);
+        work_queue_run(octx->ctx->work_queue, conv2d_win_wpack_thread, &wc, kp->n_threads);
+
+        conv2d_win_run_phase(&wc, 0, -1);
+
+        for (int32_t c = 0; c < n_chunks; c++) {
+            uint32_t ts;
+            const uint32_t nt = conv2d_win_chunk_tiles(&wc, c, &ts);
+            conv2d_win_live(&wc, wc.live[c & 1], ts, nt);
+            job.live    = wc.live[c & 1];
+            job.out     = wc.out[c & 1];
+            job.w       = wc.w_tiles;
+            job.act     = wc.act[c & 1];
+            job.n_rt    = wc.n_rt;
+            job.n_tiles = nt;
+            hmx_queue_push(octx->ctx->hmx_queue, hmx_queue_make_desc(conv2d_win_hmx_worker, &job));
+
+            const int32_t pack   = c + 1 < n_chunks ? c + 1 : -1;
+            const int32_t unpack = c - 1;
+            if (pack >= 0 || unpack >= 0) {
+                conv2d_win_run_phase(&wc, pack, unpack);
+            }
+
+            hmx_queue_pop(octx->ctx->hmx_queue);
+        }
+
+        conv2d_win_run_phase(&wc, -1, n_chunks - 1);
+    }
+
+    return HTP_STATUS_OK;
+}
+
 int op_conv_2d(struct htp_ops_context * octx) {
     const struct htp_tensor * kernel = octx->src[0];
     const struct htp_tensor * input  = octx->src[1];
@@ -1392,6 +2546,13 @@ int op_conv_2d(struct htp_ops_context * octx) {
 
     if (kparams->total_rows == 0) {
         return HTP_STATUS_OK;
+    }
+
+    if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX_WIN) {
+        const int status = conv2d_win(octx, (const struct htp_conv2d_win_params *) octx->kernel_params);
+        if (status == HTP_STATUS_OK) {
+            return HTP_STATUS_OK;
+        }
     }
 
     if (kparams->kernel_type == HTP_CONV2D_KERNEL_HMX || kparams->kernel_type == HTP_CONV2D_KERNEL_HVX_TILES) {
