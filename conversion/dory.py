@@ -4,6 +4,7 @@ from .base import ModelBase, TextModel, gguf
 
 
 @ModelBase.register("DoryForCausalLM")
+@ModelBase.example("nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16")
 class DoryModel(TextModel):
     model_arch = gguf.MODEL_ARCH.DORY
 
@@ -26,7 +27,36 @@ class DoryModel(TextModel):
         self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
-        h = self.hparams
+        h = self.hparams.copy()
+        public_config = "layer_types" in h
+        if public_config:
+            layer_types = h["layer_types"]
+            patterns = {"sliding_attention": "S", "full_attention": "*", "mlp": "-"}
+            if not isinstance(layer_types, list) or len(layer_types) != h["num_hidden_layers"] or any(not isinstance(t, str) or t not in patterns for t in layer_types):
+                raise ValueError("Invalid Dory layer_types")
+            rope = h["rope_parameters"]
+            for kind in ("full_attention", "sliding_attention"):
+                if rope[kind].get("rope_type") != "default" or rope[kind].get("partial_rotary_factor", 1.0) != 1.0:
+                    raise ValueError("Dory port requires default, full-head RoPE")
+            # Public configs use shared attention dimensions and per-type RoPE settings.
+            converted = {
+                "attention_head_dim": h["head_dim"],
+                "swa_head_dim": h["head_dim"],
+                "swa_num_attention_heads": h["num_attention_heads"],
+                "swa_num_key_value_heads": h["num_key_value_heads"],
+                "init_method_std": h["initializer_range"],
+                "mlp_hidden_act": h["hidden_act"],
+                "swa_window_size": h["sliding_window"],
+                "hybrid_layer_pattern": "".join(patterns[t] for t in layer_types),
+                "rope_profile_layers": [2 if t == "sliding_attention" else 1 for t in layer_types],
+                "no_rope_layers": [0] * len(layer_types),
+                "rope_theta": rope["full_attention"]["rope_theta"],
+                "rope_theta_2": rope["sliding_attention"]["rope_theta"],
+            }
+            for key, value in converted.items():
+                if key in h and h[key] != value:
+                    raise ValueError(f"Conflicting Dory configuration for {key}")
+            h.update(converted)
         required = {
             "dory_format_version": 1,
             "ngpt": True, "fngpt": True, "ngpt_enable_final_norm": False,
@@ -37,7 +67,7 @@ class DoryModel(TextModel):
             "mixer_type": None,
         }
         for key, value in required.items():
-            if key not in h or h[key] != value:
+            if (key in h and h[key] != value) or (not public_config and key not in h):
                 raise ValueError(f"Dory port requires {key}={value!r}")
         cache_mode = h.get("recurrent_kv_cache_mode", "per_loop")
         if cache_mode not in ("per_loop", "last_loop"):
@@ -74,7 +104,7 @@ class DoryModel(TextModel):
         w.add_rope_freq_base_2(h["rope_theta_2"])
         w.add_init_std(h["init_method_std"])
         w.add_alpha_init(h["ngpt_alpha_init"])
-        w.add_gate_init(h["attention_output_gate_logit_scale_init"] or h["hidden_size"]**0.5)
+        w.add_gate_init(h.get("attention_output_gate_logit_scale_init") or h["hidden_size"]**0.5)
 
     def modify_tensors(self, data_torch, name, bid):
         # Scale vectors have no suffix in the HF export.
