@@ -647,4 +647,37 @@ describe('parseExecShellCommandMeta', () => {
 			)
 		).toBeNull();
 	});
+
+	it('surfaces a partially streamed command before the JSON closes', () => {
+		const meta = parseExecShellCommandMeta(
+			makeSection(
+				{ toolArgs: '{"command":"git sta', toolName: BuiltInTool.SERVER_EXEC_SHELL_COMMAND },
+				BuiltInTool.SERVER_EXEC_SHELL_COMMAND
+			)
+		);
+
+		expect(meta?.command).toBe('git sta');
+	});
+
+	it('keeps a dangling escape from breaking the partial parse', () => {
+		const meta = parseExecShellCommandMeta(
+			makeSection(
+				{ toolArgs: '{"command":"echo \\"he', toolName: BuiltInTool.SERVER_EXEC_SHELL_COMMAND },
+				BuiltInTool.SERVER_EXEC_SHELL_COMMAND
+			)
+		);
+
+		expect(meta?.command).toBe('echo "he');
+	});
+
+	it('returns null while the command value is still empty', () => {
+		expect(
+			parseExecShellCommandMeta(
+				makeSection(
+					{ toolArgs: '{"command":"', toolName: BuiltInTool.SERVER_EXEC_SHELL_COMMAND },
+					BuiltInTool.SERVER_EXEC_SHELL_COMMAND
+				)
+			)
+		).toBeNull();
+	});
 });

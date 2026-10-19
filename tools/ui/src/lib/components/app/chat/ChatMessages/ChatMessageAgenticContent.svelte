@@ -8,7 +8,7 @@
 		MarkdownContent
 	} from '$lib/components/app';
 	import { AgenticSectionType, ChatMessageStatsView, ToolPermissionDecision } from '$lib/enums';
-	import { agenticStore, settingsStore } from '$lib/stores';
+	import { agenticStore, conversationsStore, settingsStore } from '$lib/stores';
 	import type {
 		AgenticSection,
 		ChatMessageAgenticTimings,
@@ -96,6 +96,14 @@
 		isStreaming ? agenticStore.getExecutingToolCallId(message.convId) : null
 	);
 
+	// Cwd the agentic loop passes to tool calls in this conversation; the exec
+	// block shows it until the result message persists the real one.
+	const conversationCwd = $derived(
+		conversationsStore.activeConversation?.id === message.convId
+			? conversationsStore.activeConversation?.cwd
+			: undefined
+	);
+
 	type TurnGroup = {
 		sections: AgenticSection[];
 		flatIndices: number[];
@@ -180,6 +188,7 @@
 	{:else if section.type === AgenticSectionType.TOOL_CALL || section.type === AgenticSectionType.TOOL_CALL_PENDING || section.type === AgenticSectionType.TOOL_CALL_STREAMING}
 		<ChatMessageToolCallBlock
 			attachments={section.toolResultExtras}
+			{conversationCwd}
 			isExecuting={section.toolCallId !== undefined &&
 				section.toolCallId === currentlyExecutingToolCallId}
 			{isStreaming}
