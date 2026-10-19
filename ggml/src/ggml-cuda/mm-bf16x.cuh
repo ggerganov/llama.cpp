@@ -137,7 +137,7 @@ __global__ void k_mul_mm_bf16x_mma(
         const size_t nb1,  const size_t nb2,  const size_t nb3,
         const int r2, const int r3) {
 
-    constexpr int BM = 128, BN = 32, BK = 32;
+    constexpr int BM = 128, BN = 64, BK = 32;
     constexpr int NTILES = BN / 8;
 
     // X tile is stored n-major (sX[n][k]) so that B fragments can be loaded
@@ -288,7 +288,7 @@ static bool ggml_cuda_mul_mat_bf16x_mma(
     if (nb00 != sizeof(block_bf16x) || nb10 != 4 || nb0 != 4) return false;
     if (ne00 % 32 != 0) return false;   // BK tail is not handled; fall back to cuBLAS
     const int r2 = ne12 / ne02, r3 = ne13 / ne03;
-    const dim3 grid((unsigned) ((ne01 + 127) / 128), (unsigned) ((ne11 + 31) / 32), (unsigned) (ne12 * ne13));
+    const dim3 grid((unsigned) ((ne01 + 127) / 128), (unsigned) ((ne11 + 63) / 64), (unsigned) (ne12 * ne13));
     cudaStream_t stream = ctx.stream();
     k_mul_mm_bf16x_mma<<<grid, 256, 0, stream>>>(
         (const char *) src0->data, (const float *) src1->data, (float *) dst->data,

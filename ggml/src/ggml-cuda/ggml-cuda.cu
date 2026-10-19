@@ -1921,9 +1921,12 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
         ggml_cuda_mul_mat_vec_q(ctx, src0, src1, nullptr, dst);
         return;
     }
-    // BF16X fused-decode MMA GEMM (pp path, n > 8; n <= 8 uses MMVQ above).
-    // Falls through to cuBLAS dequant+GEMM for shapes the kernel does not handle.
-    if (ggml_cuda_mul_mat_bf16x_mma(ctx, src0, src1, dst)) {
+    // BF16X fused-decode MMA GEMM (n > 8; n <= 8 uses MMVQ above).
+    // Off by default: the cuBLAS dequant+GEMM fallback below is currently
+    // 2.5-3.4x faster per GEMM on this workload. Opt in for testing /
+    // to avoid the intermediate dequant buffer: GGML_CUDA_BF16X_MMA=1
+    static const bool bf16x_mma = getenv("GGML_CUDA_BF16X_MMA") != nullptr;
+    if (bf16x_mma && ggml_cuda_mul_mat_bf16x_mma(ctx, src0, src1, dst)) {
         return;
     }
     if (ggml_cuda_should_use_mmq(src0->type, cc, ne11, /*n_experts =*/ 0)) {
