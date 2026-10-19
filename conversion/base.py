@@ -2194,9 +2194,8 @@ class TextModel(ModelBase):
             raise NotImplementedError(f"HybridDNATokenizer with k={tokenizer.k}, tail={tail!r}")  # ty: ignore[unresolved-attribute]
         for kmer in [*tokenizer.kmers, *getattr(tokenizer, "npad_tokens", [])]:  # ty: ignore[unresolved-attribute]
             reverse_vocab[tokenizer.dna_token_to_id[kmer]] = kmer + "\ue000"  # ty: ignore[unresolved-attribute]
-        # older HybridDNATokenizer versions (Carbon-500M/3B/8B) do not register the base tokenizer's added tokens
-        # (<|im_start|>, <think>, ...) as their own, but still encode them as special tokens: take their types from
-        # the base tokenizer
+        # older HybridDNATokenizer versions (Carbon-500M/3B/8B) do not register the base tokenizer's added tokens (<|im_start|>, <think>, ...) as their own
+        # but they are still encoded as special tokens: take their types from the base tokenizer
         base_tokenizer = getattr(tokenizer, "_base_tokenizer", tokenizer)
         added_tokens_decoder = {**base_tokenizer.added_tokens_decoder, **tokenizer.added_tokens_decoder}  # ty: ignore[unresolved-attribute]
 
