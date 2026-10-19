@@ -18,8 +18,8 @@
 
 namespace {
 
-// LRU of the experts of a group of layers, the slot of each expert is kept in the slot map of its layer
-struct moe_cache_lru {
+// SLRU of the experts of a group of layers, the slot of each expert is kept in the slot map of its layer
+struct moe_cache_slru {
     int32_t n_expert = 0;
     int32_t n_slots  = 0;
 
@@ -27,11 +27,13 @@ struct moe_cache_lru {
     std::vector<int32_t>   key_of;   // [n_slots] il*n_expert + expert, -1 if empty
     std::vector<uint8_t>   from_profile; // [n_slots] 1 while the slot holds the expert the profile put there
 
-    // doubly linked list of the slots, head is the least recently used
+    // probation and protected LRU lists; hits promote slots to the protected half
     std::vector<int32_t> prev;
     std::vector<int32_t> next;
-    int32_t head = -1;
-    int32_t tail = -1;
+    int32_t head[2] = { -1, -1 };
+    int32_t tail[2] = { -1, -1 };
+    std::vector<bool> is_protected;
+    int32_t n_protected = 0;
 
     std::vector<uint32_t> seen; // [n_expert]
     uint32_t seen_gen = 0;
@@ -49,27 +51,59 @@ struct moe_cache_lru {
             prev[s] = s - 1;
             next[s] = s + 1 < n_slots ? s + 1 : -1;
         }
-        head = 0;
-        tail = n_slots - 1;
+        head[0] = 0;
+        tail[0] = n_slots - 1;
+        is_protected.assign(n_slots, false);
         seen.assign(n_expert, 0);
     }
 
-    // move slot s to the tail (most recently used)
-    void touch(int32_t s) {
-        if (s == tail) {
+    // move slot s to the most recently used end of a segment
+    void move(int32_t s, bool protect) {
+        const bool from = is_protected[s];
+        if (from == protect && s == tail[from]) {
             return;
         }
         if (prev[s] >= 0) {
             next[prev[s]] = next[s];
         } else {
-            head = next[s];
+            head[from] = next[s];
         }
-        prev[next[s]] = prev[s];
+        if (next[s] >= 0) {
+            prev[next[s]] = prev[s];
+        } else {
+            tail[from] = prev[s];
+        }
 
-        prev[s] = tail;
+        prev[s] = tail[protect];
         next[s] = -1;
-        next[tail] = s;
-        tail = s;
+        if (tail[protect] >= 0) {
+            next[tail[protect]] = s;
+        } else {
+            head[protect] = s;
+        }
+        tail[protect] = s;
+        is_protected[s] = protect;
+        n_protected += int(protect) - int(from);
+    }
+
+    void touch(int32_t s) {
+        move(s, true);
+        if (n_protected > n_slots/2) {
+            move(head[1], false);
+        }
+    }
+
+    int32_t victim(int32_t il) const {
+        for (int segment = 0; segment < 2; ++segment) {
+            for (int32_t s = head[segment]; s >= 0; s = next[s]) {
+                const int32_t key = key_of[s];
+                // keep every expert selected by this request, including earlier fills
+                if (key < 0 || key / n_expert != il || seen[key % n_expert] != seen_gen) {
+                    return s;
+                }
+            }
+        }
+        GGML_ABORT("no SLRU victim");
     }
 
     // the i-th hottest expert of a profile takes slot n_slots-1-i: the list runs from the head (least recently used) to
@@ -90,7 +124,7 @@ struct moe_cache_lru {
         int32_t slot;
     };
 
-    // give a slot to each expert selected by ids in layer il, the misses evict the least recently used experts
+    // give a slot to each expert selected by ids in layer il, evicting from probation first
     // returns false if the ids select more distinct experts than there are slots
     // n_hit_profile: the hits on experts the profile put in the cache that were never evicted since
     bool plan(int32_t il, const int32_t * ids, size_t n_ids, std::vector<fill> & fills, size_t & n_hit, size_t & n_hit_profile) {
@@ -116,7 +150,7 @@ struct moe_cache_lru {
 
         int32_t * slots = slot_map[il];
 
-        // hits go to the tail first, so the head can be evicted below
+        // promote hits before choosing victims for misses
         for (int32_t e : uniq) {
             if (slots[e] >= 0) {
                 touch(slots[e]);
@@ -130,14 +164,14 @@ struct moe_cache_lru {
             if (slots[e] >= 0) {
                 continue;
             }
-            const int32_t s = head;
+            const int32_t s = victim(il);
             if (key_of[s] >= 0) {
                 slot_map[key_of[s] / n_expert][key_of[s] % n_expert] = -1;
             }
             key_of[s] = il*n_expert + e;
             from_profile[s] = 0;
             slots[e] = s;
-            touch(s);
+            move(s, false);
             fills.push_back({ e, s });
         }
         return true;
@@ -209,7 +243,7 @@ struct llama_moe_cache::impl {
         size_t host_bytes = 0;
         size_t bias_bytes = 0;            // device copies of the layers' host expert biases, out of the budget
         int32_t n_slots = 0;
-        moe_cache_lru lru;
+        moe_cache_slru slru;
     };
 
     struct layer {
@@ -301,7 +335,7 @@ struct llama_moe_cache::impl {
     std::unordered_map<const ggml_tensor *, int32_t> layer_of; // slot map -> layer
 
     std::vector<int32_t> ids;
-    std::vector<moe_cache_lru::fill> fills;
+    std::vector<moe_cache_slru::fill> fills;
 
     // slot maps in host memory
     ggml_context_ptr ctx_host;
@@ -422,7 +456,7 @@ struct llama_moe_cache::impl {
                 g.n_slots = 0;
                 continue;
             }
-            g.lru.init(model.layers.size(), n_expert, g.n_slots);
+            g.slru.init(model.layers.size(), n_expert, g.n_slots);
             n_tensors[g.id] += g.ref.size()*(1 + g.layers.size()) + 4*g.layers.size(); // banks, views, biases
             n_tensors_host  += g.layers.size();
         }
@@ -528,7 +562,7 @@ struct llama_moe_cache::impl {
             for (group & g : groups) {
                 for (int32_t il : g.layers) {
                     if (layers[il].slot_map != nullptr) {
-                        g.lru.slot_map[il] = (int32_t *) layers[il].slot_map->data;
+                        g.slru.slot_map[il] = (int32_t *) layers[il].slot_map->data;
                     }
                 }
             }
@@ -627,7 +661,7 @@ struct llama_moe_cache::impl {
                 if (layers[il].ig != (int32_t) ig) {
                     continue;
                 }
-                const int32_t s = g.lru.prefill(il, e, i);
+                const int32_t s = g.slru.prefill(il, e, i);
                 if (s < 0) {
                     continue;
                 }
@@ -854,7 +888,7 @@ struct llama_moe_cache::impl {
         size_t n_hit = 0;
         size_t n_hit_profile = 0;
         size_t n_cpu = 0;
-        const moe_cache_lru & lru = self.groups[self.layers[h.il].ig].lru;
+        const moe_cache_slru & slru = self.groups[self.layers[h.il].ig].slru;
         for (int64_t j = 0; j < k; ++j) {
             const int32_t e = ids[j];
             GGML_ASSERT(e >= 0 && e < (int32_t) h.seen.size());
@@ -863,7 +897,7 @@ struct llama_moe_cache::impl {
             if (h.seen[e] != h.seen_gen) {
                 h.seen[e] = h.seen_gen;
                 (s >= 0 ? n_hit : n_cpu)++;
-                n_hit_profile += s >= 0 ? lru.from_profile[s] : 0;
+                n_hit_profile += s >= 0 ? slru.from_profile[s] : 0;
                 if (self.adaptive) {
                     self.heat[self.heat_off[h.il] + e] += self.heat_inc;
                 }
@@ -937,7 +971,7 @@ struct llama_moe_cache::impl {
             }
             bool free_slots = false;
             for (const group & g : groups) {
-                free_slots = free_slots || (g.n_slots > 0 && std::count(g.lru.key_of.begin(), g.lru.key_of.end(), -1) > 0);
+                free_slots = free_slots || (g.n_slots > 0 && std::count(g.slru.key_of.begin(), g.slru.key_of.end(), -1) > 0);
             }
             if (++steps_since_rebalance >= (free_slots ? rebalance_fill_every : rebalance_every)) {
                 steps_since_rebalance = 0;
@@ -978,7 +1012,7 @@ struct llama_moe_cache::impl {
                 if (is_full(il)) {
                     continue;
                 }
-                const int32_t * slots = g.lru.slot_map[il];
+                const int32_t * slots = g.slru.slot_map[il];
                 for (int32_t e = 0; e < (int32_t) layers[il].slot_map->ne[1]; ++e) {
                     const float h = heat[heat_off[il] + e];
                     if (slots[e] >= 0) {
@@ -993,7 +1027,7 @@ struct llama_moe_cache::impl {
 
             std::vector<int32_t> free_slots;
             for (int32_t s = 0; s < g.n_slots; ++s) {
-                if (g.lru.key_of[s] < 0) {
+                if (g.slru.key_of[s] < 0) {
                     free_slots.push_back(s);
                 }
             }
@@ -1009,8 +1043,8 @@ struct llama_moe_cache::impl {
                     if (!(eager ? c.h > v.h : c.h > swap_margin*v.h + swap_min_heat*heat_inc)) {
                         break; // the rest of the candidates are colder, and the rest of the residents hotter
                     }
-                    s = g.lru.slot_map[v.il][v.e];
-                    g.lru.slot_map[v.il][v.e] = -1;
+                    s = g.slru.slot_map[v.il][v.e];
+                    g.slru.slot_map[v.il][v.e] = -1;
                     touched[v.il] = 1;
                     i_out++;
                 } else {
@@ -1020,9 +1054,9 @@ struct llama_moe_cache::impl {
                     const size_t size = layers[c.il].experts[ip]->nb[2];
                     upload(devices[g.id], g.banks[ip], (const uint8_t *) layers[c.il].experts[ip]->data + c.e*size, s*size, size);
                 }
-                g.lru.slot_map[c.il][c.e] = s;
-                g.lru.key_of[s]       = c.il*g.lru.n_expert + c.e;
-                g.lru.from_profile[s] = 0;
+                g.slru.slot_map[c.il][c.e] = s;
+                g.slru.key_of[s]       = c.il*g.slru.n_expert + c.e;
+                g.slru.from_profile[s] = 0;
                 touched[c.il] = 1;
                 done++;
             }
@@ -1086,7 +1120,7 @@ struct llama_moe_cache::impl {
         size_t n_hit = 0;
         size_t n_hit_profile = 0;
         size_t n_cpu = 0;
-        const moe_cache_lru & lru = h.self->groups[h.self->layers[h.il].ig].lru;
+        const moe_cache_slru & slru = h.self->groups[h.self->layers[h.il].ig].slru;
         if (++h.seen_gen == 0) {
             std::fill(h.seen.begin(), h.seen.end(), 0);
             h.seen_gen = 1;
@@ -1102,7 +1136,7 @@ struct llama_moe_cache::impl {
                 if (h.seen[e] != h.seen_gen) {
                     h.seen[e] = h.seen_gen;
                     (s >= 0 ? n_hit : n_cpu)++;
-                    n_hit_profile += s >= 0 ? lru.from_profile[s] : 0;
+                    n_hit_profile += s >= 0 ? slru.from_profile[s] : 0;
                     if (h.self->adaptive) {
                         h.self->heat[h.self->heat_off[h.il] + e] += h.self->heat_inc;
                     }
@@ -1177,7 +1211,7 @@ struct llama_moe_cache::impl {
         }
 
         // large batches only read the cache, so the experts used in generation stay in it
-        const int32_t * slots = g.lru.slot_map[b.il];
+        const int32_t * slots = g.slru.slot_map[b.il];
         if (slots == nullptr || slots[e] < 0) {
             return 0;
         }
@@ -1255,7 +1289,7 @@ struct llama_moe_cache::impl {
 
         size_t n_hit = 0;
         size_t n_hit_profile = 0;
-        if (!g.lru.plan(il, ids.data(), ids.size(), fills, n_hit, n_hit_profile)) {
+        if (!g.slru.plan(il, ids.data(), ids.size(), fills, n_hit, n_hit_profile)) {
             GGML_ABORT("the MoE cache is too small for the experts selected in layer %d", il);
         }
 

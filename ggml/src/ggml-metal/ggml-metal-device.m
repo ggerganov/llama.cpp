@@ -118,6 +118,7 @@ int ggml_metal_pipeline_max_theads_per_threadgroup(struct ggml_metal_pipeline_wi
     X(FA_Q5_0,         fa_q5_0)        \
     X(FA_Q5_1,         fa_q5_1)        \
     X(FA_Q8_0,         fa_q8_0)        \
+    X(FA_TENSOR,       fa_tensor)      \
     X(FA_VEC_F16,      fa_vec_f16)     \
     X(FA_VEC_F32,      fa_vec_f32)     \
     X(FA_VEC_Q4_0,     fa_vec_q4_0)    \
@@ -1741,10 +1742,13 @@ bool ggml_metal_device_supports_op(ggml_metal_device_t dev, const struct ggml_te
                 op->src[0]->ne[0] != 576) {
                 return false;
             }
-            if (op->src[1]->ne[0] == 72 && op->src[1]->ne[0] != op->src[2]->ne[0]) {
-                return false;
-            }
-            if (op->src[1]->ne[0] < op->src[2]->ne[0]) {
+            // the kernels exist for K == V and for these K > V pairs only
+            if (op->src[1]->ne[0] != op->src[2]->ne[0] &&
+                !(op->src[1]->ne[0] ==  96 && op->src[2]->ne[0] ==  64) &&
+                !(op->src[1]->ne[0] == 128 && op->src[2]->ne[0] ==  96) &&
+                !(op->src[1]->ne[0] == 192 && op->src[2]->ne[0] == 128) &&
+                !(op->src[1]->ne[0] == 320 && op->src[2]->ne[0] == 256) &&
+                !(op->src[1]->ne[0] == 576 && op->src[2]->ne[0] == 512)) {
                 return false;
             }
             if (op->src[1]->type != op->src[2]->type) {

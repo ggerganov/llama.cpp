@@ -16,7 +16,7 @@ struct llama_model;
 bool llama_moe_cache_read_profile(const std::string & path, uint32_t n_layer, uint32_t n_expert,
         std::vector<std::pair<int32_t, int32_t>> & ranked, std::string & err);
 
-// keeps the most recently used experts of host-resident MoE layers in a device buffer
+// keeps recently and repeatedly used experts of host-resident MoE layers in a device buffer
 // each layer has a slot map in host memory: when the scheduler copies it to the device, the copy callback uploads the missing experts
 class llama_moe_cache {
 public:
