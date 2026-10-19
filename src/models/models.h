@@ -2635,28 +2635,37 @@ struct llama_model_qwen4exp : public llama_model_base {
                             int * sections,
                             int   il);
 
-        // dense self-attention over the cells the QSA mask keeps
+        // dense self-attention over the cells the QSA mask keeps, one query chunk at a time
         ggml_tensor * build_attn_qsa(
         llm_graph_input_attn_kv * inp,
+          llm_graph_input_kpool * inp_kpool,
+                    ggml_tensor * q_idx,
+                    ggml_tensor * k_pool,
                     ggml_tensor * q_cur,
                     ggml_tensor * k_cur,
                     ggml_tensor * v_cur,
-                    ggml_tensor * sel,
-                        int64_t   n_sel,
                           float   kq_scale,
                             int   il);
 
         // the QSA layers share one set of k-pool inputs, see llama_memory_hybrid_idx
-        llm_graph_input_kpool * build_inp_kpool(const llama_memory_hybrid_idx_context * mctx_hyb);
+        llm_graph_input_kpool * build_inp_kpool(const llama_memory_hybrid_idx_context * mctx_hyb, ggml_tensor * kq_mask);
 
-        // QSA: the additive mask [n_kv, n_tokens] of the top blocks and the tail, kq_mask included
-        ggml_tensor * build_qsa_sel(
+        // QSA indexer: store and pool the new keys, return the indexer query and the pooled keys
+        ggml_tensor * build_qsa_idx(
   const llama_memory_hybrid_idx_context * mctx_hyb,
           llm_graph_input_kpool * inp_kpool,
                     ggml_tensor * cur,
                     ggml_tensor * inp_pos,
-                    ggml_tensor * kq_mask,
                             int * sections,
+                    ggml_tensor ** k_pool,
+                            int   il);
+
+        // QSA: the additive mask [n_kv, n_chunk] of the top blocks and the tail for query chunk ic, kq_mask included
+        ggml_tensor * build_qsa_sel(
+          llm_graph_input_kpool * inp_kpool,
+                    ggml_tensor * q,
+                    ggml_tensor * pooled,
+                         size_t   ic,
                             int   il);
 
         ggml_tensor * build_layer_attn_linear(
