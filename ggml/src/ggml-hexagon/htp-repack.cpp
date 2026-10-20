@@ -150,6 +150,172 @@ static void repack_neon_q8_rows(const uint8_t * qs[8], uint8_t * tile_dst, int r
         }
     }
 }
+
+static inline void repack_store_u32(uint8_t * dst, uint32_t v) {
+    memcpy(dst, &v, sizeof(v));
+}
+
+static inline uint32x4_t repack_neon_transpose_2bit_4x4(uint32x4_t w) {
+    uint32x4_t t = vandq_u32(veorq_u32(w, vshrq_n_u32(w, 6)), vdupq_n_u32(0x00CC00CCu));
+    w = veorq_u32(w, veorq_u32(t, vshlq_n_u32(t, 6)));
+    t = vandq_u32(veorq_u32(w, vshrq_n_u32(w, 12)), vdupq_n_u32(0x0000F0F0u));
+    return veorq_u32(w, veorq_u32(t, vshlq_n_u32(t, 12)));
+}
+
+static inline void repack_neon_q2_0_block(const uint8_t * qs, uint8_t * tile, int row) {
+    const uint32x4_t w = repack_neon_transpose_2bit_4x4(vreinterpretq_u32_u8(vld1q_u8(qs)));
+    repack_store_u32(tile + 0 * 128 + 4 * row, vgetq_lane_u32(w, 0));
+    repack_store_u32(tile + 1 * 128 + 4 * row, vgetq_lane_u32(w, 1));
+    repack_store_u32(tile + 2 * 128 + 4 * row, vgetq_lane_u32(w, 2));
+    repack_store_u32(tile + 3 * 128 + 4 * row, vgetq_lane_u32(w, 3));
+}
+
+static inline void repack_neon_q1_0_block(const uint8_t * qs, uint8_t * tile, int row) {
+    uint32x4_t w = vreinterpretq_u32_u8(vld1q_u8(qs));
+    uint32x4_t t = vandq_u32(veorq_u32(w, vshrq_n_u32(w, 1)), vdupq_n_u32(0x22222222u));
+    w = veorq_u32(w, veorq_u32(t, vshlq_n_u32(t, 1)));
+    t = vandq_u32(veorq_u32(w, vshrq_n_u32(w, 3)), vdupq_n_u32(0x0A0A0A0Au));
+    w = veorq_u32(w, veorq_u32(t, vshlq_n_u32(t, 3)));
+    w = repack_neon_transpose_2bit_4x4(w);
+    repack_store_u32(tile + 0 * 128 + 4 * row, vgetq_lane_u32(w, 0));
+    repack_store_u32(tile + 1 * 128 + 4 * row, vgetq_lane_u32(w, 1));
+    repack_store_u32(tile + 2 * 128 + 4 * row, vgetq_lane_u32(w, 2));
+    repack_store_u32(tile + 3 * 128 + 4 * row, vgetq_lane_u32(w, 3));
+}
+
+static inline void repack_neon_pack_2bit_plane(uint8x16_t v0, uint8x16_t v1, uint8_t * dst, int row) {
+    const uint32x4x2_t z   = vuzpq_u32(vreinterpretq_u32_u8(v0), vreinterpretq_u32_u8(v1));
+    const uint32x4_t   p01 = vorrq_u32(z.val[0], vshlq_n_u32(z.val[1], 2));
+    const uint32x2x2_t u   = vuzp_u32(vget_low_u32(p01), vget_high_u32(p01));
+    const uint32x2_t   out = vorr_u32(u.val[0], vshl_n_u32(u.val[1], 4));
+    repack_store_u32(dst + 0 * 128 + row * 4, vget_lane_u32(out, 0));
+    repack_store_u32(dst + 1 * 128 + row * 4, vget_lane_u32(out, 1));
+}
+
+static inline void repack_neon_q2_3_k_low2(const uint8_t * qs, int kt_local, uint8_t * lo_pl, int row) {
+    const uint8_t *  qs_sub = qs + (kt_local / 4) * 32;
+    const int8x16_t  shift  = vdupq_n_s8(-2 * (kt_local % 4));
+    const uint8x16_t mask   = vdupq_n_u8(0x03);
+    const uint8x16_t v0     = vandq_u8(vshlq_u8(vld1q_u8(qs_sub +  0), shift), mask);
+    const uint8x16_t v1     = vandq_u8(vshlq_u8(vld1q_u8(qs_sub + 16), shift), mask);
+    repack_neon_pack_2bit_plane(v0, v1, lo_pl, row);
+}
+
+static inline void repack_neon_q3_k_hmask(const uint8_t * hmask, int kt_local, uint8_t * neg_pl, int row) {
+    static const uint32_t mask_words[4] = { 0x01010101u, 0x02020202u, 0x04040404u, 0x08080808u };
+    const uint8x16_t m0   = vreinterpretq_u8_u32(vld1q_u32(mask_words));
+    const uint8x16_t m1   = vshlq_n_u8(m0, 4);
+    const uint8x16_t hbit = vdupq_n_u8((uint8_t) (1u << kt_local));
+    const uint8x16_t b0   = vbicq_u8(m0, vtstq_u8(vld1q_u8(hmask +  0), hbit));
+    const uint8x16_t b1   = vbicq_u8(m1, vtstq_u8(vld1q_u8(hmask + 16), hbit));
+    const uint32x4_t b01  = vreinterpretq_u32_u8(vorrq_u8(b0, b1));
+    const uint32x2_t f0   = vorr_u32(vget_low_u32(b01), vget_high_u32(b01));
+    const uint32x2_t f1   = vpadd_u32(f0, f0);
+    repack_store_u32(neg_pl + row * 4, vget_lane_u32(f1, 0));
+}
+
+static inline void repack_neon_q6_k(const block_q6_K * b, int kt_local, uint8_t * lo_pl, uint8_t * hi_pl, int row) {
+    const int        c      = kt_local / 4;
+    const int        g_sb   = kt_local % 4;
+    const uint8_t *  ql     = b->ql + c * 64 + (g_sb & 1) * 32;
+    const uint8_t *  qh     = b->qh + c * 32;
+    const int8x16_t  lshift = vdupq_n_s8((g_sb >= 2) ? -4 : 0);
+    const int8x16_t  hshift = vdupq_n_s8(-2 * g_sb);
+    const uint8x16_t mask4  = vdupq_n_u8(0x0F);
+    const uint8x16_t mask2  = vdupq_n_u8(0x03);
+
+    const uint8x16_t lo0  = vandq_u8(vshlq_u8(vld1q_u8(ql +  0), lshift), mask4);
+    const uint8x16_t lo1  = vandq_u8(vshlq_u8(vld1q_u8(ql + 16), lshift), mask4);
+    const uint32x4x2_t lz = vuzpq_u32(vreinterpretq_u32_u8(lo0), vreinterpretq_u32_u8(lo1));
+    const uint32x4_t lout = vorrq_u32(lz.val[0], vshlq_n_u32(lz.val[1], 4));
+    repack_store_u32(lo_pl + 0 * 128 + row * 4, vgetq_lane_u32(lout, 0));
+    repack_store_u32(lo_pl + 1 * 128 + row * 4, vgetq_lane_u32(lout, 1));
+    repack_store_u32(lo_pl + 2 * 128 + row * 4, vgetq_lane_u32(lout, 2));
+    repack_store_u32(lo_pl + 3 * 128 + row * 4, vgetq_lane_u32(lout, 3));
+
+    const uint8x16_t hi0 = vandq_u8(vshlq_u8(vld1q_u8(qh +  0), hshift), mask2);
+    const uint8x16_t hi1 = vandq_u8(vshlq_u8(vld1q_u8(qh + 16), hshift), mask2);
+    repack_neon_pack_2bit_plane(hi0, hi1, hi_pl, row);
+}
+
+static inline void repack_neon_q5_k_qh(const uint8_t * qh, uint8_t hbit, uint8_t * plane, int row) {
+    static const uint8_t mask_bytes[16] = { 1, 2, 1, 2, 1, 2, 1, 2, 4, 8, 4, 8, 4, 8, 4, 8 };
+    const uint8x16_t m0   = vld1q_u8(mask_bytes);
+    const uint8x16_t m1   = vshlq_n_u8(m0, 4);
+    const uint8x16_t vbit = vdupq_n_u8(hbit);
+    const uint8x16_t b0   = vandq_u8(vtstq_u8(vld1q_u8(qh +  0), vbit), m0);
+    const uint8x16_t b1   = vandq_u8(vtstq_u8(vld1q_u8(qh + 16), vbit), m1);
+    const uint8x16_t b01  = vorrq_u8(b0, b1);
+    const uint8x8_t  fold = vorr_u8(vget_low_u8(b01), vget_high_u8(b01));
+    const uint8x8_t  out  = vpadd_u8(fold, fold);
+    plane[0 * 32 + row] = vget_lane_u8(out, 0);
+    plane[1 * 32 + row] = vget_lane_u8(out, 1);
+    plane[2 * 32 + row] = vget_lane_u8(out, 2);
+    plane[3 * 32 + row] = vget_lane_u8(out, 3);
+}
+
+static inline uint16x8_t repack_neon_load_f16x8(const uint16_t * src) {
+    return vld1q_u16(src);
+}
+
+#if defined(__aarch64__) || defined(__ARM_FP16_FORMAT_IEEE)
+static inline uint16x8_t repack_neon_load_f16x8(const float * src) {
+    const float16x4_t lo = vcvt_f16_f32(vld1q_f32(src));
+    const float16x4_t hi = vcvt_f16_f32(vld1q_f32(src + 4));
+    return vreinterpretq_u16_f16(vcombine_f16(lo, hi));
+}
+
+static inline uint16x8_t repack_neon_load_f16x8(const ggml_bf16_t * src) {
+    const uint16x8_t  bf   = vld1q_u16((const uint16_t *) src);
+    const float32x4_t f_lo = vreinterpretq_f32_u32(vshll_n_u16(vget_low_u16(bf), 16));
+    const float32x4_t f_hi = vreinterpretq_f32_u32(vshll_n_u16(vget_high_u16(bf), 16));
+    const float16x4_t lo   = vcvt_f16_f32(f_lo);
+    const float16x4_t hi   = vcvt_f16_f32(f_hi);
+    return vreinterpretq_u16_f16(vcombine_f16(lo, hi));
+}
+#else
+static inline uint16x8_t repack_neon_load_f16x8(const float * src) {
+    uint16_t tmp[8];
+    for (int i = 0; i < 8; ++i) {
+        tmp[i] = GGML_FP32_TO_FP16(src[i]);
+    }
+    return vld1q_u16(tmp);
+}
+
+static inline uint16x8_t repack_neon_load_f16x8(const ggml_bf16_t * src) {
+    uint16_t tmp[8];
+    for (int i = 0; i < 8; ++i) {
+        tmp[i] = GGML_FP32_TO_FP16(GGML_BF16_TO_FP32(src[i]));
+    }
+    return vld1q_u16(tmp);
+}
+#endif
+
+template <typename SrcT>
+static void repack_neon_f16_tile(uint16_t * tile_dst, const SrcT * src_slice, int64_t row_stride, int ct, int kt) {
+    for (int row0 = 0; row0 < 32; row0 += 4) {
+        const SrcT * r0 = src_slice + (int64_t) (ct * 32 + row0 + 0) * row_stride + kt * 32;
+        const SrcT * r1 = src_slice + (int64_t) (ct * 32 + row0 + 1) * row_stride + kt * 32;
+        const SrcT * r2 = src_slice + (int64_t) (ct * 32 + row0 + 2) * row_stride + kt * 32;
+        const SrcT * r3 = src_slice + (int64_t) (ct * 32 + row0 + 3) * row_stride + kt * 32;
+        for (int cp = 0; cp < 16; cp += 4) {
+            const uint32x4_t v0 = vreinterpretq_u32_u16(repack_neon_load_f16x8(r0 + 2 * cp));
+            const uint32x4_t v1 = vreinterpretq_u32_u16(repack_neon_load_f16x8(r1 + 2 * cp));
+            const uint32x4_t v2 = vreinterpretq_u32_u16(repack_neon_load_f16x8(r2 + 2 * cp));
+            const uint32x4_t v3 = vreinterpretq_u32_u16(repack_neon_load_f16x8(r3 + 2 * cp));
+
+            const uint32x2x2_t t0 = vtrn_u32(vget_low_u32(v0),  vget_low_u32(v1));
+            const uint32x2x2_t t1 = vtrn_u32(vget_high_u32(v0), vget_high_u32(v1));
+            const uint32x2x2_t t2 = vtrn_u32(vget_low_u32(v2),  vget_low_u32(v3));
+            const uint32x2x2_t t3 = vtrn_u32(vget_high_u32(v2), vget_high_u32(v3));
+
+            vst1q_u16(tile_dst + (cp + 0) * 64 + row0 * 2, vreinterpretq_u16_u32(vcombine_u32(t0.val[0], t2.val[0])));
+            vst1q_u16(tile_dst + (cp + 1) * 64 + row0 * 2, vreinterpretq_u16_u32(vcombine_u32(t0.val[1], t2.val[1])));
+            vst1q_u16(tile_dst + (cp + 2) * 64 + row0 * 2, vreinterpretq_u16_u32(vcombine_u32(t1.val[0], t3.val[0])));
+            vst1q_u16(tile_dst + (cp + 3) * 64 + row0 * 2, vreinterpretq_u16_u32(vcombine_u32(t1.val[1], t3.val[1])));
+        }
+    }
+}
 #endif
 
 // --- Generic 32x32 tile grid walkers for block-32 and float types ---
@@ -486,6 +652,9 @@ static void repack_q2_0_tiled(ggml_tensor * t, const void * data, size_t offset,
             for (int64_t kt = 0; kt < n_weight_tiles; ++kt) {
                 const block_q2_0 * block = src_slice + row_index * blocks_per_row + kt;
                 uint8_t * tile = dst_slice + (ct * n_weight_tiles + kt) * HTP_TENSOR_TILE_SIZE_Q2_0;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+                repack_neon_q2_0_block(block->qs, tile, row);
+#else
                 for (int group = 0; group < 16; ++group) {
                     for (int byte = 0; byte < 4; ++byte) {
                         const int k = 4 * group + byte;
@@ -493,6 +662,7 @@ static void repack_q2_0_tiled(ggml_tensor * t, const void * data, size_t offset,
                         tile[(group >> 2) * 128 + 4 * row + byte] |= code << (2 * (group & 3));
                     }
                 }
+#endif
                 memcpy(tile + 512 + 2 * row, &block->d, sizeof(block->d));
             }
         }
@@ -543,6 +713,12 @@ static void repack_float_to_f16_tiled(ggml_tensor * t, const void * data, size_t
     repack_to_tiled_grid_32<SrcT, 32>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_F16,
         [&](uint8_t * tile_bytes, const SrcT * src_slice, int64_t ne0, int64_t ne1, int64_t row_stride, int ct, int kt) {
             uint16_t * tile_dst = (uint16_t *) tile_bytes;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            if (ct * 32 + 32 <= ne1 && kt * 32 + 32 <= ne0) {
+                repack_neon_f16_tile(tile_dst, src_slice, row_stride, ct, kt);
+                return;
+            }
+#endif
             for (int cp = 0; cp < 16; cp++) {
                 const int64_t c0 = kt * 32 + cp * 2;
                 const int64_t c1 = c0 + 1;
@@ -668,6 +844,7 @@ static void unpack_kquant_from_tiled_grid(void * data, const ggml_tensor * t, si
 
 // --- K-Quant Helpers & Per-Type Implementations (Q2_K, Q3_K, Q4_K, Q5_K, Q6_K) ---
 
+#if !defined(__ARM_NEON) && !defined(__aarch64__)
 // unsigned 6-bit value (0..63) of element e of a Q6_K block, same bit layout as dequantize_row_q6_K
 static inline uint8_t q6_K_get_quant(const block_q6_K * b, int e) {
     const int c = e / 128;
@@ -685,6 +862,7 @@ static inline uint8_t q6_K_get_quant(const block_q6_K * b, int e) {
     }
     return (uint8_t) (lo | (hi << 4));
 }
+#endif
 
 static void repack_q6_K_tiled(ggml_tensor * t, const void * data, size_t offset, size_t size) {
     repack_kquant_to_tiled_grid<block_q6_K>(t, data, offset, size, HTP_TENSOR_TILE_SIZE_Q6_K,
@@ -694,6 +872,9 @@ static void repack_q6_K_tiled(ggml_tensor * t, const void * data, size_t offset,
             uint8_t * hi_pl   = tile + 512;
             ggml_half * sc_pl = (ggml_half *) (tile + 768);
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            repack_neon_q6_k(b, kt_local, lo_pl, hi_pl, row);
+#else
             for (int lk = 0; lk < 32; lk++) {
                 const uint8_t q6 = q6_K_get_quant(b, kt_local * 32 + lk);
                 const int g   = lk >> 2;
@@ -701,6 +882,7 @@ static void repack_q6_K_tiled(ggml_tensor * t, const void * data, size_t offset,
                 lo_pl[(g >> 1) * 128 + pos] |= (uint8_t) ((q6 & 0xF) << ((g & 1) * 4));
                 hi_pl[(g >> 2) * 128 + pos] |= (uint8_t) ((q6 >> 4) << ((g & 3) * 2));
             }
+#endif
             for (int sub = 0; sub < 2; sub++) {
                 sc_pl[sub * 32 + row] = GGML_FP32_TO_FP16(d * (float) b->scales[kt_local * 2 + sub]);
             }
@@ -760,6 +942,7 @@ static void repack_tiled_q6_K(void * data, const ggml_tensor * t, size_t offset,
         });
 }
 
+#if !defined(__ARM_NEON) && !defined(__aarch64__)
 // low 2 bits (0..3) of element e of a Q2_K or Q3_K block, same bit layout as dequantize_row_q2_K / q3_K
 static inline uint8_t q2_3_K_get_low2(const uint8_t * qs, int e) {
     const int c = e / 128;
@@ -775,6 +958,7 @@ static inline bool q3_K_get_hbit(const block_q3_K * b, int e) {
     const int l = e % 32;
     return (b->hmask[l] >> (c * 4 + j)) & 1;
 }
+#endif
 
 // signed 6-bit scale j (-32..31) of a Q3_K block, same packing as quantize_row_q3_K_ref
 static inline int q3_K_get_scale(const uint8_t * scales, int j) {
@@ -845,6 +1029,10 @@ static void repack_q3_K_tiled(ggml_tensor * t, const void * data, size_t offset,
             uint8_t * neg_pl  = tile + 256;
             ggml_half * sc_pl = (ggml_half *) (tile + 384);
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            repack_neon_q2_3_k_low2(b->qs, kt_local, lo_pl, row);
+            repack_neon_q3_k_hmask(b->hmask, kt_local, neg_pl, row);
+#else
             for (int lk = 0; lk < 32; lk++) {
                 const int e   = kt_local * 32 + lk;
                 const int g   = lk >> 2;
@@ -854,6 +1042,7 @@ static void repack_q3_K_tiled(ggml_tensor * t, const void * data, size_t offset,
                     neg_pl[pos] |= (uint8_t) (1 << g);
                 }
             }
+#endif
             for (int sub = 0; sub < 2; sub++) {
                 sc_pl[sub * 32 + row] = GGML_FP32_TO_FP16(d * (float) q3_K_get_scale(b->scales, kt_local * 2 + sub));
             }
@@ -925,11 +1114,15 @@ static void repack_q2_K_tiled(ggml_tensor * t, const void * data, size_t offset,
             uint8_t * sc_pl   = tile + 256;
             ggml_half * dd_pl = (ggml_half *) (tile + 320);
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            repack_neon_q2_3_k_low2(b->qs, kt_local, lo_pl, row);
+#else
             for (int lk = 0; lk < 32; lk++) {
                 const int g   = lk >> 2;
                 const int pos = row * 4 + (lk & 3);
                 lo_pl[(g >> 2) * 128 + pos] |= (uint8_t) (q2_3_K_get_low2(b->qs, kt_local * 32 + lk) << ((g & 3) * 2));
             }
+#endif
             for (int sub = 0; sub < 2; sub++) {
                 sc_pl[sub * 32 + row] = b->scales[kt_local * 2 + sub];
             }
@@ -1112,6 +1305,9 @@ static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset,
             repack_k4_quants(tile_dst, b, row, kt_local, sb_per_row, use_neon);
 
             const uint8_t hbit = (uint8_t) (1 << kt_local);
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            repack_neon_q5_k_qh(b->qh, hbit, plane, row);
+#else
             for (int cp = 0; cp < 16; cp++) {
                 const int i    = cp / 4;
                 const int lane = (cp % 4) * 32 + row;
@@ -1122,6 +1318,7 @@ static void repack_q5_K_tiled(ggml_tensor * t, const void * data, size_t offset,
                     plane[lane] |= (uint8_t) (1 << (2 * i + 1));
                 }
             }
+#endif
 
             ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
             scale_dst[2 * row + 0] = GGML_FP32_TO_FP16(d * (float) sc);
@@ -1211,6 +1408,9 @@ static void repack_q1_0_tiled(ggml_tensor * t, const void * data, size_t offset,
 
                     const block_q1_0 & block = src_slice[r * n_k_tiles + kt];
                     scale_dst[row] = block.d;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+                    repack_neon_q1_0_block(block.qs, tile_dst, row);
+#else
                     for (int k = 0; k < QK1_0; k++) {
                         int byte_offset;
                         int bit;
@@ -1219,6 +1419,7 @@ static void repack_q1_0_tiled(ggml_tensor * t, const void * data, size_t offset,
                             tile_dst[byte_offset] |= (uint8_t) (1u << bit);
                         }
                     }
+#endif
                 }
             }
         }
@@ -1322,11 +1523,11 @@ void htp_repack_tensor_tiled(ggml_tensor * tensor, const void * data, size_t siz
             break;
         case GGML_TYPE_F32:
             repack_float_to_f16_tiled<float>(tensor, data, 0, size,
-                [](float v) { return (uint16_t) ggml_fp32_to_fp16(v); });
+                [](float v) { return (uint16_t) GGML_FP32_TO_FP16(v); });
             break;
         case GGML_TYPE_BF16:
             repack_float_to_f16_tiled<ggml_bf16_t>(tensor, data, 0, size,
-                [](ggml_bf16_t v) { return (uint16_t) ggml_fp32_to_fp16(ggml_bf16_to_fp32(v)); });
+                [](ggml_bf16_t v) { return (uint16_t) GGML_FP32_TO_FP16(GGML_BF16_TO_FP32(v)); });
             break;
         default:
             break;
