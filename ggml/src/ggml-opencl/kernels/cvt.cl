@@ -2661,3 +2661,54 @@ kernel void kernel_moe_expand_scale_q5_K(
         dst_min[((long)e*ne01 + row)*nblk32 + sub] = (half)(dm * (float)mn);
     }
 }
+
+struct block_q2_K {
+    uint8_t scales[QK_K/16]; // low nibble scale, high nibble min, one per 16 weights
+    uint8_t qs[QK_K/4];      // quants, 2 bits each
+    half d;                  // super-block scale for the quantized scales
+    half dmin;               // super-block scale for the quantized mins
+};
+
+kernel void kernel_convert_block_q2_K(
+    global struct block_q2_K * src0,
+    global uchar * dst_qs,
+    global uchar * dst_sc,
+    global half * dst_dm,
+    ulong n_blk
+) {
+    const ulong i = get_global_id(0);
+    if (i >= n_blk) {
+        return;
+    }
+    global struct block_q2_K * b = src0 + i;
+    for (int j = 0; j < 64; ++j) {
+        dst_qs[64*i + j] = b->qs[j];
+    }
+    for (int j = 0; j < 16; ++j) {
+        dst_sc[16*i + j] = b->scales[j];
+    }
+    dst_dm[2*i + 0] = b->d;
+    dst_dm[2*i + 1] = b->dmin;
+}
+
+kernel void kernel_restore_block_q2_K(
+    global uchar * src_qs,
+    global uchar * src_sc,
+    global half * src_dm,
+    global struct block_q2_K * dst,
+    ulong n_blk
+) {
+    const ulong i = get_global_id(0);
+    if (i >= n_blk) {
+        return;
+    }
+    global struct block_q2_K * b = dst + i;
+    for (int j = 0; j < 64; ++j) {
+        b->qs[j] = src_qs[64*i + j];
+    }
+    for (int j = 0; j < 16; ++j) {
+        b->scales[j] = src_sc[16*i + j];
+    }
+    b->d = src_dm[2*i + 0];
+    b->dmin = src_dm[2*i + 1];
+}
