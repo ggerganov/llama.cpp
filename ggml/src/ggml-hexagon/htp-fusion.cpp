@@ -1,6 +1,13 @@
 #include "htp-fusion.h"
 #include "ggml-impl.h"
 
+#include "htp/allreduce-ops.h"
+#include "htp/binary-ops.h"
+#include "htp/get-rows-ops.h"
+#include "htp/glu-ops.h"
+#include "htp/matmul-ops.h"
+#include "htp/unary-ops.h"
+
 #include <algorithm>
 #include <cstring>
 
@@ -266,7 +273,6 @@ static bool fuse_allreduce_add(const ggml_hexagon_session * sess, htp_opnode & p
     }
 
     prev.opcode = HTP_OP_ALLREDUCE_ADD;
-    prev.name   = "ALLREDUCE+ADD";
     prev.inputs.push_back(res_tensor);
     if (kparams.mode != HTP_ALLREDUCE_SHARDED_FANOUT) {
         prev.outputs = { add_dst };
@@ -300,7 +306,6 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     }
 
     prev.opcode  = HTP_OP_RMS_NORM_MUL;
-    prev.name   += "+MUL";
     prev.inputs  = { src0, weight };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
@@ -333,7 +338,6 @@ static bool fuse_rms_norm_scale(const ggml_hexagon_session * sess, htp_opnode & 
     }
     memcpy(&prev.params[1], &scale, sizeof(float));
 
-    prev.name      += "+SCALE";
     prev.outputs[0] = dst;
     prev.fused.push_back(cur.node);
     return true;
@@ -381,7 +385,6 @@ static bool fuse_mul_mat_add(const ggml_hexagon_session * sess, htp_opnode & pre
     }
 
     prev.opcode  = HTP_OP_MUL_MAT_ADD;
-    prev.name    = "MUL_MAT+ADD";
     prev.inputs  = { src0, src1, src2 };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
@@ -435,7 +438,6 @@ static bool fuse_mul_mat_nx(const ggml_hexagon_session * sess, htp_opnode & prev
         }
         memcpy(prev.kernel_params, &kparams, sizeof(kparams));
         prev.opcode = HTP_OP_MUL_MAT_NX;
-        prev.name   = "MUL_MAT_NX";
     }
 
     prev.inputs.insert(prev.inputs.begin() + curr_n, w_in);
@@ -485,7 +487,6 @@ static bool fuse_mul_mat_id_nx(const ggml_hexagon_session * sess, htp_opnode & p
     }
 
     prev.opcode = HTP_OP_MUL_MAT_ID_NX;
-    prev.name   = "MUL_MAT_ID_NX";
     prev.inputs.insert(prev.inputs.begin() + curr_n, w_in);
     prev.outputs.push_back(d_in);
     prev.fused.push_back(cur.node);
@@ -528,7 +529,6 @@ static bool fuse_gdn_cpy(const ggml_hexagon_session * sess, htp_opnode & prev, c
         return false;
     }
 
-    prev.name += "+CPY";
     prev.outputs.push_back(cpy_dst);
     prev.fused.push_back(cur.node);
     return true;
@@ -551,7 +551,6 @@ static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode &
     if (kparams.vtcm_size == 0 || (size_t) kparams.vtcm_size > htp_session_vtcm_size(sess)) return false;
 
     prev.opcode  = HTP_OP_GET_ROWS;
-    prev.name    = "REPEAT+GET_ROWS";
     prev.inputs  = { repeat_src0, gr_src1 };
     prev.outputs = { gr_dst };
     prev.fused.push_back(cur.node);
@@ -586,7 +585,6 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     if (!htp_precompute_glu_params(sess, gate, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
-    prev.name   += "+MUL";
     prev.inputs  = { gate, up };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
@@ -625,7 +623,6 @@ static bool fuse_mul_mul_scalar(const ggml_hexagon_session * sess, htp_opnode & 
     kparams.rows_per_buffer = L.rows_per_buffer;
     kparams.vtcm_size       = L.total_bytes;
 
-    prev.name += "+MUL";
     prev.inputs.push_back(src2);
     prev.outputs[0] = dst;
     prev.fused.push_back(cur.node);
@@ -703,18 +700,69 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     kparams.rows_per_buffer = L.rows_per_buffer;
     kparams.vtcm_size       = (uint32_t) L.total_bytes;
 
-    switch (cur.opcode) {
-        case HTP_OP_ADD: prev.name = "ADD_NX"; break;
-        case HTP_OP_SUB: prev.name = "SUB_NX"; break;
-        case HTP_OP_MUL: prev.name = "MUL_NX"; break;
-        case HTP_OP_DIV: prev.name = "DIV_NX"; break;
-        default: break;
-    }
     prev.inputs.push_back(new_src);
     prev.outputs[0] = dst;
     prev.fused.push_back(cur.node);
     memcpy(prev.kernel_params, &kparams, sizeof(kparams));
     return true;
+}
+
+bool htp_fusion_can_stack(const struct ggml_tensor * a) {
+    if (!a || !a->src[0] || !a->src[1]) return false;
+    switch (a->op) {
+        case GGML_OP_MUL_MAT:
+            if (!htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_NX)) return false;
+            if (ggml_get_op_params_i32(a, 1) == GGML_HINT_SRC0_IS_HADAMARD) return false;
+            if (a->src[0]->ne[2] != 1 || a->src[0]->ne[3] != 1) return false;
+            return ggml_is_quantized(a->src[0]->type);
+        case GGML_OP_MUL_MAT_ID:
+            if (!htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_ID_NX)) return false;
+            return a->src[2] != nullptr && ggml_is_quantized(a->src[0]->type);
+        default:
+            return false;
+    }
+}
+
+bool htp_fusion_can_stack(const struct ggml_tensor * a, const struct ggml_tensor * b) {
+    if (!htp_fusion_can_stack(b) || a->op != b->op || a->src[1] != b->src[1]) {
+        return false;
+    }
+    if (a->op == GGML_OP_MUL_MAT_ID && a->src[2] != b->src[2]) {
+        return false;
+    }
+    const ggml_tensor * w0 = a->src[0];
+    const ggml_tensor * w1 = b->src[0];
+    return w0->type == w1->type && w0->ne[0] == w1->ne[0] && w0->ne[2] == w1->ne[2];
+}
+
+int htp_fusion_max(const struct ggml_cgraph * graph, int idx) {
+    const int n = graph->n_nodes;
+    const ggml_op op0 = graph->nodes[idx]->op;
+    if (op0 != GGML_OP_ADD && op0 != GGML_OP_NORM && op0 != GGML_OP_RMS_NORM) {
+        return 1;
+    }
+
+    enum ggml_op ops[HTP_OP_MAX_FUSED];
+    ops[0] = op0;
+
+    int f = idx + 1;
+    while (f < n && f < idx + HTP_OP_MAX_FUSED) {
+        const ggml_op op = graph->nodes[f]->op;
+        if (op != GGML_OP_ADD && op != GGML_OP_MUL && op != GGML_OP_SCALE &&
+            op != GGML_OP_NORM && op != GGML_OP_RMS_NORM) {
+            break;
+        }
+        ops[f - idx] = op;
+        f++;
+    }
+
+    f -= idx;
+    for (; f > 1; f--) {
+        if (ggml_can_fuse(graph, idx, ops, f)) {
+            break;
+        }
+    }
+    return f;
 }
 
 void htp_fusion_tag_graph(struct ggml_cgraph * graph) {
