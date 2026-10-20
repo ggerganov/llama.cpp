@@ -12,7 +12,6 @@
 #include <string>
 #include <thread>
 #include <mutex>
-#include <set>
 
 //
 // HTTP implementation using cpp-httplib
@@ -21,7 +20,6 @@
 class server_http_context::Impl {
 public:
     std::vector<std::unique_ptr<httplib::Server>> servers;
-    std::set<std::string> ws_paths; // full paths registered via ws()
     std::vector<std::string> hosts;
     std::vector<std::thread> threads; // one thread per listener
     std::unique_ptr<httplib::ThreadPool> pool; // single pool shared among all listeners
@@ -260,7 +258,7 @@ bool server_http_context::init_listener(const common_params & params) {
         return endpoints;
     }();
 
-    auto middleware_validate_api_key = [this, api_keys = params.api_keys](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [api_keys = params.api_keys](const httplib::Request & req, httplib::Response & res) {
         // If API key is not set, skip validation
         if (api_keys.empty()) {
             return true;
@@ -268,11 +266,6 @@ bool server_http_context::init_listener(const common_params & params) {
 
         // If path is public or a UI asset, skip validation
         if (get_public_endpoints.count(req.path)) {
-            return true;
-        }
-
-        // websocket handlers authenticate the client themselves
-        if (pimpl->ws_paths.count(req.path)) {
             return true;
         }
 
@@ -754,7 +747,6 @@ void server_http_context::post(const std::string & path, const server_http_conte
 
 void server_http_context::ws(const std::string & path, const server_http_context::ws_handler_t & handler) const {
     const std::string full_path = path_prefix + path;
-    pimpl->ws_paths.insert(full_path);
 
     auto callback = [handler](const httplib::Request & req, httplib::ws::WebSocket & sock) {
         struct conn_impl : server_http_context::ws_conn {

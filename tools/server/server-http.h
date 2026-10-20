@@ -103,7 +103,6 @@ struct server_http_context {
     void get(const std::string & path, const handler_t & handler) const;
     void post(const std::string & path, const handler_t & handler) const;
     void del(const std::string & path, const handler_t & handler) const;
-    // note: the API key check is skipped for websocket paths, the handler must authenticate the client
     void ws(const std::string & path, const ws_handler_t & handler) const;
 
     // Register the Google Cloud Platform (Vertex AI) compat (AIP_PREDICT_ROUTE env var, or /predict)

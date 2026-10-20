@@ -5772,7 +5772,7 @@ void server_routes::init_routes() {
     // realtime transcription over websocket, modeled after the OpenAI realtime API
     // audio is PCM16 mono at the model sample rate, sent as base64 in input_audio_buffer.append events
     // input_audio_buffer.commit with "final": true ends the input, closing the socket also ends it
-    this->ws_realtime = [this](const server_http_req & req, server_http_context::ws_conn & conn) {
+    this->ws_realtime = [this](const server_http_req &, server_http_context::ws_conn & conn) {
         auto send_event = [&conn](json ev) {
             ev["event_id"] = "event_" + random_string();
             conn.send(safe_json_to_str(ev));
@@ -5793,28 +5793,6 @@ void server_routes::init_routes() {
             send_error_event("The current model does not support realtime transcription.", "invalid_request_error");
             conn.close();
             return;
-        }
-
-        // the API key middleware does not cover websocket paths, check the bearer token here
-        if (!params.api_keys.empty()) {
-            std::string token;
-            for (const auto & [key, value] : req.headers) {
-                std::string lower = key;
-                std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-                if (lower == "authorization") {
-                    token = value;
-                }
-            }
-            const std::string prefix = "Bearer ";
-            if (token.compare(0, prefix.size(), prefix) == 0) {
-                token = token.substr(prefix.size());
-            }
-            const auto & keys = params.api_keys;
-            if (std::find(keys.begin(), keys.end(), token) == keys.end()) {
-                send_error_event("Invalid API Key", "authentication_error");
-                conn.close();
-                return;
-            }
         }
 
         const std::string session_id = "sess_" + random_string();
