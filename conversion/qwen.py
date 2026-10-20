@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from pathlib import Path
 from typing import Any, Callable, Iterable, TYPE_CHECKING
 
 import numpy as np
@@ -10,7 +11,7 @@ import torch
 if TYPE_CHECKING:
     from torch import Tensor
 
-from .base import LazyTorchTensor, ModelBase, ModelType, TextModel, get_model_architecture, gguf, logger
+from .base import LazyTorchTensor, ModelBase, ModelType, TextModel, get_model_architecture, gguf, jinja_str_or_json, logger
 
 
 @ModelBase.register("QWenLMHeadModel")
@@ -58,6 +59,10 @@ class Qwen2Model(TextModel):
     model_arch = gguf.MODEL_ARCH.QWEN2
 
     def set_vocab(self):
+        # HuggingFaceBio/Carbon-14B: Qwen3 with the HybridDNATokenizer (Qwen3 BPE plus DNA 6-mers)
+        if self._is_hybriddna():
+            self._set_vocab_hybriddna()
+            return
         try:
             self._set_vocab_sentencepiece()
         except FileNotFoundError:
@@ -251,6 +256,11 @@ class Qwen3Model(Qwen2Model):
                 if is_tied_head:
                     yield from super().modify_tensors(data_torch, name, bid)
                 return
+
+        # output embedding projection (voyage-4-nano)
+        if name == "linear.weight":
+            self.gguf_writer.add_embedding_length_out(data_torch.shape[0])
+            name = "dense_2_out.weight"
 
         yield from super().modify_tensors(data_torch, name, bid)
 
@@ -569,17 +579,25 @@ class _LinearAttentionVReorderBase(Qwen3NextModel):
         elif name.endswith((".linear_attn.in_proj_a.weight", ".linear_attn.in_proj_b.weight")):
             weight, scale = reorder_rows(weight, scale, 1)
         elif name.endswith(".linear_attn.out_proj.weight"):
-            col_perm = self._reorder_v_heads(
-                torch.arange(num_v_heads * head_v_dim, dtype=torch.long).unsqueeze(0),
-                1, num_k_heads, num_v_per_k, head_v_dim,
-            ).squeeze(0)
-            weight, scale = apply_col_perm(weight, scale, col_perm)
+            if self._hadamard_folds_tensor(name):
+                # folded weight: keep the grouped V order, the runtime permutes the activation instead
+                self._hadamard_gdn_v_grouped = True
+            else:
+                col_perm = self._reorder_v_heads(
+                    torch.arange(num_v_heads * head_v_dim, dtype=torch.long).unsqueeze(0),
+                    1, num_k_heads, num_v_per_k, head_v_dim,
+                ).squeeze(0)
+                weight, scale = apply_col_perm(weight, scale, col_perm)
 
         return weight, scale
 
     def _repack_nvfp4(self, name: str, weight: Tensor, scale: Tensor, scale2: Tensor, input_scale: Tensor):
         weight, scale = self._transform_nvfp4_weight(name, weight, scale)
         super()._repack_nvfp4(name, weight, scale, scale2, input_scale)
+
+    def _hadamard_folds_tensor(self, name: str) -> bool:
+        # a manifest name and `name` can differ only by leading wrapper prefixes
+        return any(name.endswith(n) or n.endswith(name) for n in self.hadamard_folded_names())
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         num_k_heads = self.hparams.get("linear_num_key_heads", 0)
@@ -627,8 +645,12 @@ class _LinearAttentionVReorderBase(Qwen3NextModel):
                 data_torch = torch.cat([qk_part, v_part], dim=0)
 
             elif ".out_proj." in name:
-                # Out projection weight: reorder columns (input dimension)
-                data_torch = self._reorder_v_heads(data_torch, 1, num_k_heads, num_v_per_k, head_v_dim)
+                if self._hadamard_folds_tensor(name):
+                    # folded weight: keep the grouped V order, the runtime permutes the activation instead
+                    self._hadamard_gdn_v_grouped = True
+                else:
+                    # Out projection weight: reorder columns (input dimension)
+                    data_torch = self._reorder_v_heads(data_torch, 1, num_k_heads, num_v_per_k, head_v_dim)
 
         yield from super().modify_tensors(data_torch, name, bid)
 
@@ -649,10 +671,79 @@ class _Qwen35MRopeMixin:
             self.gguf_writer.add_rope_dimension_sections(self._QWEN35_DEFAULT_MROPE_SECTION)
 
 
-@ModelBase.register("Qwen3_5ForConditionalGeneration", "Qwen3_5ForCausalLM")
+@ModelBase.register("Qwen3_5ForConditionalGeneration", "Qwen3_5ForCausalLM", "Qwen3_5TextModel")
 @ModelBase.example("Qwen/Qwen3.5-9B")
 class Qwen3_5TextModel(_Qwen35MRopeMixin, _LinearAttentionVReorderBase):
     model_arch = gguf.MODEL_ARCH.QWEN35
+
+    def __init__(self, dir_model, *args, **kwargs):
+        # Inner TextModel does not own mtp.*. Set no_mtp before mixin bumps block_count.
+        hparams = kwargs.pop("hparams", None)
+        if hparams is None:
+            hparams = ModelBase.load_hparams(dir_model, self.is_mistral_format)
+        if get_model_architecture(hparams, ModelType.TEXT) == "Qwen3_5TextModel":
+            self.no_mtp = True
+        super().__init__(dir_model, *args, hparams=hparams, **kwargs)
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self._try_set_pooling_type()
+
+
+def _is_openjev_checkpoint(dir_model: Path) -> bool:
+    return (dir_model / "helper" / "shim.py").is_file() and (dir_model / "config.json").is_file()
+
+
+@ModelBase.register_hparams_loader(_is_openjev_checkpoint)
+def _load_openjev_hparams(dir_model: Path) -> dict[str, Any]:
+    logger.info("gguf: detected OpenJev checkpoint")
+    hparams = ModelBase.load_hparams(dir_model, False, guess=False)
+    hparams["architectures"] = ["OpenJevModel"]
+    return hparams
+
+
+@ModelBase.register("OpenJevModel")
+@ModelBase.example("openjev/openjev")
+class OpenJevModel(Qwen3_5TextModel):
+    model_arch = gguf.MODEL_ARCH.QWEN35
+    no_mtp = True  # the checkpoint has no MTP head
+
+    # prompt and calibration follow helper/shim.py of the model repo (text lane)
+    _LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    _TEMPERATURE = 0.85
+    _TEMPERATURE_NOUL = 1.829074  # applied on top of _TEMPERATURE
+
+    def set_vocab(self):
+        super().set_vocab()
+        self.gguf_writer.add_chat_template([{"name": "systemone", "template": self._systemone_template()}])
+
+    def _systemone_template(self) -> str:
+        description = jinja_str_or_json("o.description")
+        option = (
+            "{% if type != 'noul' %}{{ o.key }}: {% if o.description %}" + description + "{% endif %}"
+            "{% elif o.key == 'true' %}yes: {% if o.description %}" + description + "{% else %}The statement is true.{% endif %}"
+            "{% else %}no: {% if o.description %}" + description + "{% else %}The statement is false.{% endif %}{% endif %}"
+        )
+        # TODO: only the layout with one image is known (image first), the one with several images is not verified
+        images = (
+            "{% for image in images %}{{ image }}{% endfor %}"
+            "{% if images %}{{ 'The screenshot shows the current screen.\\n' }}{% endif %}"
+        )
+        return (
+            "{% set letters = '" + self._LETTERS + "' %}"
+            "<|im_start|>user\n" + images + "State:\n" + jinja_str_or_json("state") + "\n\nQuestion: " + jinja_str_or_json("instructions")
+            + "{% if type == 'score' %} Rate along the ordered levels below (lowest first).{% endif %}"
+            "{{ '\\nOptions:\\n' }}"
+            "{% for o in options %}[{{ letters[loop.index0] }}] " + option + "{{ '\\n' }}{% endfor %}"
+            "{{ '\\nAnswer with the letter of the best option only.<|im_end|>\\n<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n' }}"
+        )
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_decision_type(gguf.DecisionType.OPENJEV)
+        self.gguf_writer.add_decision_temperature("choice", self._TEMPERATURE)
+        self.gguf_writer.add_decision_temperature("score",  self._TEMPERATURE)
+        self.gguf_writer.add_decision_temperature("noul",   self._TEMPERATURE * self._TEMPERATURE_NOUL)
 
 
 @ModelBase.register("Qwen3_5MoeForConditionalGeneration", "Qwen3_5MoeForCausalLM")
@@ -729,6 +820,12 @@ class DFlashModel(Qwen3Model):
         embedding_scale = dflash_config.get(
             "input_embedding_scale", self.hparams.get("input_embedding_scale")
         )
+        if embedding_scale is None and self.target_model_dir is not None:
+            # the draft shares the target's token embeddings, and Gemma scales them by sqrt(hidden_size) in the forward pass
+            target_hparams = ModelBase.load_hparams(self.target_model_dir, False)
+            if get_model_architecture(target_hparams, ModelType.TEXT).startswith("Gemma"):
+                target_hparams = {**target_hparams, **target_hparams.get("text_config", {})}
+                embedding_scale = target_hparams["hidden_size"] ** 0.5
         if embedding_scale is not None:
             self.gguf_writer.add_embedding_scale(float(embedding_scale))
 

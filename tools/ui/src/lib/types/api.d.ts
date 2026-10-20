@@ -1,4 +1,5 @@
 import type { ChatMessagePromptProgress, ChatRole } from './chat';
+import type { ModelSidecar } from '$lib/constants';
 import type {
 	ContentPartType,
 	FileTypeAudio,
@@ -100,6 +101,10 @@ export interface ApiModelDataEntry {
 	tags?: string[];
 	/** Modality capabilities, reported by the router for every model regardless of load state */
 	architecture?: ApiModelArchitecture;
+	/** Trained context of the model, read from its GGUF metadata at registration */
+	context_length?: number;
+	/** Sidecar kinds a cached model or an unfinished download has on disk, as -hf resolves them */
+	sidecars?: ModelSidecar[];
 	/** Legacy meta field (may be present in older responses) */
 	meta?: Record<string, unknown> | null;
 }
@@ -168,6 +173,8 @@ export interface ApiModelsSseEvent {
  */
 export interface ApiModelsDownloadRequest {
 	model: string;
+	/** Sidecar kinds pulled with the model, picked by the server as -hf picks them */
+	sidecars: ModelSidecar[];
 }
 
 /**

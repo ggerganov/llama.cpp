@@ -45,6 +45,7 @@ set(METALLIB_KERNEL_SOURCES
     kernels/fa_q5_0.metal
     kernels/fa_q5_1.metal
     kernels/fa_q8_0.metal
+    kernels/fa_tensor.metal
     kernels/fa_vec_f16.metal
     kernels/fa_vec_f32.metal
     kernels/fa_vec_q4_0.metal
@@ -53,6 +54,7 @@ set(METALLIB_KERNEL_SOURCES
     kernels/fa_vec_q5_1.metal
     kernels/fa_vec_q8_0.metal
     kernels/mul_mv.metal
+    kernels/mul_mv_mma.metal
     kernels/mul_mm.metal
     kernels/quantize.metal
     kernels/softmax.metal
@@ -232,10 +234,19 @@ else()
             VERBATIM
         )
 
+        set(AIR_FA_TENSOR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fa_tensor_tensor.air")
+        add_custom_command(
+            OUTPUT ${AIR_FA_TENSOR}
+            COMMAND xcrun -sdk ${METAL_SDK} metal ${XC_FLAGS_TENSOR} -DGGML_METAL_HAS_TENSOR -I ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kernels/fa_tensor.metal -o ${AIR_FA_TENSOR}
+            DEPENDS kernels/fa_tensor.metal kernels/common.h ${METALLIB_COMMON} ggml-metal-impl.h
+            COMMENT "Compiling kernels/fa_tensor.metal (tensor API)"
+            VERBATIM
+        )
+
         add_custom_command(
             OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-tensor.metallib
-            COMMAND xcrun -sdk ${METAL_SDK} metallib ${AIR_MM_TENSOR} -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-tensor.metallib
-            DEPENDS ${AIR_MM_TENSOR}
+            COMMAND xcrun -sdk ${METAL_SDK} metallib ${AIR_MM_TENSOR} ${AIR_FA_TENSOR} -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-tensor.metallib
+            DEPENDS ${AIR_MM_TENSOR} ${AIR_FA_TENSOR}
             COMMENT "Linking tensor API Metal kernels into ggml-tensor.metallib"
         )
 
@@ -248,7 +259,7 @@ else()
         COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-common.h
         COMMAND rm -f ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal-impl.h
         COMMAND rm -rf ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kernels
-        DEPENDS ${AIR_FILES} ${AIR_MM_TENSOR}
+        DEPENDS ${AIR_FILES} ${AIR_MM_TENSOR} ${AIR_FA_TENSOR}
         COMMENT "Linking Metal kernels into default.metallib"
     )
 

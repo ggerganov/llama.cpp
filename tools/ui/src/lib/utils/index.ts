@@ -42,10 +42,21 @@ export {
 export { setConfigValue, getConfigValue, configToParameterRecord } from './config-helpers';
 
 // CORS Proxy
-export { buildProxiedUrl, buildProxiedHeaders } from './cors-proxy';
+export { buildProxiedIconUrl, buildProxiedUrl, buildProxiedHeaders } from './cors-proxy';
 
 // URL utilities
 export { extractRootDomain, sanitizeExternalUrl, canonicalizeServerUrl } from './url';
+
+// Model list helpers
+export {
+	filterModelOptions,
+	groupFavoriteOptions,
+	groupModelOptions,
+	windowLocalGroups,
+	type GroupedModelOptions,
+	type ModelItem,
+	type OrgGroup
+} from './model-list';
 
 // Progress helpers
 export { modelLoadFraction, modelLoadProgressText } from './progress';
@@ -105,10 +116,17 @@ export {
 } from './modality-file-validation';
 
 // Model name utilities
-export { normalizeModelName, isValidModelName } from './model-names';
+export { isValidModelName, normalizeModelName, orgOf, repoOf } from './model-names';
 
 // Sidecar token utilities
-export { isAuxSidecar, isDraftSidecar, sidecarFromFileToken, sidecarFromTag } from './sidecars';
+export {
+	directoryOf,
+	isAuxSidecar,
+	isDraftSidecar,
+	isServerSidecarFile,
+	sidecarFromFileToken,
+	sidecarFromTag
+} from './sidecars';
 
 // Portal utilities
 export { portalToBody } from './portal-to-body';
@@ -360,3 +378,7 @@ export { remToPx } from './css';
 
 // Audio format helper (used by agentic store and chat service)
 export { getAudioInputFormat } from './audio-format';
+export { groupModelFamilies, modelFamilyKey, type ModelFamilyGroup } from './model-families';
+
+// Svelte actions
+export { nearViewport } from './near-viewport';
