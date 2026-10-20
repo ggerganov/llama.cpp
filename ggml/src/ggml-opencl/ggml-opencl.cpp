@@ -823,7 +823,6 @@ struct ggml_backend_opencl_context {
     cl_program program_conv_2d_f16;
     cl_program program_conv_2d_f32;
     cl_program program_conv_2d_f16_f32;
-    cl_program program_conv2_dw;
     cl_program program_tsembd;
     cl_program program_gemv_moe_mxfp4_f32, program_gemm_moe_mxfp4_f32;
     cl_program program_mul_mv_id_q4_0_f32_8x_flat;
@@ -3697,14 +3696,13 @@ static void load_cl_kernels(ggml_backend_opencl_context *backend_ctx) {
         const std::string kernel_src = read_file("conv2_dw.cl");
 #endif
         if (!kernel_src.empty()) {
-            backend_ctx->program_conv2_dw =
-                build_program_from_source(backend_ctx, kernel_src.c_str(), compile_opts);
-            CL_CHECK((backend_ctx->kernel_conv2d_dw_f32_f32 = clCreateKernel(backend_ctx->program_conv2_dw, "kernel_conv2d_dw_f32_f32", &err), err));
-            CL_CHECK((backend_ctx->kernel_conv2d_dwf16_f32 = clCreateKernel(backend_ctx->program_conv2_dw, "kernel_conv2d_dwf16_f32", &err), err));
+            cl_program prog = build_program_from_source(backend_ctx, kernel_src.c_str(), compile_opts);
+            CL_CHECK((backend_ctx->kernel_conv2d_dw_f32_f32 = clCreateKernel(prog, "kernel_conv2d_dw_f32_f32", &err), err));
+            CL_CHECK((backend_ctx->kernel_conv2d_dwf16_f32 = clCreateKernel(prog, "kernel_conv2d_dwf16_f32", &err), err));
+            CL_CHECK(clReleaseProgram(prog));
             GGML_LOG_CONT(".");
         } else {
             GGML_LOG_WARN("ggml_opencl: conv2_dw kernel source not found or empty. This op will not be available.\n");
-            backend_ctx->program_conv2_dw = nullptr;
             backend_ctx->kernel_conv2d_dw_f32_f32 = nullptr;
             backend_ctx->kernel_conv2d_dwf16_f32 = nullptr;
         }
