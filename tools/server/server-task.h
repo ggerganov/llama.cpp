@@ -122,7 +122,7 @@ struct task_result_state {
     const std::string oai_resp_id;
     const std::string oai_resp_reasoning_id;
     const std::string oai_resp_message_id;
-    std::unordered_set<size_t> oai_resp_tool_calls_started;
+    std::string oai_resp_fc_id; // function call ID for current args delta
 
     task_result_state(common_chat_session session = {});
 
@@ -473,8 +473,7 @@ struct server_task_result_cmpl_partial : server_task_result {
     std::string oai_resp_id;
     std::string oai_resp_reasoning_id;
     std::string oai_resp_message_id;
-    std::vector<std::string> oai_resp_fc_ids;
-    std::unordered_set<size_t> oai_resp_tool_calls_started;
+    std::string oai_resp_fc_id;
 
     // for Anthropic API: track if any reasoning content has been generated
     bool anthropic_has_reasoning = false;
