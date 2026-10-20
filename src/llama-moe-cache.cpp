@@ -723,11 +723,8 @@ struct llama_moe_cache::impl {
     }
 
     // mailboxes for the layers the hybrid splits between the GPU and the CPU, if the one device that has host experts has them
-    // (CUDA); without, those layers keep the scheduler's copies. LLAMA_MOE_CACHE_NO_MAILBOX turns them off.
+    // (CUDA); without, those layers keep the scheduler's copies.
     void setup_mailbox(const llama_model & model) {
-        if (getenv("LLAMA_MOE_CACHE_NO_MAILBOX") != nullptr) {
-            return;
-        }
         device * dev = nullptr;
         int n_dev = 0;
         for (device & d : devices) {
@@ -987,6 +984,8 @@ struct llama_moe_cache::impl {
     // adaptive: swap the hottest experts the cache lacks in for the coldest it holds (and into free slots first), at most
     // max_swaps. The device must be idle - the banks and its slot maps change - which it is between two generated tokens;
     // the copies are blocking, ~1.2 ms an expert. A layer the cache holds whole is left alone. eager: no hysteresis.
+    // A swap rewrites key_of and the slot maps but not the SLRU lists: adaptive implies hybrid, which never calls
+    // plan(), so the list order is unused. Anything that mixes the two would have to move() the reused slots.
     int32_t do_rebalance(int32_t max_swaps, bool eager) {
         if (!adaptive || heat.empty() || max_swaps <= 0) {
             return 0;
@@ -1259,14 +1258,20 @@ struct llama_moe_cache::impl {
         // the hybrid's slot maps never change and it never uploads, so a layer it holds whole needs no look at the
         // selected experts: copy the map as it is, without the sync that reading them costs (~45 us a layer under WSL).
         // Every lookup is a hit, counted from the lookup's size (the distinct experts exactly for one token, at most
-        // that for more)
+        // that for more). Without the selected experts, a hit is known to be on a profile expert only when every
+        // expert of the layer still is one (an adaptive fill clears from_profile): otherwise none is counted, a lower bound
         if (hybrid) {
             const int64_t n_ids = ggml_nelements(lookup->src[1]);
             const size_t  n_hit = (size_t) std::min<int64_t>(n_ids, l.slot_map->ne[1]);
+            const int32_t * slots = g.slru.slot_map[il];
+            bool all_profile = slots != nullptr;
+            for (int32_t e = 0; all_profile && e < g.slru.n_expert; ++e) {
+                all_profile = slots[e] >= 0 && g.slru.from_profile[slots[e]];
+            }
             stats & st = n_ids <= 8*n_expert_used ? stats_small : stats_large;
             for (stats * s : { &st, &stats_layer[il] }) {
                 s->hits         += n_hit;
-                s->hits_profile += n_hit;
+                s->hits_profile += all_profile ? n_hit : 0;
             }
             ggml_backend_tensor_set_async(backend, dst, src->data, 0, ggml_nbytes(src));
             return true;
@@ -1476,7 +1481,7 @@ bool llama_moe_cache_read_profile(const std::string & path, uint32_t n_layer, ui
         std::vector<std::pair<int32_t, int32_t>> & ranked, std::string & err) {
     std::ifstream f(path, std::ios::binary);
     char magic[4] = {};
-    uint32_t hdr[5] = {}; // version, n_layer, n_expert, slots, n_ranked
+    uint32_t hdr[5] = {}; // version, n_layer, n_expert, slots (informational: the cache size it was planned for), n_ranked
     if (!f.read(magic, sizeof(magic)) || std::memcmp(magic, "STRP", 4) != 0 || !f.read((char *) hdr, sizeof(hdr))) {
         err = path + ": not a Strata expert profile";
         return false;

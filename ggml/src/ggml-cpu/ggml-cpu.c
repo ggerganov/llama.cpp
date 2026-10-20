@@ -1551,6 +1551,9 @@ static void * incr_ptr_aligned(void ** p, size_t size, size_t align) {
     return ptr;
 }
 
+// GGML_MMID_CHUNK: rows per chunk of a one-token-per-expert mul_mat_id (0 = one slice per thread)
+static int ggml_cpu_mmid_chunk = 32; // initialized once in ggml_cpu_init(), read-only afterwards
+
 static void ggml_compute_forward_mul_mat_id(
         const struct ggml_compute_params * params,
               struct ggml_tensor * dst) {
@@ -1706,14 +1709,9 @@ static void ggml_compute_forward_mul_mat_id(
         // few thousand rows). One slice per thread would make every expert wait for the slowest core (a hybrid CPU's
         // efficiency cores take ~2x as long); several small chunks per thread, taken as they come, let the fast cores do more.
         // Qwen3-Coder-Next's experts on an i7-13620H, 10 threads: 115-120 -> 92-96 us an op with 32 rows (16: 97)
-        static int mmid_rows = -1; // GGML_MMID_CHUNK: rows per chunk in that case (0 = the old one slice per thread)
-        if (mmid_rows < 0) {
-            const char * s = getenv("GGML_MMID_CHUNK");
-            mmid_rows = s ? atoi(s) : 32;
-        }
-        const bool small_chunks = nr1 == 1 && nr0 > 1 && mmid_rows > 0 && !disable_chunking;
+        const bool small_chunks = nr1 == 1 && nr0 > 1 && ggml_cpu_mmid_chunk > 0 && !disable_chunking;
         if (small_chunks) {
-            chunk_size = mmid_rows;
+            chunk_size = ggml_cpu_mmid_chunk;
         }
 
         int64_t nchunk0 = (nr0 + chunk_size - 1) / chunk_size;
@@ -3119,36 +3117,9 @@ static int ggml_cpu_try_fuse_ops(
     return 0;
 }
 
-// GGML_CPU_OP_PROFILE=1: thread 0's time per op kind (the op and the barrier after it, so the slowest thread's), at exit
-static int     ggml_cpu_op_prof = -1;
-static int64_t ggml_cpu_op_us[GGML_OP_COUNT];
-static int64_t ggml_cpu_op_n[GGML_OP_COUNT];
-
-static void ggml_cpu_op_prof_print(void) {
-    int64_t total = 0;
-    for (int i = 0; i < GGML_OP_COUNT; i++) {
-        total += ggml_cpu_op_us[i];
-    }
-    fprintf(stderr, "cpu op profile: %.1f ms in all (thread 0, op + barrier)\n", total/1000.0);
-    for (int i = 0; i < GGML_OP_COUNT; i++) {
-        if (ggml_cpu_op_n[i] > 0) {
-            fprintf(stderr, "  %-16s %9.1f ms %8lld ops %7.2f us each %5.1f%%\n", ggml_op_name((enum ggml_op) i),
-                    ggml_cpu_op_us[i]/1000.0, (long long) ggml_cpu_op_n[i], (double) ggml_cpu_op_us[i]/ggml_cpu_op_n[i],
-                    100.0*ggml_cpu_op_us[i]/(total > 0 ? total : 1));
-        }
-    }
-}
-
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_threadpool    * tp    = state->threadpool;
-    if (state->ith == 0 && ggml_cpu_op_prof < 0) {
-        ggml_cpu_op_prof = getenv("GGML_CPU_OP_PROFILE") != NULL;
-        if (ggml_cpu_op_prof) {
-            atexit(ggml_cpu_op_prof_print);
-        }
-    }
-    const bool op_prof = state->ith == 0 && ggml_cpu_op_prof > 0;
 
     const struct ggml_cgraph * cgraph = tp->cgraph;
     const struct ggml_cplan  * cplan  = tp->cplan;
@@ -3186,9 +3157,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             continue;
         }
 
-        const int64_t t_op = op_prof ? ggml_time_us() : 0;
-        const enum ggml_op op = node->op;
-
         // TODO: move fused-op detection into ggml_graph_plan so fusion decisions are made once at planning time
         // Try fused ops, fall back to normal compute
         const int n_fused = ggml_cpu_try_fuse_ops(cgraph, node_n, &params, cplan);
@@ -3206,10 +3174,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         if (node_n + 1 < cgraph->n_nodes) {
             ggml_barrier(state->threadpool);
-        }
-        if (op_prof) {
-            ggml_cpu_op_us[op] += ggml_time_us() - t_op;
-            ggml_cpu_op_n[op]++;
         }
     }
 
@@ -3988,6 +3952,13 @@ void ggml_cpu_init(void) {
         {
             const char * env = getenv("GGML_CPU_DISABLE_FUSION");
             ggml_cpu_disable_fusion = (env != NULL && atoi(env) == 1);
+        }
+
+        {
+            const char * env = getenv("GGML_MMID_CHUNK");
+            if (env != NULL) {
+                ggml_cpu_mmid_chunk = atoi(env);
+            }
         }
 
         is_first_call = false;

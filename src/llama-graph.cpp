@@ -2559,7 +2559,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         // A stand-in can repeat an expert a token already uses, and mul_mat_id assumes an expert at most once per token
         // (CUDA's mm_ids_helper keeps one row of it), so every (expert, token) pair becomes a token of its own with one
         // expert: [n_embd, 1, k*n_tokens], the input copied k times. A stand-in row costs a full expert read: on
-        // gpt-oss-20b the GPU's part took 2.5x the time of its own experts that way (ADR-002)
+        // gpt-oss-20b the GPU's part took 2.5x the time of its own experts that way
         const char * gpu_name = ggml_backend_name(gpu);
         bool skip = n_tokens == 1 && cur->ne[1] == 1 && (strncmp(gpu_name, "CUDA", 4) == 0 || strncmp(gpu_name, "ROCm", 4) == 0);
         for (ggml_tensor * w : { up_exps, gate_exps, down_exps, gate_up_exps }) {
@@ -2582,7 +2582,8 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
             hot_slots = plane(3);
             cold_ids  = plane(1);
             ids_flat  = ggml_reshape_2d(ctx0, ggml_is_contiguous(selected_experts) ? selected_experts : ggml_cont(ctx0, selected_experts), 1, kt);
-            x = cur->ne[1] == k ? cur : ggml_repeat_4d(ctx0, cur, n_embd, k, n_tokens, 1); // weight_before_ffn has it already
+            // llama4 (weight_before_ffn) already repeated cur to [n_embd, k, n_tokens] above; the others have [n_embd, 1, n_tokens]
+            x = cur->ne[1] == k ? cur : ggml_repeat_4d(ctx0, cur, n_embd, k, n_tokens, 1);
             x = ggml_reshape_3d(ctx0, ggml_is_contiguous(x) ? x : ggml_cont(ctx0, x), n_embd, 1, kt);
         }
 
@@ -2594,7 +2595,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         ggml_build_forward_expand(gf, e_cold);
 
         // the masks and the sum on the GPU: each small op left on the CPU costs a thread barrier per layer, which on
-        // Granite 1B-A400M cost more than the expert reads the hybrid saves (8.9 -> see ADR-002)
+        // Granite 1B-A400M cost more than the expert reads the hybrid saves
         auto on_gpu = [&](ggml_tensor * t) {
             if (ggml_backend_supports_op(gpu, t)) {
                 ggml_backend_sched_set_tensor_backend(sched, t, gpu);
