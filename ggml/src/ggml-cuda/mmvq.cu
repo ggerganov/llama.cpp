@@ -1145,6 +1145,12 @@ static void mul_mat_vec_q_switch_ncols_dst(
         const int  nwarps = calc_nwarps(type, c_ncols_dst, table_id);
         bool       use    = nwarps > 1 && blocks_per_row_x < nwarps * blocks_per_iter_1warp;
 
+        // Jetson Orin: with its small L2 a single column is bound by DRAM latency at any K,
+        // more rows per block keep more loads in flight (tuned on Jetson Orin Nano)
+        if (GGML_CUDA_CC_IS_NVIDIA(cc) && cc == GGML_CUDA_CC_ORIN && c_ncols_dst == 1 && !has_ids) {
+            use = nwarps > 1;
+        }
+
         constexpr std::array<ggml_type, 2> iq_slow_turing = {
             GGML_TYPE_IQ3_XXS,
             GGML_TYPE_IQ3_S,
