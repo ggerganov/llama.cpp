@@ -4990,7 +4990,7 @@ server_context_meta server_context::get_meta() const {
         /* model_aliases           */ impl->model_aliases,
         /* model_tags              */ impl->model_tags,
         /* model_path              */ impl->params_base.model.path,
-        /* model_output_modalities */ server_model_output_modalities(common_get_decision_type(impl->model_tgt)),
+        /* model_output_modalities */ server_model_output_modalities(impl->model_tgt, impl->has_cap_chat(), impl->has_cap_tts()),
         /* has_mtmd                */ impl->mctx != nullptr,
         /* has_inp_image           */ impl->chat_params.allow_image,
         /* has_inp_audio           */ impl->chat_params.allow_audio,
