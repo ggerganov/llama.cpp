@@ -2768,6 +2768,11 @@ ggml_status llama_context::graph_compute(
         LLAMA_LOG_ERROR("%s: ggml_backend_sched_graph_compute_async failed with error %d\n", __func__, status);
     }
 
+    // the CPU splits have run by now, the MoE cache's mailbox ops among them
+    if (moe_cache && moe_cache->take_mailbox_error() && status == GGML_STATUS_SUCCESS) {
+        status = GGML_STATUS_FAILED;
+    }
+
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(sched));
 
     return status;

@@ -72,6 +72,9 @@ public:
     void build_mailbox_recv(ggml_context * ctx, int32_t il, ggml_tensor * e_cold, ggml_tensor *& copy, ggml_tensor *& recv) const;
     // before each graph compute: a new epoch, which the GPU's sends stamp on their flags
     void begin_step();
+    // after each graph compute: true if a hand-over from the GPU timed out in it (the CPU then computed none of its
+    // experts, so the step's results are wrong and it must fail); clears the error
+    bool take_mailbox_error();
 
     // ggml_backend_sched copy callback, returns false if src is not a slot map
     bool copy(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph);

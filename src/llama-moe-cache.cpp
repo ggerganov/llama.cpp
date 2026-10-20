@@ -308,6 +308,7 @@ struct llama_moe_cache::impl {
     float   heat_inc = 1.0f;                 // the weight of a selection now: it grows, which is how older ones decay
     int32_t steps_since_rebalance = 0;
     bool    decode_seen = false;             // a CPU op of the hybrid ran in the last graph
+    std::atomic<bool> mailbox_error{false};  // a hand-over timed out in the last graph, see take_mailbox_error
     size_t  n_swap = 0;
     // mailbox: how long the CPU waited for the GPU's hand-overs (the time the GPU spends before the experts), and how many
     uint64_t wait_ns = 0;
@@ -859,11 +860,25 @@ struct llama_moe_cache::impl {
         impl & self = *h.self;
         const mailbox_layer & m = self.mailbox[h.il];
         const uint32_t epoch = self.epoch;
+        const int64_t k = m.ids->ne[0];
+        int32_t * cold = (int32_t *) dst->data;
+
+        // an earlier layer of this step timed out already: the step fails anyway, do not wait 20 s for every layer
+        if (self.mailbox_error) {
+            std::fill(cold, cold + k, -1);
+            return;
+        }
 
         const auto t0 = std::chrono::steady_clock::now();
         for (uint64_t spins = 0; *m.host_flag != epoch; ++spins) {
             if ((spins & 0xFFFFF) == 0xFFFFF && std::chrono::steady_clock::now() - t0 > std::chrono::seconds(20)) {
-                GGML_ABORT("MoE cache: the GPU did not hand layer %d over within 20 s", h.il);
+                // a stalled GPU fails the step, not the process: the CPU computes no expert (its GPU-side receive is
+                // launched after this split anyway) and graph_compute turns the error into a failed decode. A late send
+                // is stamped with this epoch, which the next step's no longer matches
+                LLAMA_LOG_ERROR("%s: the GPU did not hand layer %d over within 20 s, failing the step\n", __func__, h.il);
+                std::fill(cold, cold + k, -1);
+                self.mailbox_error = true;
+                return;
             }
         }
         std::atomic_thread_fence(std::memory_order_acquire);
@@ -872,8 +887,6 @@ struct llama_moe_cache::impl {
 
         const int32_t * ids   = (const int32_t *) m.ids->data;
         const int32_t * slots = (const int32_t *) dst->src[2]->data;
-        const int64_t k = m.ids->ne[0];
-        int32_t * cold = (int32_t *) dst->data;
 
         // consumed: a graph computed without begin_step() would wait for a new send instead of reading these ids again
         *m.host_flag = 0;
@@ -1459,6 +1472,10 @@ void llama_moe_cache::build_mailbox_recv(ggml_context * ctx, int32_t il, ggml_te
 
 void llama_moe_cache::begin_step() {
     pimpl->begin_step();
+}
+
+bool llama_moe_cache::take_mailbox_error() {
+    return pimpl->mailbox_error.exchange(false);
 }
 
 ggml_tensor * llama_moe_cache::build_hybrid_ids(ggml_context * ctx, ggml_tensor * selected_experts, int32_t il) const {
