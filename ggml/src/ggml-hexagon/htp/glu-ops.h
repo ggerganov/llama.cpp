@@ -36,6 +36,8 @@ static inline bool htp_op_is_glu(uint32_t opcode) {
         case HTP_OP_GLU_GEGLU:
         case HTP_OP_GLU_GEGLU_QUICK:
         case HTP_OP_GLU_GEGLU_ERF:
+        case HTP_OP_GLU_REGLU:
+        case HTP_OP_GLU_SIGMOID:
             return true;
         default:
             return false;

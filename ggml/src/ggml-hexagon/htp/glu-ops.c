@@ -467,6 +467,118 @@ static void geglu_erf_f32(const float * restrict src0,
     }
 }
 
+static inline void hvx_reglu_f32_aa(uint8_t * restrict dst, const uint8_t * restrict src0, const uint8_t * restrict src1, uint32_t n) {
+    assert((unsigned long) dst  % 128 == 0);
+    assert((unsigned long) src0 % 128 == 0);
+    assert((unsigned long) src1 % 128 == 0);
+
+    HVX_Vector * restrict vdst        = (HVX_Vector *) dst;
+    const HVX_Vector * restrict vsrc0 = (const HVX_Vector *) src0;
+    const HVX_Vector * restrict vsrc1 = (const HVX_Vector *) src1;
+
+    const uint32_t epv  = 128 / sizeof(float);
+    const uint32_t nvec = n / epv;
+    const uint32_t nloe = n % epv;
+
+    const HVX_Vector v_zero = Q6_V_vzero();
+
+    uint32_t i = 0;
+
+    _Pragma("unroll(4)")
+    for (; i < nvec; i++) {
+        HVX_Vector x = Q6_Vsf_vmax_VsfVsf(vsrc0[i], v_zero);
+        vdst[i]      = hvx_vec_mul_f32_f32(x, vsrc1[i]);
+    }
+
+    if (nloe) {
+        HVX_Vector x   = Q6_Vsf_vmax_VsfVsf(vsrc0[i], v_zero);
+        HVX_Vector res = hvx_vec_mul_f32_f32(x, vsrc1[i]);
+        hvx_vec_store_a((void *) &vdst[i], nloe * sizeof(float), res);
+    }
+}
+
+// reglu(x, g) = relu(x) * g
+static void reglu_f32(const float * restrict src0,
+                      const float * restrict src1,
+                      float * restrict dst,
+                      const uint32_t num_rows,
+                      const struct htp_glu_context * gctx) {
+    htp_glu_op_preamble;
+
+    for (uint32_t ib = 0; ib < num_rows; ib++) {
+        const uint8_t * restrict src0_ptr = (const uint8_t *) src0 + (ib * src0_row_size_aligned);
+        const uint8_t * restrict src1_ptr = (const uint8_t *) src1 + (ib * src1_row_size_aligned);
+        uint8_t * restrict dst_ptr        = (uint8_t *) dst + (ib * dst_row_size_aligned);
+
+        hvx_reglu_f32_aa(dst_ptr, src0_ptr, src1_ptr, nc);
+    }
+}
+
+static __attribute__((noinline)) void hvx_sigglu_f32_vec(HVX_Vector * restrict vdst,
+                                                         const HVX_Vector * restrict vsrc0,
+                                                         const HVX_Vector * restrict vsrc1,
+                                                         uint32_t nvec) {
+    const HVX_Vector v_one     = hvx_vec_splat_f32(1.0f);
+    const HVX_Vector v_max_exp = hvx_vec_splat_f32(87.0f);
+    const HVX_Vector v_min_exp = hvx_vec_splat_f32(-87.0f);
+
+    for (uint32_t i = 0; i < nvec; i++) {
+        HVX_Vector sig = hvx_vec_fast_sigmoid_f32_guard(vsrc0[i], v_one, v_max_exp, v_min_exp);
+        vdst[i]        = hvx_vec_mul_f32_f32(sig, vsrc1[i]);
+    }
+}
+
+static __attribute__((noinline)) void hvx_sigglu_f32_tail(HVX_Vector * restrict vdst,
+                                                          const HVX_Vector * restrict vsrc0,
+                                                          const HVX_Vector * restrict vsrc1,
+                                                          uint32_t nloe) {
+    const HVX_Vector v_one     = hvx_vec_splat_f32(1.0f);
+    const HVX_Vector v_max_exp = hvx_vec_splat_f32(87.0f);
+    const HVX_Vector v_min_exp = hvx_vec_splat_f32(-87.0f);
+
+    HVX_Vector sig = hvx_vec_fast_sigmoid_f32_guard(vsrc0[0], v_one, v_max_exp, v_min_exp);
+    HVX_Vector res = hvx_vec_mul_f32_f32(sig, vsrc1[0]);
+    hvx_vec_store_a((void *) vdst, nloe * sizeof(float), res);
+}
+
+static inline void hvx_sigglu_f32_aa(uint8_t * restrict dst, const uint8_t * restrict src0, const uint8_t * restrict src1, uint32_t n) {
+    assert((unsigned long) dst  % 128 == 0);
+    assert((unsigned long) src0 % 128 == 0);
+    assert((unsigned long) src1 % 128 == 0);
+
+    HVX_Vector * restrict vdst        = (HVX_Vector *) dst;
+    const HVX_Vector * restrict vsrc0 = (const HVX_Vector *) src0;
+    const HVX_Vector * restrict vsrc1 = (const HVX_Vector *) src1;
+
+    const uint32_t epv  = 128 / sizeof(float);
+    const uint32_t nvec = n / epv;
+    const uint32_t nloe = n % epv;
+
+    if (nvec) {
+        hvx_sigglu_f32_vec(vdst, vsrc0, vsrc1, nvec);
+    }
+    if (nloe) {
+        hvx_sigglu_f32_tail(vdst + nvec, vsrc0 + nvec, vsrc1 + nvec, nloe);
+    }
+}
+
+// sigglu(x, g) = sigmoid(x) * g
+static void sigglu_f32(const float * restrict src0,
+                       const float * restrict src1,
+                       float * restrict dst,
+                       const uint32_t num_rows,
+                       const struct htp_glu_context * gctx) {
+    htp_glu_op_preamble;
+
+    for (uint32_t ib = 0; ib < num_rows; ib++) {
+        const uint8_t * restrict src0_ptr = (const uint8_t *) src0 + (ib * src0_row_size_aligned);
+        const uint8_t * restrict src1_ptr = (const uint8_t *) src1 + (ib * src1_row_size_aligned);
+        uint8_t * restrict dst_ptr        = (uint8_t *) dst + (ib * dst_row_size_aligned);
+
+        hvx_sigglu_f32_aa(dst_ptr, src0_ptr, src1_ptr, nc);
+    }
+}
+
 // swiglu(x) = x1 * sigmoid(x0)
 static void swiglu_f16(const _Float16 * restrict src0,
                        const _Float16 * restrict src1,
@@ -549,6 +661,110 @@ static void geglu_f16(const _Float16 * restrict src0,
         uint8_t * restrict dst_ptr        = (uint8_t *) dst + (ib * dst_row_size_aligned);
 
         hvx_geglu_f16_aa(dst_ptr, src0_ptr, src1_ptr, nc);
+    }
+}
+
+static inline void hvx_reglu_f16_aa(uint8_t * restrict dst, const uint8_t * restrict src0, const uint8_t * restrict src1, uint32_t n) {
+    assert((unsigned long) dst  % 128 == 0);
+    assert((unsigned long) src0 % 128 == 0);
+    assert((unsigned long) src1 % 128 == 0);
+
+    HVX_Vector * restrict vdst        = (HVX_Vector *) dst;
+    const HVX_Vector * restrict vsrc0 = (const HVX_Vector *) src0;
+    const HVX_Vector * restrict vsrc1 = (const HVX_Vector *) src1;
+
+    const uint32_t epv  = 128 / sizeof(_Float16);
+    const uint32_t nvec = n / epv;
+    const uint32_t nloe = n % epv;
+
+    const HVX_Vector v_zero = Q6_V_vzero();
+
+    uint32_t i = 0;
+
+    _Pragma("unroll(4)")
+    for (; i < nvec; i++) {
+        HVX_Vector x = Q6_Vhf_vmax_VhfVhf(vsrc0[i], v_zero);
+        vdst[i]      = hvx_vec_mul_f16_f16(x, vsrc1[i]);
+    }
+
+    if (nloe) {
+        HVX_Vector x   = Q6_Vhf_vmax_VhfVhf(vsrc0[i], v_zero);
+        HVX_Vector res = hvx_vec_mul_f16_f16(x, vsrc1[i]);
+        hvx_vec_store_a((void *) &vdst[i], nloe * sizeof(_Float16), res);
+    }
+}
+
+// reglu(x, g) = relu(x) * g
+static void reglu_f16(const _Float16 * restrict src0,
+                      const _Float16 * restrict src1,
+                      _Float16 * restrict dst,
+                      const uint32_t num_rows,
+                      const struct htp_glu_context * gctx) {
+    htp_glu_op_preamble;
+
+    for (uint32_t ib = 0; ib < num_rows; ib++) {
+        const uint8_t * restrict src0_ptr = (const uint8_t *) src0 + (ib * src0_row_size_aligned);
+        const uint8_t * restrict src1_ptr = (const uint8_t *) src1 + (ib * src1_row_size_aligned);
+        uint8_t * restrict dst_ptr        = (uint8_t *) dst + (ib * dst_row_size_aligned);
+
+        hvx_reglu_f16_aa(dst_ptr, src0_ptr, src1_ptr, nc);
+    }
+}
+
+static __attribute__((noinline)) void hvx_sigglu_f16_vec(HVX_Vector * restrict vdst,
+                                                         const HVX_Vector * restrict vsrc0,
+                                                         const HVX_Vector * restrict vsrc1,
+                                                         uint32_t nvec) {
+    for (uint32_t i = 0; i < nvec; i++) {
+        HVX_Vector sig = hvx_vec_fast_sigmoid_f16(vsrc0[i]);
+        vdst[i]        = hvx_vec_mul_f16_f16(sig, vsrc1[i]);
+    }
+}
+
+static __attribute__((noinline)) void hvx_sigglu_f16_tail(HVX_Vector * restrict vdst,
+                                                          const HVX_Vector * restrict vsrc0,
+                                                          const HVX_Vector * restrict vsrc1,
+                                                          uint32_t nloe) {
+    HVX_Vector sig = hvx_vec_fast_sigmoid_f16(vsrc0[0]);
+    HVX_Vector res = hvx_vec_mul_f16_f16(sig, vsrc1[0]);
+    hvx_vec_store_a((void *) vdst, nloe * sizeof(_Float16), res);
+}
+
+static inline void hvx_sigglu_f16_aa(uint8_t * restrict dst, const uint8_t * restrict src0, const uint8_t * restrict src1, uint32_t n) {
+    assert((unsigned long) dst  % 128 == 0);
+    assert((unsigned long) src0 % 128 == 0);
+    assert((unsigned long) src1 % 128 == 0);
+
+    HVX_Vector * restrict vdst        = (HVX_Vector *) dst;
+    const HVX_Vector * restrict vsrc0 = (const HVX_Vector *) src0;
+    const HVX_Vector * restrict vsrc1 = (const HVX_Vector *) src1;
+
+    const uint32_t epv  = 128 / sizeof(_Float16);
+    const uint32_t nvec = n / epv;
+    const uint32_t nloe = n % epv;
+
+    if (nvec) {
+        hvx_sigglu_f16_vec(vdst, vsrc0, vsrc1, nvec);
+    }
+    if (nloe) {
+        hvx_sigglu_f16_tail(vdst + nvec, vsrc0 + nvec, vsrc1 + nvec, nloe);
+    }
+}
+
+// sigglu(x, g) = sigmoid(x) * g
+static void sigglu_f16(const _Float16 * restrict src0,
+                       const _Float16 * restrict src1,
+                       _Float16 * restrict dst,
+                       const uint32_t num_rows,
+                       const struct htp_glu_context * gctx) {
+    htp_glu_op_preamble;
+
+    for (uint32_t ib = 0; ib < num_rows; ib++) {
+        const uint8_t * restrict src0_ptr = (const uint8_t *) src0 + (ib * src0_row_size_aligned);
+        const uint8_t * restrict src1_ptr = (const uint8_t *) src1 + (ib * src1_row_size_aligned);
+        uint8_t * restrict dst_ptr        = (uint8_t *) dst + (ib * dst_row_size_aligned);
+
+        hvx_sigglu_f16_aa(dst_ptr, src0_ptr, src1_ptr, nc);
     }
 }
 
@@ -683,6 +899,16 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
         case HTP_OP_GLU_GEGLU_ERF:
             compute_fn = geglu_erf_f32;
             op_type    = "geglu-erf-f32";
+            break;
+
+        case HTP_OP_GLU_REGLU:
+            compute_fn = reglu_f32;
+            op_type    = "reglu-f32";
+            break;
+
+        case HTP_OP_GLU_SIGMOID:
+            compute_fn = sigglu_f32;
+            op_type    = "sigglu-f32";
             break;
 
         default:
@@ -839,6 +1065,16 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
         case HTP_OP_GLU_GEGLU:
             compute_fn = geglu_f16;
             op_type    = "geglu-f16";
+            break;
+
+        case HTP_OP_GLU_REGLU:
+            compute_fn = reglu_f16;
+            op_type    = "reglu-f16";
+            break;
+
+        case HTP_OP_GLU_SIGMOID:
+            compute_fn = sigglu_f16;
+            op_type    = "sigglu-f16";
             break;
 
         default:

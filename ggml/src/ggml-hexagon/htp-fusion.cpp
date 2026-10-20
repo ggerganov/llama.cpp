@@ -589,6 +589,8 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
         case HTP_OP_UNARY_GELU:       glu_op = HTP_OP_GLU_GEGLU;       break;
         case HTP_OP_UNARY_GELU_QUICK: glu_op = HTP_OP_GLU_GEGLU_QUICK; break;
         case HTP_OP_UNARY_GELU_ERF:   glu_op = HTP_OP_GLU_GEGLU_ERF;   break;
+        case HTP_OP_UNARY_RELU:       glu_op = HTP_OP_GLU_REGLU;       break;
+        case HTP_OP_UNARY_SIGMOID:    glu_op = HTP_OP_GLU_SIGMOID;     break;
         default: return false;
     }
 

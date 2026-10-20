@@ -6162,6 +6162,7 @@ static htp_op_code op_remap_to_htp(const ggml_tensor * t) {
 
         case GGML_OP_GLU:
             switch (ggml_get_glu_op(t)) {
+                case GGML_GLU_OP_REGLU:        return HTP_OP_GLU_REGLU;
                 case GGML_GLU_OP_SWIGLU:       return HTP_OP_GLU_SWIGLU;
                 case GGML_GLU_OP_SWIGLU_OAI:   return HTP_OP_GLU_SWIGLU_OAI;
                 case GGML_GLU_OP_SWIGLU_CLAMP: return HTP_OP_GLU_SWIGLU_CLAMP;
@@ -7149,6 +7150,7 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
 
         case GGML_OP_GLU:
             switch (ggml_get_glu_op(op)) {
+                case GGML_GLU_OP_REGLU:
                 case GGML_GLU_OP_SWIGLU:
                 case GGML_GLU_OP_SWIGLU_OAI:
                 case GGML_GLU_OP_SWIGLU_CLAMP:
