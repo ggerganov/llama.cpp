@@ -701,10 +701,18 @@ void ggml_vec_dot_q1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const voi
 #if defined(__AVX2__)
 // four consecutive Q2_0 weights per byte: byte b becomes b & 3, (b >> 2) & 3, (b >> 4) & 3, (b >> 6) & 3 (OR, never add: the overlapping copies only touch masked-off bits)
 static inline __m256i q2_0_unpack_32_avx2(const uint8_t * qs) {
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__)
+    const __m256i shifts = _mm256_setr_epi8(
+            0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+            32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62);
+    const __m256i bits = _mm256_broadcastq_epi64(_mm_loadl_epi64((const __m128i *) qs));
+    return _mm256_and_si256(_mm256_multishift_epi64_epi8(shifts, bits), _mm256_set1_epi8(3));
+#else
     __m256i v = _mm256_cvtepu8_epi32(_mm_loadl_epi64((const __m128i *) qs));
     v = _mm256_or_si256(v, _mm256_slli_epi32(v, 12));
     v = _mm256_or_si256(v, _mm256_slli_epi32(v,  6));
     return _mm256_and_si256(v, _mm256_set1_epi32(0x03030303));
+#endif
 }
 
 // 32 weights against one Q8_0 block: sum((v - 1) * y) = sum(v * y) - sum(y), exact for every int8 y
