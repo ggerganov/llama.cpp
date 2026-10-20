@@ -346,8 +346,7 @@ static void normalize_anthropic_billing_header(std::string & system_text) {
 }
 
 json server_chat_convert_anthropic_to_oai(const json & body) {
-    // Start from the whole request, as the Responses conversion does, so llama.cpp params pass through;
-    // the Anthropic fields below are converted on top of it.
+    // Start from the whole request so llama.cpp params pass through
     json oai_body = body;
 
     // Convert system prompt
