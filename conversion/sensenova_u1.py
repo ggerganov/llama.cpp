@@ -55,8 +55,8 @@ class SenseNovaU1VisionModel(MmprojModel):
             hparams = dict(hparams)
 
         vision_config = dict(hparams["vision_config"])
-        # NEOVisionModel has no transformer blocks; these defaults satisfy
-        # the generic mmproj metadata contract without replacing checkpoint values.
+        # NEOVisionModel has no transformer blocks
+        # these defaults satisfy the generic mmproj metadata contract without replacing checkpoint values
         vision_config.setdefault("image_size", 0)
         vision_config.setdefault("intermediate_size", 0)
         vision_config.setdefault("num_hidden_layers", 0)
