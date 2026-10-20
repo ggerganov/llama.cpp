@@ -32,7 +32,10 @@ void llama_model_sensenova_u1::load_arch_hparams(llama_model_loader & ml) {
     if (hparams.n_embd_head_k() % 4 != 0 || hparams.n_embd_head_v() != hparams.n_embd_head_k()) {
         throw std::runtime_error("SenseNova U1 requires equal Q/K/V head sizes divisible by four");
     }
-    type = hparams.n_layer() == 42 ? LLM_TYPE_8B : LLM_TYPE_UNKNOWN;
+    switch (hparams.n_layer()) {
+        case 42: type = LLM_TYPE_8B; break;
+        default: type = LLM_TYPE_UNKNOWN;
+    }
 }
 
 void llama_model_sensenova_u1::load_arch_tensors(llama_model_loader &) {
