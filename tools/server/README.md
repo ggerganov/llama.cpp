@@ -1649,7 +1649,7 @@ See [Anthropic Messages API documentation](https://docs.anthropic.com/en/api/mes
 
 `top_k`: Top-k sampling
 
-llama.cpp sampling options are also accepted and behave as on [`/completion`](#post-completion-given-a-prompt-it-returns-the-predicted-completion): `seed`, `min_p`, `top_n_sigma`, `typical_p`, `min_keep`, `samplers`, `xtc_probability`, `xtc_threshold`, `dynatemp_range`, `dynatemp_exponent`, `repeat_last_n`, `repeat_penalty`, `frequency_penalty`, `presence_penalty`, `dry_multiplier`, `dry_base`, `dry_allowed_length`, `dry_penalty_last_n`, `dry_sequence_breakers`, `mirostat`, `mirostat_tau`, `mirostat_eta`, `adaptive_target`, `adaptive_decay`. Other `/completion` options are not forwarded.
+Other parameters are passed through as on `/v1/chat/completions`, so llama.cpp options such as `seed`, `min_p`, `repeat_penalty` or `id_slot` work here too.
 
 `stop_sequences`: Array of stop sequences
 

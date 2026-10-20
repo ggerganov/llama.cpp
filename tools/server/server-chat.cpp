@@ -346,7 +346,9 @@ static void normalize_anthropic_billing_header(std::string & system_text) {
 }
 
 json server_chat_convert_anthropic_to_oai(const json & body) {
-    json oai_body;
+    // Start from the whole request, as the Responses conversion does, so llama.cpp params pass through;
+    // the Anthropic fields below are converted on top of it.
+    json oai_body = body;
 
     // Convert system prompt
     json oai_messages = json::array();
@@ -587,27 +589,6 @@ json server_chat_convert_anthropic_to_oai(const json & body) {
         oai_body["max_tokens"] = body.at("max_tokens");
     } else {
         oai_body["max_tokens"] = 4096;
-    }
-
-    // Pass through common params
-    for (const auto & key : {"temperature", "top_p", "top_k", "stream", "chat_template_kwargs"}) {
-        if (body.contains(key)) {
-            oai_body[key] = body.at(key);
-        }
-    }
-
-    // llama.cpp sampling params, accepted on every chat endpoint
-    static const char * const llama_sampling_keys[] = {
-        "seed", "min_p", "top_n_sigma", "typical_p", "min_keep", "samplers",
-        "xtc_probability", "xtc_threshold", "dynatemp_range", "dynatemp_exponent",
-        "repeat_last_n", "repeat_penalty", "frequency_penalty", "presence_penalty",
-        "dry_multiplier", "dry_base", "dry_allowed_length", "dry_penalty_last_n", "dry_sequence_breakers",
-        "mirostat", "mirostat_tau", "mirostat_eta", "adaptive_target", "adaptive_decay",
-    };
-    for (const char * key : llama_sampling_keys) {
-        if (body.contains(key)) {
-            oai_body[key] = body.at(key);
-        }
     }
 
     // Handle Anthropic-specific thinking param

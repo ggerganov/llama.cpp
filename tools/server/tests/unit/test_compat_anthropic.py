@@ -72,6 +72,24 @@ def test_anthropic_messages_basic():
     assert "timings" not in res.body, "Anthropic API should not include timings field"
 
 
+def test_anthropic_messages_ignores_unknown_fields():
+    """Anthropic request fields llama.cpp has no use for are ignored, not rejected"""
+    server.start()
+
+    res = server.make_request("POST", "/v1/messages", data={
+        "model": "test",
+        "max_tokens": 8,
+        "messages": [{"role": "user", "content": "Say hello"}],
+        "service_tier": "auto",
+        "output_config": {"effort": "low"},
+        "context_management": {"edits": []},
+        "stop_sequences": ["\n\n"],
+    })
+
+    assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.body}"
+    assert res.body["type"] == "message"
+
+
 def test_anthropic_messages_with_system():
     """Test messages with system prompt"""
     server.start()
