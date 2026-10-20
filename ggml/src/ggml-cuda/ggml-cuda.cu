@@ -2023,7 +2023,7 @@ static bool ggml_cuda_should_fuse_mul_mat_q(const ggml_tensor * up, const ggml_t
         return false;
     }
 
-    // The fused kernel cannot use stream-k, so only fuse if its tiling is efficient.
+    // The fused kernel needs one block per tile (no stream-k split), so only fuse if the tiling is efficient.
     return ggml_cuda_mmq_fusion_is_efficient(x_up->type, x_up->ne[1], y->ne[1], y->ne[2]*y->ne[3], device);
 }
 

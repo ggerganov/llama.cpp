@@ -530,5 +530,8 @@ bool ggml_cuda_mmq_fusion_is_efficient(const ggml_type type, const int64_t nrows
     }
     const int64_t nrows_tile = ggml_cuda_mmq_get_config(type, J_best, fallback, cc, GGML_PREC_Q8).I / 2;
     const int64_t ntiles     = (ncols + J_best - 1)/J_best * ((nrows_x + nrows_tile - 1)/nrows_tile) * nchannels;
-    return ggml_cuda_mmq_tiling_is_efficient(ntiles, nsm);
+    // Same condition as launch_mul_mat_q uses to run the stream-k kernel with one block per tile.
+    const int64_t tiles_nwaves             = (ntiles + nsm - 1) / nsm;
+    const int64_t tiles_efficiency_percent = 100 * ntiles / (nsm*tiles_nwaves);
+    return tiles_efficiency_percent >= 90;
 }

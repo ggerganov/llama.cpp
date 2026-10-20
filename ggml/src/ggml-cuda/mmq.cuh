@@ -375,12 +375,6 @@ static __host__ bool ggml_cuda_mmq_needs_fallback(const int64_t nrows_x) {
     return nrows_x % 128 != 0;
 }
 
-// Whether one CUDA block per tile (tiling) fills the SMs well enough that stream-k is not needed.
-static __host__ bool ggml_cuda_mmq_tiling_is_efficient(const int64_t ntiles, const int nsm) {
-    const int64_t nwaves = (ntiles + nsm - 1) / nsm;
-    return 100*ntiles / (nsm*nwaves) >= 90;
-}
-
 static constexpr __device__ int ggml_cuda_mmq_get_rows_per_warp(ggml_type type, int J, bool fallback, ggml_prec prec_src1) {
     return ggml_cuda_mmq_get_config(type, J, fallback, prec_src1).rows_per_warp();
 }
@@ -1518,11 +1512,13 @@ static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & a
     // For the stream-k kernel it is possible to run it with tiling by setting the number of CUDA blocks equal to the number of tiles.
     // This is worthwhile if the efficiency of tiling is high and skipping the fixup kernel is more important.
     const int ntiles_dst = ntx * nty * ntzw;
+    const int tiles_nwaves = (ntiles_dst + nsm - 1) / nsm;
+    const int tiles_efficiency_percent = 100 * ntiles_dst / (nsm*tiles_nwaves);
 
     GGML_ASSERT(ntiles_dst * blocks_per_ne00_fd.z < (1 << 30)); // Assert that variable kbc will not overflow.
 
     const int nwork = ntiles_dst * ((args.ncols_x + config.K_vram - 1) / config.K_vram); // Maximum number of CUDA blocks that can do useful work.
-    const dim3 block_nums_stream_k(GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_mmq_tiling_is_efficient(ntiles_dst, nsm) ? ntiles_dst : std::min(nsm, nwork), 1, 1);
+    const dim3 block_nums_stream_k(GGML_CUDA_CC_IS_NVIDIA(cc) && tiles_efficiency_percent >= 90 ? ntiles_dst : std::min(nsm, nwork), 1, 1);
     // The GLU is nonlinear, so the fused kernel needs the whole K range of a tile in one block.
     GGML_ASSERT(!has_fusion || int(block_nums_stream_k.x) == ntiles_dst);
 
