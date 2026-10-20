@@ -283,7 +283,7 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     store_a(col, k_pair + 8, FLOAT_TYPEV2(v1.xy));
     store_a(col, k_pair + 9, FLOAT_TYPEV2(v1.zw));
 
-#elif defined(DATA_A_IQ2_K)
+#elif defined(DATA_A_JQ2_K)
     const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
     const uint k_pair = row * LOAD_VEC_A / 2;
 
@@ -296,13 +296,13 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     const uint qshift = 2 * (g & 3);
     u8vec4 qs = unpack8((uint(data_a_packed32[ib].qs[iq]) >> qshift) & 0x03030303);
 
-    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * IQ2K_PHASE);
+    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * JQ2K_PHASE);
     const float d = float(data_a[ib].d) * float(ls);
-    const vec4 v = d * (vec4(kvalues_iq2k[qs.x], kvalues_iq2k[qs.y], kvalues_iq2k[qs.z], kvalues_iq2k[qs.w]) + ph);
+    const vec4 v = d * (vec4(kvalues_jq2k[qs.x], kvalues_jq2k[qs.y], kvalues_jq2k[qs.z], kvalues_jq2k[qs.w]) + ph);
 
     store_a(col, k_pair, FLOAT_TYPEV2(v.xy));
     store_a(col, k_pair + 1, FLOAT_TYPEV2(v.zw));
-#elif defined(DATA_A_IQ3_K)
+#elif defined(DATA_A_JQ3_K)
     const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
     const uint k_pair = row * LOAD_VEC_A / 2;
 
@@ -323,13 +323,13 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     const uint qhw = (pack32(u16vec2(data_a_packed16[ib].qh[ih], data_a_packed16[ib].qh[ih + 1])) >> g) & 0x01010101;
     u8vec4 qs = unpack8(qsw | (qhw << 2));
 
-    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * IQ3K_PHASE);
+    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * JQ3K_PHASE);
     const float d = float(data_a[ib].d) * float(ls);
-    const vec4 v = d * (vec4(kvalues_iq3k[qs.x], kvalues_iq3k[qs.y], kvalues_iq3k[qs.z], kvalues_iq3k[qs.w]) + ph);
+    const vec4 v = d * (vec4(kvalues_jq3k[qs.x], kvalues_jq3k[qs.y], kvalues_jq3k[qs.z], kvalues_jq3k[qs.w]) + ph);
 
     store_a(col, k_pair, FLOAT_TYPEV2(v.xy));
     store_a(col, k_pair + 1, FLOAT_TYPEV2(v.zw));
-#elif defined(DATA_A_IQ4_K)
+#elif defined(DATA_A_JQ4_K)
     const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
     const uint k_pair = row * LOAD_VEC_A / 2;
 
@@ -343,13 +343,13 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     u8vec4 qs = unpack8((uint(data_a_packed32[ib].qs[iq]) >> qshift) & 0x0F0F0F0F);
 
     // sub-block phase shifts the codebook by a constant before scaling
-    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * IQ4K_PHASE);
+    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * JQ4K_PHASE);
     const float d = float(data_a[ib].d) * float(int(sl | (sh << 4)) - 32);
-    const vec4 v = d * (vec4(kvalues_iq4k[qs.x], kvalues_iq4k[qs.y], kvalues_iq4k[qs.z], kvalues_iq4k[qs.w]) + ph);
+    const vec4 v = d * (vec4(kvalues_jq4k[qs.x], kvalues_jq4k[qs.y], kvalues_jq4k[qs.z], kvalues_jq4k[qs.w]) + ph);
 
     store_a(col, k_pair, FLOAT_TYPEV2(v.xy));
     store_a(col, k_pair + 1, FLOAT_TYPEV2(v.zw));
-#elif defined(DATA_A_IQ5_K)
+#elif defined(DATA_A_JQ5_K)
     const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
     const uint k_pair = row * LOAD_VEC_A / 2;
 
@@ -366,13 +366,13 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     const uint qhw = (uint(data_a_packed32[ib].qh[ih]) >> g) & 0x01010101;
     u8vec4 qs = unpack8(qsw | (qhw << 4));
 
-    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * IQ5K_PHASE);
+    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * JQ5K_PHASE);
     const float d = float(data_a[ib].d) * float(int(sl | (sh << 4)) - 32);
-    const vec4 v = d * (vec4(kvalues_iq5k[qs.x], kvalues_iq5k[qs.y], kvalues_iq5k[qs.z], kvalues_iq5k[qs.w]) + ph);
+    const vec4 v = d * (vec4(kvalues_jq5k[qs.x], kvalues_jq5k[qs.y], kvalues_jq5k[qs.z], kvalues_jq5k[qs.w]) + ph);
 
     store_a(col, k_pair, FLOAT_TYPEV2(v.xy));
     store_a(col, k_pair + 1, FLOAT_TYPEV2(v.zw));
-#elif defined(DATA_A_IQ6_K)
+#elif defined(DATA_A_JQ6_K)
     const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
     const uint k_pair = row * LOAD_VEC_A / 2;
 
@@ -388,9 +388,9 @@ void load_a_to_shmem(const uint pos_a, const uint row, const uint col, const uin
     const uint qhw = (uint(data_a_packed32[ib].qh[ih]) >> hshift) & 0x03030303;
     u8vec4 qs = unpack8(qsw | (qhw << 4));
 
-    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * IQ6K_PHASE);
+    const float ph = float(((uint(data_a[ib].extra) >> ib16) & 1) * JQ6K_PHASE);
     const float d = float(data_a[ib].d) * float(data_a[ib].scales[ib16]);
-    const vec4 v = d * (vec4(kvalues_iq6k[qs.x], kvalues_iq6k[qs.y], kvalues_iq6k[qs.z], kvalues_iq6k[qs.w]) + ph);
+    const vec4 v = d * (vec4(kvalues_jq6k[qs.x], kvalues_jq6k[qs.y], kvalues_jq6k[qs.z], kvalues_jq6k[qs.w]) + ph);
 
     store_a(col, k_pair, FLOAT_TYPEV2(v.xy));
     store_a(col, k_pair + 1, FLOAT_TYPEV2(v.zw));
