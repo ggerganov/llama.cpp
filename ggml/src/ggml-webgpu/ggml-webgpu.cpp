@@ -256,6 +256,9 @@ struct webgpu_context_struct {
     wgpu::ComputePassEncoder active_compute_pass;
     bool                     batch_compute_passes = true;
 
+    // Per-graph submission limit: throttled during prefill, unrestricted for decode.
+    uint32_t graph_max_inflight_batches = UINT32_MAX;
+
     size_t memset_bytes_per_thread;
 
 #ifdef GGML_WEBGPU_GPU_PROFILE
@@ -509,7 +512,26 @@ static void ggml_backend_webgpu_check_wait_status(wgpu::WaitStatus wait_status,
 
 // TODO: these next two functions may want tuning across different platforms and workloads,
 static uint32_t ggml_backend_webgpu_get_max_inflight_batches() {
+    // Decode keeps the full pipeline; prefill graphs are throttled per graph
+    // in ggml_backend_webgpu_graph_compute().
     return UINT32_MAX;
+}
+
+static bool ggml_backend_webgpu_graph_is_prefill(const struct ggml_cgraph * cgraph) {
+    // LLM graphs start with the token embedding lookup; CLIP graphs start with
+    // the patch-embedding convolution. Decode graphs have a single token.
+    if (cgraph->n_nodes == 0) {
+        return false;
+    }
+
+    const struct ggml_tensor * first = cgraph->nodes[0];
+    if (first->op == GGML_OP_IM2COL || first->op == GGML_OP_CONV_2D || first->op == GGML_OP_PAD) {
+        return true;
+    }
+    if (first->op == GGML_OP_GET_ROWS && first->src[1] != nullptr) {
+        return first->src[1]->ne[0] > 1;
+    }
+    return false;
 }
 
 static uint32_t ggml_backend_webgpu_get_command_submit_batch_size() {
@@ -556,7 +578,7 @@ static void ggml_backend_webgpu_map_buffer(webgpu_global_context & ctx,
 static void ggml_backend_webgpu_submit_commands(webgpu_context &          ctx,
                                                 const wgpu::CommandBuffer commands,
                                                 uint32_t &                num_inflight_batches) {
-    if (num_inflight_batches >= ctx->global_ctx->max_inflight_batches) {
+    if (num_inflight_batches >= ctx->graph_max_inflight_batches) {
         ggml_backend_webgpu_wait_queue(ctx->global_ctx);
         num_inflight_batches = 0;
     }
@@ -3560,6 +3582,10 @@ static ggml_status ggml_backend_webgpu_graph_compute(ggml_backend_t backend, str
 
     ggml_backend_webgpu_context * backend_ctx = (ggml_backend_webgpu_context *) backend->context;
     webgpu_context                ctx         = backend_ctx->webgpu_ctx;
+
+    ctx->graph_max_inflight_batches = ggml_backend_webgpu_graph_is_prefill(cgraph)
+                                        ? 1
+                                        : ctx->global_ctx->max_inflight_batches;
 
     WEBGPU_CPU_PROFILE_TOTAL_START(graph_compute);
 
