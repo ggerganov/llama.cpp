@@ -1989,6 +1989,23 @@ private:
             ? SLOT_STATE_WAIT_OTHER // wait for the parent to process prompt
             : SLOT_STATE_STARTED;
 
+        // no prompt, the rows come from the audio stream, which audio controls reach from now on
+        if (slot.task->type == SERVER_TASK_TYPE_TRANSCRIBE_RT) {
+            slot.audio_stream.reset(mtmd_audio_stream_init(mctx, mtmd_audio_stream_params_default()));
+            if (!slot.audio_stream) {
+                send_error(slot, "failed to initialize the audio stream", ERROR_TYPE_SERVER);
+                slot.release();
+                return false;
+            }
+            slot.prompt_clear();
+            slot.init_sampler();
+            slot.sampled = LLAMA_TOKEN_NULL;
+            slot.i_batch = -1;
+            slot.stats.update_prompt_start();
+            slot.state = SLOT_STATE_GENERATING;
+            send_partial_response(slot, {}, false, true);
+        }
+
         // reset server kill-switch counter
         n_empty_consecutive = 0;
 
@@ -3680,20 +3697,6 @@ private:
 
                 // no prompt, the rows come from the audio stream
                 if (slot.task->type == SERVER_TASK_TYPE_TRANSCRIBE_RT) {
-                    if (slot.state == SLOT_STATE_STARTED) {
-                        slot.audio_stream.reset(mtmd_audio_stream_init(mctx, mtmd_audio_stream_params_default()));
-                        if (!slot.audio_stream) {
-                            send_error(slot, "failed to initialize the audio stream", ERROR_TYPE_SERVER);
-                            slot.release();
-                            return;
-                        }
-                        slot.prompt_clear();
-                        slot.init_sampler();
-                        slot.sampled = LLAMA_TOKEN_NULL;
-                        slot.i_batch = -1;
-                        slot.stats.update_prompt_start();
-                        slot.state = SLOT_STATE_GENERATING;
-                    }
                     return;
                 }
 
@@ -5807,7 +5810,6 @@ void server_routes::init_routes() {
             {"modalities",     json::array({"text"})},
             {"turn_detection", nullptr},
         };
-        send_event(json {{"type", "session.created"}, {"session", session_config}});
 
         auto res = create_response();
         auto & rd = res->rd;
@@ -5820,6 +5822,19 @@ void server_routes::init_routes() {
             task.params.oaicompat_model   = meta->model_name;
             rd.post_task(std::move(task));
         }
+
+        // the slot answers once its audio stream is live, the session starts there
+        {
+            auto result = rd.next([&conn]() { return !conn.is_open(); });
+            if (!result || result->is_error()) {
+                if (result) {
+                    send_error_event(json_value(result->to_json(), "message", std::string("server error")), "server_error");
+                }
+                conn.close();
+                return;
+            }
+        }
+        send_event(json {{"type", "session.created"}, {"session", session_config}});
 
         // one item per committed audio buffer, deltas are attributed to the current item
         std::mutex  mutex_item;
@@ -5914,6 +5929,8 @@ void server_routes::init_routes() {
             if (!input_ended.exchange(true)) {
                 post_control(SERVER_CONTROL_ACTION_AUDIO_END, {});
             }
+            // the result loop waits on the socket, nobody reads it from here on
+            conn.close();
         });
 
         while (true) {
