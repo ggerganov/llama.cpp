@@ -1666,7 +1666,6 @@ ggml_tensor * llm_graph_context::build_lora_mm(
     return res;
 }
 
-// note: when the values already fit in F16, the factors are exactly 1.0f so this does not affect
 ggml_tensor * llm_graph_context::build_amax_src1_f16(
           ggml_tensor * cur,
           ggml_tensor * & scale_s) const {

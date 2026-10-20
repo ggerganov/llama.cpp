@@ -775,8 +775,6 @@ static struct ggml_backend_meta_split_state ggml_backend_meta_get_split_state(
     };
 
     auto handle_pool_1d = [&](const std::vector<ggml_backend_meta_split_state> & src_ss) -> ggml_backend_meta_split_state {
-        // the pool reduces along axis 0, so a split along that axis becomes a replicated
-        // per-device partial result
         if (src_ss[0].axis == GGML_BACKEND_SPLIT_AXIS_0) {
             return {GGML_BACKEND_SPLIT_AXIS_MIRRORED, {0}, {1}, 1};
         }
