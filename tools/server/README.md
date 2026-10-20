@@ -1649,7 +1649,7 @@ See [Anthropic Messages API documentation](https://docs.anthropic.com/en/api/mes
 
 `top_k`: Top-k sampling
 
-Other parameters are passed through as on `/v1/chat/completions`, so llama.cpp options such as `seed`, `min_p`, `repeat_penalty` or `id_slot` work here too.
+`extra_params`: llama.cpp parameters that the Anthropic API has no field for, such as `seed`, `min_p` or `repeat_penalty`, as an object (e.g. `{"seed": 42, "min_p": 0.05}`). Its keys are merged into the converted request and behave as on `/v1/chat/completions`.
 
 `stop_sequences`: Array of stop sequences
 

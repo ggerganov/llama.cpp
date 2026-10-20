@@ -637,12 +637,10 @@ def test_sampling_params_applied_on_every_chat_endpoint(path, body):
     global server
     server.server_slots = True
     server.start()
-    res = server.make_request("POST", path, data={
-        **body,
-        "seed": 4242,
-        "min_p": 0.33,
-        "presence_penalty": 1.5,
-    })
+    params = {"seed": 4242, "min_p": 0.33, "presence_penalty": 1.5}
+    # /v1/messages takes llama.cpp params under extra_params, the OpenAI-style endpoints at the top level
+    data = {**body, "extra_params": params} if path == "/v1/messages" else {**body, **params}
+    res = server.make_request("POST", path, data=data)
     assert res.status_code == 200
     res = server.make_request("GET", "/slots")
     assert res.status_code == 200
