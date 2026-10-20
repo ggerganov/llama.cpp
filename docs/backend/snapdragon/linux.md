@@ -29,7 +29,7 @@ Alternatively, you can build llama.cpp manually by entering the cross-compilatio
 
 ```bash
 # Start the cross-compilation container manually:
-~/src/llama.cpp$ docker run -it --rm -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-linux:v0.7
+~/src/llama.cpp$ docker run -it --rm -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-linux:v0.8
 
 # Inside the container, build the project using presets:
 [d]/workspace> cp docs/backend/snapdragon/CMakeUserPresets.json .

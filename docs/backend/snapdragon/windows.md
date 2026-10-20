@@ -8,7 +8,7 @@ Native Windows 11 arm64 builds have the following tool dependencies:
   - UCRT and Driver Kit
 - LLVM core libraries and Clang compiler (winget)
 - CMake, Git, Python (winget)
-- Hexagon SDK Community Edition 6.6 or later (see below)
+- Hexagon SDK Community Edition 6.7 or later (see below)
 - OpenCL SDK 2.3 or later (see below)
 
 Note: The rest of the **Windows** build process assumes that you're running natively in Powershell.
