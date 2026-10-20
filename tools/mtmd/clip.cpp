@@ -1410,25 +1410,8 @@ struct clip_model_loader {
             // default warmup value
             hparams.warmup_image_size = hparams.image_size;
 
-            {
-                bool use_gelu = false;
-                bool use_silu = false;
-                get_bool(KEY_USE_GELU, use_gelu, false);
-                get_bool(KEY_USE_SILU, use_silu, false);
-                if (use_gelu && use_silu) {
-                    throw std::runtime_error(string_format("%s: both use_gelu and use_silu are set to true\n", __func__));
-                }
-                if (use_gelu) {
-                    hparams.ffn_op = FFN_GELU;
-                    log_ffn_op = "gelu";
-                } else if (use_silu) {
-                    hparams.ffn_op = FFN_SILU;
-                    log_ffn_op = "silu";
-                } else {
-                    hparams.ffn_op = FFN_GELU_QUICK;
-                    log_ffn_op = "gelu_quick";
-                }
-            }
+            hparams.ffn_op = clip_get_ffn_op(ctx_gguf.get(), model.proj_type);
+            log_ffn_op = hparams.ffn_op == FFN_GELU ? "gelu" : hparams.ffn_op == FFN_SILU ? "silu" : "gelu_quick";
 
             {
                 std::string mm_patch_merge_type;
@@ -6471,6 +6454,27 @@ projector_type clip_get_projector_type(const struct clip_ctx * ctx) {
 
 const clip_hparams * clip_get_hparams(const struct clip_ctx * ctx) {
     return &ctx->model.hparams;
+}
+
+ffn_op_type clip_get_ffn_op(const struct gguf_context * ctx, projector_type proj_type) {
+    const int64_t gelu_id = gguf_find_key(ctx, KEY_USE_GELU);
+    const int64_t silu_id = gguf_find_key(ctx, KEY_USE_SILU);
+    const bool use_gelu = gelu_id >= 0 && gguf_get_val_bool(ctx, gelu_id);
+    const bool use_silu = silu_id >= 0 && gguf_get_val_bool(ctx, silu_id);
+    if (use_gelu && use_silu) {
+        throw std::runtime_error(string_format("%s: both use_gelu and use_silu are set to true\n", __func__));
+    }
+    if (use_gelu) {
+        return FFN_GELU;
+    }
+    if (use_silu) {
+        return FFN_SILU;
+    }
+    if (proj_type == PROJECTOR_TYPE_GEMMA4V && gelu_id < 0 && silu_id < 0) {
+        // older Gemma 4 mmproj files have no activation key; vision_config.hidden_activation is gelu_pytorch_tanh
+        return FFN_GELU;
+    }
+    return FFN_GELU_QUICK;
 }
 
 std::map<ggml_backend_dev_t, size_t> clip_get_mem_usage(const struct clip_ctx * ctx) {

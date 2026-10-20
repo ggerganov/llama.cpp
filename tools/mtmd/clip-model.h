@@ -930,3 +930,6 @@ struct clip_model {
 };
 
 const clip_hparams * clip_get_hparams(const struct clip_ctx * ctx);
+
+// activation of the encoder FFN from the use_gelu / use_silu keys, with the projector default when neither is set
+ffn_op_type clip_get_ffn_op(const struct gguf_context * ctx, projector_type proj_type);

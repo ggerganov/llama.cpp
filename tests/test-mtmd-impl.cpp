@@ -119,6 +119,49 @@ MAKE_TEST(test_image_preprocessor_lfm2) {
 }
 
 //
+// clip hparams
+//
+
+MAKE_TEST(test_clip_ffn_op) {
+    // { projector, use_gelu, use_silu, expected }; -1 = key not set
+    const std::vector<std::tuple<projector_type, int, int, ffn_op_type>> cases = {
+        { PROJECTOR_TYPE_GEMMA4V,  -1, -1, FFN_GELU       }, // older Gemma 4 files have no activation key
+        { PROJECTOR_TYPE_GEMMA4V,   1, -1, FFN_GELU       },
+        { PROJECTOR_TYPE_GEMMA4V,  -1,  1, FFN_SILU       },
+        { PROJECTOR_TYPE_GEMMA4V,   0, -1, FFN_GELU_QUICK },
+        { PROJECTOR_TYPE_GEMMA4V,   0,  0, FFN_GELU_QUICK },
+        { PROJECTOR_TYPE_GEMMA4UV, -1, -1, FFN_GELU_QUICK },
+        { PROJECTOR_TYPE_GEMMA3,   -1, -1, FFN_GELU_QUICK },
+        { PROJECTOR_TYPE_GEMMA3,    1, -1, FFN_GELU       },
+    };
+
+    for (const auto & [proj, use_gelu, use_silu, expected] : cases) {
+        gguf_context * ctx = gguf_init_empty();
+        if (use_gelu >= 0) {
+            gguf_set_val_bool(ctx, KEY_USE_GELU, use_gelu != 0);
+        }
+        if (use_silu >= 0) {
+            gguf_set_val_bool(ctx, KEY_USE_SILU, use_silu != 0);
+        }
+        const std::string name = std::string(PROJECTOR_TYPE_NAMES[proj]) + " use_gelu=" + std::to_string(use_gelu) + " use_silu=" + std::to_string(use_silu);
+        t.assert_equal(name, (int) expected, (int) clip_get_ffn_op(ctx, proj));
+        gguf_free(ctx);
+    }
+
+    gguf_context * ctx = gguf_init_empty();
+    gguf_set_val_bool(ctx, KEY_USE_GELU, true);
+    gguf_set_val_bool(ctx, KEY_USE_SILU, true);
+    bool thrown = false;
+    try {
+        clip_get_ffn_op(ctx, PROJECTOR_TYPE_GEMMA4V);
+    } catch (const std::runtime_error &) {
+        thrown = true;
+    }
+    t.assert_true("both use_gelu and use_silu set", thrown);
+    gguf_free(ctx);
+}
+
+//
 // mtmd temporal merge
 //
 
