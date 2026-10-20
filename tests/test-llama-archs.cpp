@@ -9,6 +9,7 @@
 
 // TODO: replace with #include "llama-ext.h" in the future
 #include "../src/llama-arch.h"
+#include "../src/llama-model.h"
 #include "../src/llama-model-saver.h"
 
 #include <cinttypes>
@@ -80,6 +81,13 @@ static void set_tensor_data(struct ggml_tensor * tensor, void * userdata) {
             tmp[i] = ggml_fp32_to_fp16(is_ssm_a ? -fabsf(val) : val);
         }
         ggml_backend_tensor_set(tensor, tmp.data(), 0, ggml_nbytes(tensor));
+    } else if (tensor->type == GGML_TYPE_BF16) {
+        std::vector<ggml_bf16_t> tmp(ne);
+        for (int64_t i = 0; i < ne; i++) {
+            float val = dis(gen);
+            tmp[i] = ggml_fp32_to_bf16(is_ssm_a ? -fabsf(val) : val);
+        }
+        ggml_backend_tensor_set(tensor, tmp.data(), 0, ggml_nbytes(tensor));
     } else {
         GGML_ABORT("fatal error");
     }
@@ -123,7 +131,7 @@ static bool host_experts_test(const llm_arch arch) {
     }
 }
 
-static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe, const float stdev) {
+static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe, const float stdev, const bool bf16_scales = false) {
     gguf_context_ptr ret(gguf_init_empty());
     llama_model_saver ms(arch, ret.get());
     const uint32_t n_ctx = 256;
@@ -490,6 +498,20 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe, const 
         ms.add_kv(LLM_KV_ATTENTION_KEY_LENGTH, n_embd_head);
         ms.add_kv(LLM_KV_ATTENTION_VALUE_LENGTH, n_embd_head);
         ms.add_kv(LLM_KV_ROPE_DIMENSION_COUNT, n_embd_head);
+        if (bf16_scales) {
+            const auto tn = LLM_TN(arch);
+            ggml_tensor t = {};
+            t.type = GGML_TYPE_BF16;
+            ggml_set_name(&t, tn(LLM_TENSOR_OUTPUT_SCALE, "weight").str().c_str());
+            gguf_add_tensor(ms.gguf_ctx, &t);
+            for (uint32_t il = 0; il < n_layer; il++) {
+                for (const llm_tensor scale : { LLM_TENSOR_RESIDUAL_ALPHA, LLM_TENSOR_ATTN_QK_SCALE,
+                        LLM_TENSOR_ATTN_GATE_SCALE, LLM_TENSOR_FFN_GATE_SCALE, LLM_TENSOR_FFN_UP_SCALE }) {
+                    ggml_set_name(&t, tn(scale, "weight", il).str().c_str());
+                    gguf_add_tensor(ms.gguf_ctx, &t);
+                }
+            }
+        }
     }
 
     for (uint32_t il = 0; il < n_layer; il++) {
@@ -510,6 +532,32 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe, const 
 
 static bool silent_model_load_progress(float /*progress*/, void * /*user_data*/) {
     return true;
+}
+
+static bool check_dory_scale_placement(const llama_model * model, ggml_backend_dev_t dev) {
+    ggml_init_params params = { ggml_tensor_overhead()*3, nullptr, true };
+    ggml_context_ptr ctx(ggml_init(params));
+    GGML_ASSERT(ctx);
+    size_t n_scales = 0;
+    bool ok = true;
+    for (const auto & entry : llama_internal_get_tensor_map(model)) {
+        const ggml_tensor * tensor = entry.second;
+        if (tensor->type != GGML_TYPE_BF16) {
+            continue;
+        }
+        n_scales++;
+        ggml_tensor * cast = ggml_cast(ctx.get(), entry.second, GGML_TYPE_F32);
+        const auto buft = ggml_backend_buffer_get_type(tensor->buffer);
+        const bool on_device = buft == ggml_backend_dev_buffer_type(dev) ||
+            (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU && ggml_backend_buft_is_host(buft));
+        if (ggml_backend_dev_supports_op(dev, cast) && !on_device) {
+            LOG_ERR("%s: %s uses %s instead of %s\n", __func__, tensor->name,
+                ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
+            ok = false;
+        }
+        ggml_reset(ctx.get());
+    }
+    return ok && n_scales == 19;
 }
 
 static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
@@ -987,7 +1035,9 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
         }
 
         const bool encode = arch == LLM_ARCH_T5 || arch == LLM_ARCH_DREAM || arch == LLM_ARCH_LLADA || arch == LLM_ARCH_LLADA_MOE || arch == LLM_ARCH_RND1;
-        for (int config = 0; config < (arch == LLM_ARCH_DORY ? 8 : 2); ++config) {
+        for (int config = 0; config < (arch == LLM_ARCH_DORY ? 16 : 2); ++config) {
+            const bool bf16_scales = arch == LLM_ARCH_DORY && config >= 8;
+            const bool shared_kv = arch == LLM_ARCH_DORY && config % 8 >= 4;
             const bool moe = arch != LLM_ARCH_DORY && config != 0;
             if (moe && !moe_implemented(arch)) {
                 continue;
@@ -995,12 +1045,12 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
             if (!moe && moe_mandatory(arch)) {
                 continue;
             }
-            const std::string config_name = arch == LLM_ARCH_DORY ? "K" + std::to_string(config % 4 + 1) + (config < 4 ? "/P" : "/L") : moe ? "MoE" : "Dense";
-            gguf_context_ptr gguf_ctx = get_gguf_ctx(arch, moe, stdev);
+            const std::string config_name = arch == LLM_ARCH_DORY ? "K" + std::to_string(config % 4 + 1) + (shared_kv ? "/L" : "/P") + (bf16_scales ? "/BF16" : "") : moe ? "MoE" : "Dense";
+            gguf_context_ptr gguf_ctx = get_gguf_ctx(arch, moe, stdev, bf16_scales);
             if (arch == LLM_ARCH_DORY) {
                 llama_model_saver ms(arch, gguf_ctx.get());
                 ms.add_kv(LLM_KV_NUM_LOOPS, uint32_t(config % 4 + 1));
-                ms.add_kv(LLM_KV_RECURRENT_KV_CACHE_MODE, config < 4 ? "per_loop" : "last_loop");
+                ms.add_kv(LLM_KV_RECURRENT_KV_CACHE_MODE, shared_kv ? "last_loop" : "per_loop");
             }
             if (arch == LLM_ARCH_BAILINGMOE3) {
                 GGML_ASSERT(gguf_remove_key(gguf_ctx.get(), "bailingmoe3.kda.safe_gate") >= 0);
@@ -1008,6 +1058,9 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
             std::pair<llama_model_ptr, llama_context_ptr> model_and_ctx_cpu;
             std::vector<float> logits_cpu;
             for (device_config & dc : dev_configs) {
+                if (bf16_scales && dc.split_mode != LLAMA_SPLIT_MODE_LAYER) {
+                    continue;
+                }
                 if (dc.host_experts && (!moe || !host_experts_test(arch))) {
                     continue;
                 }
@@ -1045,6 +1098,12 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                             status_nmse = "\033[1;31mFAIL\033[0m";
                         }
 
+                        if (bf16_scales && dc.split_mode == LLAMA_SPLIT_MODE_LAYER && dc.devs.size() == 1 &&
+                            !check_dory_scale_placement(model_and_ctx_dev.first.get(), dc.devs.front())) {
+                            test_ok = false;
+                            status_nmse = "\033[1;31mFAIL\033[0m (placement)";
+                        }
+
                         // chunked decode matches a single batch only with causal attention over a memory
                         llama_context * lctx_dev = model_and_ctx_dev.second.get();
                         if (!encode && llama_get_memory(lctx_dev) != nullptr) {
@@ -1058,7 +1117,6 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                             std::vector<float> logits_chunks;
                             if (llm_arch_supports_mixed_batch(arch)) {
                                 // Shared final-loop KV depends on chunk boundaries; compare the same mixed batch across backends.
-                                const bool shared_kv = arch == LLM_ARCH_DORY && config >= 4;
                                 llama_model * reference_model = shared_kv ? model_and_ctx_cpu.first.get() : model_and_ctx_dev.first.get();
                                 llama_context * reference_ctx = shared_kv ? model_and_ctx_cpu.second.get() : lctx_dev;
                                 if (get_logits_mixed(reference_model, reference_ctx, tokens, embd_mixed, shared_kv, logits_chunks) != 0 ||
