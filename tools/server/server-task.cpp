@@ -1008,8 +1008,6 @@ void server_task_result_cmpl_partial::update(task_result_state & state) {
     for (const auto & tool_call : state.chat_msg.tool_calls) {
         oai_resp_fc_ids.push_back(tool_call.id);
     }
-    oai_resp_has_reasoning = !state.chat_msg.reasoning_content.empty();
-    oai_resp_has_text      = !state.chat_msg.content.empty();
 
     // track if the accumulated message has any reasoning content
     anthropic_has_reasoning = !state.chat_msg.reasoning_content.empty();
@@ -1250,7 +1248,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
                     {"event", "response.output_item.added"},
                     {"data", json {
                         {"type", "response.output_item.added"},
-                        {"output_index", oai_resp_has_reasoning ? 1 : 0},
+                        {"output_index", anthropic_has_reasoning ? 1 : 0},
                         {"item", json {
                             {"content", json::array()},
                             {"id",      oai_resp_message_id},
@@ -1265,7 +1263,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
                     {"data", json {
                         {"type",    "response.content_part.added"},
                         {"item_id", oai_resp_message_id},
-                        {"output_index", oai_resp_has_reasoning ? 1 : 0},
+                        {"output_index", anthropic_has_reasoning ? 1 : 0},
                         {"content_index", 0},
                         {"part", json {
                             {"type", "output_text"},
@@ -1280,7 +1278,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
                 {"data", json {
                     {"type",    "response.output_text.delta"},
                     {"item_id", oai_resp_message_id},
-                    {"output_index", oai_resp_has_reasoning ? 1 : 0},
+                    {"output_index", anthropic_has_reasoning ? 1 : 0},
                     {"content_index", 0},
                     {"delta",   diff.content_delta},
                 }},
@@ -1294,7 +1292,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
                 {"event", "response.output_item.added"},
                 {"data", json {
                     {"type",  "response.output_item.added"},
-                    {"output_index", (oai_resp_has_reasoning ? 1 : 0) + (oai_resp_has_text ? 1 : 0) + diff.tool_call_index},
+                    {"output_index", (anthropic_has_reasoning ? 1 : 0) + (text_block_started ? 1 : 0) + diff.tool_call_index},
                     {"item", json {
                         {"id",        "fc_" + oai_resp_fc_ids[diff.tool_call_index]},
                         {"arguments", ""},
@@ -1316,7 +1314,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_resp() {
                     {"type",    "response.function_call_arguments.delta"},
                     {"delta",   diff.tool_call_delta.arguments},
                     {"item_id", "fc_" + oai_resp_fc_ids[diff.tool_call_index]},
-                    {"output_index", (oai_resp_has_reasoning ? 1 : 0) + (oai_resp_has_text ? 1 : 0) + diff.tool_call_index},
+                    {"output_index", (anthropic_has_reasoning ? 1 : 0) + (text_block_started ? 1 : 0) + diff.tool_call_index},
                 }},
             });
         }
