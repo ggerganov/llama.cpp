@@ -6068,16 +6068,19 @@ void server_routes::init_routes() {
 
         json body = json::parse(req.body);
 
-        // multipart form fields arrive as strings, correct the types of the numeric params
-        for (const char * k : { "top_k", "n_predict", "max_tokens" }) {
+        // multipart form fields arrive as strings, correct the types of the numeric and boolean params
+        for (const char * k : { "top_k", "n_predict", "max_tokens", "seed" }) {
             if (body.contains(k) && body[k].is_string()) {
-                body[k] = std::stoi(body[k].get<std::string>());
+                body[k] = std::stoll(body[k].get<std::string>());
             }
         }
         for (const char * k : { "top_p", "repeat_penalty" }) {
             if (body.contains(k) && body[k].is_string()) {
                 body[k] = std::stof(body[k].get<std::string>());
             }
+        }
+        if (body.contains("stream") && body["stream"].is_string()) {
+            body["stream"] = body["stream"] == "true";
         }
 
         std::string prompt = json_value(body, "input", json_value(body, "prompt", std::string()));
