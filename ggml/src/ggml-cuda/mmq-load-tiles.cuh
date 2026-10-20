@@ -1769,7 +1769,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
 
 // ---------------------------------------------------------------------------------------------
 
-template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_iq2_k(
+template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_jq2_k(
         const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int warp_size   = ggml_cuda_get_physical_warp_size();
     constexpr int nwarps      = ggml_cuda_mmq_get_nthreads(type, J, fallback, GGML_PREC_Q8) / warp_size;
@@ -1780,7 +1780,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + MMQ_TILE_NE_K*2);
 #else
-    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_IQ2_K, I);
+    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_JQ2_K, I);
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + txs.qs);
 #endif // defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
@@ -1800,14 +1800,14 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
             i = min(i, i_max);
         }
 
-        const block_iq2_k * bxi = (const block_iq2_k *) x + kbx0 + i*stride;
+        const block_jq2_k * bxi = (const block_jq2_k *) x + kbx0 + i*stride;
 
-        const int ph = (bxi->extra >> ib) & 1 ? IQ2K_PHASE : 0;
+        const int ph = (bxi->extra >> ib) & 1 ? JQ2K_PHASE : 0;
 
 #pragma unroll
         for (int j = 0; j < 4; ++j) {
             const int q = (get_int_b4(bxi->qs, 8*(g >> 2) + 4*l + j) >> 2*(g & 3)) & 0x03030303;
-            const int v = get_int_from_table_u8_ph(q, kvalues_iq2k, ph);
+            const int v = get_int_from_table_u8_ph(q, kvalues_jq2k, ph);
 
 #if defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
             x_qs[i*sram_stride           + 4*ib + j] = v;
@@ -1826,7 +1826,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     }
 }
 
-template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_iq3_k(
+template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_jq3_k(
         const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int warp_size   = ggml_cuda_get_physical_warp_size();
     constexpr int nwarps      = ggml_cuda_mmq_get_nthreads(type, J, fallback, GGML_PREC_Q8) / warp_size;
@@ -1837,7 +1837,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + MMQ_TILE_NE_K*2);
 #else
-    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_IQ3_K, I);
+    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_JQ3_K, I);
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + txs.qs);
 #endif // defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
@@ -1857,16 +1857,16 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
             i = min(i, i_max);
         }
 
-        const block_iq3_k * bxi = (const block_iq3_k *) x + kbx0 + i*stride;
+        const block_jq3_k * bxi = (const block_jq3_k *) x + kbx0 + i*stride;
 
-        const int ph = (bxi->extra >> ib) & 1 ? IQ3K_PHASE : 0;
+        const int ph = (bxi->extra >> ib) & 1 ? JQ3K_PHASE : 0;
 
 #pragma unroll
         for (int j = 0; j < 4; ++j) {
-            // sizeof(block_iq3_k) is 110, which is 2 mod 4, so qs and qh are only 2-byte aligned
+            // sizeof(block_jq3_k) is 110, which is 2 mod 4, so qs and qh are only 2-byte aligned
             const int lo = (get_int_b2(bxi->qs, 8*(g >> 2) + 4*l + j) >> 2*(g & 3)) & 0x03030303;
             const int hi = (get_int_b2(bxi->qh,             4*l + j) >> g)          & 0x01010101;
-            const int v  = get_int_from_table_u8_ph(lo | (hi << 2), kvalues_iq3k, ph);
+            const int v  = get_int_from_table_u8_ph(lo | (hi << 2), kvalues_jq3k, ph);
 
 #if defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
             x_qs[i*sram_stride           + 4*ib + j] = v;
@@ -1886,7 +1886,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     }
 }
 
-template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_iq4_k(
+template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_jq4_k(
         const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int warp_size   = ggml_cuda_get_physical_warp_size();
     constexpr int nwarps      = ggml_cuda_mmq_get_nthreads(type, J, fallback, GGML_PREC_Q8) / warp_size;
@@ -1897,7 +1897,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + MMQ_TILE_NE_K*2);
 #else
-    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_IQ4_K, I);
+    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_JQ4_K, I);
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + txs.qs);
 #endif // defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
@@ -1917,14 +1917,14 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
             i = min(i, i_max);
         }
 
-        const block_iq4_k * bxi = (const block_iq4_k *) x + kbx0 + i*stride;
+        const block_jq4_k * bxi = (const block_jq4_k *) x + kbx0 + i*stride;
 
-        const int ph = (bxi->extra >> ib) & 1 ? IQ4K_PHASE : 0;
+        const int ph = (bxi->extra >> ib) & 1 ? JQ4K_PHASE : 0;
 
 #pragma unroll
         for (int j = 0; j < 4; ++j) {
             const int q = (get_int_b4(bxi->qs, 4*g + j) >> 4*l) & 0x0F0F0F0F;
-            const int v = get_int_from_table_u8_ph(q, kvalues_iq4k, ph);
+            const int v = get_int_from_table_u8_ph(q, kvalues_jq4k, ph);
 
 #if defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
             x_qs[i*sram_stride           + 4*ib + j] = v;
@@ -1944,7 +1944,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     }
 }
 
-template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_iq5_k(
+template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_jq5_k(
         const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int warp_size   = ggml_cuda_get_physical_warp_size();
     constexpr int nwarps      = ggml_cuda_mmq_get_nthreads(type, J, fallback, GGML_PREC_Q8) / warp_size;
@@ -1955,7 +1955,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + MMQ_TILE_NE_K*2);
 #else
-    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_IQ5_K, I);
+    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_JQ5_K, I);
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + txs.qs);
 #endif // defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
@@ -1975,15 +1975,15 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
             i = min(i, i_max);
         }
 
-        const block_iq5_k * bxi = (const block_iq5_k *) x + kbx0 + i*stride;
+        const block_jq5_k * bxi = (const block_jq5_k *) x + kbx0 + i*stride;
 
-        const int ph = (bxi->extra >> ib) & 1 ? IQ5K_PHASE : 0;
+        const int ph = (bxi->extra >> ib) & 1 ? JQ5K_PHASE : 0;
 
 #pragma unroll
         for (int j = 0; j < 4; ++j) {
             const int lo = (get_int_b4(bxi->qs, 8*(g >> 1) + 4*l + j) >> 4*(g & 1)) & 0x0F0F0F0F;
             const int hi = (get_int_b4(bxi->qh,             4*l + j) >> g)          & 0x01010101;
-            const int v  = get_int_from_table_u8_ph(lo | (hi << 4), kvalues_iq5k, ph);
+            const int v  = get_int_from_table_u8_ph(lo | (hi << 4), kvalues_jq5k, ph);
 
 #if defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
             x_qs[i*sram_stride           + 4*ib + j] = v;
@@ -2003,7 +2003,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     }
 }
 
-template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_iq6_k(
+template <ggml_type type, int J, bool fallback> static __device__ __forceinline__ void ggml_cuda_mmq_load_tiles_jq6_k(
         const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int warp_size   = ggml_cuda_get_physical_warp_size();
     constexpr int nwarps      = ggml_cuda_mmq_get_nthreads(type, J, fallback, GGML_PREC_Q8) / warp_size;
@@ -2014,7 +2014,7 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + MMQ_TILE_NE_K*2);
 #else
-    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_IQ6_K, I);
+    constexpr tile_x_sizes txs = mmq_get_dp4a_tile_x_sizes(GGML_TYPE_JQ6_K, I);
     int   * x_qs = (int   *)  x_tile;
     float * x_df = (float *) (x_qs + txs.qs);
 #endif // defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
@@ -2034,15 +2034,15 @@ template <ggml_type type, int J, bool fallback> static __device__ __forceinline_
             i = min(i, i_max);
         }
 
-        const block_iq6_k * bxi = (const block_iq6_k *) x + kbx0 + i*stride;
+        const block_jq6_k * bxi = (const block_jq6_k *) x + kbx0 + i*stride;
 
-        const int ph = (bxi->extra >> ib) & 1 ? IQ6K_PHASE : 0;
+        const int ph = (bxi->extra >> ib) & 1 ? JQ6K_PHASE : 0;
 
 #pragma unroll
         for (int j = 0; j < 4; ++j) {
             const int lo = (get_int_b4(bxi->qs, 8*(g >> 1) + 4*l + j) >> 4*(g & 1)) & 0x0F0F0F0F;
             const int hi = (get_int_b4(bxi->qh, 8*(g >> 2) + 4*l + j) >> 2*(g & 3)) & 0x03030303;
-            const int v  = get_int_from_table_u8_ph(lo | (hi << 4), kvalues_iq6k, ph);
+            const int v  = get_int_from_table_u8_ph(lo | (hi << 4), kvalues_jq6k, ph);
 
 #if defined(AMD_MFMA_AVAILABLE) || defined(TURING_MMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
             x_qs[i*sram_stride           + 4*ib + j] = v;

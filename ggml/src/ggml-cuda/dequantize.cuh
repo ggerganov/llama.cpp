@@ -435,34 +435,34 @@ static __device__ __forceinline__ void dequantize_iq4_xs(const void * vx, const 
     }
 }
 
-//================================== iq*_k quants
+//================================== jq*_k quants
 
 // Each splits the super-block into 16 sub-blocks of 16 weights,
 // with its own signed scale ls and a phase bit that offsets the codebook.
 
 template<typename dst_t>
-static __device__ __forceinline__ void dequantize_iq2_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
-    const block_iq2_k * x = (const block_iq2_k *) vx + ibs;
+static __device__ __forceinline__ void dequantize_jq2_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
+    const block_jq2_k * x = (const block_jq2_k *) vx + ibs;
 
     const int ib = tid/2;     // sub-block, 0...15
     const int j0 = 8*(tid%2); // first weight in the sub-block, 0 or 8
     const int g  = ib/2;      // 32-weight group, 0...7
 
     const int ls = ((x->scales[ib/2] >> 4*(ib%2)) & 0xf) - 8;
-    const int ph = (x->extra >> ib) & 1 ? IQ2K_PHASE : 0;
+    const int ph = (x->extra >> ib) & 1 ? JQ2K_PHASE : 0;
     const float dl = (float) x->d * ls;
 
     const uint8_t * qs = x->qs + 32*(g/4) + 16*(ib%2) + j0;
     dst_t * y = yy + 16*ib + j0;
     for (int j = 0; j < 8; ++j) {
         const int q = (qs[j] >> 2*(g%4)) & 3;
-        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_iq2k[q] + ph));
+        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_jq2k[q] + ph));
     }
 }
 
 template<typename dst_t>
-static __device__ __forceinline__ void dequantize_iq3_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
-    const block_iq3_k * x = (const block_iq3_k *) vx + ibs;
+static __device__ __forceinline__ void dequantize_jq3_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
+    const block_jq3_k * x = (const block_jq3_k *) vx + ibs;
 
     const int ib = tid/2;
     const int j0 = 8*(tid%2);
@@ -470,7 +470,7 @@ static __device__ __forceinline__ void dequantize_iq3_k(const void * vx, const i
 
     const int m  = (x->scales_l[ib/2] >> 4*(ib%2)) & 0xf;
     const int ls = (x->scales_h >> ib) & 1 ? -(2*m + 1) : 2*m + 1;
-    const int ph = (x->extra >> ib) & 1 ? IQ3K_PHASE : 0;
+    const int ph = (x->extra >> ib) & 1 ? JQ3K_PHASE : 0;
     const float dl = (float) x->d * ls;
 
     const uint8_t * qs = x->qs + 32*(g/4) + 16*(ib%2) + j0;
@@ -478,13 +478,13 @@ static __device__ __forceinline__ void dequantize_iq3_k(const void * vx, const i
     dst_t * y = yy + 16*ib + j0;
     for (int j = 0; j < 8; ++j) {
         const int q = ((qs[j] >> 2*(g%4)) & 3) | (((qh[j] >> g) & 1) << 2);
-        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_iq3k[q] + ph));
+        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_jq3k[q] + ph));
     }
 }
 
 template<typename dst_t>
-static __device__ __forceinline__ void dequantize_iq4_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
-    const block_iq4_k * x = (const block_iq4_k *) vx + ibs;
+static __device__ __forceinline__ void dequantize_jq4_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
+    const block_jq4_k * x = (const block_jq4_k *) vx + ibs;
 
     const int ib = tid/2;
     const int j0 = 8*(tid%2);
@@ -492,20 +492,20 @@ static __device__ __forceinline__ void dequantize_iq4_k(const void * vx, const i
 
     const int hb = x->scales_h[ib/4];
     const int ls = (((x->scales_l[ib/2] >> 4*(ib%2)) & 0xf) | (((hb >> 2*(ib%4)) & 3) << 4)) - 32;
-    const int ph = (x->extra >> ib) & 1 ? IQ4K_PHASE : 0;
+    const int ph = (x->extra >> ib) & 1 ? JQ4K_PHASE : 0;
     const float dl = (float) x->d * ls;
 
     const uint8_t * qs = x->qs + 16*g + j0;
     dst_t * y = yy + 16*ib + j0;
     for (int j = 0; j < 8; ++j) {
         const int q = (qs[j] >> 4*(ib%2)) & 0xf;
-        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_iq4k[q] + ph));
+        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_jq4k[q] + ph));
     }
 }
 
 template<typename dst_t>
-static __device__ __forceinline__ void dequantize_iq5_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
-    const block_iq5_k * x = (const block_iq5_k *) vx + ibs;
+static __device__ __forceinline__ void dequantize_jq5_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
+    const block_jq5_k * x = (const block_jq5_k *) vx + ibs;
 
     const int ib = tid/2;
     const int j0 = 8*(tid%2);
@@ -513,7 +513,7 @@ static __device__ __forceinline__ void dequantize_iq5_k(const void * vx, const i
 
     const int hb = x->scales_h[ib/4];
     const int ls = (((x->scales_l[ib/2] >> 4*(ib%2)) & 0xf) | (((hb >> 2*(ib%4)) & 3) << 4)) - 32;
-    const int ph = (x->extra >> ib) & 1 ? IQ5K_PHASE : 0;
+    const int ph = (x->extra >> ib) & 1 ? JQ5K_PHASE : 0;
     const float dl = (float) x->d * ls;
 
     const uint8_t * qs = x->qs + 32*(g/2) + 16*(ib%2) + j0;
@@ -521,20 +521,20 @@ static __device__ __forceinline__ void dequantize_iq5_k(const void * vx, const i
     dst_t * y = yy + 16*ib + j0;
     for (int j = 0; j < 8; ++j) {
         const int q = ((qs[j] >> 4*(g%2)) & 0xf) | (((qh[j] >> g) & 1) << 4);
-        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_iq5k[q] + ph));
+        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_jq5k[q] + ph));
     }
 }
 
 template<typename dst_t>
-static __device__ __forceinline__ void dequantize_iq6_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
-    const block_iq6_k * x = (const block_iq6_k *) vx + ibs;
+static __device__ __forceinline__ void dequantize_jq6_k(const void * vx, const int64_t ibs, dst_t * yy, const int tid) {
+    const block_jq6_k * x = (const block_jq6_k *) vx + ibs;
 
     const int ib = tid/2;
     const int j0 = 8*(tid%2);
     const int g  = ib/2;
 
     const int ls = x->scales[ib];
-    const int ph = (x->extra >> ib) & 1 ? IQ6K_PHASE : 0;
+    const int ph = (x->extra >> ib) & 1 ? JQ6K_PHASE : 0;
     const float dl = (float) x->d * ls;
 
     const uint8_t * qs = x->qs + 32*(g/2) + 16*(ib%2) + j0;
@@ -542,7 +542,7 @@ static __device__ __forceinline__ void dequantize_iq6_k(const void * vx, const i
     dst_t * y = yy + 16*ib + j0;
     for (int j = 0; j < 8; ++j) {
         const int q = ((qs[j] >> 4*(g%2)) & 0xf) | (((qh[j] >> 2*(g%4)) & 3) << 4);
-        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_iq6k[q] + ph));
+        y[j] = ggml_cuda_cast<dst_t>(dl * (kvalues_jq6k[q] + ph));
     }
 }
 
