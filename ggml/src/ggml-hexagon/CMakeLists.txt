@@ -74,7 +74,7 @@ function(build_htp_skel V)
             -DHEXAGON_TOOLS_ROOT=${HEXAGON_TOOLS_ROOT}
             -DHEXAGON_HTP_DEBUG=${GGML_HEXAGON_HTP_DEBUG}
             -DDSP_VERSION=${V}
-            -DPREBUILT_LIB_DIR="toolv19_${V}")
+            -DPREBUILT_LIB_DIR="toolv21_${V}")
     list(APPEND HTP_SKELS ${CMAKE_CURRENT_BINARY_DIR}/libggml-htp-${V}.so)
     list(APPEND HTP_PROJECTS htp-${V})
     set(HTP_SKELS ${HTP_SKELS} PARENT_SCOPE)
@@ -85,6 +85,7 @@ build_htp_skel(v73)
 build_htp_skel(v75)
 build_htp_skel(v79)
 build_htp_skel(v81)
+build_htp_skel(v85)
 
 # Install Hexagon skels required at runtime
 install(FILES ${HTP_SKELS} TYPE LIB)

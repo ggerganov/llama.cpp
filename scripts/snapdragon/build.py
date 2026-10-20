@@ -53,14 +53,14 @@ def main():
     parser.add_argument("--preset", help="Override the CMake preset to use")
     parser.add_argument("--debug", action="store_true", help="Build in debug mode (uses -debug presets instead of -release)")
     parser.add_argument("--hex-only", "--hexagon-only", action="store_true", help="Only build and push ggml-hexagon and libggml-htp libraries")
-    parser.add_argument("--hex-arch", choices=["v73", "v75", "v79", "v81", "73", "75", "79", "81"], help="Specific Hexagon DSP architecture to build with --hex-only (default: all)")
+    parser.add_argument("--hex-arch", choices=["v73", "v75", "v79", "v81", "73", "75", "79", "81", "85"], help="Specific Hexagon DSP architecture to build with --hex-only (default: all)")
 
     # Push options
     parser.add_argument("--push", action="store_true", help="Push built package to the target device via ADB or SSH/SCP")
     parser.add_argument("--target-dir", help="Target directory on the device (default: /data/local/tmp/llama.cpp for Android, ~/llama.cpp for Linux)")
 
     # Toolchain options
-    parser.add_argument("--toolchain-version", default="v0.7", help="Docker toolchain image version/tag (default: v0.7)")
+    parser.add_argument("--toolchain-version", default="v0.8", help="Docker toolchain image version/tag (default: v0.8)")
     parser.add_argument("--toolchain-url", default="ghcr.io/snapdragon-toolchain", help="Docker toolchain registry URL/namespace (default: ghcr.io/snapdragon-toolchain)")
 
     args = parser.parse_args()
