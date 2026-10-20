@@ -346,8 +346,7 @@ static void normalize_anthropic_billing_header(std::string & system_text) {
 }
 
 json server_chat_convert_anthropic_to_oai(const json & body) {
-    // Start from the whole request so llama.cpp params pass through
-    json oai_body = body;
+    json oai_body;
 
     // Convert system prompt
     json oai_messages = json::array();
@@ -588,6 +587,13 @@ json server_chat_convert_anthropic_to_oai(const json & body) {
         oai_body["max_tokens"] = body.at("max_tokens");
     } else {
         oai_body["max_tokens"] = 4096;
+    }
+
+    // Pass through common params
+    for (const auto & key : {"temperature", "top_p", "top_k", "stream", "chat_template_kwargs", "id_slot"}) {
+        if (body.contains(key)) {
+            oai_body[key] = body.at(key);
+        }
     }
 
     // Handle Anthropic-specific thinking param
