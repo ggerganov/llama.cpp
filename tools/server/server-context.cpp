@@ -1708,6 +1708,7 @@ private:
                 }
 
                 SLT_INF(*ret, "selected slot by id (%d)\n", task.id_slot);
+                update_cache = ret->prompt.tokens.empty();
             }
         }
 
