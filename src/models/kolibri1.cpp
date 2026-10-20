@@ -131,8 +131,7 @@ llama_model_kolibri1::graph::graph(const llama_model & model, const llm_graph_pa
         cur = build_norm(ffn_inp, layer.ffn_norm, NULL, LLM_NORM_RMS, il);
         cb(cur, "ffn_norm", il);
 
-        // The selection adds the bias to the logits, the weights are the sigmoid of the
-        // unbiased logits, so the same logits feed both.
+        // The selection adds the bias to the logits, the weights are the sigmoid of the unbiased logits, so the same logits feed both.
         ggml_tensor * logits = build_lora_mm(layer.ffn_gate_inp, cur);
         cb(logits, "ffn_moe_logits", il);
 
