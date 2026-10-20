@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstring>
 #include <initializer_list>
+#include <thread>
 
 #if defined(__ARM_NEON) || defined(__aarch64__)
 #    include <arm_neon.h>
@@ -320,6 +321,36 @@ static void repack_neon_f16_tile(uint16_t * tile_dst, const SrcT * src_slice, in
 
 // --- Generic 32x32 tile grid walkers for block-32 and float types ---
 
+template <typename Fn>
+static void repack_parallel_for_ct(size_t slice_bytes, int n_col_tiles, Fn && fn) {
+    int n_threads = 1;
+    if (slice_bytes > 128 * 1024) {
+        for (int nt : { 4, 3, 2 }) {
+            if (n_col_tiles % nt == 0) {
+                n_threads = nt;
+                break;
+            }
+        }
+    }
+
+    if (n_threads <= 1) {
+        fn(0, n_col_tiles);
+        return;
+    }
+
+    const int chunk = n_col_tiles / n_threads;
+    std::thread workers[3];
+    for (int i = 0; i < n_threads - 1; ++i) {
+        workers[i] = std::thread([&fn, i, chunk]() {
+            fn(i * chunk, (i + 1) * chunk);
+        });
+    }
+    fn((n_threads - 1) * chunk, n_col_tiles);
+    for (int i = 0; i < n_threads - 1; ++i) {
+        workers[i].join();
+    }
+}
+
 template <typename SrcElemT, int ELEMS_PER_KTILE, typename PackTileFn>
 static void repack_to_tiled_grid_32(ggml_tensor * t, const void * data, size_t offset, size_t size,
                                     size_t tile_size, PackTileFn && pack_tile) {
@@ -345,12 +376,14 @@ static void repack_to_tiled_grid_32(ggml_tensor * t, const void * data, size_t o
         const SrcElemT * src_slice = src_matrix + (slice_idx - start_slice) * (ne1 * row_stride);
         uint8_t * matrix_dst = (uint8_t *) t->data + slice_idx * matrix_size;
 
-        for (int ct = 0; ct < n_col_tiles; ct++) {
-            for (int kt = 0; kt < n_k_tiles; kt++) {
-                uint8_t * tile_dst = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
-                pack_tile(tile_dst, src_slice, ne0, ne1, row_stride, ct, kt);
+        repack_parallel_for_ct(matrix_size, n_col_tiles, [&](int ct0, int ct1) {
+            for (int ct = ct0; ct < ct1; ct++) {
+                for (int kt = 0; kt < n_k_tiles; kt++) {
+                    uint8_t * tile_dst = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
+                    pack_tile(tile_dst, src_slice, ne0, ne1, row_stride, ct, kt);
+                }
             }
-        }
+        });
     }
 }
 
@@ -644,28 +677,33 @@ static void repack_q2_0_tiled(ggml_tensor * t, const void * data, size_t offset,
     for (int64_t slice = 0; slice < t->ne[2] * t->ne[3]; ++slice) {
         const block_q2_0 * src_slice = src + slice * t->ne[1] * blocks_per_row;
         uint8_t * dst_slice = (uint8_t *) t->data + slice * matrix_size;
-        memset(dst_slice, 0, matrix_size);
+        const size_t ct_bytes = (size_t) n_weight_tiles * HTP_TENSOR_TILE_SIZE_Q2_0;
 
-        for (int64_t row_index = 0; row_index < t->ne[1]; ++row_index) {
-            const int64_t ct = row_index / 32;
-            const int row = (int) (row_index % 32);
-            for (int64_t kt = 0; kt < n_weight_tiles; ++kt) {
-                const block_q2_0 * block = src_slice + row_index * blocks_per_row + kt;
-                uint8_t * tile = dst_slice + (ct * n_weight_tiles + kt) * HTP_TENSOR_TILE_SIZE_Q2_0;
+        repack_parallel_for_ct(matrix_size, (int) n_col_tiles, [&](int ct0, int ct1) {
+            memset(dst_slice + (size_t) ct0 * ct_bytes, 0, (size_t) (ct1 - ct0) * ct_bytes);
+            const int64_t r0 = (int64_t) ct0 * 32;
+            const int64_t r1 = (std::min)((int64_t) ct1 * 32, t->ne[1]);
+            for (int64_t row_index = r0; row_index < r1; ++row_index) {
+                const int64_t ct = row_index / 32;
+                const int row = (int) (row_index % 32);
+                for (int64_t kt = 0; kt < n_weight_tiles; ++kt) {
+                    const block_q2_0 * block = src_slice + row_index * blocks_per_row + kt;
+                    uint8_t * tile = dst_slice + (ct * n_weight_tiles + kt) * HTP_TENSOR_TILE_SIZE_Q2_0;
 #if defined(__ARM_NEON) || defined(__aarch64__)
-                repack_neon_q2_0_block(block->qs, tile, row);
+                    repack_neon_q2_0_block(block->qs, tile, row);
 #else
-                for (int group = 0; group < 16; ++group) {
-                    for (int byte = 0; byte < 4; ++byte) {
-                        const int k = 4 * group + byte;
-                        const uint8_t code = (block->qs[k / 4] >> (2 * (k % 4))) & 3;
-                        tile[(group >> 2) * 128 + 4 * row + byte] |= code << (2 * (group & 3));
+                    for (int group = 0; group < 16; ++group) {
+                        for (int byte = 0; byte < 4; ++byte) {
+                            const int k = 4 * group + byte;
+                            const uint8_t code = (block->qs[k / 4] >> (2 * (k % 4))) & 3;
+                            tile[(group >> 2) * 128 + 4 * row + byte] |= code << (2 * (group & 3));
+                        }
                     }
-                }
 #endif
-                memcpy(tile + 512 + 2 * row, &block->d, sizeof(block->d));
+                    memcpy(tile + 512 + 2 * row, &block->d, sizeof(block->d));
+                }
             }
-        }
+        });
     }
 }
 
@@ -775,20 +813,25 @@ static void repack_kquant_to_tiled_grid(ggml_tensor * t, const void * data, size
     for (int64_t slice_idx = 0; slice_idx < ne2 * ne3; slice_idx++) {
         const BlockT * src_slice = src_matrix + slice_idx * (ne1 * sb_per_row);
         uint8_t * matrix_dst     = (uint8_t *) t->data + slice_idx * matrix_size;
+        const size_t ct_bytes    = (size_t) n_k_tiles * tile_size;
 
-        // Padding rows and OR-ed bit planes require zeroed tiles
-        memset(matrix_dst, 0, matrix_size);
+        repack_parallel_for_ct(matrix_size, n_col_tiles, [&](int ct0, int ct1) {
+            // Padding rows and OR-ed bit planes require zeroed tiles
+            memset(matrix_dst + (size_t) ct0 * ct_bytes, 0, (size_t) (ct1 - ct0) * ct_bytes);
 
-        for (int64_t r = 0; r < ne1; r++) {
-            const int ct  = (int) (r / 32);
-            const int row = (int) (r % 32);
-            const BlockT * src_row = src_slice + r * sb_per_row;
+            const int64_t r0 = (int64_t) ct0 * 32;
+            const int64_t r1 = (std::min)((int64_t) ct1 * 32, ne1);
+            for (int64_t r = r0; r < r1; r++) {
+                const int ct  = (int) (r / 32);
+                const int row = (int) (r % 32);
+                const BlockT * src_row = src_slice + r * sb_per_row;
 
-            for (int kt = 0; kt < n_k_tiles; kt++) {
-                uint8_t * tile = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
-                pack_kt(tile, &src_row[kt / 8], row, kt % 8);
+                for (int kt = 0; kt < n_k_tiles; kt++) {
+                    uint8_t * tile = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
+                    pack_kt(tile, &src_row[kt / 8], row, kt % 8);
+                }
             }
-        }
+        });
     }
 }
 
@@ -1394,35 +1437,37 @@ static void repack_q1_0_tiled(ggml_tensor * t, const void * data, size_t offset,
         const block_q1_0 * src_slice = src_matrix + (slice_idx - start_slice) * ne1 * n_k_tiles;
         uint8_t * matrix_dst = (uint8_t *) t->data + slice_idx * matrix_size;
 
-        for (int ct = 0; ct < n_col_tiles; ct++) {
-            for (int kt = 0; kt < n_k_tiles; kt++) {
-                uint8_t * tile_dst = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
-                ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
-                memset(tile_dst, 0, tile_size);
+        repack_parallel_for_ct(matrix_size, n_col_tiles, [&](int ct0, int ct1) {
+            for (int ct = ct0; ct < ct1; ct++) {
+                for (int kt = 0; kt < n_k_tiles; kt++) {
+                    uint8_t * tile_dst = matrix_dst + ((size_t) ct * n_k_tiles + kt) * tile_size;
+                    ggml_half * scale_dst = (ggml_half *) (tile_dst + 512);
+                    memset(tile_dst, 0, tile_size);
 
-                for (int row = 0; row < 32; row++) {
-                    const int64_t r = ct * 32 + row;
-                    if (r >= ne1) {
-                        continue;
-                    }
-
-                    const block_q1_0 & block = src_slice[r * n_k_tiles + kt];
-                    scale_dst[row] = block.d;
-#if defined(__ARM_NEON) || defined(__aarch64__)
-                    repack_neon_q1_0_block(block.qs, tile_dst, row);
-#else
-                    for (int k = 0; k < QK1_0; k++) {
-                        int byte_offset;
-                        int bit;
-                        q1_0_tiled_bit_location(k, row, byte_offset, bit);
-                        if (block.qs[k / 8] & (1u << (k % 8))) {
-                            tile_dst[byte_offset] |= (uint8_t) (1u << bit);
+                    for (int row = 0; row < 32; row++) {
+                        const int64_t r = ct * 32 + row;
+                        if (r >= ne1) {
+                            continue;
                         }
-                    }
+
+                        const block_q1_0 & block = src_slice[r * n_k_tiles + kt];
+                        scale_dst[row] = block.d;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+                        repack_neon_q1_0_block(block.qs, tile_dst, row);
+#else
+                        for (int k = 0; k < QK1_0; k++) {
+                            int byte_offset;
+                            int bit;
+                            q1_0_tiled_bit_location(k, row, byte_offset, bit);
+                            if (block.qs[k / 8] & (1u << (k % 8))) {
+                                tile_dst[byte_offset] |= (uint8_t) (1u << bit);
+                            }
+                        }
 #endif
+                    }
                 }
             }
-        }
+        });
     }
 }
 
