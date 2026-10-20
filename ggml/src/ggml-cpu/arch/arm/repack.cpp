@@ -544,17 +544,17 @@ void ggml_gemv_mxfp4_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const v
         const svbool_t  pg_hi4 = svnot_b_z(pgw, pg4);
         const svuint8_t m4b = svdup_n_u8(0x0f);
         const svuint8_t values = svld1_u8(pg16, (const uint8_t *) kvalues_mxfp4);
-        
+
         // Reorder Q8 four-byte groups as [0,2,4,6,1,3,5,7]
         const svuint32_t q8_group_index = svsub_n_u32_m(pg_hi4, svindex_u32(0, 2), 7);
-        
+
         const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
         float * res_ptr = s;
-        
+
         for (int x = 0; x < nc / ncols_interleaved; x++) {
             const block_mxfp4x4 * b_ptr = (const block_mxfp4x4 *) vx + (x * nb);
             svfloat32_t sumf = svdup_n_f32(0.0f);
-            
+
             for (int l = 0; l < nb; l++) {
                 const svint8_t q8 = svld1_s8(pgb, a_ptr[l].qs);
                 const svint8_t q8_even_odd = svreinterpret_s8_u32(svtbl_u32(svreinterpret_u32_s8(q8), q8_group_index));
@@ -564,14 +564,14 @@ void ggml_gemv_mxfp4_4x4_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const v
                 const svuint8_t qmx23 = svld1_u8(pgb, b_ptr[l].qs + 32);
                 const svuint8_t qmx_lo23 = svtbl_u8(values, svand_u8_x(pgb, qmx23, m4b));
                 const svuint8_t qmx_hi23 = svtbl_u8(values, svlsr_n_u8_x(pgb, qmx23, 4));
-                
+
                 svint32_t sumi = svdup_n_s32(0);
                 sumi = svdot_lane_s32(sumi, svreinterpret_s8_u8(qmx_lo01), q8_even_odd, 0);
                 sumi = svdot_lane_s32(sumi, svreinterpret_s8_u8(qmx_lo23), q8_even_odd, 1);
                 sumi = svdot_lane_s32(sumi, svreinterpret_s8_u8(qmx_hi01), q8_even_odd, 2);
                 sumi = svdot_lane_s32(sumi, svreinterpret_s8_u8(qmx_hi23), q8_even_odd, 3);
                 const svint32_t sumi_cols = svadd_s32_z(pg4, sumi, svext_s32(sumi, sumi, 4));
-                
+
                 // Vector form of GGML_CPU_E8M0_TO_FP32_HALF
                 const svuint32_t e_u32 = svld1ub_u32(pg4, b_ptr[l].e);
                 const svbool_t e_is_denormal = svcmplt_n_u32(pg4, e_u32, 2);
