@@ -5839,10 +5839,11 @@ void server_routes::init_routes() {
         // one item per committed audio buffer, deltas are attributed to the current item
         std::mutex  mutex_item;
         std::string item_id = "item_" + random_string();
+        std::string item_prev; // the committed item before item_id, empty for the first one
         std::string item_text;
 
+        // called with mutex_item held
         auto send_completed = [&]() {
-            std::lock_guard<std::mutex> lock(mutex_item);
             send_event(json {
                 {"type",          "conversation.item.input_audio_transcription.completed"},
                 {"item_id",       item_id},
@@ -5907,19 +5908,16 @@ void server_routes::init_routes() {
                     if (!post_control(SERVER_CONTROL_ACTION_AUDIO_COMMIT, {})) {
                         break;
                     }
-                    send_completed();
-                    const std::string next_id = "item_" + random_string();
-                    std::string prev_id;
-                    {
-                        std::lock_guard<std::mutex> lock(mutex_item);
-                        prev_id = item_id;
-                        item_id = next_id;
-                    }
+                    // the current item is the committed one, its transcript completes it and the next item opens
+                    std::lock_guard<std::mutex> lock(mutex_item);
                     send_event(json {
                         {"type",             "input_audio_buffer.committed"},
-                        {"previous_item_id", prev_id},
-                        {"item_id",          next_id},
+                        {"previous_item_id", item_prev.empty() ? json(nullptr) : json(item_prev)},
+                        {"item_id",          item_id},
                     });
+                    send_completed();
+                    item_prev = item_id;
+                    item_id   = "item_" + random_string();
                 } else if (type == "input_audio_buffer.clear") {
                     send_event(json {{"type", "input_audio_buffer.cleared"}});
                 } else {
@@ -5954,6 +5952,7 @@ void server_routes::init_routes() {
                     });
                 }
             } else if (result->is_stop()) {
+                std::lock_guard<std::mutex> lock(mutex_item);
                 send_completed();
                 break;
             }

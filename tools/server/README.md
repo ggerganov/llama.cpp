@@ -1505,7 +1505,7 @@ Closing the websocket also ends the input.
 - `session.created` and `session.updated`: carry the `session` object
 - `conversation.item.input_audio_transcription.delta`: `delta` holds the new text for `item_id`
 - `conversation.item.input_audio_transcription.completed`: `transcript` holds the full text of `item_id`
-- `input_audio_buffer.committed`: `item_id` of the new item, `previous_item_id` of the completed one
+- `input_audio_buffer.committed`: `item_id` of the committed item, `previous_item_id` of the item committed before it (`null` for the first one)
 - `error`: `error.message` describes the problem
 
 Note that words held back by the model's delay at the time of a commit are attributed to the next item.
