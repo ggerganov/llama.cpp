@@ -1166,43 +1166,43 @@ struct ggml_cuda_type_traits<GGML_TYPE_IQ3_S> {
 };
 
 template<>
-struct ggml_cuda_type_traits<GGML_TYPE_IQ2_K> {
+struct ggml_cuda_type_traits<GGML_TYPE_JQ2_K> {
     static constexpr int qk = QK_K;
-    static constexpr int qr = QR_IQ2_K;
-    static constexpr int qi = QI_IQ2_K;
-    static constexpr int bs = sizeof(block_iq2_k);
+    static constexpr int qr = QR_JQ2_K;
+    static constexpr int qi = QI_JQ2_K;
+    static constexpr int bs = sizeof(block_jq2_k);
 };
 
 template<>
-struct ggml_cuda_type_traits<GGML_TYPE_IQ3_K> {
+struct ggml_cuda_type_traits<GGML_TYPE_JQ3_K> {
     static constexpr int qk = QK_K;
-    static constexpr int qr = QR_IQ3_K;
-    static constexpr int qi = QI_IQ3_K;
-    static constexpr int bs = sizeof(block_iq3_k);
+    static constexpr int qr = QR_JQ3_K;
+    static constexpr int qi = QI_JQ3_K;
+    static constexpr int bs = sizeof(block_jq3_k);
 };
 
 template<>
-struct ggml_cuda_type_traits<GGML_TYPE_IQ4_K> {
+struct ggml_cuda_type_traits<GGML_TYPE_JQ4_K> {
     static constexpr int qk = QK_K;
-    static constexpr int qr = QR_IQ4_K;
-    static constexpr int qi = QI_IQ4_K;
-    static constexpr int bs = sizeof(block_iq4_k);
+    static constexpr int qr = QR_JQ4_K;
+    static constexpr int qi = QI_JQ4_K;
+    static constexpr int bs = sizeof(block_jq4_k);
 };
 
 template<>
-struct ggml_cuda_type_traits<GGML_TYPE_IQ5_K> {
+struct ggml_cuda_type_traits<GGML_TYPE_JQ5_K> {
     static constexpr int qk = QK_K;
-    static constexpr int qr = QR_IQ5_K;
-    static constexpr int qi = QI_IQ5_K;
-    static constexpr int bs = sizeof(block_iq5_k);
+    static constexpr int qr = QR_JQ5_K;
+    static constexpr int qi = QI_JQ5_K;
+    static constexpr int bs = sizeof(block_jq5_k);
 };
 
 template<>
-struct ggml_cuda_type_traits<GGML_TYPE_IQ6_K> {
+struct ggml_cuda_type_traits<GGML_TYPE_JQ6_K> {
     static constexpr int qk = QK_K;
-    static constexpr int qr = QR_IQ6_K;
-    static constexpr int qi = QI_IQ6_K;
-    static constexpr int bs = sizeof(block_iq6_k);
+    static constexpr int qr = QR_JQ6_K;
+    static constexpr int qi = QI_JQ6_K;
+    static constexpr int bs = sizeof(block_jq6_k);
 };
 
 //////////////////////

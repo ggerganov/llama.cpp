@@ -169,20 +169,20 @@ typedef sycl::half2 ggml_half2;
 #define QI3_S (QK_K / (4*QR3_S))
 #define QR3_S 4
 
-#define QI_IQ2_K (QK_K / (4*QR_IQ2_K))
-#define QR_IQ2_K 4
+#define QI_JQ2_K (QK_K / (4*QR_JQ2_K))
+#define QR_JQ2_K 4
 
-#define QI_IQ3_K (QK_K / (4*QR_IQ3_K))
-#define QR_IQ3_K 4
+#define QI_JQ3_K (QK_K / (4*QR_JQ3_K))
+#define QR_JQ3_K 4
 
-#define QI_IQ4_K (QK_K / (4*QR_IQ4_K))
-#define QR_IQ4_K 2
+#define QI_JQ4_K (QK_K / (4*QR_JQ4_K))
+#define QR_JQ4_K 2
 
-#define QI_IQ5_K (QK_K / (4*QR_IQ5_K))
-#define QR_IQ5_K 2
+#define QI_JQ5_K (QK_K / (4*QR_JQ5_K))
+#define QR_JQ5_K 2
 
-#define QI_IQ6_K (QK_K / (4*QR_IQ6_K))
-#define QR_IQ6_K 2
+#define QI_JQ6_K (QK_K / (4*QR_JQ6_K))
+#define QR_JQ6_K 2
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 

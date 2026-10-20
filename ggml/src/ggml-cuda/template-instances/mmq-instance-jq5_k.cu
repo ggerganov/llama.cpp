@@ -2,4 +2,4 @@
 
 #include "../mmq.cuh"
 
-DECL_MMQ_CASE(GGML_TYPE_IQ6_K);
+DECL_MMQ_CASE(GGML_TYPE_JQ5_K);
