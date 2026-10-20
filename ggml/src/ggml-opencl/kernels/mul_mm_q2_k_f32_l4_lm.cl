@@ -18,13 +18,25 @@ struct block_q2_K {
 
 #define BM 64
 #define BN 64
+#ifndef BK
 #define BK 32
+#endif
 #ifdef INTEL_GPU
 #define TM 8
-#define TN 8
 #else
 #define TM 4
+#endif
 #define TN 8
+
+#ifndef LM_HALF
+#define LM_HALF 0
+#endif
+#if LM_HALF
+typedef half lm_st;
+#define LM_LD4(p, i) convert_float4(vload4((i), (p)))
+#else
+typedef float lm_st;
+#define LM_LD4(p, i) vload4((i), (p))
 #endif
 
 kernel void kernel_mul_mm_q2_k_f32_l4_lm(
@@ -57,8 +69,8 @@ kernel void kernel_mul_mm_q2_k_f32_l4_lm(
     src1 = (global float4*)((global char*)src1 + offset1);
     dst  = (global float *)((global char*)dst  + offsetd);
 
-    local float buf_a[BM * BK];
-    local float buf_b[BN * BK];
+    local lm_st buf_a[BM * BK];
+    local lm_st buf_b[BN * BK];
 
     const int batch_idx = get_global_id(2);
 
@@ -89,12 +101,11 @@ kernel void kernel_mul_mm_q2_k_f32_l4_lm(
     int pos_a = batch_idx_a * batch_stride_a + ir * BM * stride_a;
     int pos_b = (batch_idx   * batch_stride_b + ic * BN * stride_b) / LOAD_VEC_B;
 
-    float sums[TM * TN];
-    float cache_a[TM];
-    float cache_b[TN];
+    float4 sums4[(TM/4) * TN];
+    float4 cache_a4[TM/4];
 
-    for (int i = 0; i < TM * TN; i++) {
-        sums[i] = 0.0f;
+    for (int i = 0; i < (TM/4) * TN; i++) {
+        sums4[i] = (float4)(0.0f);
     }
 
     for (int block = 0; block < ne00; block += BK) {
@@ -158,18 +169,15 @@ kernel void kernel_mul_mm_q2_k_f32_l4_lm(
         pos_b += BK / LOAD_VEC_B;
 
         for (int i = 0; i < BK; i++) {
-            for (int j = 0; j < TM; j++) {
-                cache_a[j] = buf_a[(i) * BM + th_r * TM + j];
-            }
-
-            for (int j = 0; j < TN; j++) {
-                cache_b[j] = buf_b[(i) * BN + th_c * TN + j];
+            for (int a = 0; a < TM/4; a++) {
+                cache_a4[a] = LM_LD4(buf_a + (i) * BM + th_r * TM, a);
             }
 
             for (int cc = 0; cc < TN; cc++) {
-                for (int cr = 0; cr < TM; cr++) {
-                    const int sums_idx = cc*TM + cr;
-                    sums[sums_idx] = mad(cache_a[cr], cache_b[cc], sums[sums_idx]);
+                const float cache_b = buf_b[(i) * BN + th_c * TN + cc];
+                for (int a = 0; a < TM/4; a++) {
+                    const int sums_idx = cc*(TM/4) + a;
+                    sums4[sums_idx] = mad(cache_a4[a], (float4)cache_b, sums4[sums_idx]);
                 }
             }
         }
@@ -182,9 +190,13 @@ kernel void kernel_mul_mm_q2_k_f32_l4_lm(
     const ulong offsets = batch_idx * batch_stride_d;
 
     for (int cc = 0; cc < TN; cc++) {
-        for (int cr = 0; cr < TM; cr++) {
-            if (dr + cr < ne01 && dc + cc < ne11) {
-                dst[offsets + (dc + cc) * stride_d + dr + cr] = sums[cc * TM + cr];
+        for (int a = 0; a < TM/4; a++) {
+            const float4 v = sums4[cc * (TM/4) + a];
+            const float  vs[4] = { v.s0, v.s1, v.s2, v.s3 };
+            for (int k = 0; k < 4; k++) {
+                if (dr + 4*a + k < ne01 && dc + cc < ne11) {
+                    dst[offsets + (dc + cc) * stride_d + dr + 4*a + k] = vs[k];
+                }
             }
         }
     }
