@@ -1990,14 +1990,6 @@ static bool ggml_cuda_mul_mat_q_fusion_matches(const ggml_tensor * up, const ggm
         return false;
     }
 
-    // The fused kernel quantizes src1 to Q8_1, only fuse if the src1 precision of up and gate allows it.
-    for (const ggml_tensor * mm : { up, gate }) {
-        const ggml_prec prec_src1 = (ggml_prec) ggml_get_op_params_i32(mm, 3);
-        if (prec_src1 != GGML_PREC_UNDEFINED && prec_src1 != GGML_PREC_Q8 && prec_src1 != GGML_PREC_Q4) {
-            return false;
-        }
-    }
-
     // The fused write-back applies SWIGLU_OAI with the default alpha and limit of ggml_cuda_op_swiglu_oai_single.
     if (ggml_get_glu_op(glu) == GGML_GLU_OP_SWIGLU_OAI && (ggml_get_op_params_f32(glu, 2) != 1.702f || ggml_get_op_params_f32(glu, 3) != 7.0f)) {
         return false;
