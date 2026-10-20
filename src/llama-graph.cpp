@@ -1666,6 +1666,35 @@ ggml_tensor * llm_graph_context::build_lora_mm(
     return res;
 }
 
+// note: when the values already fit in F16, the factors are exactly 1.0f so this does not affect
+ggml_tensor * llm_graph_context::build_amax_src1_f16(
+          ggml_tensor * cur,
+          ggml_tensor * & scale_s) const {
+    scale_s = nullptr;
+
+    const int64_t n_embd = cur->ne[0];
+
+    // amax = max|cur| along the rows for each [expert, token] -> [1, n_expert, n_tokens]
+    ggml_tensor * ab = ggml_abs(ctx0, cur);
+    ggml_tensor * amax = ggml_pool_1d(ctx0, ab, GGML_OP_POOL_MAX, n_embd, n_embd, 0);
+
+    // ref: https://github.com/ggml-org/llama.cpp/pull/26223
+    constexpr float k_log2_e = 1.4426950408889634f; // 1 / ln(2)
+    constexpr float k_ln_2   = 0.6931471805599453f;
+
+    ggml_tensor * e;
+    e = ggml_scale(ctx0, amax, 1.0f/32768.0f);
+    e = ggml_log  (ctx0, e);
+    e = ggml_scale(ctx0, e, k_log2_e);
+    e = ggml_ceil (ctx0, e);
+    e = ggml_clamp(ctx0, e, 0.0f, 127.0f);
+    e = ggml_scale(ctx0, e, k_ln_2);
+
+    scale_s = ggml_exp(ctx0, e);
+
+    return ggml_div(ctx0, cur, scale_s);
+}
+
 ggml_tensor * llm_graph_context::build_lora_mm_id(
           ggml_tensor * w,   // ggml_tensor * as
           ggml_tensor * cur, // ggml_tensor * b
@@ -2465,10 +2494,15 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
             GGML_ABORT("fatal error");
     }
 
-    experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s, slots); // [n_embd, n_expert_used, n_tokens]
+    // the src1 of the down projection can exceed the F16 range, so it is rescaled to fit
+    ggml_tensor * f16_scale_s = nullptr;
     if (arch == LLM_ARCH_MISTRAL4 || arch == LLM_ARCH_MELLUM) {
-        // src1 can exceed F16 range
-        ggml_prec_set_src(experts, GGML_PREC_F32, 1);
+        cur = build_amax_src1_f16(cur, f16_scale_s);
+    }
+
+    experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s, slots); // [n_embd, n_expert_used, n_tokens]
+    if (f16_scale_s) {
+        experts = ggml_mul(ctx0, experts, f16_scale_s);
     }
     cb(experts, "ffn_moe_down", il);
 
