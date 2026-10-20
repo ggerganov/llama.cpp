@@ -12,8 +12,32 @@ export enum TooltipSide {
 }
 
 /**
+ * ScrollCarousel arrow placement.
+ */
+export enum ScrollCarouselVariant {
+	CENTER = 'center',
+	TOP = 'top'
+}
+
+/**
+ * Sidebar icon strip actions handled directly by the sidebar.
+ */
+export enum SidebarAction {
+	MANAGE_MODELS = 'manage-models',
+	MCP = 'mcp',
+	NEW_CHAT = 'new-chat',
+	SETTINGS = 'settings'
+}
+
+/**
  * MCP prompt display variant
  */
+/** View the models dialog renders. */
+export enum ModelsDialogView {
+	DISCOVER = 'discover',
+	MANAGE = 'manage'
+}
+
 export enum McpPromptVariant {
 	ATTACHMENT = 'attachment',
 	MESSAGE = 'message'
