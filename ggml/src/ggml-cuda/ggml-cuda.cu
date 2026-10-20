@@ -1995,11 +1995,6 @@ static bool ggml_cuda_mul_mat_q_fusion_matches(const ggml_tensor * up, const ggm
         return false;
     }
 
-    // The fused launch has the row tiles (64 output rows each) in gridDim.y and channels * samples in gridDim.z.
-    if ((x_up->ne[1] + 63)/64 > 65535 || y->ne[2]*y->ne[3] > 65535) {
-        return false;
-    }
-
     // NVIDIA only: the fused write-back relies on the MMA accumulator layout.
     return turing_mma_available(ggml_cuda_info().devices[device].cc);
 }
