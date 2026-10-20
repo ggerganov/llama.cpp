@@ -1239,8 +1239,8 @@ struct server_tool_grep_search : server_tool {
 // exec_shell_command: run an arbitrary shell command
 //
 
-static constexpr size_t SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_OUTPUT_SIZE = 16 * 1024; // 16 KB
-static constexpr int    SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT     = 60;        // seconds
+static constexpr size_t SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_OUTPUT_SIZE = 256 * 1024; // 256 KB
+static constexpr int    SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT     = 10800;        // seconds
 
 struct server_tool_exec_shell_command : server_tool {
     server_tool_exec_shell_command() {
