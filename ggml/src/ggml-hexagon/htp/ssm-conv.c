@@ -135,10 +135,17 @@ static inline void hvx_ssm_conv_unpack_to_T(const float * raw, float * T, uint32
     }
 }
 
+static __attribute__((noinline)) void hvx_ssm_conv_silu_vtcm(float * restrict buf, uint32_t n_vecs) {
+    HVX_Vector * restrict vbuf = (HVX_Vector *) buf;
+    for (uint32_t i = 0; i < n_vecs; ++i) {
+        vbuf[i] = hvx_vec_silu_f32(vbuf[i]);
+    }
+}
+
 // Decode dot product specialization for d_conv == 4: multiply in the raw channel-major layout,
 // then deinterleave the products so each vector holds one tap of 32 channels, and sum.
 // Keeps both operands in DMA layout - no transpose, no scratch.
-static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float * out, uint32_t n_ch, bool apply_silu) {
+static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float * out, uint32_t n_ch) {
     for (uint32_t cb = 0; cb < n_ch; cb += VLEN_FP32) {
         const float * xp = x + cb * 4;
         const float * wp = w + cb * 4;
@@ -157,11 +164,7 @@ static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float
         HVX_Vector a = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_V_lo_W(q02), Q6_V_lo_W(q13));
         HVX_Vector b = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_V_hi_W(q02), Q6_V_hi_W(q13));
 
-        HVX_Vector y = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
-        if (apply_silu) {
-            y = hvx_vec_silu_f32(y);
-        }
-        *(HVX_Vector *)(out + cb) = y;
+        *(HVX_Vector *)(out + cb) = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
     }
 }
 
@@ -294,29 +297,23 @@ static void ssm_conv_thread_f32_decode(unsigned int nth, unsigned int ith, void 
         if (raw_dot) {
             const float * xp = src0_tile_raw[c & 1];
             const float * wp = src1_raw + tile_off * 4;
-            hvx_ssm_conv_decode_4(xp, wp, out, tile_n, apply_silu);
+            hvx_ssm_conv_decode_4(xp, wp, out, tile_n);
         } else {
             const uint32_t tile_stride = hex_round_up(tile_n, VLEN_FP32);
             hvx_ssm_conv_unpack_to_T(src0_tile_raw[c & 1], src0_T, tile_n, tile_stride, d_conv);
 
             for (uint32_t cb = 0; cb < tile_n; cb += VLEN_FP32) {
-                const uint32_t cb_n = MIN(VLEN_FP32, tile_n - cb);
                 HVX_Vector acc = hvx_vec_splat_f32(0.0f);
                 for (uint32_t j = 0; j < d_conv; ++j) {
                     HVX_Vector x = *(const HVX_Vector *)(src0_T + j * tile_stride + cb);
                     HVX_Vector w = *(const HVX_Vector *)(src1_T + j * d_inner_stride + tile_off + cb);
                     acc          = Q6_Vqf32_vadd_Vqf32Vqf32(acc, Q6_Vqf32_vmpy_VsfVsf(x, w));
                 }
-                HVX_Vector y = Q6_Vsf_equals_Vqf32(acc);
-                if (apply_silu) {
-                    y = hvx_vec_silu_f32(y);
-                }
-                if (cb_n == VLEN_FP32) {
-                    *(HVX_Vector *)(out + cb) = y;
-                } else {
-                    hvx_vec_store_u(out + cb, cb_n * sizeof(float), y);
-                }
+                *(HVX_Vector *)(out + cb) = Q6_Vsf_equals_Vqf32(acc);
             }
+        }
+        if (apply_silu) {
+            hvx_ssm_conv_silu_vtcm(out, hex_round_up(tile_n, VLEN_FP32) / VLEN_FP32);
         }
         htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) i3);
 
@@ -502,11 +499,7 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
                     HVX_Vector b = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_Vqf32_vmpy_VsfVsf(x2, w2),
                                                             Q6_Vqf32_vmpy_VsfVsf(x3, w3));
 
-                    HVX_Vector y = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
-                    if (apply_silu) {
-                        y = hvx_vec_silu_f32(y);
-                    }
-                    *(HVX_Vector *) (op + t * dst_tile_stride) = y;
+                    *(HVX_Vector *) (op + t * dst_tile_stride) = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
 
                     x0 = x1;
                     x1 = x2;
@@ -520,20 +513,20 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
                         HVX_Vector w = *(const HVX_Vector *) (wp + j * d_inner_stride);
                         acc          = Q6_Vqf32_vadd_Vqf32Vqf32(acc, Q6_Vqf32_vmpy_VsfVsf(x, w));
                     }
-                    HVX_Vector y = Q6_Vsf_equals_Vqf32(acc);
-                    if (apply_silu) {
-                        y = hvx_vec_silu_f32(y);
-                    }
-                    *(HVX_Vector *) (op + t * dst_tile_stride) = y;
+                    *(HVX_Vector *) (op + t * dst_tile_stride) = Q6_Vsf_equals_Vqf32(acc);
                 }
             }
             htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) tile_off);
         }
 
+        if (apply_silu) {
+            htp_trace_event_start(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) tile_off);
+            hvx_ssm_conv_silu_vtcm(out, n_t * (dst_tile_stride / C_TILE));
+            htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) tile_off);
+        }
+
         // Writeback dst_tile VTCM -> DDR via 2D DMA
-        dma_queue_push(dma_q,
-                       dma_make_data(dst->data + i3 * dst_stride_seq_bytes + (ir0 + tile_off) * sizeof(float),
-                                     (uint8_t *) out),
+        dma_queue_push(dma_q, dma_make_data(dst->data + i3 * dst_stride_seq_bytes + (ir0 + tile_off) * sizeof(float), (uint8_t *) out),
                        dst_stride_token_bytes, dst_tile_stride * sizeof(float), tile_n * sizeof(float), n_t);
 
         if (c + 2 < n_chunks) {
