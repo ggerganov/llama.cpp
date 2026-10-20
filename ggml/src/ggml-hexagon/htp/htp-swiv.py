@@ -79,6 +79,7 @@ class Elf32_Ehdr:
 
         return (Elf32_Ehdr.s).pack(*values)
 
+
 class Elf32_Phdr:
     s = struct.Struct('I' * 8)
 
@@ -126,15 +127,15 @@ class Elf32_Shdr:
 
     def getPackedData(self):
         values = [self.sh_name,
-                self.sh_type,
-                self.sh_flags,
-                self.sh_addr,
-                self.sh_offset,
-                self.sh_size,
-                self.sh_link,
-                self.sh_info,
-                self.sh_addralign,
-                self.sh_entsize]
+                  self.sh_type,
+                  self.sh_flags,
+                  self.sh_addr,
+                  self.sh_offset,
+                  self.sh_size,
+                  self.sh_link,
+                  self.sh_info,
+                  self.sh_addralign,
+                  self.sh_entsize]
 
         return (Elf32_Shdr.s).pack(*values)
 
@@ -206,6 +207,7 @@ class Elf64_Phdr:
 
         return (Elf64_Phdr.s).pack(*values)
 
+
 class Elf64_Shdr:
     s = struct.Struct('IIQQQQIIQQ')
 
@@ -225,15 +227,15 @@ class Elf64_Shdr:
 
     def getPackedData(self):
         values = [self.sh_name,
-                self.sh_type,
-                self.sh_flags,
-                self.sh_addr,
-                self.sh_offset,
-                self.sh_size,
-                self.sh_link,
-                self.sh_info,
-                self.sh_addralign,
-                self.sh_entsize]
+                  self.sh_type,
+                  self.sh_flags,
+                  self.sh_addr,
+                  self.sh_offset,
+                  self.sh_size,
+                  self.sh_link,
+                  self.sh_info,
+                  self.sh_addralign,
+                  self.sh_entsize]
 
         return (Elf64_Shdr.s).pack(*values)
 
@@ -261,9 +263,9 @@ def is_elf64(elf_header):
 
 def verify_elf_header(elf_header):
     ident = elf_header.e_ident
-    return (ident.startswith(ELF_MAGIC) and
-            ident[ELF_CLASS_INDEX] in (ELFCLASS32, ELFCLASS64) and
-            ident[ELF_VERSION_INDEX] == EV_CURRENT)
+    return (ident.startswith(ELF_MAGIC)
+            and ident[ELF_CLASS_INDEX] in (ELFCLASS32, ELFCLASS64)
+            and ident[ELF_VERSION_INDEX] == EV_CURRENT)
 
 
 def file_copy_offset(in_fp, in_off, out_fp, out_off, num_bytes):
