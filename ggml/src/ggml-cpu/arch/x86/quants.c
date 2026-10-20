@@ -3982,31 +3982,31 @@ void ggml_vec_dot_iq1_m_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
 }
 
 #ifdef __AVX2__
-static inline __m256i iqk_scale_pair(int ls1, int ls2) {
+static inline __m256i jqk_scale_pair(int ls1, int ls2) {
     return MM256_SET_M128I(_mm_set1_epi16((short)ls2), _mm_set1_epi16((short)ls1));
 }
 
-static inline __m256i iqk_phase_pair(int phase, uint16_t extra, int ib) {
+static inline __m256i jqk_phase_pair(int phase, uint16_t extra, int ib) {
     return MM256_SET_M128I(_mm_set1_epi8((char)(phase*((extra >> (ib + 1)) & 1))), _mm_set1_epi8((char)(phase*((extra >> (ib + 0)) & 1))));
 }
 
-static inline __m256i iqk_values_tbl(const int8_t * values, int n_values) {
+static inline __m256i jqk_values_tbl(const int8_t * values, int n_values) {
     int8_t tbl[16];
     for (int i = 0; i < 16; ++i) { tbl[i] = values[i % n_values]; }
     const __m128i t = _mm_loadu_si128((const __m128i *)tbl);
     return MM256_SET_M128I(t, t);
 }
 
-static inline __m256i iqk_lookup_32(const __m256i * tbl, const __m256i idx) {
+static inline __m256i jqk_lookup_32(const __m256i * tbl, const __m256i idx) {
     return _mm256_blendv_epi8(_mm256_shuffle_epi8(tbl[0], idx), _mm256_shuffle_epi8(tbl[1], idx), _mm256_slli_epi16(idx, 3));
 }
 
-static inline __m256i iqk_lookup_64(const __m256i * tbl, const __m256i idx) {
-    return _mm256_blendv_epi8(iqk_lookup_32(tbl, idx), iqk_lookup_32(tbl + 2, idx), _mm256_slli_epi16(idx, 2));
+static inline __m256i jqk_lookup_64(const __m256i * tbl, const __m256i idx) {
+    return _mm256_blendv_epi8(jqk_lookup_32(tbl, idx), jqk_lookup_32(tbl + 2, idx), _mm256_slli_epi16(idx, 2));
 }
 #endif
 
-void ggml_vec_dot_iq2_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq2_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -4014,14 +4014,14 @@ void ggml_vec_dot_iq2_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq2_k * GGML_RESTRICT x = vx;
+    const block_jq2_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
 
 #if defined __AVX2__
 
-    const __m256i values = iqk_values_tbl(kvalues_iq2k, 4);
+    const __m256i values = jqk_values_tbl(kvalues_jq2k, 4);
     const __m256i m2 = _mm256_set1_epi8(0x03);
 
     __m256 accum = _mm256_setzero_ps();
@@ -4044,10 +4044,10 @@ void ggml_vec_dot_iq2_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
                 const int ib = 8 * j + 2 * k;
                 const uint8_t sc = x[ibl].scales[ib / 2];
 
-                const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx[k]), iqk_phase_pair(IQ2K_PHASE, extra, ib));
+                const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx[k]), jqk_phase_pair(JQ2K_PHASE, extra, ib));
                 const __m256i p16 = mul_add_epi8(v, _mm256_loadu_si256((const __m256i *)q8));
                 q8 += 32;
-                const __m256i p = _mm256_madd_epi16(p16, iqk_scale_pair((sc & 0xf) - 8, (sc >> 4) - 8));
+                const __m256i p = _mm256_madd_epi16(p16, jqk_scale_pair((sc & 0xf) - 8, (sc >> 4) - 8));
                 sumi = _mm256_add_epi32(p, sumi);
             }
         }
@@ -4061,11 +4061,11 @@ void ggml_vec_dot_iq2_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(x);
     UNUSED(y);
     UNUSED(nb);
-    ggml_vec_dot_iq2_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
+    ggml_vec_dot_jq2_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
 #endif
 }
 
-void ggml_vec_dot_iq3_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq3_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -4073,14 +4073,14 @@ void ggml_vec_dot_iq3_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq3_k * GGML_RESTRICT x = vx;
+    const block_jq3_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
 
 #if defined __AVX2__
 
-    const __m256i values = iqk_values_tbl(kvalues_iq3k, 8);
+    const __m256i values = jqk_values_tbl(kvalues_jq3k, 8);
     const __m256i m2 = _mm256_set1_epi8(0x03);
     const __m256i mh = _mm256_set1_epi8(0x04);
 
@@ -4110,10 +4110,10 @@ void ggml_vec_dot_iq3_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
                 const int ls1 = 2 * (sc & 0xf) + 1;
                 const int ls2 = 2 * (sc >>  4) + 1;
 
-                const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx[k]), iqk_phase_pair(IQ3K_PHASE, extra, ib));
+                const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx[k]), jqk_phase_pair(JQ3K_PHASE, extra, ib));
                 const __m256i p16 = mul_add_epi8(v, _mm256_loadu_si256((const __m256i *)q8));
                 q8 += 32;
-                const __m256i p = _mm256_madd_epi16(p16, iqk_scale_pair(signs & (1 << (ib + 0)) ? -ls1 : ls1, signs & (1 << (ib + 1)) ? -ls2 : ls2));
+                const __m256i p = _mm256_madd_epi16(p16, jqk_scale_pair(signs & (1 << (ib + 0)) ? -ls1 : ls1, signs & (1 << (ib + 1)) ? -ls2 : ls2));
                 sumi = _mm256_add_epi32(p, sumi);
             }
         }
@@ -4127,11 +4127,11 @@ void ggml_vec_dot_iq3_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(x);
     UNUSED(y);
     UNUSED(nb);
-    ggml_vec_dot_iq3_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
+    ggml_vec_dot_jq3_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
 #endif
 }
 
-void ggml_vec_dot_iq4_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq4_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -4139,14 +4139,14 @@ void ggml_vec_dot_iq4_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq4_k * GGML_RESTRICT x = vx;
+    const block_jq4_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
 
 #if defined __AVX2__
 
-    const __m256i values = iqk_values_tbl(kvalues_iq4k, 16);
+    const __m256i values = jqk_values_tbl(kvalues_jq4k, 16);
     const __m256i m4 = _mm256_set1_epi8(0x0f);
 
     __m256 accum = _mm256_setzero_ps();
@@ -4165,10 +4165,10 @@ void ggml_vec_dot_iq4_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
             const int ls1 = ((x[ibl].scales_l[ib / 2] & 0xf) | (((hb >> (2 * (ib % 4))) & 3) << 4)) - 32;
             const int ls2 = ((x[ibl].scales_l[ib / 2] >> 4) | (((hb >> (2 * (ib % 4) + 2)) & 3) << 4)) - 32;
 
-            const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx), iqk_phase_pair(IQ4K_PHASE, extra, ib));
+            const __m256i v = _mm256_add_epi8(_mm256_shuffle_epi8(values, idx), jqk_phase_pair(JQ4K_PHASE, extra, ib));
             const __m256i p16 = mul_add_epi8(v, _mm256_loadu_si256((const __m256i *)q8));
             q8 += 32;
-            const __m256i p = _mm256_madd_epi16(p16, iqk_scale_pair(ls1, ls2));
+            const __m256i p = _mm256_madd_epi16(p16, jqk_scale_pair(ls1, ls2));
             sumi = _mm256_add_epi32(p, sumi);
         }
 
@@ -4181,11 +4181,11 @@ void ggml_vec_dot_iq4_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(x);
     UNUSED(y);
     UNUSED(nb);
-    ggml_vec_dot_iq4_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
+    ggml_vec_dot_jq4_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
 #endif
 }
 
-void ggml_vec_dot_iq5_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq5_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -4193,14 +4193,14 @@ void ggml_vec_dot_iq5_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq5_k * GGML_RESTRICT x = vx;
+    const block_jq5_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
 
 #if defined __AVX2__
 
-    const __m256i values[2] = { iqk_values_tbl(kvalues_iq5k, 16), iqk_values_tbl(kvalues_iq5k + 16, 16) };
+    const __m256i values[2] = { jqk_values_tbl(kvalues_jq5k, 16), jqk_values_tbl(kvalues_jq5k + 16, 16) };
     const __m256i m4 = _mm256_set1_epi8(0x0f);
     const __m256i mh = _mm256_set1_epi8(0x10);
 
@@ -4231,10 +4231,10 @@ void ggml_vec_dot_iq5_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
                 const int ls1 = ((x[ibl].scales_l[ib / 2] & 0xf) | (((hb >> (2 * (ib%4))) & 3) << 4)) - 32;
                 const int ls2 = ((x[ibl].scales_l[ib/2] >> 4) | (((hb >> (2 * (ib % 4) + 2)) & 3) << 4)) - 32;
 
-                const __m256i v = _mm256_add_epi8(iqk_lookup_32(values, idx[k]), iqk_phase_pair(IQ5K_PHASE, extra, ib));
+                const __m256i v = _mm256_add_epi8(jqk_lookup_32(values, idx[k]), jqk_phase_pair(JQ5K_PHASE, extra, ib));
                 const __m256i p16 = mul_add_epi8(v, _mm256_loadu_si256((const __m256i *)q8));
                 q8 += 32;
-                const __m256i p = _mm256_madd_epi16(p16, iqk_scale_pair(ls1, ls2));
+                const __m256i p = _mm256_madd_epi16(p16, jqk_scale_pair(ls1, ls2));
                 sumi = _mm256_add_epi32(p, sumi);
             }
         }
@@ -4248,11 +4248,11 @@ void ggml_vec_dot_iq5_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(x);
     UNUSED(y);
     UNUSED(nb);
-    ggml_vec_dot_iq5_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
+    ggml_vec_dot_jq5_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
 #endif
 }
 
-void ggml_vec_dot_iq6_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq6_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -4260,15 +4260,15 @@ void ggml_vec_dot_iq6_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq6_k * GGML_RESTRICT x = vx;
+    const block_jq6_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
 
 #if defined __AVX2__
 
-    const __m256i values[4] = { iqk_values_tbl(kvalues_iq6k, 16), iqk_values_tbl(kvalues_iq6k + 16, 16),
-                                iqk_values_tbl(kvalues_iq6k + 32, 16), iqk_values_tbl(kvalues_iq6k + 48, 16) };
+    const __m256i values[4] = { jqk_values_tbl(kvalues_jq6k, 16), jqk_values_tbl(kvalues_jq6k + 16, 16),
+                                jqk_values_tbl(kvalues_jq6k + 32, 16), jqk_values_tbl(kvalues_jq6k + 48, 16) };
     const __m256i m4 = _mm256_set1_epi8(0x0f);
     const __m256i mh = _mm256_set1_epi8(0x30);
 
@@ -4297,10 +4297,10 @@ void ggml_vec_dot_iq6_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
             for (int k = 0; k < 4; ++k) {
                 const int ib = 8 * j + 2 * k;
 
-                const __m256i v = _mm256_add_epi8(iqk_lookup_64(values, idx[k]), iqk_phase_pair(IQ6K_PHASE, extra, ib));
+                const __m256i v = _mm256_add_epi8(jqk_lookup_64(values, idx[k]), jqk_phase_pair(JQ6K_PHASE, extra, ib));
                 const __m256i p16 = mul_add_epi8(v, _mm256_loadu_si256((const __m256i *)q8));
                 q8 += 32;
-                const __m256i p = _mm256_madd_epi16(p16, iqk_scale_pair(x[ibl].scales[ib], x[ibl].scales[ib + 1]));
+                const __m256i p = _mm256_madd_epi16(p16, jqk_scale_pair(x[ibl].scales[ib], x[ibl].scales[ib + 1]));
                 sumi = _mm256_add_epi32(p, sumi);
             }
         }
@@ -4314,7 +4314,7 @@ void ggml_vec_dot_iq6_k_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const vo
     UNUSED(x);
     UNUSED(y);
     UNUSED(nb);
-    ggml_vec_dot_iq6_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
+    ggml_vec_dot_jq6_k_q8_K_generic(n, s, bs, vx, bx, vy, by, nrc);
 #endif
 }
 

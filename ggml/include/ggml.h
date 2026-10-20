@@ -431,11 +431,11 @@ extern "C" {
         GGML_TYPE_Q1_0    = 41,
         GGML_TYPE_Q2_0    = 42,
         // reserving 43 and 44 for IQ2_NL and IQ3_NL
-        GGML_TYPE_IQ2_K   = 45,
-        GGML_TYPE_IQ3_K   = 46,
-        GGML_TYPE_IQ4_K   = 47,
-        GGML_TYPE_IQ5_K   = 48,
-        GGML_TYPE_IQ6_K   = 49,
+        GGML_TYPE_JQ2_K   = 45,
+        GGML_TYPE_JQ3_K   = 46,
+        GGML_TYPE_JQ4_K   = 47,
+        GGML_TYPE_JQ5_K   = 48,
+        GGML_TYPE_JQ6_K   = 49,
         GGML_TYPE_COUNT   = 50,
     };
 

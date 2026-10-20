@@ -6201,11 +6201,11 @@ class GGMLQuantizationType(IntEnum):
     Q1_0    = 41
     Q2_0    = 42
     # Reserving 43 and 44 for IQ2_NL and IQ3_NL
-    IQ2_K   = 45
-    IQ3_K   = 46
-    IQ4_K   = 47
-    IQ5_K   = 48
-    IQ6_K   = 49
+    JQ2_K   = 45
+    JQ3_K   = 46
+    JQ4_K   = 47
+    JQ5_K   = 48
+    JQ6_K   = 49
 
 
 class ExpertGatingFuncType(IntEnum):
@@ -6263,11 +6263,11 @@ class LlamaFileType(IntEnum):
     MOSTLY_Q1_0          = 40  # except 1d tensors
     MOSTLY_Q2_0          = 41  # except 1d tensors
     # Reserving 42 and 43 for IQ2_NL and IQ3_NL
-    MOSTLY_IQ2_K         = 44  # except 1d tensors
-    MOSTLY_IQ3_K         = 45  # except 1d tensors
-    MOSTLY_IQ4_K         = 46  # except 1d tensors
-    MOSTLY_IQ5_K         = 47  # except 1d tensors
-    MOSTLY_IQ6_K         = 48  # except 1d tensors
+    MOSTLY_JQ2_K         = 44  # except 1d tensors
+    MOSTLY_JQ3_K         = 45  # except 1d tensors
+    MOSTLY_JQ4_K         = 46  # except 1d tensors
+    MOSTLY_JQ5_K         = 47  # except 1d tensors
+    MOSTLY_JQ6_K         = 48  # except 1d tensors
 
     GUESSED              = 1024  # not specified in the model file
 
@@ -6429,11 +6429,11 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.NVFP4:   (64, 4 + 32),
     GGMLQuantizationType.Q1_0:    (128, 2 + 16),
     GGMLQuantizationType.Q2_0:    (64, 2 + 16),
-    GGMLQuantizationType.IQ2_K:   (256, 2 + 2 + QK_K // 32 + QK_K // 4),
-    GGMLQuantizationType.IQ3_K:   (256, 2 + 2 + 2 + QK_K // 32 + QK_K // 4 + QK_K // 8),
-    GGMLQuantizationType.IQ4_K:   (256, 2 + 2 + QK_K // 64 + QK_K // 32 + QK_K // 2),
-    GGMLQuantizationType.IQ5_K:   (256, 2 + 2 + QK_K // 64 + QK_K // 32 + QK_K // 2 + QK_K // 8),
-    GGMLQuantizationType.IQ6_K:   (256, 2 + 2 + QK_K // 16 + QK_K // 2 + QK_K // 4),
+    GGMLQuantizationType.JQ2_K:   (256, 2 + 2 + QK_K // 32 + QK_K // 4),
+    GGMLQuantizationType.JQ3_K:   (256, 2 + 2 + 2 + QK_K // 32 + QK_K // 4 + QK_K // 8),
+    GGMLQuantizationType.JQ4_K:   (256, 2 + 2 + QK_K // 64 + QK_K // 32 + QK_K // 2),
+    GGMLQuantizationType.JQ5_K:   (256, 2 + 2 + QK_K // 64 + QK_K // 32 + QK_K // 2 + QK_K // 8),
+    GGMLQuantizationType.JQ6_K:   (256, 2 + 2 + QK_K // 16 + QK_K // 2 + QK_K // 4),
 }
 
 
