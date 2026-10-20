@@ -2053,14 +2053,14 @@ i32vec2 iq4nl_to_i8x8(uint32_t vui) {
 #endif
 
 #define IQ2K_PHASE 5
-#define IQ3K_PHASE 23
+#define IQ3K_PHASE 5
 #define IQ4K_PHASE 18
 #define IQ5K_PHASE 15
 #define IQ6K_PHASE 13
 
 #if defined(DATA_A_IQ2_K)
 const int8_t kvalues_iq2k_const[4] = {
-    int8_t(-31), int8_t(-14), int8_t(-2), int8_t(10)
+    int8_t(-19), int8_t(-4), int8_t(8), int8_t(26)
 };
 
 shared FLOAT_TYPE kvalues_iq2k[4];
@@ -2077,7 +2077,7 @@ void init_iq_shmem(uvec3 wgsize)
 
 #if defined(DATA_A_IQ3_K)
 const int8_t kvalues_iq3k_const[8] = {
-    int8_t(-56), int8_t(-37), int8_t(-23), int8_t(-12), int8_t(-1), int8_t(10), int8_t(23), int8_t(40)
+    int8_t(-51), int8_t(-30), int8_t(-16), int8_t(-4), int8_t(7), int8_t(20), int8_t(36), int8_t(58)
 };
 
 shared FLOAT_TYPE kvalues_iq3k[8];
