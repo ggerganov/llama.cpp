@@ -4874,6 +4874,7 @@ void ggml_gemm_q6_K_8x8_q8_K(int                        n,
 
     constexpr int ncols_interleaved = 8;
     constexpr int blocklen          = 8;
+    constexpr int q8_k_blocklen     = 4;
 
     assert(n % qk == 0);
     assert(nr % 4 == 0);
@@ -4882,12 +4883,12 @@ void ggml_gemm_q6_K_8x8_q8_K(int                        n,
     UNUSED(nb);
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
-    constexpr int    q8_k_blocklen = 4;
+    UNUSED(q8_k_blocklen);
 
 #if defined(__aarch64__) && defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (svcntb() * 8 == 256) {
-        const svbool_t pg8    = svptrue_b8();
-        const svbool_t pg32   = svptrue_b32();
+        const svbool_t pg8  = svptrue_b8();
+        const svbool_t pg32 = svptrue_b32();
 
         const svuint8_t low_nibble = svdup_n_u8(0x0f);
         const svuint8_t high_lo2   = svdup_n_u8(0x03);
