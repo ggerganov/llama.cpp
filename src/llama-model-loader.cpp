@@ -71,11 +71,11 @@ const char * llama_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_IQ4_XS:    name = LLAMA_FTYPE_PREFIX "IQ4_XS - 4.25 bpw"; break;
         case LLAMA_FTYPE_MOSTLY_IQ3_S:     name = LLAMA_FTYPE_PREFIX "IQ3_S - 3.4375 bpw"; break;
         case LLAMA_FTYPE_MOSTLY_IQ3_M:     name = LLAMA_FTYPE_PREFIX "IQ3_S mix - 3.66 bpw"; break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_K:     name = LLAMA_FTYPE_PREFIX "IQ2_K - 2.375 bpw"; break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_K:     name = LLAMA_FTYPE_PREFIX "IQ3_K - 3.4375 bpw"; break;
-        case LLAMA_FTYPE_MOSTLY_IQ4_K:     name = LLAMA_FTYPE_PREFIX "IQ4_K - 4.5 bpw"; break;
-        case LLAMA_FTYPE_MOSTLY_IQ5_K:     name = LLAMA_FTYPE_PREFIX "IQ5_K - 5.5 bpw"; break;
-        case LLAMA_FTYPE_MOSTLY_IQ6_K:     name = LLAMA_FTYPE_PREFIX "IQ6_K - 6.625 bpw"; break;
+        case LLAMA_FTYPE_MOSTLY_JQ2_K:     name = LLAMA_FTYPE_PREFIX "JQ2_K - 2.375 bpw"; break;
+        case LLAMA_FTYPE_MOSTLY_JQ3_K:     name = LLAMA_FTYPE_PREFIX "JQ3_K - 3.4375 bpw"; break;
+        case LLAMA_FTYPE_MOSTLY_JQ4_K:     name = LLAMA_FTYPE_PREFIX "JQ4_K - 4.5 bpw"; break;
+        case LLAMA_FTYPE_MOSTLY_JQ5_K:     name = LLAMA_FTYPE_PREFIX "JQ5_K - 5.5 bpw"; break;
+        case LLAMA_FTYPE_MOSTLY_JQ6_K:     name = LLAMA_FTYPE_PREFIX "JQ6_K - 6.625 bpw"; break;
         default:                           name = LLAMA_FTYPE_PREFIX "unknown, may not work"; break;
     }
     return (ftype & LLAMA_FTYPE_GUESSED) ? name : name + guessed_prefix_len;
@@ -785,11 +785,11 @@ llama_model_loader::llama_model_loader(
             case GGML_TYPE_NVFP4:   ftype = LLAMA_FTYPE_MOSTLY_NVFP4;   break;
             case GGML_TYPE_Q1_0:    ftype = LLAMA_FTYPE_MOSTLY_Q1_0;    break;
             case GGML_TYPE_Q2_0:    ftype = LLAMA_FTYPE_MOSTLY_Q2_0;    break;
-            case GGML_TYPE_IQ2_K:   ftype = LLAMA_FTYPE_MOSTLY_IQ2_K;   break;
-            case GGML_TYPE_IQ3_K:   ftype = LLAMA_FTYPE_MOSTLY_IQ3_K;   break;
-            case GGML_TYPE_IQ4_K:   ftype = LLAMA_FTYPE_MOSTLY_IQ4_K;   break;
-            case GGML_TYPE_IQ5_K:   ftype = LLAMA_FTYPE_MOSTLY_IQ5_K;   break;
-            case GGML_TYPE_IQ6_K:   ftype = LLAMA_FTYPE_MOSTLY_IQ6_K;   break;
+            case GGML_TYPE_JQ2_K:   ftype = LLAMA_FTYPE_MOSTLY_JQ2_K;   break;
+            case GGML_TYPE_JQ3_K:   ftype = LLAMA_FTYPE_MOSTLY_JQ3_K;   break;
+            case GGML_TYPE_JQ4_K:   ftype = LLAMA_FTYPE_MOSTLY_JQ4_K;   break;
+            case GGML_TYPE_JQ5_K:   ftype = LLAMA_FTYPE_MOSTLY_JQ5_K;   break;
+            case GGML_TYPE_JQ6_K:   ftype = LLAMA_FTYPE_MOSTLY_JQ6_K;   break;
             default:
                 {
                     LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));

@@ -1431,7 +1431,7 @@ class IQ4_XS(__Quant, qtype=GGMLQuantizationType.IQ4_XS):
         return (dl * qs).reshape((n_blocks, -1))
 
 
-class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
+class JQ2_K(__Quant, qtype=GGMLQuantizationType.JQ2_K):
     kvalues = (-19, -4, 8, 26)
     phase = 5
 
@@ -1461,7 +1461,7 @@ class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
         return (dl * (qs + ph)).reshape((n_blocks, -1))
 
 
-class IQ3_K(__Quant, qtype=GGMLQuantizationType.IQ3_K):
+class JQ3_K(__Quant, qtype=GGMLQuantizationType.JQ3_K):
     kvalues = (-51, -30, -16, -4, 7, 20, 36, 58)
     phase = 5
 
@@ -1500,7 +1500,7 @@ class IQ3_K(__Quant, qtype=GGMLQuantizationType.IQ3_K):
         return (dl * (qs + ph)).reshape((n_blocks, -1))
 
 
-class IQ4_K(__Quant, qtype=GGMLQuantizationType.IQ4_K):
+class JQ4_K(__Quant, qtype=GGMLQuantizationType.JQ4_K):
     kvalues = (-127, -97, -78, -62, -48, -35, -23, -12, -1, 11, 23, 36, 51, 67, 87, 105)
     phase = 18
 
@@ -1534,7 +1534,7 @@ class IQ4_K(__Quant, qtype=GGMLQuantizationType.IQ4_K):
         return (dl * (qs + ph)).reshape((n_blocks, -1))
 
 
-class IQ5_K(__Quant, qtype=GGMLQuantizationType.IQ5_K):
+class JQ5_K(__Quant, qtype=GGMLQuantizationType.JQ5_K):
     kvalues = (-115, -105, -94, -83, -73, -65, -58, -51, -45, -39, -33, -27, -22, -17, -11, -6,
                -1, 4, 9, 15, 20, 26, 32, 39, 46, 53, 61, 69, 77, 86, 103, 111)
     phase = 15
@@ -1573,7 +1573,7 @@ class IQ5_K(__Quant, qtype=GGMLQuantizationType.IQ5_K):
         return (dl * (qs + ph)).reshape((n_blocks, -1))
 
 
-class IQ6_K(__Quant, qtype=GGMLQuantizationType.IQ6_K):
+class JQ6_K(__Quant, qtype=GGMLQuantizationType.JQ6_K):
     kvalues = (-120, -115, -108, -103, -99, -93, -88, -83, -79, -75, -70, -66, -62, -59, -55, -51,
                -48, -45, -41, -38, -35, -32, -29, -26, -24, -21, -18, -15, -13, -10, -7, -5,
                -2, 0, 3, 6, 8, 11, 14, 16, 19, 22, 25, 28, 31, 34, 38, 41,

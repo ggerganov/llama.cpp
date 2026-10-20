@@ -1326,7 +1326,7 @@ void ggml_vec_dot_iq4_xs_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs,
     *s = sumf;
 }
 
-void ggml_vec_dot_iq2_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq2_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -1334,7 +1334,7 @@ void ggml_vec_dot_iq2_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq2_k * GGML_RESTRICT x = vx;
+    const block_jq2_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
@@ -1348,12 +1348,12 @@ void ggml_vec_dot_iq2_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
         for (int ib = 0; ib < QK_K/16; ++ib) {
             const int g = ib / 2;
             const int ls = (int)((x[ibl].scales[ib / 2] >> 4 * (ib % 2)) & 0xf) - 8;
-            const int ph = x[ibl].extra & (1 << ib) ? IQ2K_PHASE : 0;
+            const int ph = x[ibl].extra & (1 << ib) ? JQ2K_PHASE : 0;
             const uint8_t * qs = x[ibl].qs + 32 * (g / 4) + 16 * (ib % 2);
             int sumi = 0;
             for (int j = 0; j < 16; ++j) {
                 const uint8_t q = (qs[j] >> 2 * (g % 4)) & 3;
-                sumi += q8[16 * ib + j] * (kvalues_iq2k[q] + ph);
+                sumi += q8[16 * ib + j] * (kvalues_jq2k[q] + ph);
             }
 
             sum += ls * sumi;
@@ -1365,7 +1365,7 @@ void ggml_vec_dot_iq2_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     *s = sumf;
 }
 
-void ggml_vec_dot_iq3_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq3_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -1373,7 +1373,7 @@ void ggml_vec_dot_iq3_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq3_k * GGML_RESTRICT x = vx;
+    const block_jq3_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
@@ -1388,13 +1388,13 @@ void ggml_vec_dot_iq3_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
             const int g = ib / 2;
             const int m = (x[ibl].scales_l[ib / 2] >> 4 * (ib % 2)) & 0xf;
             const int ls = x[ibl].scales_h & (1 << ib) ? -(2 * m + 1) : 2 * m + 1;
-            const int ph = x[ibl].extra & (1 << ib) ? IQ3K_PHASE : 0;
+            const int ph = x[ibl].extra & (1 << ib) ? JQ3K_PHASE : 0;
             const uint8_t * qs = x[ibl].qs + 32 * (g / 4) + 16 * (ib % 2);
             const uint8_t * qh = x[ibl].qh + 16 * (ib % 2);
             int sumi = 0;
             for (int j = 0; j < 16; ++j) {
                 const uint8_t q = ((qs[j] >> 2 * (g % 4)) & 3) | (((qh[j] >> g) & 1) << 2);
-                sumi += q8[16 * ib + j] * (kvalues_iq3k[q] + ph);
+                sumi += q8[16 * ib + j] * (kvalues_jq3k[q] + ph);
             }
 
             sum += ls * sumi;
@@ -1406,7 +1406,7 @@ void ggml_vec_dot_iq3_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     *s = sumf;
 }
 
-void ggml_vec_dot_iq4_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq4_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -1414,7 +1414,7 @@ void ggml_vec_dot_iq4_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq4_k * GGML_RESTRICT x = vx;
+    const block_jq4_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
@@ -1430,12 +1430,12 @@ void ggml_vec_dot_iq4_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
             const uint8_t hb = x[ibl].scales_h[ib / 4];
             const int ls1 = ((x[ibl].scales_l[ib / 2] & 0xf) | (((hb >> (2 * (ib % 4))) & 3) << 4)) - 32;
             const int ls2 = ((x[ibl].scales_l[ib / 2] >> 4) | (((hb >> (2 * (ib % 4) + 2)) & 3) << 4)) - 32;
-            const int ph1 = x[ibl].extra & (1 << (ib + 0)) ? IQ4K_PHASE : 0;
-            const int ph2 = x[ibl].extra & (1 << (ib + 1)) ? IQ4K_PHASE : 0;
+            const int ph1 = x[ibl].extra & (1 << (ib + 0)) ? JQ4K_PHASE : 0;
+            const int ph2 = x[ibl].extra & (1 << (ib + 1)) ? JQ4K_PHASE : 0;
             int sumi1 = 0, sumi2 = 0;
             for (int j = 0; j < 16; ++j) {
-                sumi1 += q8[j + 0] * (kvalues_iq4k[qs[j] & 0xf] + ph1);
-                sumi2 += q8[j +16] * (kvalues_iq4k[qs[j] >> 4] + ph2);
+                sumi1 += q8[j + 0] * (kvalues_jq4k[qs[j] & 0xf] + ph1);
+                sumi2 += q8[j +16] * (kvalues_jq4k[qs[j] >> 4] + ph2);
             }
 
             sum += ls1*sumi1 + ls2*sumi2;
@@ -1449,7 +1449,7 @@ void ggml_vec_dot_iq4_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     *s = sumf;
 }
 
-void ggml_vec_dot_iq5_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq5_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -1457,7 +1457,7 @@ void ggml_vec_dot_iq5_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq5_k * GGML_RESTRICT x = vx;
+    const block_jq5_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
@@ -1472,13 +1472,13 @@ void ggml_vec_dot_iq5_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
             const int g = ib / 2;
             const uint8_t hb = x[ibl].scales_h[ib / 4];
             const int ls = (((x[ibl].scales_l[ib / 2] >> 4 * (ib % 2)) & 0xf) | (((hb >> 2 * (ib % 4)) & 3) << 4)) - 32;
-            const int ph = x[ibl].extra & (1 << ib) ? IQ5K_PHASE : 0;
+            const int ph = x[ibl].extra & (1 << ib) ? JQ5K_PHASE : 0;
             const uint8_t * qs = x[ibl].qs + 32 * (g / 2) + 16 * (ib % 2);
             const uint8_t * qh = x[ibl].qh + 16 * (ib % 2);
             int sumi = 0;
             for (int j = 0; j < 16; ++j) {
                 const uint8_t q = ((qs[j] >> 4 * (g % 2)) & 0xf) | (((qh[j] >> g) & 1) << 4);
-                sumi += q8[16 * ib + j] * (kvalues_iq5k[q] + ph);
+                sumi += q8[16 * ib + j] * (kvalues_jq5k[q] + ph);
             }
 
             sum += ls * sumi;
@@ -1490,7 +1490,7 @@ void ggml_vec_dot_iq5_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     *s = sumf;
 }
 
-void ggml_vec_dot_iq6_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_jq6_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
@@ -1498,7 +1498,7 @@ void ggml_vec_dot_iq6_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
     UNUSED(bs);
     assert(n % QK_K == 0);
 
-    const block_iq6_k * GGML_RESTRICT x = vx;
+    const block_jq6_k * GGML_RESTRICT x = vx;
     const block_q8_K  * GGML_RESTRICT y = vy;
 
     const int nb = n / QK_K;
@@ -1512,13 +1512,13 @@ void ggml_vec_dot_iq6_k_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, 
         for (int ib = 0; ib < QK_K/16; ++ib) {
             const int g = ib / 2;
             const int ls = x[ibl].scales[ib];
-            const int ph = x[ibl].extra & (1 << ib) ? IQ6K_PHASE : 0;
+            const int ph = x[ibl].extra & (1 << ib) ? JQ6K_PHASE : 0;
             const uint8_t * qs = x[ibl].qs + 32 * (g / 2) + 16 * (ib % 2);
             const uint8_t * qh = x[ibl].qh + 32 * (g / 4) + 16 * (ib % 2);
             int sumi = 0;
             for (int j = 0; j < 16; ++j) {
                 const uint8_t q = ((qs[j] >> 4 * (g % 2)) & 0xf) | (((qh[j] >> 2 * (g % 4)) & 3) << 4);
-                sumi += q8[16 * ib + j] * (kvalues_iq6k[q] + ph);
+                sumi += q8[16 * ib + j] * (kvalues_jq6k[q] + ph);
             }
 
             sum += ls * sumi;
@@ -1542,27 +1542,27 @@ void quantize_row_iq4_xs(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, 
     quantize_iq4_xs(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq2_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
+void quantize_row_jq2_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
     assert(k % QK_K == 0);
-    quantize_iq2_k(x, y, 1, k, NULL);
+    quantize_jq2_k(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq3_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
+void quantize_row_jq3_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
     assert(k % QK_K == 0);
-    quantize_iq3_k(x, y, 1, k, NULL);
+    quantize_jq3_k(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq4_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
+void quantize_row_jq4_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
     assert(k % QK_K == 0);
-    quantize_iq4_k(x, y, 1, k, NULL);
+    quantize_jq4_k(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq5_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
+void quantize_row_jq5_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
     assert(k % QK_K == 0);
-    quantize_iq5_k(x, y, 1, k, NULL);
+    quantize_jq5_k(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq6_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
+void quantize_row_jq6_k(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k) {
     assert(k % QK_K == 0);
-    quantize_iq6_k(x, y, 1, k, NULL);
+    quantize_jq6_k(x, y, 1, k, NULL);
 }
