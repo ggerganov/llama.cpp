@@ -135,7 +135,6 @@ struct htp_opformat {
     int          format_tensor_strides(char * str, size_t max_size, const struct ggml_tensor * t);
     void         format_op_strides(char * str, size_t max_size, const htp_opnode & node);
     void         format_op_types(char * str, size_t max_size, const htp_opnode & node);
-    const char * tensor_buff_name(const struct ggml_tensor * t);
     void         format_op_buffs(char * str, size_t max_size, const htp_opnode & node);
     void         format_op_names(char * str, size_t max_size, const htp_opnode & node);
     void         format_kernel_params(char * str, size_t max_size, const htp_opnode & node);

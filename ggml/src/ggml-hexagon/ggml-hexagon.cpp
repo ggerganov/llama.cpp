@@ -1604,7 +1604,7 @@ struct ggml_hexagon_opbatch {
         }
 
         htp_opnode & last_node = ops[n_ops - 1];
-        if (!htp_try_fuse(sess, last_node, node)) {
+        if (!htp_fusion_try_fuse(sess, last_node, node)) {
             return false;
         }
 

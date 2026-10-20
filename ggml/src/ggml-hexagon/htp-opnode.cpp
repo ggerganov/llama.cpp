@@ -180,7 +180,7 @@ void htp_opformat::format_op_types(char * str, size_t max_size, const htp_opnode
     }
 }
 
-const char * htp_opformat::tensor_buff_name(const struct ggml_tensor * t) {
+static const char * tensor_buff_name(const struct ggml_tensor * t) {
     if (t && t->buffer) {
         return ggml_backend_buffer_name(t->buffer);
     }

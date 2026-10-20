@@ -711,12 +711,12 @@ bool htp_fusion_can_stack(const struct ggml_tensor * a) {
     if (!a || !a->src[0] || !a->src[1]) return false;
     switch (a->op) {
         case GGML_OP_MUL_MAT:
-            if (!htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_NX)) return false;
+            if (!htp_fusion_enabled(HTP_FUSE_MUL_MAT_NX)) return false;
             if (ggml_get_op_params_i32(a, 1) == GGML_HINT_SRC0_IS_HADAMARD) return false;
             if (a->src[0]->ne[2] != 1 || a->src[0]->ne[3] != 1) return false;
             return ggml_is_quantized(a->src[0]->type);
         case GGML_OP_MUL_MAT_ID:
-            if (!htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_ID_NX)) return false;
+            if (!htp_fusion_enabled(HTP_FUSE_MUL_MAT_ID_NX)) return false;
             return a->src[2] != nullptr && ggml_is_quantized(a->src[0]->type);
         default:
             return false;
@@ -783,32 +783,32 @@ void htp_fusion_tag_graph(struct ggml_cgraph * graph) {
     }
 }
 
-bool htp_try_fuse(const struct ggml_hexagon_session * sess, struct htp_opnode & prev, const struct htp_opnode & cur) {
+bool htp_fusion_try_fuse(const struct ggml_hexagon_session * sess, struct htp_opnode & prev, const struct htp_opnode & cur) {
     if (!opt_opfusion) return false;
 
     switch (cur.opcode) {
         case HTP_OP_ADD:
-            return (htp_is_fusion_enabled(HTP_FUSE_ALLREDUCE_ADD) && fuse_allreduce_add(sess, prev, cur)) ||
-                   (htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_ADD)   && fuse_mul_mat_add(sess, prev, cur))   ||
-                   (htp_is_fusion_enabled(HTP_FUSE_BINARY_NX)     && fuse_binary_nx(sess, prev, cur));
+            return (htp_fusion_enabled(HTP_FUSE_ALLREDUCE_ADD) && fuse_allreduce_add(sess, prev, cur)) ||
+                   (htp_fusion_enabled(HTP_FUSE_MUL_MAT_ADD)   && fuse_mul_mat_add(sess, prev, cur))   ||
+                   (htp_fusion_enabled(HTP_FUSE_BINARY_NX)     && fuse_binary_nx(sess, prev, cur));
         case HTP_OP_MUL:
-            return (htp_is_fusion_enabled(HTP_FUSE_RMS_NORM_MUL)   && fuse_rms_norm_mul(sess, prev, cur))   ||
-                   (htp_is_fusion_enabled(HTP_FUSE_UNARY_MUL_GLU)  && fuse_unary_mul_glu(sess, prev, cur))  ||
-                   (htp_is_fusion_enabled(HTP_FUSE_MUL_MUL_SCALAR) && fuse_mul_mul_scalar(sess, prev, cur)) ||
-                   (htp_is_fusion_enabled(HTP_FUSE_BINARY_NX)      && fuse_binary_nx(sess, prev, cur));
+            return (htp_fusion_enabled(HTP_FUSE_RMS_NORM_MUL)   && fuse_rms_norm_mul(sess, prev, cur))   ||
+                   (htp_fusion_enabled(HTP_FUSE_UNARY_MUL_GLU)  && fuse_unary_mul_glu(sess, prev, cur))  ||
+                   (htp_fusion_enabled(HTP_FUSE_MUL_MUL_SCALAR) && fuse_mul_mul_scalar(sess, prev, cur)) ||
+                   (htp_fusion_enabled(HTP_FUSE_BINARY_NX)      && fuse_binary_nx(sess, prev, cur));
         case HTP_OP_SUB:
         case HTP_OP_DIV:
-            return htp_is_fusion_enabled(HTP_FUSE_BINARY_NX) && fuse_binary_nx(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_BINARY_NX) && fuse_binary_nx(sess, prev, cur);
         case HTP_OP_SCALE:
-            return htp_is_fusion_enabled(HTP_FUSE_RMS_NORM_SCALE) && fuse_rms_norm_scale(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_RMS_NORM_SCALE) && fuse_rms_norm_scale(sess, prev, cur);
         case HTP_OP_GET_ROWS:
-            return htp_is_fusion_enabled(HTP_FUSE_REPEAT_GET_ROWS) && fuse_repeat_get_rows(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_REPEAT_GET_ROWS) && fuse_repeat_get_rows(sess, prev, cur);
         case HTP_OP_CPY:
-            return htp_is_fusion_enabled(HTP_FUSE_GDN_CPY) && fuse_gdn_cpy(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_GDN_CPY) && fuse_gdn_cpy(sess, prev, cur);
         case HTP_OP_MUL_MAT:
-            return htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_NX) && fuse_mul_mat_nx(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_MUL_MAT_NX) && fuse_mul_mat_nx(sess, prev, cur);
         case HTP_OP_MUL_MAT_ID:
-            return htp_is_fusion_enabled(HTP_FUSE_MUL_MAT_ID_NX) && fuse_mul_mat_id_nx(sess, prev, cur);
+            return htp_fusion_enabled(HTP_FUSE_MUL_MAT_ID_NX) && fuse_mul_mat_id_nx(sess, prev, cur);
         default:
             return false;
     }
