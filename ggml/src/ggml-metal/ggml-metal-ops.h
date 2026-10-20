@@ -95,6 +95,7 @@ int ggml_metal_op_pad_reflect_1d    (ggml_metal_op_t ctx, int idx);
 int ggml_metal_op_roll              (ggml_metal_op_t ctx, int idx);
 int ggml_metal_op_arange            (ggml_metal_op_t ctx, int idx);
 int ggml_metal_op_timestep_embedding(ggml_metal_op_t ctx, int idx);
+size_t ggml_metal_op_argmax_extra   (const struct ggml_tensor * op);
 int ggml_metal_op_argmax            (ggml_metal_op_t ctx, int idx);
 int ggml_metal_op_argsort           (ggml_metal_op_t ctx, int idx);
 int ggml_metal_op_top_k             (ggml_metal_op_t ctx, int idx);
