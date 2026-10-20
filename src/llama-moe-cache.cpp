@@ -927,14 +927,14 @@ struct llama_moe_cache::impl {
 
         // the GPU: store x and the ids in the mailbox and raise the flag
         ggml_tensor * send_args[2] = { x, ids };
-        out.send = ggml_custom_4d(ctx, GGML_TYPE_I32, 1, 1, 1, 1, send_args, 2, ggml_mailbox_cpu_stub, 1, (void *) &m.send);
+        out.send = ggml_custom_4d(ctx, GGML_TYPE_I32, 1, 1, 1, 1, send_args, 2, ggml_mailbox_cpu_stub, 1, const_cast<ggml_mailbox_op *>(&m.send));
         ggml_backend_tensor_alloc(mailbox_buf.get(), out.send, (void *) m.flag->data);
         out.x   = m.x;
         out.ids = m.ids;
 
         // the CPU: the ids of the experts the cache does not hold
         ggml_tensor * split_args[3] = { out.send, m.ids, layers[il].slot_map };
-        out.cold_ids = ggml_custom_4d(ctx, GGML_TYPE_I32, k, 1, 1, 1, split_args, 3, mailbox_split, 1, (void *) &hybrid_layers[il]);
+        out.cold_ids = ggml_custom_4d(ctx, GGML_TYPE_I32, k, 1, 1, 1, split_args, 3, mailbox_split, 1, const_cast<hybrid_layer *>(&hybrid_layers[il]));
         out.cold_ids->flags |= GGML_TENSOR_FLAG_NO_SYNC;
 
         // the GPU looks up its own slots, from its copy of the slot map
@@ -950,7 +950,7 @@ struct llama_moe_cache::impl {
         // the CPU stores its experts in the mailbox; the GPU reads them from there
         copy = ggml_cpy(ctx, e_cold, m.e);
         ggml_tensor * recv_args[1] = { copy };
-        recv = ggml_custom_4d(ctx, GGML_TYPE_F32, m.e->ne[0], m.e->ne[1], 1, 1, recv_args, 1, ggml_mailbox_cpu_stub, 1, (void *) &m.recv);
+        recv = ggml_custom_4d(ctx, GGML_TYPE_F32, m.e->ne[0], m.e->ne[1], 1, 1, recv_args, 1, ggml_mailbox_cpu_stub, 1, const_cast<ggml_mailbox_op *>(&m.recv));
     }
 
     void begin_step() {
@@ -1093,7 +1093,7 @@ struct llama_moe_cache::impl {
         ggml_tensor * ids = ggml_is_contiguous(selected_experts) ? selected_experts : ggml_cont(ctx, selected_experts);
         ggml_tensor * args[2] = { ids, layers[il].slot_map };
         return ggml_custom_4d(ctx, GGML_TYPE_I32, selected_experts->ne[0], n_tokens, 4, 1, args, 2, hybrid_split, 1,
-                (void *) &hybrid_layers[il]);
+                const_cast<hybrid_layer *>(&hybrid_layers[il]));
     }
 
     // the CPU op of build_hybrid_ids, one task
