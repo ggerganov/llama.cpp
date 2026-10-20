@@ -55,14 +55,14 @@ struct htp_opvec {
 };
 
 struct htp_opnode {
-    ggml_tensor * node   { nullptr };
-    htp_op_code   opcode { HTP_OP_INVALID };
-    int32_t       params[HTP_OP_MAX_PARAMS] {0};
-    int32_t       kernel_params[HTP_OP_MAX_KERN_PARAMS] {0};
+    const ggml_tensor * node   { nullptr };
+    htp_op_code         opcode { HTP_OP_INVALID };
+    int32_t             params[HTP_OP_MAX_PARAMS] {0};
+    int32_t             kernel_params[HTP_OP_MAX_KERN_PARAMS] {0};
 
     std::vector<std::shared_ptr<ggml_tensor>>          dummy;
 
-    htp_opvec<ggml_tensor *,   HTP_OP_MAX_FUSED>       fused;
+    htp_opvec<const ggml_tensor *, HTP_OP_MAX_FUSED>   fused;
     htp_opvec<const ggml_tensor *, HTP_OP_MAX_FUSED>   inputs;
     htp_opvec<const ggml_tensor *, HTP_OP_MAX_OUTPUTS> outputs;
 
@@ -76,7 +76,7 @@ struct htp_opnode {
         return 0;
     }
 
-    void init(ggml_tensor * node) {
+    void init(const ggml_tensor * node) {
         static_assert(sizeof(this->params) == sizeof(this->node->op_params), "params size mismatch");
 
         this->node = node;
@@ -98,7 +98,11 @@ struct htp_opnode {
         this->outputs.push_back(this->dst());
     }
 
-    htp_opnode(htp_op_code opcode = HTP_OP_INVALID, ggml_tensor * node = nullptr) : opcode(opcode) {
+    htp_opnode(htp_op_code opcode = HTP_OP_INVALID, const ggml_tensor * node = nullptr) : opcode(opcode) {
+        init(node);
+    }
+
+    htp_opnode(const ggml_tensor * node) : opcode(HTP_OP_INVALID) {
         init(node);
     }
 
@@ -122,33 +126,22 @@ struct htp_opnode {
     std::string name() const;
 };
 
-struct htp_opformat {
-    char strides[64 * GGML_MAX_SRC];
-    char dims[64 * GGML_MAX_SRC];
-    char types[16 * GGML_MAX_SRC];
-    char buffs[64 * GGML_MAX_SRC];
-    char names[64 * GGML_MAX_SRC];
-    char kparams[128];
+enum htp_opformat_flags {
+    HTP_OPFMT_OP      = (1 << 0),
+    HTP_OPFMT_NAMES   = (1 << 1),
+    HTP_OPFMT_DIMS    = (1 << 2),
+    HTP_OPFMT_TYPES   = (1 << 3),
+    HTP_OPFMT_STRIDES = (1 << 4),
+    HTP_OPFMT_BUFFS   = (1 << 5),
+    HTP_OPFMT_KPARAMS = (1 << 6),
 
-    int          format_tensor_dims(char * str, size_t max_size, const struct ggml_tensor * t);
-    void         format_op_dims(char * str, size_t max_size, const htp_opnode & node);
-    int          format_tensor_strides(char * str, size_t max_size, const struct ggml_tensor * t);
-    void         format_op_strides(char * str, size_t max_size, const htp_opnode & node);
-    void         format_op_types(char * str, size_t max_size, const htp_opnode & node);
-    void         format_op_buffs(char * str, size_t max_size, const htp_opnode & node);
-    void         format_op_names(char * str, size_t max_size, const htp_opnode & node);
-    void         format_kernel_params(char * str, size_t max_size, const htp_opnode & node);
-    void         format(const htp_opnode & node);
-
-    htp_opformat() {
-        strides[0] = '\0';
-        dims[0]    = '\0';
-        types[0]   = '\0';
-        buffs[0]   = '\0';
-        names[0]   = '\0';
-        kparams[0] = '\0';
-    }
-    htp_opformat(const htp_opnode & node) { format(node); }
+    HTP_OPFMT_EXEC    = HTP_OPFMT_OP | HTP_OPFMT_NAMES | HTP_OPFMT_DIMS | HTP_OPFMT_TYPES | HTP_OPFMT_STRIDES | HTP_OPFMT_BUFFS | HTP_OPFMT_KPARAMS,
+    HTP_OPFMT_SUPP    = HTP_OPFMT_OP | HTP_OPFMT_NAMES | HTP_OPFMT_DIMS | HTP_OPFMT_TYPES | HTP_OPFMT_STRIDES | HTP_OPFMT_BUFFS,
+    HTP_OPFMT_PROF    = HTP_OPFMT_OP | HTP_OPFMT_NAMES | HTP_OPFMT_DIMS | HTP_OPFMT_TYPES | HTP_OPFMT_STRIDES | HTP_OPFMT_KPARAMS,
+    HTP_OPFMT_TENSOR  = HTP_OPFMT_NAMES | HTP_OPFMT_DIMS | HTP_OPFMT_TYPES | HTP_OPFMT_STRIDES,
 };
+
+std::string htp_format_op(const htp_opnode & node, uint32_t flags = HTP_OPFMT_EXEC);
+std::string htp_format_tensor(const ggml_tensor * t, uint32_t flags = HTP_OPFMT_TENSOR);
 
 #endif // HTP_OPNODE_H

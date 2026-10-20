@@ -20,7 +20,6 @@
 #include "htp/sum-rows-ops.h"
 #include "htp/unary-ops.h"
 
-#include <algorithm>
 #include <stdio.h>
 
 std::string htp_opnode::name() const {
@@ -69,183 +68,77 @@ std::string htp_opnode::name() const {
     return res;
 }
 
-int htp_opformat::format_tensor_dims(char * str, size_t max_size, const struct ggml_tensor * t) {
+static const char * format_tensor_name(const struct ggml_tensor * t) {
+    return t ? t->name : "NONE";
+}
+
+static std::string format_tensor_dims(const struct ggml_tensor * t) {
     if (!t) {
-        return snprintf(str, max_size, "NONE");
+        return "NONE";
     }
+    char buf[64];
     if (t->ne[2] == 1 && t->ne[3] == 1) {
-        return snprintf(str, max_size, "%d:%d", (int) t->ne[0], (int) t->ne[1]);
+        snprintf(buf, sizeof(buf), "%d:%d", (int) t->ne[0], (int) t->ne[1]);
     } else {
-        return snprintf(str, max_size, "%d:%d:%d:%d", (int) t->ne[0], (int) t->ne[1], (int) t->ne[2], (int) t->ne[3]);
+        snprintf(buf, sizeof(buf), "%d:%d:%d:%d", (int) t->ne[0], (int) t->ne[1], (int) t->ne[2], (int) t->ne[3]);
     }
+    return buf;
 }
 
-void htp_opformat::format_op_dims(char * str, size_t max_size, const htp_opnode & node) {
-    char * p = str;
-    char * p_end = str + max_size;
-    const auto & inputs = node.get_inputs();
-
-    if (!inputs.empty()) {
-        p += std::min((size_t)format_tensor_dims(p, p_end - p, inputs[0]), (size_t)(p_end - p));
-
-        for (size_t i = 1; i < inputs.size(); i++) {
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, " x "), (size_t)(p_end - p));
-            }
-            if (p < p_end) {
-                p += std::min((size_t)format_tensor_dims(p, p_end - p, inputs[i]), (size_t)(p_end - p));
-            }
-        }
-
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, " -> "), (size_t)(p_end - p));
-        }
-    }
-
-    char self[64];
-    format_tensor_dims(self, sizeof(self), node.dst());
-    if (p < p_end) {
-        p += std::min((size_t)snprintf(p, p_end - p, "%s", self), (size_t)(p_end - p));
-    }
+static const char * format_tensor_type(const struct ggml_tensor * t) {
+    return t ? ggml_type_name(t->type) : "NONE";
 }
 
-int htp_opformat::format_tensor_strides(char * str, size_t max_size, const struct ggml_tensor * t) {
+static std::string format_tensor_strides(const struct ggml_tensor * t) {
     if (!t) {
-        return snprintf(str, max_size, "NONE");
+        return "NONE";
     }
+    char buf[64];
     const char * c = ggml_is_contiguous(t) ? "" : "!";
-
     if (t->ne[2] == 1 && t->ne[3] == 1) {
-        return snprintf(str, max_size, "%zu:%zu%s", (size_t) t->nb[0], (size_t) t->nb[1], c);
+        snprintf(buf, sizeof(buf), "%zu:%zu%s", (size_t) t->nb[0], (size_t) t->nb[1], c);
     } else {
-        return snprintf(str, max_size, "%zu:%zu:%zu:%zu%s", (size_t) t->nb[0], (size_t) t->nb[1], (size_t) t->nb[2], (size_t) t->nb[3], c);
+        snprintf(buf, sizeof(buf), "%zu:%zu:%zu:%zu%s", (size_t) t->nb[0], (size_t) t->nb[1], (size_t) t->nb[2], (size_t) t->nb[3], c);
     }
+    return buf;
 }
 
-void htp_opformat::format_op_strides(char * str, size_t max_size, const htp_opnode & node) {
-    char * p = str;
-    char * p_end = str + max_size;
-    const auto & inputs = node.get_inputs();
-
-    if (!inputs.empty()) {
-        p += std::min((size_t)format_tensor_strides(p, p_end - p, inputs[0]), (size_t)(p_end - p));
-
-        for (size_t i = 1; i < inputs.size(); i++) {
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, " x "), (size_t)(p_end - p));
-            }
-            if (p < p_end) {
-                p += std::min((size_t)format_tensor_strides(p, p_end - p, inputs[i]), (size_t)(p_end - p));
-            }
-        }
-
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, " -> "), (size_t)(p_end - p));
-        }
-    }
-
-    char self[64];
-    format_tensor_strides(self, sizeof(self), node.dst());
-    if (p < p_end) {
-        p += std::min((size_t)snprintf(p, p_end - p, "%s", self), (size_t)(p_end - p));
-    }
-}
-
-void htp_opformat::format_op_types(char * str, size_t max_size, const htp_opnode & node) {
-    char * p = str;
-    char * p_end = str + max_size;
-    const auto & inputs = node.get_inputs();
-
-    if (!inputs.empty()) {
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, "%s", inputs[0] ? ggml_type_name(inputs[0]->type) : "NONE"), (size_t)(p_end - p));
-        }
-
-        for (size_t i = 1; i < inputs.size(); i++) {
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, " x "), (size_t)(p_end - p));
-            }
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, "%s", inputs[i] ? ggml_type_name(inputs[i]->type) : "NONE"), (size_t)(p_end - p));
-            }
-        }
-
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, " -> "), (size_t)(p_end - p));
-        }
-    }
-
-    if (p < p_end) {
-        p += std::min((size_t)snprintf(p, p_end - p, "%s", ggml_type_name(node.dst()->type)), (size_t)(p_end - p));
-    }
-}
-
-static const char * tensor_buff_name(const struct ggml_tensor * t) {
+static const char * format_tensor_buff(const struct ggml_tensor * t) {
     if (t && t->buffer) {
         return ggml_backend_buffer_name(t->buffer);
     }
     return "NONE";
 }
 
-void htp_opformat::format_op_buffs(char * str, size_t max_size, const htp_opnode & node) {
-    char * p = str;
-    char * p_end = str + max_size;
-    const auto & inputs = node.get_inputs();
+template <typename Fn>
+static std::string format_op_tensors(const htp_opnode & node, Fn fn) {
+    std::string res;
+    const auto & inputs  = node.get_inputs();
+    const auto & outputs = node.get_outputs();
 
     if (!inputs.empty()) {
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, "%s", tensor_buff_name(inputs[0])), (size_t)(p_end - p));
+        for (size_t i = 0; i < inputs.size(); i++) {
+            if (i > 0) res += " x ";
+            res += fn(inputs[i]);
         }
-
-        for (size_t i = 1; i < inputs.size(); i++) {
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, " x "), (size_t)(p_end - p));
-            }
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, "%s", tensor_buff_name(inputs[i])), (size_t)(p_end - p));
-            }
-        }
-
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, " -> "), (size_t)(p_end - p));
-        }
+        res += " -> ";
     }
 
-    if (p < p_end) {
-        p += std::min((size_t)snprintf(p, p_end - p, "%s", tensor_buff_name(node.dst())), (size_t)(p_end - p));
+    if (outputs.empty()) {
+        res += fn(node.dst());
+    } else {
+        for (size_t i = 0; i < outputs.size(); i++) {
+            if (i > 0) res += " x ";
+            res += fn(outputs[i]);
+        }
     }
+    return res;
 }
 
-void htp_opformat::format_op_names(char * str, size_t max_size, const htp_opnode & node) {
-    char * p = str;
-    char * p_end = str + max_size;
-    const auto & inputs = node.get_inputs();
+static std::string format_kernel_params(const htp_opnode & node) {
+    char str[128];
+    const size_t max_size = sizeof(str);
 
-    if (!inputs.empty()) {
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, "%s", inputs[0] ? inputs[0]->name : "NONE"), (size_t)(p_end - p));
-        }
-
-        for (size_t i = 1; i < inputs.size(); i++) {
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, " x "), (size_t)(p_end - p));
-            }
-            if (p < p_end) {
-                p += std::min((size_t)snprintf(p, p_end - p, "%s", inputs[i] ? inputs[i]->name : "NONE"), (size_t)(p_end - p));
-            }
-        }
-
-        if (p < p_end) {
-            p += std::min((size_t)snprintf(p, p_end - p, " -> "), (size_t)(p_end - p));
-        }
-    }
-
-    if (p < p_end) {
-        p += std::min((size_t)snprintf(p, p_end - p, "%s", node.dst()->name), (size_t)(p_end - p));
-    }
-}
-
-void htp_opformat::format_kernel_params(char * str, size_t max_size, const htp_opnode & node) {
     if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID ||
         node.opcode == HTP_OP_MUL_MAT_NX || node.opcode == HTP_OP_MUL_MAT_ID_NX ||
         node.opcode == HTP_OP_MUL_MAT_ADD) {
@@ -334,13 +227,34 @@ void htp_opformat::format_kernel_params(char * str, size_t max_size, const htp_o
     } else {
         snprintf(str, max_size, "----");
     }
+    return str;
 }
 
-void htp_opformat::format(const htp_opnode & node) {
-    format_op_dims(dims, sizeof(dims), node);
-    format_op_strides(strides, sizeof(strides), node);
-    format_op_types(types, sizeof(types), node);
-    format_op_buffs(buffs, sizeof(buffs), node);
-    format_op_names(names, sizeof(names), node);
-    format_kernel_params(kparams, sizeof(kparams), node);
+static void append_section(std::string & res, const std::string & sec) {
+    if (!res.empty()) {
+        res += "|";
+    }
+    res += sec;
+}
+
+std::string htp_format_tensor(const ggml_tensor * t, uint32_t flags) {
+    std::string res;
+    if (flags & HTP_OPFMT_NAMES)   append_section(res, format_tensor_name(t));
+    if (flags & HTP_OPFMT_DIMS)    append_section(res, format_tensor_dims(t));
+    if (flags & HTP_OPFMT_TYPES)   append_section(res, format_tensor_type(t));
+    if (flags & HTP_OPFMT_STRIDES) append_section(res, format_tensor_strides(t));
+    if (flags & HTP_OPFMT_BUFFS)   append_section(res, format_tensor_buff(t));
+    return res;
+}
+
+std::string htp_format_op(const htp_opnode & node, uint32_t flags) {
+    std::string res;
+    if (flags & HTP_OPFMT_OP)      append_section(res, node.name());
+    if (flags & HTP_OPFMT_NAMES)   append_section(res, format_op_tensors(node, format_tensor_name));
+    if (flags & HTP_OPFMT_DIMS)    append_section(res, format_op_tensors(node, format_tensor_dims));
+    if (flags & HTP_OPFMT_TYPES)   append_section(res, format_op_tensors(node, format_tensor_type));
+    if (flags & HTP_OPFMT_STRIDES) append_section(res, format_op_tensors(node, format_tensor_strides));
+    if (flags & HTP_OPFMT_BUFFS)   append_section(res, format_op_tensors(node, format_tensor_buff));
+    if (flags & HTP_OPFMT_KPARAMS) append_section(res, format_kernel_params(node));
+    return res;
 }

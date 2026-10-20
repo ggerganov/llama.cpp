@@ -204,17 +204,15 @@ static const char * status_to_str(uint32_t status) {
 static void ggml_hexagon_dump_op_exec(const char * sess_name, const htp_opnode & node, const uint32_t req_flags) {
     if (!opt_verbose) return;
 
-    htp_opformat fmt(node);
-    GGML_LOG_DEBUG("ggml-hex: %s execute-op %s|%s|%s|%s|%s|%s|%s|flags 0x%x\n", sess_name,
-                node.name().c_str(), fmt.names, fmt.dims, fmt.types, fmt.strides, fmt.buffs, fmt.kparams, req_flags);
+    GGML_LOG_DEBUG("ggml-hex: %s execute-op %s|flags 0x%x\n",
+                   sess_name, htp_format_op(node, HTP_OPFMT_EXEC).c_str(), req_flags);
 }
 
 static void ggml_hexagon_dump_op_supp(const char * sess_name, const struct ggml_tensor * op, bool supp) {
     if (!opt_verbose) return;
 
-    htp_opformat fmt(htp_opnode(HTP_OP_INVALID, const_cast<ggml_tensor*>(op)));
-    GGML_LOG_DEBUG("ggml-hex: %s supports-op %s|%s|%s|%s|%s|%s|%s\n", sess_name,
-                ggml_op_desc(op), fmt.names, fmt.dims, fmt.types, fmt.strides, fmt.buffs, supp ? "yes" : "no");
+    GGML_LOG_DEBUG("ggml-hex: %s supports-op %s|%s\n",
+                   sess_name, htp_format_op(op, HTP_OPFMT_SUPP).c_str(), supp ? "yes" : "no");
 }
 
 static const char * htp_event_name(uint16_t id) {
@@ -247,7 +245,7 @@ static const char * htp_event_name(uint16_t id) {
     }
 }
 
-static void ggml_hexagon_dump_op_prof(const std::string &sess_name, const htp_opnode & node, const htp_prof_desc & pd) {
+static void ggml_hexagon_dump_op_prof(const char * sess_name, const htp_opnode & node, const htp_prof_desc & pd) {
     if (!opt_profile) return;
 
     uint32_t op_usec = pd.usecs;
@@ -261,13 +259,12 @@ static void ggml_hexagon_dump_op_prof(const std::string &sess_name, const htp_op
                 pmu[0], pmu[1], pmu[2], pmu[3], pmu[4], pmu[5], pmu[6], pmu[7]);
     }
 
-    htp_opformat fmt(node);
     float mhz = op_usec > 0 ? (float) op_cycles / op_usec : 0.0f;
-    GGML_LOG_DEBUG("ggml-hex: %s profile-op %s|%s|%s|%s|%s|%s|usec %u cycles %u start %u mhz %.1f%s\n", sess_name.c_str(),
-            node.name().c_str(), fmt.names, fmt.dims, fmt.types, fmt.strides, fmt.kparams, op_usec, op_cycles, pd.cycles_start, mhz, pmu_str);
+    GGML_LOG_DEBUG("ggml-hex: %s profile-op %s|usec %u cycles %u start %u mhz %.1f%s\n",
+                   sess_name, htp_format_op(node, HTP_OPFMT_PROF).c_str(), op_usec, op_cycles, pd.cycles_start, mhz, pmu_str);
 }
 
-static void ggml_hexagon_dump_batch_prof(const std::string & sess_name, const htp_opbatch_rsp & rsp) {
+static void ggml_hexagon_dump_batch_prof(const char * sess_name, const htp_opbatch_rsp & rsp) {
     uint64_t batch_cycles = rsp.cycles_stop - rsp.cycles_start;
     float batch_mhz = rsp.usecs > 0 ? (float) batch_cycles / rsp.usecs : 0.0f;
 
@@ -280,10 +277,10 @@ static void ggml_hexagon_dump_batch_prof(const std::string & sess_name, const ht
     }
 
     GGML_LOG_DEBUG("ggml-hex: %s profile-op OPBATCH|----|n-ops %u|%s|----|----|usec %u cycles %llu start %llu mhz %.1f\n",
-                   sess_name.c_str(), rsp.n_ops, evt_str, rsp.usecs, (unsigned long long) batch_cycles, (unsigned long long) rsp.cycles_start, batch_mhz);
+                   sess_name, rsp.n_ops, evt_str, rsp.usecs, (unsigned long long) batch_cycles, (unsigned long long) rsp.cycles_start, batch_mhz);
 }
 
-static void ggml_hexagon_dump_trace_events(const std::string & sess_name, const htp_opbatch_rsp & rsp,
+static void ggml_hexagon_dump_trace_events(const char * sess_name, const htp_opbatch_rsp & rsp,
                                            const htp_trace_desc * trace_events, uint32_t n_traces) {
     if (opt_profile == 3 && trace_events) {
         uint32_t valid_cnt[HTP_MAX_NTHREADS + 1] = {0};
@@ -298,7 +295,7 @@ static void ggml_hexagon_dump_trace_events(const std::string & sess_name, const 
                 bool is_stop = (e.info & 0x8000) != 0;
                 uint16_t info = e.info & 0x7FFF;
                 GGML_LOG_DEBUG("ggml-hex: %s trace-evt %s: thread %u info %u %s %u\n",
-                               sess_name.c_str(), htp_event_name(e.id), t, info, is_stop ? "stop" : "start", e.cycles);
+                               sess_name, htp_event_name(e.id), t, info, is_stop ? "stop" : "start", e.cycles);
             }
         }
     }
@@ -1772,13 +1769,13 @@ struct ggml_hexagon_opqueue {
                 trace_events = (const htp_trace_desc *) (p_ptr + p_size);
             }
 
-            ggml_hexagon_dump_batch_prof(shm_buf->sess->name, rsp);
+            ggml_hexagon_dump_batch_prof(shm_buf->sess->c_name(), rsp);
 
             for (uint32_t i = 0; i < rsp.n_ops; i++) {
-                ggml_hexagon_dump_op_prof(shm_buf->sess->name, ops[i], pd[i]);
+                ggml_hexagon_dump_op_prof(shm_buf->sess->c_name(), ops[i], pd[i]);
             }
 
-            ggml_hexagon_dump_trace_events(shm_buf->sess->name, rsp, trace_events, n_traces);
+            ggml_hexagon_dump_trace_events(shm_buf->sess->c_name(), rsp, trace_events, n_traces);
         }
     }
 };
@@ -6213,19 +6210,13 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 continue;
             }
 
-            htp_opnode node(HTP_OP_INVALID, n);
-            node.opcode = op_remap_to_htp(n);
+            htp_opnode node(op_remap_to_htp(n), n);
             if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID || node.opcode == HTP_OP_GET_ROWS) {
                 ggml_tensor * src0 = node.node->src[0];
                 if (htp_needs_repack(src0)) {
                     if (opt_verbose) {
-                        char dims_buf[64];
-                        char strides_buf[64];
-                        htp_opformat fmt;
-                        fmt.format_tensor_dims(dims_buf, sizeof(dims_buf), src0);
-                        fmt.format_tensor_strides(strides_buf, sizeof(strides_buf), src0);
-                        GGML_LOG_DEBUG("ggml-hex: %s rt-repack %s|%s|%s|%s|size %zu\n",
-                                       sess->c_name(), src0->name, dims_buf, ggml_type_name(src0->type), strides_buf, ggml_nbytes(src0));
+                        GGML_LOG_DEBUG("ggml-hex: %s rt-repack %s|size %zu\n",
+                                       sess->c_name(), htp_format_tensor(src0, HTP_OPFMT_TENSOR).c_str(), ggml_nbytes(src0));
                     }
                     std::vector<uint8_t> raw(ggml_nbytes(src0));
                     memcpy(raw.data(), src0->data, raw.size());
