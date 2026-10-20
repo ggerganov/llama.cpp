@@ -711,8 +711,18 @@ static inline __m256i q2_0_unpack_32_avx2(const uint8_t * qs) {
 static inline __m256 q2_0_dot_32_avx2(const uint8_t * qs, const int8_t * qy) {
     const __m256i v = q2_0_unpack_32_avx2(qs);
     const __m256i y = _mm256_loadu_si256((const __m256i *) qy);
+#if defined(__AVX512VNNI__) && defined(__AVX512VL__)
+    const __m256i p = _mm256_dpbusd_epi32(_mm256_setzero_si256(), v, y);
+    const __m256i s = _mm256_dpbusd_epi32(_mm256_setzero_si256(), _mm256_set1_epi8(1), y);
+    return _mm256_cvtepi32_ps(_mm256_sub_epi32(p, s));
+#elif defined(__AVXVNNI__)
+    const __m256i p = _mm256_dpbusd_avx_epi32(_mm256_setzero_si256(), v, y);
+    const __m256i s = _mm256_dpbusd_avx_epi32(_mm256_setzero_si256(), _mm256_set1_epi8(1), y);
+    return _mm256_cvtepi32_ps(_mm256_sub_epi32(p, s));
+#else
     const __m256i p = _mm256_sub_epi16(_mm256_maddubs_epi16(v, y), _mm256_maddubs_epi16(_mm256_set1_epi8(1), y));
     return _mm256_cvtepi32_ps(_mm256_madd_epi16(p, _mm256_set1_epi16(1)));
+#endif
 }
 
 static inline __m256 q2_0_acc_block_avx2(const block_q2_0 * x, const block_q8_0 * y, __m256 acc) {
