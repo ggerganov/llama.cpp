@@ -1188,34 +1188,34 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mv(ggml_meta
                 nsg = N_SG_TQ2_0;
                 nr0 = N_R0_TQ2_0;
             } break;
-        case GGML_TYPE_IQ2_K:
+        case GGML_TYPE_JQ2_K:
             {
-                nsg = N_SG_IQ2_K;
-                nr0 = N_R0_IQ2_K;
+                nsg = N_SG_JQ2_K;
+                nr0 = N_R0_JQ2_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ3_K:
+        case GGML_TYPE_JQ3_K:
             {
-                nsg = N_SG_IQ3_K;
-                nr0 = N_R0_IQ3_K;
+                nsg = N_SG_JQ3_K;
+                nr0 = N_R0_JQ3_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ4_K:
+        case GGML_TYPE_JQ4_K:
             {
-                nsg = N_SG_IQ4_K;
-                nr0 = N_R0_IQ4_K;
+                nsg = N_SG_JQ4_K;
+                nr0 = N_R0_JQ4_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ5_K:
+        case GGML_TYPE_JQ5_K:
             {
-                nsg = N_SG_IQ5_K;
-                nr0 = N_R0_IQ5_K;
+                nsg = N_SG_JQ5_K;
+                nr0 = N_R0_JQ5_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ6_K:
+        case GGML_TYPE_JQ6_K:
             {
-                nsg = N_SG_IQ6_K;
-                nr0 = N_R0_IQ6_K;
+                nsg = N_SG_JQ6_K;
+                nr0 = N_R0_JQ6_K;
                 smem = 64*sizeof(float);
             } break;
         default:
@@ -1543,34 +1543,34 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mv_id(ggml_m
                 nsg = N_SG_TQ2_0;
                 nr0 = N_R0_TQ2_0;
             } break;
-        case GGML_TYPE_IQ2_K:
+        case GGML_TYPE_JQ2_K:
             {
-                nsg = N_SG_IQ2_K;
-                nr0 = N_R0_IQ2_K;
+                nsg = N_SG_JQ2_K;
+                nr0 = N_R0_JQ2_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ3_K:
+        case GGML_TYPE_JQ3_K:
             {
-                nsg = N_SG_IQ3_K;
-                nr0 = N_R0_IQ3_K;
+                nsg = N_SG_JQ3_K;
+                nr0 = N_R0_JQ3_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ4_K:
+        case GGML_TYPE_JQ4_K:
             {
-                nsg = N_SG_IQ4_K;
-                nr0 = N_R0_IQ4_K;
+                nsg = N_SG_JQ4_K;
+                nr0 = N_R0_JQ4_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ5_K:
+        case GGML_TYPE_JQ5_K:
             {
-                nsg = N_SG_IQ5_K;
-                nr0 = N_R0_IQ5_K;
+                nsg = N_SG_JQ5_K;
+                nr0 = N_R0_JQ5_K;
                 smem = 32*sizeof(float);
             } break;
-        case GGML_TYPE_IQ6_K:
+        case GGML_TYPE_JQ6_K:
             {
-                nsg = N_SG_IQ6_K;
-                nr0 = N_R0_IQ6_K;
+                nsg = N_SG_JQ6_K;
+                nr0 = N_R0_JQ6_K;
                 smem = 64*sizeof(float);
             } break;
         default:
