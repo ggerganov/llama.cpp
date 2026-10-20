@@ -140,6 +140,10 @@ MTMD_API void mtmd_free(mtmd_context * ctx);
 // if chunk is nullptr, we assume the default case where chunk is an image chunk
 MTMD_API bool mtmd_decode_use_non_causal(const mtmd_context * ctx, const mtmd_input_chunk * chunk);
 
+// whether the whole prompt (text + media) must be decoded in one batch with non-causal mask
+// if true, use mtmd_helper_eval_chunks() to decode the whole prompt at once
+MTMD_API bool mtmd_decode_use_non_causal_mixed(const mtmd_context * ctx);
+
 // whether the current model use M-RoPE for llama_decode
 MTMD_API bool mtmd_decode_use_mrope(const mtmd_context * ctx);
 

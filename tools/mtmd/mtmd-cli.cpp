@@ -419,6 +419,25 @@ static int eval_message(mtmd_cli_context & ctx, common_chat_msg & msg) {
     ctx.bitmaps.entries.clear();
     ctx.videos.clear();
 
+    if (mtmd_decode_use_non_causal_mixed(ctx.ctx_vision.get())) {
+        llama_pos new_n_past = ctx.n_past;
+        res = mtmd_helper_eval_chunks(ctx.ctx_vision.get(),
+                    ctx.lctx,
+                    chunks.ptr.get(),
+                    ctx.n_past,
+                    0, // seq_id
+                    ctx.n_batch,
+                    true, // logits_last
+                    &new_n_past);
+        if (res != 0) {
+            LOG_ERR("Unable to eval prompt\n");
+            return 1;
+        }
+        ctx.n_past = new_n_past;
+        LOG("\n");
+        return 0;
+    }
+
     // batch encode all media chunks, then decode each
     size_t n_chunks = mtmd_input_chunks_size(chunks.ptr.get());
     for (size_t i = 0; i < n_chunks; i++) {
