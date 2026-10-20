@@ -1432,7 +1432,7 @@ class IQ4_XS(__Quant, qtype=GGMLQuantizationType.IQ4_XS):
 
 
 class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
-    kvalues = (-31, -14, -2, 10)
+    kvalues = (-19, -4, 8, 26)
     phase = 5
 
     @classmethod
@@ -1462,8 +1462,8 @@ class IQ2_K(__Quant, qtype=GGMLQuantizationType.IQ2_K):
 
 
 class IQ3_K(__Quant, qtype=GGMLQuantizationType.IQ3_K):
-    kvalues = (-56, -37, -23, -12, -1, 10, 23, 40)
-    phase = 23
+    kvalues = (-51, -30, -16, -4, 7, 20, 36, 58)
+    phase = 5
 
     @classmethod
     def dequantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:

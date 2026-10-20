@@ -1190,11 +1190,11 @@ GGML_TABLE_BEGIN(int8_t, kvalues_iq4nl, 16)
 GGML_TABLE_END()
 
 GGML_TABLE_BEGIN(int8_t, kvalues_iq2k, 4)
-    -31, -14, -2, 10,
+    -19, -4, 8, 26,
 GGML_TABLE_END()
 
 GGML_TABLE_BEGIN(int8_t, kvalues_iq3k, 8)
-    -56, -37, -23, -12, -1, 10, 23, 40,
+    -51, -30, -16, -4, 7, 20, 36, 58,
 GGML_TABLE_END()
 
 GGML_TABLE_BEGIN(int8_t, kvalues_iq4k, 16)
@@ -1214,7 +1214,7 @@ GGML_TABLE_BEGIN(int8_t, kvalues_iq6k, 64)
 GGML_TABLE_END()
 
 #define IQ2K_PHASE 5
-#define IQ3K_PHASE 23
+#define IQ3K_PHASE 5
 #define IQ4K_PHASE 18
 #define IQ5K_PHASE 15
 #define IQ6K_PHASE 13

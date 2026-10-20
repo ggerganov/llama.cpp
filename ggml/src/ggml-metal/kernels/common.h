@@ -46,11 +46,11 @@ constexpr constant static float kvalues_mxfp4_f[16] = {
 };
 
 constexpr constant static float kvalues_iq2k_f[4] = {
-    -31.f, -14.f, -2.f, 10.f
+    -19.f, -4.f, 8.f, 26.f
 };
 
 constexpr constant static float kvalues_iq3k_f[8] = {
-    -56.f, -37.f, -23.f, -12.f, -1.f, 10.f, 23.f, 40.f
+    -51.f, -30.f, -16.f, -4.f, 7.f, 20.f, 36.f, 58.f
 };
 
 constexpr constant static float kvalues_iq4k_f[16] = {
@@ -70,7 +70,7 @@ constexpr constant static float kvalues_iq6k_f[64] = {
 };
 
 constexpr constant static float IQ2K_PHASE_F = 5.f;
-constexpr constant static float IQ3K_PHASE_F = 23.f;
+constexpr constant static float IQ3K_PHASE_F = 5.f;
 constexpr constant static float IQ4K_PHASE_F = 18.f;
 constexpr constant static float IQ5K_PHASE_F = 15.f;
 constexpr constant static float IQ6K_PHASE_F = 13.f;
