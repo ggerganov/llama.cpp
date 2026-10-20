@@ -200,14 +200,15 @@ struct mtmd_image_preprocessor_lfm2 : mtmd_image_preprocessor_llava_uhd {
 
     static bool should_tile(const clip_hparams & hparams, const clip_image_size & original_size);
     static clip_image_size smart_resize(const clip_hparams & hparams, const clip_image_size & original_size);
-    static clip_image_size get_grid_layout(int height, int width);
+    static clip_image_size get_grid_layout(const clip_hparams & hparams, int height, int width);
 
 private:
     static clip_image_size find_closest_aspect_ratio(
+            const clip_hparams & hparams,
             double aspect_ratio,
             const std::vector<clip_image_size> & target_ratios,
             int width, int height);
-    static std::vector<clip_image_size> get_target_ratios();
+    static std::vector<clip_image_size> get_target_ratios(const clip_hparams & hparams);
 };
 
 struct mtmd_image_preprocessor_idefics3 : mtmd_image_preprocessor_llava_uhd {
