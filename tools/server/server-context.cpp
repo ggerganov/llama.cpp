@@ -5802,13 +5802,15 @@ void server_routes::init_routes() {
 
         const std::string session_id = "sess_" + random_string();
         const json session_config = json {
-            {"id",                      session_id},
-            {"object",                  "realtime.transcription_session"},
-            {"input_audio_format",      "pcm16"},
-            {"input_audio_sample_rate", mtmd_get_audio_sample_rate(ctx_server.mctx)},
-            {"input_audio_transcription", {{"model", meta->model_name}}},
-            {"modalities",     json::array({"text"})},
-            {"turn_detection", nullptr},
+            {"id",     session_id},
+            {"object", "realtime.transcription_session"},
+            {"type",   "transcription"},
+            {"audio",  {{"input", {
+                {"format",          {{"type", "audio/pcm"}, {"rate", mtmd_get_audio_sample_rate(ctx_server.mctx)}}},
+                {"transcription",   {{"model", meta->model_name}}},
+                {"turn_detection",  nullptr},
+                {"noise_reduction", nullptr},
+            }}}},
         };
 
         auto res = create_response();

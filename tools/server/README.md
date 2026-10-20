@@ -1489,7 +1489,7 @@ Returns a JSON object with a boolean `success` field, and an optional `message` 
 
 Transcribes streamed audio, for models with a streaming audio encoder. Compatible with OAI `/v1/realtime` schema.
 
-Audio must be PCM16, mono, at the model sample rate. The sample rate is returned in `session.created` as `input_audio_sample_rate`. Each `input_audio_buffer.append` carries a base64-encoded chunk of PCM16 samples.
+Audio must be PCM16, mono, at the model sample rate. The sample rate is returned in `session.created` as `audio.input.format.rate`. Each `input_audio_buffer.append` carries a base64-encoded chunk of PCM16 samples.
 
 *Client events:*
 
