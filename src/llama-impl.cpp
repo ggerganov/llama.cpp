@@ -186,7 +186,7 @@ std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i, size_t m
                         const char * s = gguf_get_arr_str(ctx_gguf, i, j);
                         const size_t need = res.size() + 2 * strlen(s) + 2;
                         if (res.capacity() < need) {
-                            res.reserve(std::max(need, 2 * res.capacity())); 
+                            res.reserve(std::max(need, 2 * res.capacity()));
                         }
                         res += '"';
                         for (; *s; s++) {
