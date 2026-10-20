@@ -1655,6 +1655,7 @@ class ggml_webgpu_shader_lib {
 
                     switch (key.src_type) {
                         case GGML_TYPE_Q1_0:
+                        case GGML_TYPE_Q2_0:
                         case GGML_TYPE_Q4_0:
                         case GGML_TYPE_Q5_0:
                         case GGML_TYPE_Q8_0:
