@@ -52,6 +52,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_llama_embed(params);
         case LLM_ARCH_MAINCODER:
             return new llama_model_maincoder(params);
+        case LLM_ARCH_MAION_CODER:
+            return new llama_model_maion_coder(params);
         case LLM_ARCH_TALKIE:
             return new llama_model_talkie(params);
         case LLM_ARCH_DECI:
@@ -186,6 +188,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_olmoe(params);
         case LLM_ARCH_MUSE_GLIMMER:
             return new llama_model_muse_glimmer(params);
+        case LLM_ARCH_MUSE_SPARK:
+            return new llama_model_muse_spark(params);
         case LLM_ARCH_OPENELM:
             return new llama_model_openelm(params);
         case LLM_ARCH_GPTNEOX:
@@ -318,6 +322,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_minimax_m3(params);
         case LLM_ARCH_HRM_TEXT:
             return new llama_model_hrm_text(params);
+        case LLM_ARCH_BEAM:
+            return new llama_model_beam(params);
         case LLM_ARCH_COGVLM:
             return new llama_model_cogvlm(params);
         case LLM_ARCH_PANGU_EMBED:
@@ -354,6 +360,8 @@ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params
             return new llama_model_spark2_5(params);
         case LLM_ARCH_K2_HORIZON:
             return new llama_model_k2_horizon(params);
+        case LLM_ARCH_KOLIBRI1:
+            return new llama_model_kolibri1(params);
         default:
             throw std::runtime_error(std::string("unsupported model architecture: '") + llm_arch_name(arch) + "'");
     }
@@ -401,6 +409,7 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
     static const std::regex pattern_idx_cache       ("cache_idx_(k|v)_l\\d*");
     static const std::regex pattern_dsv4_state      ("dsv4_(csa|hca|lid)_state_(kv|score)_l\\d*");
     static const std::regex pattern_attn_sinks      ("blk\\.\\d*\\.attn_sinks.weight");
+    static const std::regex pattern_attn_gate_bias  ("blk\\.\\d*\\.attn_gate\\.bias");
     static const std::regex pattern_attn_out_weight ("blk\\.\\d*\\.attn_output.weight");
     static const std::regex pattern_attn_out_bias   ("blk\\.\\d*\\.attn_output.bias");
     static const std::regex pattern_attn_out_a_weight("blk\\.\\d*\\.attn_output_a\\.weight");
@@ -546,7 +555,8 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
         if (std::regex_match(tensor_name, pattern_qk_norm)) {
             return get_tensor_config_impl(tensor->ne[1] == 1 ? GGML_BACKEND_SPLIT_AXIS_MIRRORED : GGML_BACKEND_SPLIT_AXIS_1, "attn_output.weight");
         }
-        if (std::regex_match(tensor_name, pattern_kv_cache) || std::regex_match(tensor_name, pattern_attn_sinks)) {
+        if (std::regex_match(tensor_name, pattern_kv_cache) || std::regex_match(tensor_name, pattern_attn_sinks) ||
+                std::regex_match(tensor_name, pattern_attn_gate_bias)) {
             return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_0, "attn_output.weight");
         }
         if (std::regex_match(tensor_name, pattern_attn_out_weight)) {
@@ -745,6 +755,10 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
 
             const int64_t granularity_q    = std::lcm(n_embd_q, blck_size_perf);
             const int64_t granularity_head = granularity_q / hparams.n_embd_head_k(il); // for tensors with one value per head
+            if (std::regex_match(tensor_name, pattern_attn_gate_bias)) {
+                GGML_ASSERT(segments.size() == 1);
+                return {granularity_head};
+            }
             if (std::regex_match(tensor_name, pattern_attn_sinks)) {
                 GGML_ASSERT(segments.size() == 1);
                 if (is_dsv4) {
@@ -989,6 +1003,8 @@ const char * llm_type_name(llm_type type) {
         case LLM_TYPE_16x3_8B:       return "16x3.8B";
         case LLM_TYPE_10B_128x3_66B: return "10B+128x3.66B";
         case LLM_TYPE_57B_A14B:      return "57B.A14B";
+        case LLM_TYPE_816B_A42B:     return "816B.A42B";
+        case LLM_TYPE_78B_A3_5B:     return "78B.A3.5B";
         case LLM_TYPE_17B_16E:       return "17Bx16E (Scout)";
         case LLM_TYPE_17B_128E:      return "17Bx128E (Maverick)";
         case LLM_TYPE_A13B:          return "A13B";
@@ -1945,7 +1961,8 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
             if (buf == nullptr) {
                 throw std::runtime_error(format("unable to allocate %s buffer", ggml_backend_buft_name(buft)));
             }
-            if (use_mlock && ggml_backend_buffer_is_host(buf)) {
+            // a multi_buffer has no base to lock, its parts are usually pinned memory (host buffer types with a max size)
+            if (use_mlock && ggml_backend_buffer_is_host(buf) && ggml_backend_buffer_get_base(buf) != nullptr) {
                 pimpl->mlock_bufs.emplace_back(new llama_mlock);
                 auto & mlock_buf = pimpl->mlock_bufs.back();
                 mlock_buf->init   (ggml_backend_buffer_get_base(buf));
@@ -3490,6 +3507,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_DEEPSEEK32:
         case LLM_ARCH_DEEPSEEK4:
         case LLM_ARCH_MUSE_GLIMMER:
+        case LLM_ARCH_MUSE_SPARK:
         case LLM_ARCH_PLM:
         case LLM_ARCH_CHATGLM:
         case LLM_ARCH_GRANITE:
@@ -3556,6 +3574,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_GEMMA3:
         case LLM_ARCH_GEMMA3N:
         case LLM_ARCH_GEMMA4:
+        case LLM_ARCH_MAION_CODER:
         case LLM_ARCH_GEMMA4_ASSISTANT:
         case LLM_ARCH_GEMMA_EMBEDDING:
         case LLM_ARCH_GEMMA_EMBEDDING2:
@@ -3598,6 +3617,8 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_MELLUM:
         case LLM_ARCH_MAPLE:
         case LLM_ARCH_HRM_TEXT:
+        case LLM_ARCH_BEAM:
+        case LLM_ARCH_KOLIBRI1:
             return LLAMA_ROPE_TYPE_NEOX;
 
         case LLM_ARCH_DFLASH:
@@ -3899,6 +3920,32 @@ uint32_t llama_model_target_layer_ids_n(const struct llama_model * model) {
     return (uint32_t) model->target_layer_ids.size();
 }
 
+// read rows [row0, row0 + n_rows) of a 2D tensor as F32
+static void llama_tensor_rows_to_f32(const ggml_tensor * tensor, int64_t row0, int64_t n_rows, float * out) {
+    const size_t   nelements = (size_t) n_rows * tensor->ne[0];
+    const size_t   offset    = (size_t) row0 * tensor->nb[1];
+    const size_t   nbytes    = ggml_row_size(tensor->type, tensor->ne[0]) * n_rows;
+
+    if (tensor->type == GGML_TYPE_F32) {
+        ggml_backend_tensor_get(tensor, out, offset, nbytes);
+        return;
+    }
+
+    std::vector<uint8_t> buf(nbytes);
+    ggml_backend_tensor_get(tensor, buf.data(), offset, nbytes);
+
+    const ggml_type_traits * traits = ggml_get_type_traits(tensor->type);
+    if (tensor->type == GGML_TYPE_F16) {
+        ggml_fp16_to_fp32_row((const ggml_fp16_t *) buf.data(), out, nelements);
+    } else if (tensor->type == GGML_TYPE_BF16) {
+        ggml_bf16_to_fp32_row((const ggml_bf16_t *) buf.data(), out, nelements);
+    } else if (ggml_is_quantized(tensor->type) && traits->to_float != nullptr) {
+        traits->to_float(buf.data(), out, nelements);
+    } else {
+        GGML_ABORT("unsupported tensor type for dequantization: %s", ggml_type_name(tensor->type));
+    }
+}
+
 uint32_t llama_model_get_tok_embd(const struct llama_model * model, float * out) {
     if (model->vocab.n_tokens() == 0 || model->tok_embd == nullptr) {
         return 0;
@@ -3912,24 +3959,27 @@ uint32_t llama_model_get_tok_embd(const struct llama_model * model, float * out)
         return (uint32_t) nelements;
     }
 
-    if (tensor->type == GGML_TYPE_F32) {
-        ggml_backend_tensor_get(tensor, out, 0, nelements * sizeof(float));
-        return (uint32_t) nelements;
-    }
-
-    std::vector<uint8_t> buf(ggml_nbytes(tensor));
-    ggml_backend_tensor_get(tensor, buf.data(), 0, buf.size());
-
-    const ggml_type_traits * traits = ggml_get_type_traits(tensor->type);
-    if (tensor->type == GGML_TYPE_F16) {
-        ggml_fp16_to_fp32_row((const ggml_fp16_t *) buf.data(), out, nelements);
-    } else if (tensor->type == GGML_TYPE_BF16) {
-        ggml_bf16_to_fp32_row((const ggml_bf16_t *) buf.data(), out, nelements);
-    } else if (ggml_is_quantized(tensor->type) && traits->to_float != nullptr) {
-        traits->to_float(buf.data(), out, nelements);
-    } else {
-        GGML_ABORT("unsupported tensor type for dequantization: %s", ggml_type_name(tensor->type));
-    }
+    llama_tensor_rows_to_f32(tensor, 0, tensor->ne[1], out);
 
     return (uint32_t) nelements;
+}
+
+uint32_t llama_model_n_tokens_delay(const struct llama_model * model) {
+    return model->hparams.n_tokens_delay;
+}
+
+uint32_t llama_model_get_tok_embd_rows(const struct llama_model * model, const llama_token * tokens, uint32_t n_tokens, float * out) {
+    if (model->vocab.n_tokens() == 0 || model->tok_embd == nullptr || tokens == nullptr || out == nullptr) {
+        return 0;
+    }
+
+    const ggml_tensor * tensor = model->tok_embd;
+    for (uint32_t i = 0; i < n_tokens; i++) {
+        if (tokens[i] < 0 || tokens[i] >= tensor->ne[1]) {
+            return 0;
+        }
+        llama_tensor_rows_to_f32(tensor, tokens[i], 1, out + (size_t) i * tensor->ne[0]);
+    }
+
+    return n_tokens * (uint32_t) tensor->ne[0];
 }

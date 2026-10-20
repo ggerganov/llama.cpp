@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-cpp.h"
 #include "gguf.h"
 #include "clip.h"
 
@@ -85,6 +86,9 @@
 #define KEY_A_PROJ_STACK_FACTOR    "clip.audio.projector.stack_factor"
 #define KEY_A_CHUNK_SIZE           "clip.audio.chunk_size"
 #define KEY_A_CONV_KERNEL_SIZE     "clip.audio.conv_kernel_size"
+#define KEY_A_HIDDEN_SIZES         "clip.audio.hidden_sizes"
+#define KEY_A_PATCH_SIZES          "clip.audio.patch_sizes"
+#define KEY_A_DEPTHS               "clip.audio.depths"
 #define KEY_A_MAX_POS_EMB          "clip.audio.max_pos_emb"
 #define KEY_A_PROJ_WINDOW_SIZE     "clip.audio.projector.window_size"
 #define KEY_A_PROJ_DOWNSAMPLE_RATE "clip.audio.projector.downsample_rate"
@@ -369,6 +373,8 @@
 #define TN_A_INP_PROJ        "a.input_projection.%s"
 #define TN_A_CONV1D          "a.conv1d.%d.%s"
 #define TN_A_CONV1D_NORM     "a.conv1d.%d.norm.%s"
+#define TN_A_PATCH           "a.patch.%d.%s"
+#define TN_A_PATCH_NORM      "a.patch.%d.norm.%s"
 #define TN_A_OUT_PROJ        "a.pre_encode.out.%s"
 #define TN_A_ATTN_PRE_NORM   "%s.blk.%d.attn_pre_norm.%s"
 #define TN_A_ATTN_POST_NORM  "%s.blk.%d.attn_post_norm.%s"
@@ -441,6 +447,20 @@
 // align x to upper multiple of n
 #define CLIP_ALIGN(x, n) ((((x) + (n) - 1) / (n)) * (n))
 
+// sliding window KV cache of a causal audio encoder, see clip_enc_state_init()
+struct clip_enc_state {
+    int32_t n_ctx  = 0; // ring slots: attention window + frames per call
+    int32_t n_past = 0; // absolute position of the next frame
+
+    std::vector<int32_t> slot_pos;  // absolute position held by each slot, -1 if empty
+    std::vector<float>   stem_tail; // last conv stem output frame, empty on a cold start
+
+    ggml_context_ptr        ctx_data;
+    ggml_backend_buffer_ptr buf;
+    std::vector<ggml_tensor *> k; // per layer [n_embd_kv, n_ctx]
+    std::vector<ggml_tensor *> v;
+};
+
 // forward declaration
 // TODO: improve this later
 struct clip_ctx;
@@ -475,6 +495,7 @@ enum projector_type {
     PROJECTOR_TYPE_GLMA,
     PROJECTOR_TYPE_QWEN25O, // will be replaced by QWEN2A or QWEN25VL depending on clip_ctx
     PROJECTOR_TYPE_VOXTRAL,
+    PROJECTOR_TYPE_VOXTRAL_RT,
     PROJECTOR_TYPE_MERALION,
     PROJECTOR_TYPE_MUSIC_FLAMINGO,
     PROJECTOR_TYPE_LFM2,
@@ -498,6 +519,7 @@ enum projector_type {
     PROJECTOR_TYPE_YASA2,
     PROJECTOR_TYPE_KIMIK25,
     PROJECTOR_TYPE_NEMOTRON_V2_VL,
+    PROJECTOR_TYPE_NEMOTRON_OMNI,
     PROJECTOR_TYPE_HUNYUANVL,
     PROJECTOR_TYPE_PARAKEET,
     PROJECTOR_TYPE_EXAONE4_5,
@@ -514,6 +536,7 @@ enum projector_type {
     PROJECTOR_TYPE_POCKETTTS_GEN,
     PROJECTOR_TYPE_MUSE_GLIMMER,
     PROJECTOR_TYPE_COHERE2V,
+    PROJECTOR_TYPE_MUSE_SPARK_AUDIO,
     PROJECTOR_TYPE_UNKNOWN,
 };
 
@@ -546,6 +569,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_GLMA,              "glma"},
     { PROJECTOR_TYPE_QWEN25O,           "qwen2.5o"},
     { PROJECTOR_TYPE_VOXTRAL,           "voxtral"},
+    { PROJECTOR_TYPE_VOXTRAL_RT,        "voxtral_rt"},
     { PROJECTOR_TYPE_MERALION,          "meralion"},
     { PROJECTOR_TYPE_MUSIC_FLAMINGO,    "musicflamingo"},
     { PROJECTOR_TYPE_LFM2,              "lfm2"},
@@ -569,6 +593,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_YASA2,             "yasa2"},
     { PROJECTOR_TYPE_KIMIK25,           "kimik25"},
     { PROJECTOR_TYPE_NEMOTRON_V2_VL,    "nemotron_v2_vl"},
+    { PROJECTOR_TYPE_NEMOTRON_OMNI,     "nemotron_omni"},
     { PROJECTOR_TYPE_EXAONE4_5,         "exaone4_5"},
     { PROJECTOR_TYPE_HUNYUANVL,         "hunyuanvl"},
     { PROJECTOR_TYPE_MINICPMV4_6,       "minicpmv4_6"},
@@ -585,6 +610,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_POCKETTTS_GEN,     "pockettts_gen"},
     { PROJECTOR_TYPE_MUSE_GLIMMER,      "muse-glimmer"},
     { PROJECTOR_TYPE_COHERE2V,          "cohere2v"},
+    { PROJECTOR_TYPE_MUSE_SPARK_AUDIO,  "muse-spark-audio"},
 };
 
 static projector_type clip_projector_type_from_string(const std::string & str) {
@@ -904,11 +930,13 @@ static void clip_log_internal(enum ggml_log_level level, const char * format, ..
 struct clip_image_f32_batch {
     std::vector<clip_image_f32> entries;
     bool is_audio = false;
+    bool is_video = false;
 
     clip_image_f32_batch clone() const {
         clip_image_f32_batch new_batch{
             /* entries  */ {},
             /* is_audio */ is_audio,
+            /* is_video */ is_video,
         };
         new_batch.entries.reserve(entries.size());
         for (const auto & entry : entries) {

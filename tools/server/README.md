@@ -165,7 +165,7 @@ For the full list of features, please refer to [server's changelog](https://gith
 | `--kv-unified-per-slot N` | context limit per parallel slot (default: unset, behavior unchanged).<br/>when set without -c/--ctx-size, the shared KV pool is sized to n_parallel*N<br/>(env: LLAMA_ARG_KV_UNIFIED_PER_SLOT) |
 | `-ctxcp, --ctx-checkpoints, --swa-checkpoints N` | max number of context checkpoints to create per slot (default: 32)[(more info)](https://github.com/ggml-org/llama.cpp/pull/15293)<br/>(env: LLAMA_ARG_CTX_CHECKPOINTS) |
 | `-cms, --checkpoint-min-step N` | minimum spacing between context checkpoints in tokens (default: 8192, 0 = no minimum)<br/>(env: LLAMA_ARG_CHECKPOINT_MIN_SPACING_NT) |
-| `-cram, --cache-ram N` | set the maximum cache size in MiB (default: 8192, -1 - no limit, 0 - disable)[(more info)](https://github.com/ggml-org/llama.cpp/pull/16391)<br/>(env: LLAMA_ARG_CACHE_RAM) |
+| `-cram, --cache-ram N` | set the maximum cache size in MiB (default: 8192, 0 for decision models, -1 - no limit, 0 - disable)[(more info)](https://github.com/ggml-org/llama.cpp/pull/16391)<br/>(env: LLAMA_ARG_CACHE_RAM) |
 | `-kvu, --kv-unified, -no-kvu, --no-kv-unified` | use single unified KV buffer shared across all sequences (default: enabled if number of slots is auto)<br/>(env: LLAMA_ARG_KV_UNIFIED) |
 | `--cache-idle-slots, --no-cache-idle-slots` | save idle slots to the prompt cache on new task, and clear them when using unified KV (default: enabled, requires cache-ram)<br/>(env: LLAMA_ARG_CACHE_IDLE_SLOTS) |
 | `--context-shift, --no-context-shift` | whether to use context shift on infinite text generation (default: disabled)<br/>(env: LLAMA_ARG_CONTEXT_SHIFT) |
@@ -208,6 +208,8 @@ For the full list of features, please refer to [server's changelog](https://gith
 | `--mcp-servers-json JSON` | experimental: inline JSON with MCP server definitions (Cursor-compatible format) - do not enable in untrusted environments (default: none)<br/>note: for security reasons, this will limit --cors-origins to localhost by default<br/>(env: LLAMA_ARG_MCP_SERVERS_JSON) |
 | `-ag, --agent, -no-ag, --no-agent` | whether to enable CORS proxy and all built-in tools - do not enable in untrusted environments (default: disabled)<br/>note: for security reasons, this will limit --cors-origins to localhost by default<br/>(env: LLAMA_ARG_AGENT) |
 | `--ui, --webui, --no-ui, --no-webui` | whether to enable the Web UI (default: enabled)<br/>(env: LLAMA_ARG_UI) |
+| `--connect` | (experimental) open a peer-to-peer tunnel for server using llama-connect (default: disabled)<br/>(env: LLAMA_ARG_CONNECT) |
+| `--connect-code CODE` | manually specify a 40-character code for --connect (default: generate a new one for each run)<br/>(env: LLAMA_ARG_CONNECT_CODE) |
 | `--embedding, --embeddings` | restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)<br/>(env: LLAMA_ARG_EMBEDDINGS) |
 | `--rerank, --reranking` | enable reranking endpoint on server (default: disabled)<br/>(env: LLAMA_ARG_RERANKING) |
 | `--api-key KEY` | API key to use for authentication, multiple keys can be provided as a comma-separated list (default: none)<br/>(env: LLAMA_API_KEY) |
@@ -235,7 +237,7 @@ For the full list of features, please refer to [server's changelog](https://gith
 | `--reasoning-effort LEVEL` | reasoning effort level given to the chat template: 'default' to keep the template default,<br/>or a level such as 'minimal', 'low', 'medium', 'high', 'xhigh' or 'max' (default: default)<br/>(env: LLAMA_ARG_REASONING_EFFORT) |
 | `--reasoning-budget N` | token budget for thinking: -1 for unrestricted, 0 for immediate end, N>0 for token budget (default: -1)<br/>(env: LLAMA_ARG_THINK_BUDGET) |
 | `--reasoning-budget-message MESSAGE` | message injected before the end-of-thinking tag when reasoning budget is exhausted (default: none)<br/>(env: LLAMA_ARG_THINK_BUDGET_MESSAGE) |
-| `--reasoning-preserve, --no-reasoning-preserve` | preserve reasoning trace in the full history, not just the last assistant message (default: enabled)<br/>compatible with certain templates having 'supports_preserve_reasoning' capability<br/>example: https://docs.z.ai/guides/capabilities/thinking-mode#preserved-thinking<br/>(env: LLAMA_ARG_REASONING_PRESERVE) |
+| `--reasoning-preserve, --no-reasoning-preserve` | preserve reasoning trace in the full history, not just the last assistant message (default: template default)<br/>compatible with certain templates having 'supports_preserve_reasoning' capability<br/>example: https://docs.z.ai/guides/capabilities/thinking-mode#preserved-thinking<br/>(env: LLAMA_ARG_REASONING_PRESERVE) |
 | `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted (unless --jinja is set before this flag):<br/>list of built-in templates:<br/>bailing, bailing-think, bailing2, chatglm3, chatglm4, chatml, command-r, deepseek, deepseek-ocr, deepseek2, deepseek3, exaone-moe, exaone3, exaone4, falcon3, gemma, gigachat, glmedge, gpt-oss, granite, granite-4.0, granite-4.1, grok-2, hunyuan-dense, hunyuan-moe, hunyuan-vl, kimi-k2, llama2, llama2-sys, llama2-sys-bos, llama2-sys-strip, llama3, llama4, megrez, minicpm, mistral-v1, mistral-v3, mistral-v3-tekken, mistral-v7, mistral-v7-tekken, monarch, openchat, orion, pangu-embedded, phi3, phi4, rwkv-world, seed_oss, smolvlm, solar-open, vicuna, vicuna-orca, yandex, zephyr<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
 | `--chat-template-file JINJA_TEMPLATE_FILE` | set custom jinja chat template file (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted (unless --jinja is set before this flag):<br/>list of built-in templates:<br/>bailing, bailing-think, bailing2, chatglm3, chatglm4, chatml, command-r, deepseek, deepseek-ocr, deepseek2, deepseek3, exaone-moe, exaone3, exaone4, falcon3, gemma, gigachat, glmedge, gpt-oss, granite, granite-4.0, granite-4.1, grok-2, hunyuan-dense, hunyuan-moe, hunyuan-vl, kimi-k2, llama2, llama2-sys, llama2-sys-bos, llama2-sys-strip, llama3, llama4, megrez, minicpm, mistral-v1, mistral-v3, mistral-v3-tekken, mistral-v7, mistral-v7-tekken, monarch, openchat, orion, pangu-embedded, phi3, phi4, rwkv-world, seed_oss, smolvlm, solar-open, vicuna, vicuna-orca, yandex, zephyr<br/>(env: LLAMA_ARG_CHAT_TEMPLATE_FILE) |
 | `--skip-chat-parsing, --no-skip-chat-parsing` | force a pure content parser, even if a Jinja template is specified; model will output everything in the content section, including any reasoning and/or tool calls (default: disabled)<br/>(env: LLAMA_ARG_SKIP_CHAT_PARSING) |
@@ -404,6 +406,10 @@ Recommended `--cors-origins` setting, depending on where the server runs:
 | Same machine | `--cors-origins localhost` (default once `--agent` is set) |
 
 Related flags: `--cors-origins`, `--cors-methods`, `--cors-headers`, `--cors-credentials` / `--no-cors-credentials`. Background and rationale: [#25655](https://github.com/ggml-org/llama.cpp/pull/25655).
+
+### Running behind a proxy
+
+If your host reaches the internet through a corporate proxy, export `HTTP_PROXY` and `HTTPS_PROXY` before running commands that download models (e.g. `export HTTPS_PROXY=http://proxy.example.com:8080`). Hosts listed in `NO_PROXY` and loopback addresses are contacted directly.
 
 ## Build
 
@@ -1719,9 +1725,9 @@ Follows the [TypeSafe API](https://docs.typesafe.ai/api), streaming is not suppo
 
 The questions of a request are answered independently, an answer does not depend on the other questions. The exception is clef: it reads all the questions in one prompt and decides them jointly.
 
-The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for laya, clef, pplx-decider, vllm-decision2, vllm-d3, lfm2-d1 and lfm2-d1-omni. For laya, long questions and options are truncated to the token budget the model was trained with.
+The number of options of a `choice` question is limited by the model, for example: 52 for openjev, 255 for granite-switch, laya, clef, pplx-decider, vllm-decision2, vllm-d3, lfm2-d1 and lfm2-d1-omni. For laya, long questions and options are truncated to the token budget the model was trained with.
 
-For laya, clef, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available.
+For laya, clef, vllm-d3 and lfm2-d1-omni, the whole prompt is evaluated in one batch: it must fit in `--ubatch-size`. An lfm2-d1-omni prompt is cut to 16384 tokens. For vllm-decision2, the options of a question and the end of the prompt must fit in one batch. A server that runs clef only serves this endpoint, text generation is not available. A decision model that is also a text model, such as granite-switch, serves both and reports `["text", "decisions"]`.
 
 *Image input:*
 
@@ -2102,6 +2108,32 @@ Note: for "downloading" state, there can be multiple files be downloading in par
 }
 ```
 
+A download that never finished (paused or interrupted) is listed under a separate
+"incomplete" status, without an instance: posting the model to `/models` again resumes it
+from the files already on disk, and `DELETE /models` drops its partial files.
+
+```json
+"status": {
+  "value": "incomplete",
+  "args": []
+}
+```
+
+Cached models and incomplete downloads carry the sidecar kinds they have on disk
+(`mmproj`, `mtp`, `dflash`, `eagle3`, `dspark`), resolved the way `-hf` loads them:
+
+```json
+"sidecars": ["mmproj", "mtp"]
+```
+
+A cached model whose download of more sidecars never finished also lists the kinds not on
+disk yet: posting the model with them resumes them, and `DELETE /models` with `&sidecar={kind}`
+drops their partial files.
+
+```json
+"incomplete_sidecars": ["mtp"]
+```
+
 ### POST `/models/load`: Load a model
 
 Load a model
@@ -2221,7 +2253,7 @@ Example events:
 
 Trigger a new download (non-blocking), the progress can be tracked via SSE endpoint `/models/sse`
 
-To cancel model downloading, send an event to `/models/unload`
+To pause a download, send an event to `/models/unload`: it keeps its partial files and is listed as "incomplete" until it is posted again. To cancel it and drop its files, use `DELETE /models`.
 
 Download procedure:
 - Send POST request to `/models`
@@ -2234,8 +2266,13 @@ Payload:
 ```json
 {
   "model": "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M",
+  "sidecars": ["mmproj", "mtp"]
 }
 ```
+
+`sidecars` lists the sidecar kinds pulled with the model, picked by the server the way `-hf` picks them: `mmproj`, and the draft heads `mtp`, `dflash`, `eagle3` and `dspark`. It defaults to `["mmproj"]`, as `-hf` does.
+
+Posting a model that is already in the cache and not running downloads the sidecars it lacks and keeps the files already on disk.
 
 Response (download is started in the background):
 
@@ -2262,6 +2299,10 @@ Response (error, cannot start the download):
 IMPORTANT: only model stored in cache can be deleted. You cannot delete models in a preset.
 
 Model name must be passed via query param: `?model={name}`
+
+To remove one sidecar of a cached model and keep the model, add `&sidecar={kind}` (`mmproj`, `mtp`, `dflash`, `eagle3` or `dspark`); the model must not be running.
+
+Deleting a model keeps the files another cached quant of the repo still loads, such as an mmproj named after the deleted quant, and the partial files another download still writes. A sidecar deleted on its own goes for every quant that shares it.
 
 If delete success, it will send an SSE event of type `model_remove`
 
