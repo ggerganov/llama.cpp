@@ -183,8 +183,13 @@ std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i, size_t m
                         res += ", ";
                     }
                     if (arr_type == GGUF_TYPE_STRING) {
+                        const char * s = gguf_get_arr_str(ctx_gguf, i, j);
+                        const size_t need = res.size() + 2 * strlen(s) + 2;
+                        if (res.capacity() < need) {
+                            res.reserve(std::max(need, 2 * res.capacity())); 
+                        }
                         res += '"';
-                        for (const char * s = gguf_get_arr_str(ctx_gguf, i, j); *s; s++) {
+                        for (; *s; s++) {
                             if (*s == '\\' || *s == '"') {
                                 res += '\\';
                             }
