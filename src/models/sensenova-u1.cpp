@@ -81,10 +81,6 @@ llama_model_sensenova_u1::graph::graph(const llama_model_sensenova_u1 & model, c
     ggml_tensor * cur;
     ggml_tensor * inpL;
 
-    const bool bf16 = model.output->type == GGML_TYPE_BF16;
-    auto linear_input = [&](ggml_tensor * x) {
-        return bf16 ? ggml_cast(ctx0, x, GGML_TYPE_BF16) : x;
-    };
     auto normalize = [&](ggml_tensor * x, ggml_tensor * weight) {
         x = ggml_rms_norm(ctx0, x, hparams.f_norm_rms_eps);
 
@@ -138,7 +134,7 @@ llama_model_sensenova_u1::graph::graph(const llama_model_sensenova_u1 & model, c
         // self-attention
         {
             // compute Q and K and RoPE them
-            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], linear_input(cur),
+            auto [Qcur, Kcur, Vcur] = build_qkv(model.layers[il], cur,
                     n_embd_head, n_head, n_head_kv, il);
 
             Qcur = normalize_and_rotate(Qcur, model.layers[il].attn_q_norm);
@@ -163,7 +159,7 @@ llama_model_sensenova_u1::graph::graph(const llama_model_sensenova_u1 & model, c
         cur = normalize(ffn_inp, model.layers[il].ffn_norm);
         cb(cur, "ffn_norm", il);
 
-        cur = build_ffn(linear_input(cur),
+        cur = build_ffn(cur,
             model.layers[il].ffn_up,   NULL, model.layers[il].ffn_up_s,
             model.layers[il].ffn_gate, NULL, model.layers[il].ffn_gate_s,
             model.layers[il].ffn_down, NULL, model.layers[il].ffn_down_s,
@@ -187,7 +183,7 @@ llama_model_sensenova_u1::graph::graph(const llama_model_sensenova_u1 & model, c
     res->t_embd = cur;
 
     // lm_head
-    cur = build_lora_mm(model.output, linear_input(cur), model.output_s);
+    cur = build_lora_mm(model.output, cur, model.output_s);
 
     cb(cur, "result_output", -1);
     res->t_logits = cur;
