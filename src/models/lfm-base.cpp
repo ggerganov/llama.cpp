@@ -1,6 +1,6 @@
 #include "models.h"
 
-#include "../llama-memory-recurrent.h"
+#include "llama-memory-recurrent.h"
 
 #include <algorithm>
 
