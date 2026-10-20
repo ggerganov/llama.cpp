@@ -60,7 +60,7 @@ class Elf32_Ehdr:
         self.e_shnum = unpacked_data[12]
         self.e_shstrndx = unpacked_data[13]
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.e_ident,
                   self.e_type,
                   self.e_machine,
@@ -94,7 +94,7 @@ class Elf32_Phdr:
         self.p_flags = unpacked_data[6]
         self.p_align = unpacked_data[7]
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.p_type,
                   self.p_offset,
                   self.p_vaddr,
@@ -125,7 +125,7 @@ class Elf32_Shdr:
         self.sh_entsize = unpacked_data[9]
         self.sh_name_str = ""
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.sh_name,
                   self.sh_type,
                   self.sh_flags,
@@ -160,7 +160,7 @@ class Elf64_Ehdr:
         self.e_shnum = unpacked_data[12]
         self.e_shstrndx = unpacked_data[13]
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.e_ident,
                   self.e_type,
                   self.e_machine,
@@ -194,7 +194,7 @@ class Elf64_Phdr:
         self.p_memsz = unpacked_data[6]
         self.p_align = unpacked_data[7]
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.p_type,
                   self.p_flags,
                   self.p_offset,
@@ -225,7 +225,7 @@ class Elf64_Shdr:
         self.sh_entsize = unpacked_data[9]
         self.sh_name_str = ""
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.sh_name,
                   self.sh_type,
                   self.sh_flags,
@@ -248,7 +248,7 @@ class SWIV_Seg:
         self.crc = 0
         self.padding = 0
 
-    def getPackedData(self):
+    def get_packed_data(self):
         values = [self.magic,
                   self.crc,
                   self.padding
@@ -278,62 +278,60 @@ def file_copy_offset(in_fp, in_off, out_fp, out_off, num_bytes):
 
 
 def preprocess_elf_file(elf_file_name):
-    elf_fp = open(elf_file_name, 'rb')
-    elf_header = Elf_Ehdr_common(elf_fp.read(Elf_Ehdr_common.s.size))
+    with open(elf_file_name, 'rb') as elf_fp:
+        elf_header = Elf_Ehdr_common(elf_fp.read(Elf_Ehdr_common.s.size))
 
-    if verify_elf_header(elf_header) is False:
-        raise RuntimeError("Input ELF verification failed : " + elf_file_name)
+        if verify_elf_header(elf_header) is False:
+            raise RuntimeError("Input ELF verification failed : " + elf_file_name)
 
-    elf_fp.seek(0)
+        elf_fp.seek(0)
 
-    if is_elf64(elf_header):
-        elf_header = Elf64_Ehdr(elf_fp.read(Elf64_Ehdr.s.size))
-    else:
-        elf_header = Elf32_Ehdr(elf_fp.read(Elf32_Ehdr.s.size))
-
-    phdr_table = []
-
-    phdr_size = elf_header.e_phentsize
-
-    file_offset = elf_header.e_phoff
-    elf_fp.seek(file_offset)
-
-    for _ in range(elf_header.e_phnum):
         if is_elf64(elf_header):
-            phdr_table.append(Elf64_Phdr(elf_fp.read(phdr_size)))
+            elf_header = Elf64_Ehdr(elf_fp.read(Elf64_Ehdr.s.size))
         else:
-            phdr_table.append(Elf32_Phdr(elf_fp.read(phdr_size)))
+            elf_header = Elf32_Ehdr(elf_fp.read(Elf32_Ehdr.s.size))
 
-    elf_fp.close()
+        phdr_table = []
+
+        phdr_size = elf_header.e_phentsize
+
+        file_offset = elf_header.e_phoff
+        elf_fp.seek(file_offset)
+
+        for _ in range(elf_header.e_phnum):
+            if is_elf64(elf_header):
+                phdr_table.append(Elf64_Phdr(elf_fp.read(phdr_size)))
+            else:
+                phdr_table.append(Elf32_Phdr(elf_fp.read(phdr_size)))
+
     return [elf_header, phdr_table]
 
 
 def process_section_header(elf_file_name):
-    elf_fp = open(elf_file_name, 'rb')
-    elf_header = Elf_Ehdr_common(elf_fp.read(Elf_Ehdr_common.s.size))
+    with open(elf_file_name, 'rb') as elf_fp:
+        elf_header = Elf_Ehdr_common(elf_fp.read(Elf_Ehdr_common.s.size))
 
-    if verify_elf_header(elf_header) is False:
-        raise RuntimeError("Input ELF verification failed : " + elf_file_name)
+        if verify_elf_header(elf_header) is False:
+            raise RuntimeError("Input ELF verification failed : " + elf_file_name)
 
-    elf_fp.seek(0)
+        elf_fp.seek(0)
 
-    if is_elf64(elf_header):
-        elf_header = Elf64_Ehdr(elf_fp.read(Elf64_Ehdr.s.size))
-    else:
-        elf_header = Elf32_Ehdr(elf_fp.read(Elf32_Ehdr.s.size))
-
-    shdr_table = []
-
-    shdr_size = elf_header.e_shentsize
-    elf_fp.seek(elf_header.e_shoff)
-
-    for _ in range(elf_header.e_shnum):
         if is_elf64(elf_header):
-            shdr_table.append(Elf64_Shdr(elf_fp.read(shdr_size)))
+            elf_header = Elf64_Ehdr(elf_fp.read(Elf64_Ehdr.s.size))
         else:
-            shdr_table.append(Elf32_Shdr(elf_fp.read(shdr_size)))
+            elf_header = Elf32_Ehdr(elf_fp.read(Elf32_Ehdr.s.size))
 
-    elf_fp.close()
+        shdr_table = []
+
+        shdr_size = elf_header.e_shentsize
+        elf_fp.seek(elf_header.e_shoff)
+
+        for _ in range(elf_header.e_shnum):
+            if is_elf64(elf_header):
+                shdr_table.append(Elf64_Shdr(elf_fp.read(shdr_size)))
+            else:
+                shdr_table.append(Elf32_Shdr(elf_fp.read(shdr_size)))
+
     return shdr_table
 
 
@@ -419,10 +417,10 @@ def swiv_generate(input_elf, output_elf):
             num_shdrs = elf_header.e_shnum
             phdr_size = elf_header.e_phentsize
 
-            if num_phdrs > MAX_PHDR_COUNT:
-                raise RuntimeError("Input ELF has exceeded maximum number of program headers.")
+            if num_phdrs == 0 or num_phdrs > MAX_PHDR_COUNT:
+                raise RuntimeError("Input ELF has invalid number of program headers.")
 
-            if elf_header.e_shoff == 0:
+            if elf_header.e_shoff == 0 or num_shdrs == 0:
                 raise RuntimeError("Input ELF does not contain a section header table.")
 
             shdr_table_input = process_section_header(input_elf)
@@ -455,12 +453,12 @@ def swiv_generate(input_elf, output_elf):
                     file_copy_offset(elf_in_fp, phdr.p_offset, elf_out_fp, phdr.p_offset, phdr.p_filesz)
 
             elf_out_fp.seek(0)
-            elf_out_fp.write(elf_header.getPackedData())
+            elf_out_fp.write(elf_header.get_packed_data())
 
             phdr_start = elf_header.e_phoff
             for phdr in phdr_table:
                 elf_out_fp.seek(phdr_start)
-                elf_out_fp.write(phdr.getPackedData())
+                elf_out_fp.write(phdr.get_packed_data())
                 phdr_start += phdr_size
 
             for shdr in shdr_table_input[:num_shdrs]:
@@ -471,7 +469,7 @@ def swiv_generate(input_elf, output_elf):
             shdr_start = elf_header.e_shoff
             for shdr in shdr_table_output:
                 elf_out_fp.seek(shdr_start)
-                elf_out_fp.write(shdr.getPackedData())
+                elf_out_fp.write(shdr.get_packed_data())
                 shdr_start += elf_header.e_shentsize
 
             elf_out_fp.flush()
@@ -479,7 +477,7 @@ def swiv_generate(input_elf, output_elf):
             swiv_seg = SWIV_Seg()
             swiv_seg.crc = crc32_calculate(elf_out_fp, phdr_table)
             elf_out_fp.seek(swiv_shdr.sh_offset)
-            elf_out_fp.write(swiv_seg.getPackedData())
+            elf_out_fp.write(swiv_seg.get_packed_data())
 
         if temp_output is not None:
             os.replace(temp_output, output_elf)
