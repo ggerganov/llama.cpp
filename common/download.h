@@ -1,7 +1,10 @@
 #pragma once
 
+#include "hf-cache.h"
+
 #include <string>
 #include <vector>
+#include <functional>
 
 struct common_params_model;
 
@@ -47,65 +50,47 @@ struct common_cached_model_info {
     }
 };
 
-// Options for common_download_model and common_download_file_single
+// Options for common_download_file_single
 struct common_download_opts {
     std::string bearer_token;
     common_header_list headers;
     bool offline = false;
-    bool skip_download = false; // if true, only validation is performed, common_skip_download_exception may be thrown if the file is missing or invalid
-    bool download_mmproj = false;
-    bool download_mtp = false;
+    bool download_mmproj  = false;
+    bool download_mtp     = false;
+    bool download_eagle3  = false;
+    bool download_dflash  = false;
+    bool download_dspark  = false;
     common_download_callback * callback = nullptr;
 };
 
-// Result of common_download_model
-struct common_download_model_result {
-    std::string model_path;
-    std::string mmproj_path;
-    std::string mtp_path;
+struct common_download_task {
+    common_download_opts opts;
+    std::string url;
+    std::string local_path;
+    std::function<void()> on_done;
+    bool is_hf = false;
+
+    common_download_task() = default;
+    common_download_task(hf_cache::hf_file f,
+            const common_download_opts & opts,
+            std::function<void()> on_done = nullptr)
+        : opts(opts), url(f.url), local_path(f.local_path), on_done(on_done), is_hf(true) {}
 };
 
-// throw if the file is missing or invalid (e.g. ETag check failed)
-struct common_skip_download_exception : public std::runtime_error {
-    common_skip_download_exception() : std::runtime_error("skip download") {}
-};
+void common_download_run_tasks(const std::vector<common_download_task> & tasks);
 
-// Download model from HuggingFace repo or URL
-//
-// input (via model struct):
-// - model.hf_repo: HF repo with optional tag, see common_download_split_repo_tag
-// - model.hf_file: specific file in the repo (requires hf_repo)
-// - model.url: simple download (used if hf_repo is empty)
-// - model.path: local file path
-//
-// tag matching (for HF repos without model.hf_file):
-// - if tag is specified, searches for GGUF matching that quantization
-// - if no tag, searches for Q4_K_M, then Q4_0, then first available GGUF
-//
-// split GGUF: multi-part files like "model-00001-of-00003.gguf" are automatically
-// detected and all parts are downloaded
-//
-// caching:
-// - HF repos: uses HuggingFace cache
-// - URLs: uses ETag-based caching
-//
-// when opts.offline=true, no network requests are made
-// when download_mmproj=true, searches for mmproj in same directory as model or any parent directory
-// then with the closest quantization bits
-// when download_mtp=true, applies the same sibling search for an MTP-head GGUF
-//
-// returns result with model_path, mmproj_path and mtp_path (empty when not found / on failure)
-common_download_model_result common_download_model(
-    const common_params_model & model,
-    const common_download_opts & opts = {}
-);
+// if url is a multi-part GGUF file, returns all parts, otherwise returns the single file
+std::vector<std::string> common_download_get_all_parts(const std::string & url);
 
 // returns list of cached models
 std::vector<common_cached_model_info> common_list_cached_models();
 
+// resolve the local cached file path for a HF repo without network access (hf_file, if given, must match exactly)
+// returns an empty string if the model is not present in the cache
+std::string common_download_resolve_path(const std::string & hf_repo_with_tag, const std::string & hf_file = "");
+
 // download single file from url to local path
 // returns status code or -1 on error
-// returns -2 if the download was skipped due to ETag mismatch (file outdated, skip_download=true)
 // skip_etag: if true, don't read/write .etag files (for HF cache where filename is the hash)
 int common_download_file_single(const std::string & url,
                                 const std::string & path,
@@ -115,3 +100,59 @@ int common_download_file_single(const std::string & url,
 // resolve and download model from Docker registry
 // return local path to downloaded model file
 std::string common_docker_resolve_model(const std::string & docker);
+
+// Remove a cached model from disk
+// input format: "user/model" or "user/model:tag"
+// - if tag is omitted, removes the entire repo cache directory
+// - if tag is present, removes only files matching that tag (and orphaned blobs),
+//   except the files another cached tag of the repo still loads
+// returns true if anything was removed
+bool common_download_remove(const std::string & hf_repo_with_tag);
+
+// remove the cached sidecar files `opts` selects for "user/model:tag", as the cached
+// plan resolves them, and leave the model files in place; a sidecar file another tag
+// shares goes for every tag that resolves it
+// returns true if anything was removed
+bool common_download_remove_sidecars(const std::string & hf_repo_with_tag, const common_download_opts & opts);
+
+struct common_download_hf_plan {
+    hf_cache::hf_file primary;
+    hf_cache::hf_files model_files;
+    hf_cache::hf_file mmproj;
+    hf_cache::hf_file mtp;
+    hf_cache::hf_file eagle3;
+    hf_cache::hf_file dflash;
+    hf_cache::hf_file dspark;
+    hf_cache::hf_file preset; // if set, only this file is downloaded
+};
+common_download_hf_plan common_download_get_hf_plan(const common_params_model & model, const common_download_opts & opts);
+
+// a sidecar kind a download can pull next to its model: mmproj, and the draft heads
+// of --spec-type draft-<name>
+struct common_download_sidecar {
+    const char * name;    // the kind, as the API names it
+    const char * keyword; // the part of a file name that marks a file of this kind
+    bool         draft;   // a draft head, resolved at the tag even without a model
+
+    bool              common_download_opts::*    opt;  // the option that requests it
+    hf_cache::hf_file common_download_hf_plan::* file; // the plan file it resolves to
+};
+
+// every sidecar kind, the single list the resolution, the listing and the removal follow
+const std::vector<common_download_sidecar> & common_download_sidecars();
+
+// select the sidecar `kind` in `opts`; returns false for an unknown kind
+bool common_download_opts_add_sidecar(common_download_opts & opts, const std::string & kind);
+
+// the sidecar kinds `plan` resolves a file for
+std::vector<std::string> common_download_plan_sidecars(const common_download_hf_plan & plan);
+
+// a file `plan` still has to download, at the path its partial takes while it is
+// incomplete; kind is the sidecar it belongs to, empty for the model files
+struct common_download_partial {
+    std::string kind;
+    std::string path;
+};
+
+// the partials the download of `plan` writes, for the files not in the cache yet
+std::vector<common_download_partial> common_download_plan_partials(const common_download_hf_plan & plan);

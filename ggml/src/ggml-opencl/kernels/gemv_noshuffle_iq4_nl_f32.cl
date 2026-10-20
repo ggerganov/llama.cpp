@@ -230,6 +230,8 @@ kernel void kernel_gemv_noshuffle_iq4_nl_f32(
     uint M = ne01;
 
     uint LINE_STRIDE_A = M / 2;
+    // Keep tail lanes active for subgroup ops, but read a valid weight row.
+    uint gid_s = min(gid, LINE_STRIDE_A - 1);
     uint BLOCK_STRIDE_A = NSUBGROUPS * M;
 
     private uint4     regA;
@@ -240,7 +242,7 @@ kernel void kernel_gemv_noshuffle_iq4_nl_f32(
 
     // loop along K in block granularity, skip 4 blocks every iter
     for (uint k = groupId; k < (K / QK4_NL); k += NSUBGROUPS) {
-        regS = src0_d[gid + k * LINE_STRIDE_A]; // each fiber loads scale of two rows
+        regS = src0_d[gid_s + k * LINE_STRIDE_A]; // each fiber loads scale of two rows
         // first 4 fibers in each wave load 8 B values to its private scope
         if (slid < 4) {
             regB.s0123 = read_imagef(src1, (slid * 2 + k * 8));
@@ -248,20 +250,20 @@ kernel void kernel_gemv_noshuffle_iq4_nl_f32(
         }
 
         // load half weights for two blocks in consecutive rows
-        regA.s0 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 0)).x;
-        regA.s1 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 1)).x;
-        regA.s2 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 2)).x;
-        regA.s3 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 3)).x;
+        regA.s0 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 0)).x;
+        regA.s1 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 1)).x;
+        regA.s2 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 2)).x;
+        regA.s3 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 3)).x;
 #ifdef VECTOR_SUB_GROUP_BROADCAST
         dequantizeBlockAccum_ns_sgbroadcast_8_hi(totalSum, as_ushort8(regA), regS, regB);
 #else
         dequantizeBlockAccum_ns_sgbroadcast_1_hi(totalSum, as_ushort8(regA), regS, regB);
 #endif // VECTOR_SUB_GROUP_BROADCAST
 
-        regA.s0 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 4)).x;
-        regA.s1 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 5)).x;
-        regA.s2 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 6)).x;
-        regA.s3 = read_imageui(src0_q, (gid + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 7)).x;
+        regA.s0 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 4)).x;
+        regA.s1 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 5)).x;
+        regA.s2 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 6)).x;
+        regA.s3 = read_imageui(src0_q, (gid_s + k * BLOCK_STRIDE_A + LINE_STRIDE_A * 7)).x;
 #ifdef VECTOR_SUB_GROUP_BROADCAST
         dequantizeBlockAccum_ns_sgbroadcast_8_lo(totalSum, as_ushort8(regA), regS, regB);
 #else
@@ -296,7 +298,12 @@ kernel void kernel_gemv_noshuffle_iq4_nl_f32(
     // 2 outputs per fiber in wave 0
     if (groupId == 0) {
         dst = (global float*)((global char*)dst + offsetd);
-        vstore2(totalSum, 0, &(dst[gid * 2]));
+        // Guard the two output rows. The x-grid is padded to CEIL_DIV(ne01/2,64)*64,
+        // so when ne01 is not a multiple of 128 the tail row-pairs run past row ne01
+        // and would overrun dst into the adjacent tensor. No-op / byte-identical when
+        // ne01 % 128 == 0 (M/2 already a multiple of 64 -> no padding).
+        if (gid * 2 + 0 < M) dst[gid * 2 + 0] = totalSum.s0;
+        if (gid * 2 + 1 < M) dst[gid * 2 + 1] = totalSum.s1;
     }
 
 }

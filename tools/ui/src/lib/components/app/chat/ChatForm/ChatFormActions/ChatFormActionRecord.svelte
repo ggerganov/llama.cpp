@@ -2,6 +2,7 @@
 	import { Mic, Square } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { ICON_CLASS_DEFAULT } from '$lib/constants';
 
 	interface Props {
 		class?: string;
@@ -26,7 +27,7 @@
 	<Tooltip.Root>
 		<Tooltip.Trigger>
 			<Button
-				class="h-8 w-8 rounded-full p-0 {isRecording
+				class="h-8 w-8 max-md:h-9 max-md:w-9 rounded-full p-0 {isRecording
 					? 'animate-pulse bg-red-500 text-white hover:bg-red-600'
 					: ''}"
 				disabled={disabled || isLoading || !hasAudioModality}
@@ -36,9 +37,9 @@
 				<span class="sr-only">{isRecording ? 'Stop recording' : 'Start recording'}</span>
 
 				{#if isRecording}
-					<Square class="h-4 w-4 animate-pulse fill-white" />
+					<Square class="{ICON_CLASS_DEFAULT} animate-pulse fill-white" />
 				{:else}
-					<Mic class="h-4 w-4" />
+					<Mic class={ICON_CLASS_DEFAULT} />
 				{/if}
 			</Button>
 		</Tooltip.Trigger>
