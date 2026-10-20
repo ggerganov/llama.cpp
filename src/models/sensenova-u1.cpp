@@ -187,6 +187,4 @@ llama_model_sensenova_u1::graph::graph(const llama_model_sensenova_u1 & model, c
 
     cb(cur, "result_output", -1);
     res->t_logits = cur;
-
-    ggml_build_forward_expand(gf, cur);
 }
