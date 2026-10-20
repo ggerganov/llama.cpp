@@ -15,6 +15,7 @@ enum htp_fusion_flags {
     HTP_FUSE_MUL_MUL_SCALAR  = (1 << 9),  // 512
     HTP_FUSE_BINARY_NX       = (1 << 10), // 1024
     HTP_FUSE_RMS_NORM_SCALE  = (1 << 11), // 2048
+    HTP_FUSE_SSM_CONV_SILU   = (1 << 12), // 4096
 };
 
 static inline bool htp_fusion_enabled(int flag) {

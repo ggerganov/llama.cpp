@@ -6,6 +6,7 @@
 #include "htp/get-rows-ops.h"
 #include "htp/glu-ops.h"
 #include "htp/matmul-ops.h"
+#include "htp/ssm-conv.h"
 #include "htp/unary-ops.h"
 
 #include <algorithm>
@@ -534,6 +535,29 @@ static bool fuse_gdn_cpy(const ggml_hexagon_session * sess, htp_opnode & prev, c
     return true;
 }
 
+static bool fuse_ssm_conv_silu(const ggml_hexagon_session * sess, htp_opnode & prev, const htp_opnode & cur) {
+    GGML_UNUSED(sess);
+    if (prev.opcode != HTP_OP_SSM_CONV) return false;
+
+    auto * kparams = (struct htp_ssm_conv_kernel_params *) prev.kernel_params;
+    if (kparams->silu) return false;
+    if (!htp_match_consumer(prev, cur, /*commutative=*/ false)) return false;
+
+    const ggml_tensor * conv_dst = prev.dst();
+    const ggml_tensor * dst      = cur.dst();
+    if (dst->type != GGML_TYPE_F32 || !htp_same_shape_and_contiguity(conv_dst, dst)) return false;
+    if (conv_dst->nb[0] != dst->nb[0] || conv_dst->nb[1] != dst->nb[1] ||
+        conv_dst->nb[2] != dst->nb[2] || conv_dst->nb[3] != dst->nb[3]) {
+        return false;
+    }
+    if (htp_tensors_overlap(dst, prev.src0()) || htp_tensors_overlap(dst, prev.src1())) return false;
+
+    kparams->silu   = 1;
+    prev.outputs[0] = dst;
+    prev.fused.push_back(cur.node);
+    return true;
+}
+
 static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode & prev, const htp_opnode & cur) {
     if (prev.opcode != HTP_OP_REPEAT) return false;
     if (!htp_match_consumer(prev, cur, /*commutative=*/ false)) return false;
@@ -776,6 +800,7 @@ void htp_fusion_tag_graph(struct ggml_cgraph * graph) {
         if ((op == GGML_OP_RMS_NORM || op == GGML_OP_SCALE || op == GGML_OP_REPEAT ||
              op == GGML_OP_UNARY    || op == GGML_OP_ADD   || op == GGML_OP_SUB    ||
              op == GGML_OP_MUL      || op == GGML_OP_DIV   || op == GGML_OP_MUL_MAT_ID ||
+             op == GGML_OP_SSM_CONV ||
              (op == GGML_OP_MUL_MAT && ggml_get_op_params_i32(graph->nodes[i], 1) != GGML_HINT_SRC0_IS_HADAMARD)) &&
             ggml_node_has_n_uses(graph, i, 1)) {
             extra->flags |= HTP_TENSOR_FUSEABLE;
@@ -801,6 +826,8 @@ bool htp_fusion_try_fuse(const struct ggml_hexagon_session * sess, struct htp_op
             return htp_fusion_enabled(HTP_FUSE_BINARY_NX) && fuse_binary_nx(sess, prev, cur);
         case HTP_OP_SCALE:
             return htp_fusion_enabled(HTP_FUSE_RMS_NORM_SCALE) && fuse_rms_norm_scale(sess, prev, cur);
+        case HTP_OP_UNARY_SILU:
+            return htp_fusion_enabled(HTP_FUSE_SSM_CONV_SILU) && fuse_ssm_conv_silu(sess, prev, cur);
         case HTP_OP_GET_ROWS:
             return htp_fusion_enabled(HTP_FUSE_REPEAT_GET_ROWS) && fuse_repeat_get_rows(sess, prev, cur);
         case HTP_OP_CPY:

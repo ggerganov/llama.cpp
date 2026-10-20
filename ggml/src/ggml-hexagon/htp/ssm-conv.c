@@ -138,7 +138,7 @@ static inline void hvx_ssm_conv_unpack_to_T(const float * raw, float * T, uint32
 // Decode dot product specialization for d_conv == 4: multiply in the raw channel-major layout,
 // then deinterleave the products so each vector holds one tap of 32 channels, and sum.
 // Keeps both operands in DMA layout - no transpose, no scratch.
-static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float * out, uint32_t n_ch) {
+static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float * out, uint32_t n_ch, bool apply_silu) {
     for (uint32_t cb = 0; cb < n_ch; cb += VLEN_FP32) {
         const float * xp = x + cb * 4;
         const float * wp = w + cb * 4;
@@ -157,7 +157,11 @@ static inline void hvx_ssm_conv_decode_4(const float * x, const float * w, float
         HVX_Vector a = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_V_lo_W(q02), Q6_V_lo_W(q13));
         HVX_Vector b = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_V_hi_W(q02), Q6_V_hi_W(q13));
 
-        *(HVX_Vector *)(out + cb) = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
+        HVX_Vector y = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
+        if (apply_silu) {
+            y = hvx_vec_silu_f32(y);
+        }
+        *(HVX_Vector *)(out + cb) = y;
     }
 }
 
@@ -189,9 +193,10 @@ static void ssm_conv_thread_f32_decode(unsigned int nth, unsigned int ith, void 
 
     dma_queue * dma_q = octx->ctx->dma[ith];
 
-    const uint32_t d_conv  = kparams->d_conv;
-    const uint32_t d_inner = kparams->d_inner;
-    const uint32_t n_s     = kparams->n_s;
+    const uint32_t d_conv     = kparams->d_conv;
+    const uint32_t d_inner    = kparams->d_inner;
+    const uint32_t n_s        = kparams->n_s;
+    const bool     apply_silu = kparams->silu != 0;
 
     const uint32_t dr  = scctx->nrows_per_thread;
     const uint32_t ir0 = scctx->row_start + dr * ith;
@@ -289,7 +294,7 @@ static void ssm_conv_thread_f32_decode(unsigned int nth, unsigned int ith, void 
         if (raw_dot) {
             const float * xp = src0_tile_raw[c & 1];
             const float * wp = src1_raw + tile_off * 4;
-            hvx_ssm_conv_decode_4(xp, wp, out, tile_n);
+            hvx_ssm_conv_decode_4(xp, wp, out, tile_n, apply_silu);
         } else {
             const uint32_t tile_stride = hex_round_up(tile_n, VLEN_FP32);
             hvx_ssm_conv_unpack_to_T(src0_tile_raw[c & 1], src0_T, tile_n, tile_stride, d_conv);
@@ -303,6 +308,9 @@ static void ssm_conv_thread_f32_decode(unsigned int nth, unsigned int ith, void 
                     acc          = Q6_Vqf32_vadd_Vqf32Vqf32(acc, Q6_Vqf32_vmpy_VsfVsf(x, w));
                 }
                 HVX_Vector y = Q6_Vsf_equals_Vqf32(acc);
+                if (apply_silu) {
+                    y = hvx_vec_silu_f32(y);
+                }
                 if (cb_n == VLEN_FP32) {
                     *(HVX_Vector *)(out + cb) = y;
                 } else {
@@ -352,11 +360,12 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
 
     dma_queue * dma_q = octx->ctx->dma[ith];
 
-    const uint32_t d_conv  = kparams->d_conv;
-    const uint32_t d_inner = kparams->d_inner;
-    const uint32_t n_t     = kparams->n_t;
-    const uint32_t n_s     = kparams->n_s;
-    const uint32_t ncs     = src0->ne[0];
+    const uint32_t d_conv     = kparams->d_conv;
+    const uint32_t d_inner    = kparams->d_inner;
+    const uint32_t n_t        = kparams->n_t;
+    const uint32_t n_s        = kparams->n_s;
+    const uint32_t ncs        = src0->ne[0];
+    const bool     apply_silu = kparams->silu != 0;
 
     const uint32_t dr  = scctx->nrows_per_thread;
     const uint32_t ir0 = scctx->row_start + dr * ith;
@@ -493,7 +502,11 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
                     HVX_Vector b = Q6_Vqf32_vadd_Vqf32Vqf32(Q6_Vqf32_vmpy_VsfVsf(x2, w2),
                                                             Q6_Vqf32_vmpy_VsfVsf(x3, w3));
 
-                    *(HVX_Vector *) (op + t * dst_tile_stride) = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
+                    HVX_Vector y = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_Vqf32Vqf32(a, b));
+                    if (apply_silu) {
+                        y = hvx_vec_silu_f32(y);
+                    }
+                    *(HVX_Vector *) (op + t * dst_tile_stride) = y;
 
                     x0 = x1;
                     x1 = x2;
@@ -507,7 +520,11 @@ static void ssm_conv_thread_f32_prefill(unsigned int nth, unsigned int ith, void
                         HVX_Vector w = *(const HVX_Vector *) (wp + j * d_inner_stride);
                         acc          = Q6_Vqf32_vadd_Vqf32Vqf32(acc, Q6_Vqf32_vmpy_VsfVsf(x, w));
                     }
-                    *(HVX_Vector *) (op + t * dst_tile_stride) = Q6_Vsf_equals_Vqf32(acc);
+                    HVX_Vector y = Q6_Vsf_equals_Vqf32(acc);
+                    if (apply_silu) {
+                        y = hvx_vec_silu_f32(y);
+                    }
+                    *(HVX_Vector *) (op + t * dst_tile_stride) = y;
                 }
             }
             htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, (uint16_t) tile_off);

@@ -23,7 +23,7 @@ struct htp_ssm_conv_kernel_params {
     uint32_t vtcm_src1_size;
     uint32_t vtcm_dst_size;
     uint32_t vtcm_size;
-    uint32_t pad;
+    uint32_t silu;
 
     struct fastdiv_values div_d_inner_tile;
 };
