@@ -3678,20 +3678,22 @@ private:
                     return;
                 }
 
-                if (slot.state == SLOT_STATE_STARTED && slot.task->type == SERVER_TASK_TYPE_TRANSCRIBE_RT) {
-                    // no prompt, the rows come from the audio stream
-                    slot.audio_stream.reset(mtmd_audio_stream_init(mctx, mtmd_audio_stream_params_default()));
-                    if (!slot.audio_stream) {
-                        send_error(slot, "failed to initialize the audio stream", ERROR_TYPE_SERVER);
-                        slot.release();
-                        return;
+                // no prompt, the rows come from the audio stream
+                if (slot.task->type == SERVER_TASK_TYPE_TRANSCRIBE_RT) {
+                    if (slot.state == SLOT_STATE_STARTED) {
+                        slot.audio_stream.reset(mtmd_audio_stream_init(mctx, mtmd_audio_stream_params_default()));
+                        if (!slot.audio_stream) {
+                            send_error(slot, "failed to initialize the audio stream", ERROR_TYPE_SERVER);
+                            slot.release();
+                            return;
+                        }
+                        slot.prompt_clear();
+                        slot.init_sampler();
+                        slot.sampled = LLAMA_TOKEN_NULL;
+                        slot.i_batch = -1;
+                        slot.stats.update_prompt_start();
+                        slot.state = SLOT_STATE_GENERATING;
                     }
-                    slot.prompt_clear();
-                    slot.init_sampler();
-                    slot.sampled = LLAMA_TOKEN_NULL;
-                    slot.i_batch = -1;
-                    slot.stats.update_prompt_start();
-                    slot.state = SLOT_STATE_GENERATING;
                     return;
                 }
 
