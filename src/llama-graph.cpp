@@ -1666,10 +1666,11 @@ ggml_tensor * llm_graph_context::build_lora_mm(
     return res;
 }
 
-ggml_tensor * llm_graph_context::build_amax_src1_f16(
-          ggml_tensor * cur,
-          ggml_tensor * & scale_s) const {
-    scale_s = nullptr;
+llm_graph_amax_src1 llm_graph_context::build_amax_src1_f16(
+          ggml_tensor * cur) const {
+    llm_graph_amax_src1 result;
+    result.res = cur;
+    result.scale_s = nullptr;
 
     const int64_t n_embd = cur->ne[0];
 
@@ -1689,9 +1690,10 @@ ggml_tensor * llm_graph_context::build_amax_src1_f16(
     e = ggml_clamp(ctx0, e, 0.0f, 127.0f);
     e = ggml_scale(ctx0, e, k_ln_2);
 
-    scale_s = ggml_exp(ctx0, e);
+    result.scale_s = ggml_exp(ctx0, e);
+    result.res = ggml_div(ctx0, cur, result.scale_s);
 
-    return ggml_div(ctx0, cur, scale_s);
+    return result;
 }
 
 ggml_tensor * llm_graph_context::build_lora_mm_id(
@@ -2494,14 +2496,15 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     }
 
     // the src1 of the down projection can exceed the F16 range, so it is rescaled to fit
-    ggml_tensor * f16_scale_s = nullptr;
+    llm_graph_amax_src1 amax_src1 = { nullptr, nullptr };
     if (arch == LLM_ARCH_MISTRAL4 || arch == LLM_ARCH_MELLUM) {
-        cur = build_amax_src1_f16(cur, f16_scale_s);
+        amax_src1 = build_amax_src1_f16(cur);
+        cur = amax_src1.res;
     }
 
     experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s, slots); // [n_embd, n_expert_used, n_tokens]
-    if (f16_scale_s) {
-        experts = ggml_mul(ctx0, experts, f16_scale_s);
+    if (amax_src1.scale_s) {
+        experts = ggml_mul(ctx0, experts, amax_src1.scale_s);
     }
     cb(experts, "ffn_moe_down", il);
 
