@@ -623,3 +623,30 @@ def test_verbose_debug():
             assert "Book" in res.body["__verbose"]["prompt"]
         else:
             assert "__verbose" not in res.body
+
+
+@pytest.mark.parametrize(
+    "path,body",
+    [
+        ("/v1/chat/completions", {"messages": [{"role": "user", "content": "Hey"}], "max_tokens": 4}),
+        ("/v1/responses",        {"input": "Hey", "max_output_tokens": 16}),
+        ("/v1/messages",         {"messages": [{"role": "user", "content": "Hey"}], "max_tokens": 4}),
+    ]
+)
+def test_sampling_params_applied_on_every_chat_endpoint(path, body):
+    global server
+    server.server_slots = True
+    server.start()
+    res = server.make_request("POST", path, data={
+        **body,
+        "seed": 4242,
+        "min_p": 0.33,
+        "presence_penalty": 1.5,
+    })
+    assert res.status_code == 200
+    res = server.make_request("GET", "/slots")
+    assert res.status_code == 200
+    params = res.body[0]["params"]
+    assert params["seed"] == 4242
+    assert params["min_p"] == pytest.approx(0.33)
+    assert params["presence_penalty"] == pytest.approx(1.5)

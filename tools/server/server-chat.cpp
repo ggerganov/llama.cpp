@@ -596,6 +596,20 @@ json server_chat_convert_anthropic_to_oai(const json & body) {
         }
     }
 
+    // llama.cpp sampling params, accepted on every chat endpoint
+    static const char * const llama_sampling_keys[] = {
+        "seed", "min_p", "top_n_sigma", "typical_p", "min_keep", "samplers",
+        "xtc_probability", "xtc_threshold", "dynatemp_range", "dynatemp_exponent",
+        "repeat_last_n", "repeat_penalty", "frequency_penalty", "presence_penalty",
+        "dry_multiplier", "dry_base", "dry_allowed_length", "dry_penalty_last_n", "dry_sequence_breakers",
+        "mirostat", "mirostat_tau", "mirostat_eta", "adaptive_target", "adaptive_decay",
+    };
+    for (const char * key : llama_sampling_keys) {
+        if (body.contains(key)) {
+            oai_body[key] = body.at(key);
+        }
+    }
+
     // Handle Anthropic-specific thinking param
     if (body.contains("thinking")) {
         json thinking = json_value(body, "thinking", json::object());
