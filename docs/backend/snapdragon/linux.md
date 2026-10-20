@@ -3,7 +3,7 @@
 The cross-compilation is performed using the Snapdragon Linux Docker toolchain image (see
 [github.com/snapdragon-toolchain](https://github.com/snapdragon-toolchain)):
 
-* **Linux toolchain**: `ghcr.io/snapdragon-toolchain/arm64-linux:v0.7`
+* **Linux toolchain**: `ghcr.io/snapdragon-toolchain/arm64-linux:v0.8`
 
 The unified build utility (`scripts/snapdragon/build.py`) automatically pulls
 and orchestrates this container to perform target compilation. You only need to

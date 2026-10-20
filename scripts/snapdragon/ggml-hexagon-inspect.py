@@ -255,7 +255,7 @@ class HexagonToolchain:
         use_docker: bool = False,
         image_url: str = "ghcr.io/snapdragon-toolchain",
         image_name: str = "arm64-android",
-        image_ver: str = "v0.7",
+        image_ver: str = "v0.8",
     ):
         self.repo_root = repo_root
         self.image = f"{image_url}/{image_name}:{image_ver}"
@@ -322,7 +322,7 @@ class HexagonToolchain:
         if not self.docker_bin:
             raise RuntimeError("Docker is required but not installed or found on PATH.")
 
-        container_tools_dir = "/opt/hexagon/6.6.0.0/tools/HEXAGON_Tools/19.0.07/Tools/bin"
+        container_tools_dir = "/opt/hexagon/6.7.0.0/tools/HEXAGON_Tools/21.0.04/Tools/bin"
         if "objdump" in tool_name:
             container_tool = f"{container_tools_dir}/hexagon-llvm-objdump"
         elif "addr2line" in tool_name:
@@ -1457,8 +1457,8 @@ def main():
     )
     parser.add_argument(
         "--toolchain-version",
-        default="v0.7",
-        help="Docker toolchain tag (default: v0.7).",
+        default="v0.8",
+        help="Docker toolchain tag (default: v0.8).",
     )
     parser.add_argument(
         "--toolchain-url",
