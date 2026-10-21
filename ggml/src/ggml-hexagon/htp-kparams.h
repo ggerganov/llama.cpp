@@ -45,6 +45,19 @@ static inline bool htp_kparams_check(Args &&... args) {
     return SolveFn(std::forward<Args>(args)..., &kparams);
 }
 
+bool htp_kparams_solve(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    void * kparams = nullptr
+);
+
+static inline bool htp_kparams_check(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op
+) {
+    return htp_kparams_solve(sess, op, nullptr);
+}
+
 bool htp_kparams_solve_allreduce(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * dst,

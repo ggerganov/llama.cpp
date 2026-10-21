@@ -14,8 +14,7 @@
 htp_op_code htp_op_remap(const struct ggml_tensor * t) {
     switch (t->op) {
         case GGML_OP_FLASH_ATTN_EXT:  return HTP_OP_FLASH_ATTN_EXT;
-        case GGML_OP_MUL_MAT:
-            return htp_is_hadamard(t) ? HTP_OP_HADAMARD : HTP_OP_MUL_MAT;
+        case GGML_OP_MUL_MAT:         return htp_is_hadamard(t) ? HTP_OP_HADAMARD : HTP_OP_MUL_MAT;
         case GGML_OP_MUL_MAT_ID:      return HTP_OP_MUL_MAT_ID;
         case GGML_OP_MUL:             return HTP_OP_MUL;
         case GGML_OP_ADD:             return HTP_OP_ADD;
@@ -3168,4 +3167,112 @@ bool htp_kparams_solve_solve_tri(
     kparams->div_k_chunks      = init_fastdiv_values(k_chunks > 0 ? k_chunks : 1);
 
     return true;
+}
+
+template <auto SolveFn>
+static inline bool htp_kparams_invoke(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    void * kparams
+) {
+    using KParams = decltype(htp_kparams_type(SolveFn));
+    KParams tmp;
+    return SolveFn(sess, op, kparams ? (KParams *) kparams : &tmp);
+}
+
+bool htp_kparams_solve(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    void * kparams
+) {
+    const htp_op_code opcode = htp_op_remap(op);
+    switch (opcode) {
+        case HTP_OP_MUL_MAT:
+        case HTP_OP_MUL_MAT_ID:
+            return htp_kparams_invoke<htp_kparams_solve_matmul>(sess, op, kparams);
+
+        case HTP_OP_MUL:
+        case HTP_OP_ADD:
+        case HTP_OP_ADD_ID:
+        case HTP_OP_SUB:
+        case HTP_OP_DIV:
+            return htp_kparams_invoke<htp_kparams_solve_binary>(sess, op, kparams);
+
+        case HTP_OP_FLASH_ATTN_EXT:
+            return htp_kparams_invoke<htp_kparams_solve_flash_attn>(sess, op, kparams);
+
+        case HTP_OP_GET_ROWS:
+            return htp_kparams_invoke<htp_kparams_solve_get_rows>(sess, op, kparams);
+
+        case HTP_OP_SET_ROWS:
+            return htp_kparams_invoke<htp_kparams_solve_set_rows>(sess, op, kparams);
+
+        case HTP_OP_ROPE:
+            return htp_kparams_invoke<htp_kparams_solve_rope>(sess, op, kparams);
+
+        case HTP_OP_SSM_CONV:
+            return htp_kparams_invoke<htp_kparams_solve_ssm_conv>(sess, op, kparams);
+
+        case HTP_OP_SOFTMAX:
+            return htp_kparams_invoke<htp_kparams_solve_softmax>(sess, op, kparams);
+
+        case HTP_OP_GATED_DELTA_NET:
+            return htp_kparams_invoke<htp_kparams_solve_gated_delta_net>(sess, op, kparams);
+
+        case HTP_OP_ARGSORT:
+        case HTP_OP_TOP_K:
+            return htp_kparams_invoke<htp_kparams_solve_sort>(sess, op, kparams);
+
+        case HTP_OP_POOL_2D:
+        case HTP_OP_POOL_1D:
+            return htp_kparams_invoke<htp_kparams_solve_pool_2d>(sess, op, kparams);
+
+        case HTP_OP_CONCAT:
+            return htp_kparams_invoke<htp_kparams_solve_concat>(sess, op, kparams);
+
+        case HTP_OP_CPY:
+        case HTP_OP_CPY_FENCE:
+            return htp_kparams_invoke<htp_kparams_solve_cpy>(sess, op, kparams);
+
+        case HTP_OP_IM2COL:
+            return htp_kparams_invoke<htp_kparams_solve_im2col>(sess, op, kparams);
+
+        case HTP_OP_IM2COL_3D:
+            return htp_kparams_invoke<htp_kparams_solve_im2col_3d>(sess, op, kparams);
+
+        case HTP_OP_SUM_ROWS:
+        case HTP_OP_SUM:
+        case HTP_OP_ARGMAX:
+            return htp_kparams_invoke<htp_kparams_solve_sum_rows>(sess, op, kparams);
+
+        case HTP_OP_REPEAT:
+            return htp_kparams_invoke<htp_kparams_solve_repeat>(sess, op, kparams);
+
+        case HTP_OP_PAD:
+            return htp_kparams_invoke<htp_kparams_solve_pad>(sess, op, kparams);
+
+        case HTP_OP_CUMSUM:
+            return htp_kparams_invoke<htp_kparams_solve_cumsum>(sess, op, kparams);
+
+        case HTP_OP_FILL:
+            return htp_kparams_invoke<htp_kparams_solve_fill>(sess, op, kparams);
+
+        case HTP_OP_ROLL:
+            return htp_kparams_invoke<htp_kparams_solve_roll>(sess, op, kparams);
+
+        case HTP_OP_DIAG:
+            return htp_kparams_invoke<htp_kparams_solve_diag>(sess, op, kparams);
+
+        case HTP_OP_SOLVE_TRI:
+            return htp_kparams_invoke<htp_kparams_solve_solve_tri>(sess, op, kparams);
+
+        default:
+            if (htp_op_is_unary(opcode)) {
+                return htp_kparams_invoke<htp_kparams_solve_unary>(sess, op, kparams);
+            }
+            if (htp_op_is_glu(opcode)) {
+                return htp_kparams_invoke<htp_kparams_solve_glu>(sess, op, kparams);
+            }
+            return false;
+    }
 }

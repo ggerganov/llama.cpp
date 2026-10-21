@@ -2364,7 +2364,6 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
     const std::vector<htp_opnode> * nodes_ptr = nullptr;
     std::vector<htp_opnode> computed_nodes;
 
-    // Check for cache hit
     bool cache_hit = (graph->uid != 0 && sess->cached_uid == graph->uid);
     if (cache_hit) {
         nodes_ptr = &sess->cached_nodes;
@@ -2383,14 +2382,12 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
             if (opcode == HTP_OP_INVALID) {
                 GGML_ABORT("\nggml-hex: graph-compute %s is not supported\n", ggml_op_desc(n));
             }
+
             htp_opnode node(opcode, n);
             if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID || node.opcode == HTP_OP_GET_ROWS) {
                 ggml_tensor * src0 = node.node->src[0];
                 if (htp_needs_repack(src0)) {
-                    if (opt_verbose) {
-                        GGML_LOG_DEBUG("ggml-hex: %s rt-repack %s|size %zu\n",
-                                       sess->c_name(), htp_format_tensor(src0, HTP_OPFMT_TENSOR).c_str(), ggml_nbytes(src0));
-                    }
+                    HEX_VERBOSE("ggml-hex: %s rt-repack %s|size %zu\n", sess->c_name(), htp_format_tensor(src0, HTP_OPFMT_TENSOR).c_str(), ggml_nbytes(src0));
                     std::vector<uint8_t> raw(ggml_nbytes(src0));
                     memcpy(raw.data(), src0->data, raw.size());
                     htp_repack_tensor_tiled(src0, raw.data(), raw.size());
@@ -2399,135 +2396,11 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 }
             }
 
-            if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID) {
-                htp_kparams_solve_matmul(sess,
-                    node.node,
-                    (struct htp_mm_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID || node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
-                GGML_ASSERT(htp_kparams_solve_binary(sess,
-                    node.node,
-                    (struct htp_binary_kernel_params *) node.kernel_params));
-            } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
-                htp_kparams_solve_flash_attn(sess,
-                    node.node,
-                    (struct htp_fa_kernel_params *) node.kernel_params
-                );
-            } else if (htp_op_is_unary(node.opcode)) {
-                htp_kparams_solve_unary(sess,
-                    node.node,
-                    (struct htp_unary_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_GET_ROWS) {
-                htp_kparams_solve_get_rows(sess,
-                    node.node,
-                    (struct htp_get_rows_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_SET_ROWS) {
-                htp_kparams_solve_set_rows(sess,
-                    node.node,
-                    (struct htp_set_rows_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_ROPE) {
-                htp_kparams_solve_rope(sess,
-                    node.node,
-                    (struct htp_rope_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_SSM_CONV) {
-                htp_kparams_solve_ssm_conv(sess,
-                    node.node,
-                    (struct htp_ssm_conv_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_SOFTMAX) {
-                htp_kparams_solve_softmax(sess,
-                    node.node,
-                    (struct htp_softmax_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_GATED_DELTA_NET) {
-                htp_kparams_solve_gated_delta_net(sess,
-                    node.node,
-                    (struct htp_gdn_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
-                htp_kparams_solve_sort(sess,
-                    node.node,
-                    (struct htp_sort_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_POOL_2D || node.opcode == HTP_OP_POOL_1D) {
-                htp_kparams_solve_pool_2d(sess,
-                    node.node,
-                    (struct htp_pool_2d_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_CONCAT) {
-                htp_kparams_solve_concat(sess,
-                    node.node,
-                    (struct htp_concat_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_CPY || node.opcode == HTP_OP_CPY_FENCE) {
-                const bool ok = htp_kparams_solve_cpy(sess,
-                    node.node,
-                    (struct htp_copy_kernel_params *) node.kernel_params
-                );
-                const auto * kparams = (const struct htp_copy_kernel_params *) node.kernel_params;
-                if (ok && node.opcode == HTP_OP_CPY && kparams->total_elems == 0) {
-                    continue;
-                }
-            } else if (node.opcode == HTP_OP_IM2COL) {
-                htp_kparams_solve_im2col(sess,
-                    node.node,
-                    (struct htp_im2col_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_IM2COL_3D) {
-                htp_kparams_solve_im2col_3d(sess,
-                    node.node,
-                    (struct htp_im2col_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_SUM_ROWS || node.opcode == HTP_OP_SUM || node.opcode == HTP_OP_ARGMAX) {
-                htp_kparams_solve_sum_rows(sess,
-                    node.node,
-                    (struct htp_sum_rows_kernel_params *) node.kernel_params
-                );
-            } else if (htp_op_is_glu(node.opcode)) {
-                GGML_ASSERT(htp_kparams_solve_glu(sess,
-                    node.node,
-                    (struct htp_glu_kernel_params *) node.kernel_params
-                ));
-            } else if (node.opcode == HTP_OP_REPEAT) {
-                htp_kparams_solve_repeat(sess,
-                    node.node,
-                    (struct htp_repeat_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_PAD) {
-                htp_kparams_solve_pad(sess,
-                    node.node,
-                    (struct htp_pad_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_CUMSUM) {
-                htp_kparams_solve_cumsum(sess,
-                    node.node,
-                    (struct htp_cumsum_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_FILL) {
-                htp_kparams_solve_fill(sess,
-                    node.node,
-                    (struct htp_fill_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_ROLL) {
-                htp_kparams_solve_roll(sess,
-                    node.node,
-                    (struct htp_roll_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_DIAG) {
-                htp_kparams_solve_diag(sess,
-                    node.node,
-                    (struct htp_diag_kernel_params *) node.kernel_params
-                );
-            } else if (node.opcode == HTP_OP_SOLVE_TRI) {
-                htp_kparams_solve_solve_tri(sess,
-                    node.node,
-                    (struct htp_solve_tri_kernel_params *) node.kernel_params
-                );
+            GGML_ASSERT(htp_kparams_solve(sess, node.node, node.kernel_params));
+            if (node.opcode == HTP_OP_CPY && ((const struct htp_copy_kernel_params *) node.kernel_params)->total_elems == 0) {
+                continue;
             }
+
             computed_nodes.push_back(std::move(node));
         }
 
@@ -2540,7 +2413,6 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
         }
     }
 
-    // Queue and execute
     for (const auto & node : *nodes_ptr) {
         sess->enqueue_op(node);
     }
@@ -3155,154 +3027,8 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
             supp = true;
             break;
 
-        case GGML_OP_MUL:
-        case GGML_OP_ADD:
-        case GGML_OP_ADD_ID:
-        case GGML_OP_SUB:
-        case GGML_OP_DIV:
-            supp = htp_kparams_check<htp_kparams_solve_binary>(sess, op);
-            break;
-
-        case GGML_OP_MUL_MAT:
-            if (htp_is_hadamard(op)) {
-                supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
-                break;
-            }
-            // fall through
-        case GGML_OP_MUL_MAT_ID:
-            supp = htp_kparams_check<htp_kparams_solve_matmul>(sess, op);
-            break;
-
-        case GGML_OP_NORM:
-        case GGML_OP_L2_NORM:
-        case GGML_OP_RMS_NORM:
-        case GGML_OP_SCALE:
-        case GGML_OP_CLAMP:
-        case GGML_OP_LEAKY_RELU:
-        case GGML_OP_SQR:
-        case GGML_OP_SQRT:
-        case GGML_OP_LOG:
-        case GGML_OP_TRI:
-            supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
-            break;
-
-        case GGML_OP_SUM:
-        case GGML_OP_SUM_ROWS:
-        case GGML_OP_ARGMAX:
-            supp = htp_kparams_check<htp_kparams_solve_sum_rows>(sess, op);
-            break;
-
-        case GGML_OP_POOL_2D:
-        case GGML_OP_POOL_1D:
-            supp = htp_kparams_check<htp_kparams_solve_pool_2d>(sess, op);
-            break;
-
-        case GGML_OP_SOFT_MAX:
-            supp = htp_kparams_check<htp_kparams_solve_softmax>(sess, op);
-            break;
-
-        case GGML_OP_UNARY:
-            switch (ggml_get_unary_op(op)) {
-                case GGML_UNARY_OP_NEG:
-                case GGML_UNARY_OP_EXP:
-                case GGML_UNARY_OP_SIGMOID:
-                case GGML_UNARY_OP_SOFTPLUS:
-                case GGML_UNARY_OP_TANH:
-                case GGML_UNARY_OP_ABS:
-                case GGML_UNARY_OP_SILU:
-                case GGML_UNARY_OP_GELU:
-                case GGML_UNARY_OP_GELU_QUICK:
-                case GGML_UNARY_OP_GELU_ERF:
-                case GGML_UNARY_OP_RELU:
-                case GGML_UNARY_OP_STEP:
-                    supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
-                    break;
-                default:
-                    supp = false;
-                    break;
-            }
-            break;
-
-        case GGML_OP_GLU:
-            supp = htp_kparams_check<htp_kparams_solve_glu>(sess, op);
-            break;
-
-        case GGML_OP_ROPE:
-            supp = htp_kparams_check<htp_kparams_solve_rope>(sess, op);
-            break;
-
-        case GGML_OP_FLASH_ATTN_EXT:
-            supp = htp_kparams_check<htp_kparams_solve_flash_attn>(sess, op);
-            break;
-
-        case GGML_OP_SET_ROWS:
-            supp = htp_kparams_check<htp_kparams_solve_set_rows>(sess, op);
-            break;
-
-        case GGML_OP_GET_ROWS:
-            supp = htp_kparams_check<htp_kparams_solve_get_rows>(sess, op);
-            break;
-
-        case GGML_OP_DUP:
-        case GGML_OP_CPY:
-        case GGML_OP_CONT:
-            supp = htp_kparams_check<htp_kparams_solve_cpy>(sess, op);
-            break;
-
-        case GGML_OP_REPEAT:
-            supp = htp_kparams_check<htp_kparams_solve_repeat>(sess, op);
-            break;
-
-        case GGML_OP_ARGSORT:
-        case GGML_OP_TOP_K:
-            supp = htp_kparams_check<htp_kparams_solve_sort>(sess, op);
-            break;
-
-        case GGML_OP_SSM_CONV:
-            supp = htp_kparams_check<htp_kparams_solve_ssm_conv>(sess, op);
-            break;
-
-        case GGML_OP_IM2COL:
-            supp = htp_kparams_check<htp_kparams_solve_im2col>(sess, op);
-            break;
-
-        case GGML_OP_IM2COL_3D:
-            supp = htp_kparams_check<htp_kparams_solve_im2col_3d>(sess, op);
-            break;
-
-        case GGML_OP_GATED_DELTA_NET:
-            supp = htp_kparams_check<htp_kparams_solve_gated_delta_net>(sess, op);
-            break;
-
-        case GGML_OP_CUMSUM:
-            supp = htp_kparams_check<htp_kparams_solve_cumsum>(sess, op);
-            break;
-
-        case GGML_OP_CONCAT:
-            supp = htp_kparams_check<htp_kparams_solve_concat>(sess, op);
-            break;
-
-        case GGML_OP_FILL:
-            supp = htp_kparams_check<htp_kparams_solve_fill>(sess, op);
-            break;
-
-        case GGML_OP_DIAG:
-            supp = htp_kparams_check<htp_kparams_solve_diag>(sess, op);
-            break;
-
-        case GGML_OP_SOLVE_TRI:
-            supp = htp_kparams_check<htp_kparams_solve_solve_tri>(sess, op);
-            break;
-
-        case GGML_OP_PAD:
-            supp = htp_kparams_check<htp_kparams_solve_pad>(sess, op);
-            break;
-
-        case GGML_OP_ROLL:
-            supp = htp_kparams_check<htp_kparams_solve_roll>(sess, op);
-            break;
-
         default:
+            supp = htp_kparams_check(sess, op);
             break;
     }
 
