@@ -1268,7 +1268,7 @@ struct ggml_cuda_graph {
             CUDA_CHECK(cudaGraphExecDestroy(instance));
         }
     }
-    // the ggml graph is captured as a series of CUDA graphs, so the GPU can run one chunk while the next is captured
+    // the ggml graph is captured as a series of CUDA graphs, so the GPU can run one chunk while the next is enqueued
     std::vector<cudaGraphExec_t> instances;
     size_t num_nodes = 0;
     std::vector<cudaGraphNode_t> nodes;

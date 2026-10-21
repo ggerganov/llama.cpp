@@ -2797,7 +2797,7 @@ static void ggml_cuda_graph_update_executable(cudaGraphExec_t & instance, cudaGr
         (void)cudaGetLastError();
         CUDA_CHECK(cudaGraphExecDestroy(instance));
         instance = nullptr;
-        CUDA_CHECK(cudaGraphInstantiate(&instance, cuda_graph, NULL, NULL, 0));
+        CUDA_CHECK(cudaGraphInstantiate(&instance, cuda_graph, nullptr, nullptr, 0));
     } else {
         GGML_ASSERT(stat == cudaSuccess);
     }
@@ -2822,7 +2822,7 @@ static void ggml_cuda_graph_launch_chunk(ggml_backend_cuda_context * cuda_ctx, g
     } else {
         GGML_ASSERT(idx == graph->instances.size());
         graph->instances.emplace_back(nullptr);
-        CUDA_CHECK(cudaGraphInstantiate(&graph->instances[idx], cuda_graph, NULL, NULL, 0));
+        CUDA_CHECK(cudaGraphInstantiate(&graph->instances[idx], cuda_graph, nullptr, nullptr, 0));
     }
     CUDA_CHECK(cudaGraphDestroy(cuda_graph));
 
