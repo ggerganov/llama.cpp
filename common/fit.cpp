@@ -199,6 +199,7 @@ static void common_params_fit_impl(
 
     dmds_t   dmds_extra;       // memory of the extra model, laid out on the devices of the main model
     uint32_t n_ctx_extra = 0;  // context that memory was measured at
+    uint32_t nct_extra   = 0;  // cached training context of the extra model
 
     // the extra model competes for the same memory as the main model, add it to every measurement
     // its memory is measured again whenever the context it follows changes
@@ -210,21 +211,20 @@ static void common_params_fit_impl(
         if (dmds_extra.empty() || n_ctx_extra != cparams->n_ctx) {
             std::vector<ggml_backend_dev_t> devs_extra;
             uint32_t ngl_extra = 0;
-            uint32_t nct_extra = 0;
             uint32_t nex_extra = 0;
 
-            const uint32_t nct = extra->shares_model ? hp_nct : nct_extra;
+            const uint32_t nct = extra->shares_model ? hp_nct : (nct_extra > 0 ? nct_extra : hp_nct);
             if (nct > 0) {
-                const uint32_t n_ctx_per_seq = std::min(cparams->n_ctx, nct);
-                extra->cparams->n_ctx = extra->cparams->kv_unified
-                    ? n_ctx_per_seq
-                    : (n_ctx_per_seq * extra->cparams->n_seq_max);
+                const uint32_t nct_limit = extra->cparams->kv_unified
+                    ? nct
+                    : (uint32_t) std::min<uint64_t>((uint64_t) nct * extra->cparams->n_seq_max, UINT32_MAX);
+                extra->cparams->n_ctx = std::min(cparams->n_ctx, nct_limit);
             } else {
                 extra->cparams->n_ctx = cparams->n_ctx;
             }
 
             LOG_TRC("%s: getting device memory data for the extra model at a context size of %" PRIu32 ":\n",
-                __func__, cparams->n_ctx);
+                __func__, extra->cparams->n_ctx);
 
             dmds_t measured;
             try {
