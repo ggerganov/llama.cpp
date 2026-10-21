@@ -69,8 +69,6 @@ using u32vec  = std::vector<uint32_t>;
 
 #define GGML_HEXAGON_MAX_SESSIONS          16
 
-#define GGML_HEXAGON_FENCE_SLOT_SIZE       128
-
 struct ggml_hexagon_device_config {
     int         physical_idx = 0;
     int         virtual_idx  = 0;
@@ -351,8 +349,13 @@ struct ggml_hexagon_session {
     void allocate(const ggml_hexagon_device_config & config) noexcept(false);
     void release() noexcept(true);
 
-    uint8_t * alloc_fence(uint32_t n_slots = 1);
-    void      free_fence(void * ptr, uint32_t n_slots = 1);
+    uint8_t *   alloc_fence(uint32_t n_slots = 1);
+    void        free_fence(void * ptr, uint32_t n_slots = 1);
+    ggml_tensor make_fence_tensor(const volatile void * slot, uint32_t n_slots = 1) const;
+    uint32_t    next_fence_seq() {
+        if (++fence_seq == 0) fence_seq = 1;
+        return fence_seq;
+    }
 
     uint8_t *                                         mdev_fence_slot = nullptr;
     std::unordered_map<uint64_t, volatile uint32_t *> cpy_fence_slots;
@@ -570,7 +573,7 @@ struct ggml_hexagon_fence_buffer : public ggml_hexagon_shared_buffer {
 
     ggml_hexagon_fence_buffer(ggml_hexagon_session * sess, ggml_backend_buffer_type_t buft, size_t size)
         : ggml_hexagon_shared_buffer(sess, size, false /* pinned */),
-          slot_count(size / GGML_HEXAGON_FENCE_SLOT_SIZE),
+          slot_count(size / HTP_FENCE_SLOT_SIZE),
           slot_head(0) {
         backend_buffer.buft    = buft;
         backend_buffer.context = static_cast<ggml_hexagon_shared_buffer *>(this);
@@ -583,21 +586,21 @@ struct ggml_hexagon_fence_buffer : public ggml_hexagon_shared_buffer {
         if (n_slots == 1 && !free_slots.empty()) {
             uint32_t slot = free_slots.back();
             free_slots.pop_back();
-            ptr = base() + (size_t) slot * GGML_HEXAGON_FENCE_SLOT_SIZE;
+            ptr = base() + (size_t) slot * HTP_FENCE_SLOT_SIZE;
         } else if (slot_head + n_slots <= slot_count) {
             uint32_t slot = slot_head;
             slot_head += n_slots;
-            ptr = base() + (size_t) slot * GGML_HEXAGON_FENCE_SLOT_SIZE;
+            ptr = base() + (size_t) slot * HTP_FENCE_SLOT_SIZE;
         }
         if (ptr) {
-            memset(ptr, 0, (size_t) n_slots * GGML_HEXAGON_FENCE_SLOT_SIZE);
+            memset(ptr, 0, (size_t) n_slots * HTP_FENCE_SLOT_SIZE);
         }
         return ptr;
     }
 
     void free_slot(void * ptr, uint32_t n_slots = 1) {
         if (!ptr) return;
-        uint32_t slot = ((uint8_t *) ptr - base()) / GGML_HEXAGON_FENCE_SLOT_SIZE;
+        uint32_t slot = ((uint8_t *) ptr - base()) / HTP_FENCE_SLOT_SIZE;
         for (uint32_t i = 0; i < n_slots; i++) {
             free_slots.push_back(slot + i);
         }
@@ -614,6 +617,26 @@ inline void ggml_hexagon_session::free_fence(void * ptr, uint32_t n_slots) {
     if (fence_buf) {
         fence_buf->free_slot(ptr, n_slots);
     }
+}
+
+inline ggml_tensor ggml_hexagon_session::make_fence_tensor(const volatile void * slot, uint32_t n_slots) const {
+    static htp_tensor_extra fence_extra { {}, 0, HTP_TENSOR_FENCE };
+
+    ggml_tensor t {};
+    t.buffer = &this->fence_buf->backend_buffer;
+    t.extra  = &fence_extra;
+    t.data   = const_cast<void *>(slot);
+    t.type   = GGML_TYPE_I8;
+    t.ne[0]  = HTP_FENCE_SLOT_SIZE;
+    t.ne[1]  = (int64_t) n_slots;
+    t.ne[2]  = 1;
+    t.ne[3]  = 1;
+    t.nb[0]  = 1;
+    t.nb[1]  = HTP_FENCE_SLOT_SIZE;
+    t.nb[2]  = t.nb[1] * t.ne[1];
+    t.nb[3]  = t.nb[2];
+    t.op     = GGML_OP_NONE;
+    return t;
 }
 
 static void ggml_backend_hexagon_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -1830,23 +1853,7 @@ void ggml_hexagon_session::enqueue_op(const htp_opnode & node) {
 void ggml_hexagon_session::enqueue_mdev_group() {
     htp_opnode group_node(HTP_OP_MDEV_GROUP);
 
-    uint8_t * fence_slot = this->mdev_fence_slot;
-
-    static htp_tensor_extra fence_extra { {}, 0, HTP_TENSOR_FENCE };
-    ggml_tensor dummy_t {};
-    dummy_t.buffer       = &this->fence_buf->backend_buffer;
-    dummy_t.extra        = &fence_extra;
-    dummy_t.data         = (void *) fence_slot;
-    dummy_t.type         = GGML_TYPE_I8;
-    dummy_t.ne[0]        = HTP_FENCE_SLOT_SIZE;
-    dummy_t.ne[1]        = (int64_t) this->mdev.count;
-    dummy_t.ne[2]        = 1;
-    dummy_t.ne[3]        = 1;
-    dummy_t.nb[0]        = 1;
-    dummy_t.nb[1]        = HTP_FENCE_SLOT_SIZE;
-    dummy_t.nb[2]        = dummy_t.nb[1] * dummy_t.ne[1];
-    dummy_t.nb[3]        = dummy_t.nb[2];
-    dummy_t.op           = GGML_OP_NONE;
+    ggml_tensor dummy_t = make_fence_tensor(this->mdev_fence_slot, this->mdev.count);
     dummy_t.op_params[0] = (int32_t) this->mdev.idx;
 
     ggml_tensor * node = group_node.add_dummy(dummy_t);
@@ -2667,29 +2674,12 @@ static bool ggml_hexagon_cpy_tensor_async_phys(ggml_backend_t backend_src, ggml_
 
     if (!sess_src->clone_buffer(sess_dst->fence_buf)) { return false; }
 
-    if (++sess_dst->fence_seq == 0) sess_dst->fence_seq = 1;
-    uint32_t fence_seq = sess_dst->fence_seq;
+    uint32_t fence_seq = sess_dst->next_fence_seq();
 
     HEX_VERBOSE("ggml-hex: %s cpy-tensor-async %s -> %s size %zu : seq 0x%x\n",
                 sess_dst->name.c_str(), src->name, dst->name, ggml_nbytes(src), fence_seq);
 
-    // dummy fence extra (must be static)
-    static htp_tensor_extra fence_extra { {}, 0, HTP_TENSOR_FENCE };
-
-    ggml_tensor fence_tensor {};
-    fence_tensor.buffer = &sess_dst->fence_buf->backend_buffer;
-    fence_tensor.extra  = &fence_extra;
-    fence_tensor.data   = (void *) fence_slot;
-    fence_tensor.type   = GGML_TYPE_I32;
-    fence_tensor.ne[0]  = 1;
-    fence_tensor.ne[1]  = 1;
-    fence_tensor.ne[2]  = 1;
-    fence_tensor.ne[3]  = 1;
-    fence_tensor.nb[0]  = sizeof(int32_t);
-    fence_tensor.nb[1]  = sizeof(int32_t);
-    fence_tensor.nb[2]  = sizeof(int32_t);
-    fence_tensor.nb[3]  = sizeof(int32_t);
-    fence_tensor.op     = GGML_OP_NONE;
+    ggml_tensor fence_tensor = sess_dst->make_fence_tensor(fence_slot);
 
     sess_src->enqueue_cpy(src, dst, &fence_tensor, fence_seq);
     sess_dst->enqueue_fence(&fence_tensor, fence_seq, /* wait = */ true);
@@ -2751,24 +2741,10 @@ static ggml_backend_event_t ggml_backend_hexagon_device_event_new(ggml_backend_d
     auto sess    = dev_ctx->session();
 
     ggml_hexagon_event * hex_event = new ggml_hexagon_event();
-    hex_event->fence_sess = sess;
-    hex_event->sess       = sess;
-    hex_event->fence_slot = (volatile uint32_t *) sess->alloc_fence(1);
-
-    static htp_tensor_extra fence_extra { {}, 0, HTP_TENSOR_FENCE };
-    hex_event->fence_tensor.buffer = &sess->fence_buf->backend_buffer;
-    hex_event->fence_tensor.extra  = &fence_extra;
-    hex_event->fence_tensor.data   = (void *) hex_event->fence_slot;
-    hex_event->fence_tensor.type   = GGML_TYPE_I32;
-    hex_event->fence_tensor.ne[0]  = 1;
-    hex_event->fence_tensor.ne[1]  = 1;
-    hex_event->fence_tensor.ne[2]  = 1;
-    hex_event->fence_tensor.ne[3]  = 1;
-    hex_event->fence_tensor.nb[0]  = sizeof(int32_t);
-    hex_event->fence_tensor.nb[1]  = sizeof(int32_t);
-    hex_event->fence_tensor.nb[2]  = sizeof(int32_t);
-    hex_event->fence_tensor.nb[3]  = sizeof(int32_t);
-    hex_event->fence_tensor.op     = GGML_OP_NONE;
+    hex_event->fence_sess   = sess;
+    hex_event->sess         = sess;
+    hex_event->fence_slot   = (volatile uint32_t *) sess->alloc_fence(1);
+    hex_event->fence_tensor = sess->make_fence_tensor(hex_event->fence_slot);
 
     HEX_VERBOSE("ggml-hex: %s event-new : event %p fence %p\n", ggml_backend_dev_name(dev), (void *)hex_event, (void *)hex_event->fence_slot);
 
@@ -2823,9 +2799,8 @@ static void ggml_backend_hexagon_event_record(ggml_backend_t backend, ggml_backe
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     auto hex_event = static_cast<ggml_hexagon_event *>(event->context);
 
-    if (++sess->fence_seq == 0) sess->fence_seq = 1;
     hex_event->sess = sess;
-    hex_event->seq  = sess->fence_seq;
+    hex_event->seq  = sess->next_fence_seq();
 
     sess->enqueue_fence(&hex_event->fence_tensor, hex_event->seq, /* wait = */ false);
 
@@ -3148,24 +3123,10 @@ static void * ggml_backend_hexagon_comm_init(ggml_backend_t * backends, size_t n
     ctx->backends.assign(backends, backends + n_backends);
     ctx->n_backends = n_backends;
 
-    static htp_tensor_extra fence_extra { {}, 0, HTP_TENSOR_FENCE };
     for (size_t i = 0; i < n_backends; i++) {
         auto sess_i = static_cast<ggml_hexagon_session *>(backends[i]->context);
-        ctx->fence_slots[i] = (volatile uint32_t *) sess_i->alloc_fence(1);
-        ctx->fence_tensors[i] = {};
-        ctx->fence_tensors[i].buffer = &sess_i->fence_buf->backend_buffer;
-        ctx->fence_tensors[i].extra  = &fence_extra;
-        ctx->fence_tensors[i].data   = (void *) ctx->fence_slots[i];
-        ctx->fence_tensors[i].type   = GGML_TYPE_I32;
-        ctx->fence_tensors[i].ne[0]  = 4;
-        ctx->fence_tensors[i].ne[1]  = 1;
-        ctx->fence_tensors[i].ne[2]  = 1;
-        ctx->fence_tensors[i].ne[3]  = 1;
-        ctx->fence_tensors[i].nb[0]  = sizeof(int32_t);
-        ctx->fence_tensors[i].nb[1]  = sizeof(int32_t);
-        ctx->fence_tensors[i].nb[2]  = sizeof(int32_t);
-        ctx->fence_tensors[i].nb[3]  = sizeof(int32_t);
-        ctx->fence_tensors[i].op     = GGML_OP_NONE;
+        ctx->fence_slots[i]   = (volatile uint32_t *) sess_i->alloc_fence(1);
+        ctx->fence_tensors[i] = sess_i->make_fence_tensor(ctx->fence_slots[i]);
     }
 
     return ctx;
