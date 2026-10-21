@@ -14,7 +14,7 @@ kernel void kernel_argmax_f32_i32(
     const int row = get_group_id(1) * ARGMAX_ROWS_PER_GROUP + local_id / ARGMAX_LANES_PER_ROW;
 
     float max_value = -INFINITY;
-    int max_index = -1;
+    int max_index = 0;
 
     if (row < nrows) {
         global const float * src_row = (global const float *) (src0 + offset0) + row * ne00;
