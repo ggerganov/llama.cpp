@@ -1360,7 +1360,7 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
                 }
 
                 std::vector<float>   probs;
-                std::vector<int32_t> order;
+                std::vector<int32_t> sorted_idx;
 
                 int32_t predecessor = 0;
                 for (int32_t i = 1; i < (is_dflash2 ? n_block_tokens : params.n_max + 1); ++i) {
@@ -1387,15 +1387,15 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
                     }
                     if (sample) {
                         // ggml_top_k leaves candidates unordered, so walk them by token id to keep a seed's draft stable
-                        order.resize(top_k);
+                        sorted_idx.resize(top_k);
                         for (int32_t k = 0; k < top_k; ++k) {
-                            order[k] = k;
+                            sorted_idx[k] = k;
                         }
-                        std::sort(order.begin(), order.end(), [row](int32_t a, int32_t b) { return row[a] < row[b]; });
+                        std::sort(sorted_idx.begin(), sorted_idx.end(), [row](int32_t a, int32_t b) { return row[a] < row[b]; });
 
                         // a round-off overshoot keeps the argmax, which has q > 0
                         double u = std::uniform_real_distribution<double>(0.0, 1.0)(dflash2_rng[seq_id]);
-                        for (const int32_t k : order) {
+                        for (const int32_t k : sorted_idx) {
                             u -= probs[k];
                             if (u < 0.0) {
                                 predecessor = k;
