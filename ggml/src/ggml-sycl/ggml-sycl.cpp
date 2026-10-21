@@ -297,7 +297,7 @@ static ggml_sycl_device_info ggml_sycl_init() {
     return info;
 }
 
-const ggml_sycl_device_info & ggml_sycl_info() {
+ggml_sycl_device_info & ggml_sycl_info() {
     static ggml_sycl_device_info info = ggml_sycl_init();
     return info;
 }
@@ -6548,7 +6548,7 @@ static bool mul_mat_uses_onednn(ggml_tensor * dst) {
 }
 
 static bool check_graph_compatibility(ggml_backend_sycl_context * ctx, ggml_cgraph * cgraph) {
-    if (ggml_sycl_info().device_count > 1) {
+    if (ggml_sycl_info().active_device_count > 1) {
         // A sycl_ex::command_graph object can only be created for a single device
         GGML_LOG_DEBUG("%s: disabling SYCL graphs due to multiple devices\n", __func__);
         return false;
@@ -7770,8 +7770,19 @@ ggml_backend_reg_t ggml_backend_sycl_reg() {
     return &reg;
 }
 
+void set_device_active(int device) {
+    ggml_sycl_device_info & info = ggml_sycl_info();
+    info.devices[device].active = true;
+    int cnt = 0;
+    for (int i = 0; i < info.device_count; i++) {
+        if (info.devices[i].active)
+            cnt++;
+    }
+    info.active_device_count = cnt;
+}
+
 ggml_backend_t ggml_backend_sycl_init(int device) {
-    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_init\n");
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_init. device=%d\n", device);
     ggml_check_sycl();
 
     check_allow_gpu_index(device);
@@ -7782,6 +7793,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
         return nullptr;
     };
 
+    set_device_active(device);
     ggml_backend_t sycl_backend = new ggml_backend {
         /* .guid    = */ ggml_backend_sycl_guid(),
         /* .iface   = */ ggml_backend_sycl_interface,

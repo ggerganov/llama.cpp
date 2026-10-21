@@ -277,6 +277,7 @@ struct optimize_feature {
 };
 
 struct sycl_device_info {
+    bool active; //the device is activated/used in application.
     int cc;  // compute capability
     int nsm; // number of streaming multiprocessors (CUDA) maps to the maximum
              // number of compute units on a SYCL device.
@@ -301,6 +302,7 @@ struct sycl_device_info {
 
 
 struct ggml_sycl_device_info {
+    int active_device_count; //the number of active devices in the application
     int device_count;
 
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
@@ -312,7 +314,7 @@ struct ggml_sycl_device_info {
     bool ext_oneapi_level_zero = true; // sycl::backend::ext_oneapi_level_zero used by all enumerated GPU devices
 };
 
-const ggml_sycl_device_info & ggml_sycl_info();
+ggml_sycl_device_info & ggml_sycl_info();
 
 static constexpr size_t SYCL_BUFFER_ALIGNMENT = 128;
 
