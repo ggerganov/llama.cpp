@@ -1,7 +1,12 @@
 import { COMPACTION } from '$lib/constants';
 import { MessageRole, MessageType } from '$lib/enums';
 import type { DatabaseMessage } from '$lib/types';
-import { canCompactMessages, customCompactionModel, sliceAtLastCompaction } from '$lib/utils';
+import {
+	canCompactMessages,
+	compactionTokensBefore,
+	customCompactionModel,
+	sliceAtLastCompaction
+} from '$lib/utils';
 import { describe, expect, it } from 'vitest';
 
 const CONV_ID = 'conv';
@@ -164,5 +169,57 @@ describe('customCompactionModel', () => {
 
 	it('keeps the conversation model for a non string value', () => {
 		expect(customCompactionModel(true, undefined)).toBeUndefined();
+	});
+});
+
+describe('compactionTokensBefore', () => {
+	function withTimings(
+		message: DatabaseMessage,
+		timings: { cache_n?: number; predicted_n?: number; prompt_n?: number }
+	): DatabaseMessage {
+		return { ...message, timings } as DatabaseMessage;
+	}
+
+	it('reports the context the branch carried before the compaction', () => {
+		const previous = withTimings(makeMessage('a1', MessageRole.ASSISTANT, 'hello'), {
+			cache_n: 200,
+			predicted_n: 118,
+			prompt_n: 42000
+		});
+		const node = makeCompactionNode('c1', 'summary');
+
+		expect(compactionTokensBefore([previous, node], node)).toBe(42318);
+	});
+
+	it('ignores the node own stamped timings', () => {
+		const previous = withTimings(makeMessage('a1', MessageRole.ASSISTANT, 'hello'), {
+			prompt_n: 42000
+		});
+		const node = withTimings(makeCompactionNode('c1', 'summary'), { prompt_n: 3204 });
+
+		expect(compactionTokensBefore([previous, node], node)).toBe(42000);
+	});
+
+	it('reports nothing while no message ahead of the node is stamped', () => {
+		const previous = makeMessage('a1', MessageRole.ASSISTANT, 'hello');
+		const node = withTimings(makeCompactionNode('c1', 'summary'), { prompt_n: 3204 });
+
+		expect(compactionTokensBefore([previous, node], node)).toBeNull();
+	});
+
+	it('reports nothing when the node is the first message', () => {
+		expect(
+			compactionTokensBefore(
+				[makeCompactionNode('c1', 'summary')],
+				makeCompactionNode('c1', 'summary')
+			)
+		).toBeNull();
+	});
+
+	it('falls back to the previous compaction node when no turn follows it', () => {
+		const earlier = withTimings(makeCompactionNode('c0', 'older'), { prompt_n: 2800 });
+		const node = makeCompactionNode('c1', 'summary');
+
+		expect(compactionTokensBefore([earlier, node], node)).toBe(2800);
 	});
 });

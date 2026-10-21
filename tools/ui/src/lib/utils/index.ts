@@ -354,6 +354,7 @@ export { getToolUi } from './tool-ui';
 export { getChatCommands } from './chat-commands';
 export {
 	canCompactMessages,
+	compactionTokensBefore,
 	customCompactionModel,
 	lastContextBearingMessage,
 	sliceAtLastCompaction
