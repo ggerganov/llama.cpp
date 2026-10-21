@@ -814,11 +814,10 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
     cb(top_k, "indexer_top_k", il);
 
     // keep the kq_mask cells of the live picked pools and the tail, -inf elsewhere
-    if (cparams.fused_kpool_mask) {
+    if (cparams.fused_top_k_mask) {
         GGML_ASSERT(kpool*n_top_pool + inp_kpool->tail_idxs->ne[0] == inp_kpool->n_sel);
 
-        ggml_tensor * sel = ggml_kpool_mask(ctx0, kq_mask, score, top_k, inp_kpool->pool_idxs, inp_kpool->tail_idxs);
-        res->add_fused_node({LLM_FUSED_OP_KPOOL_MASK, sel, il});
+        ggml_tensor * sel = build_fused_top_k_mask(kq_mask, top_k, score, inp_kpool->pool_idxs, inp_kpool->tail_idxs, il);
         cb(sel, "indexer_sel", il);
 
         return sel;

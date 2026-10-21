@@ -1095,7 +1095,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "DSV4_HC_COMB",
     "DSV4_HC_PRE",
     "DSV4_HC_POST",
-    "KPOOL_MASK",
+    "TOP_K_MASK",
 
     "UNARY",
 
@@ -1211,7 +1211,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "dsv4_hc_comb(mixes, scale, base)",
     "dsv4_hc_pre(x, weights)",
     "dsv4_hc_post(x, residual, post, comb)",
-    "kpool_mask(mask, score, top_k, pools, tail)",
+    "top_k_mask(mask, top_k, score, blocks, extra)",
 
     "unary(x)",
 
@@ -6632,40 +6632,44 @@ struct ggml_tensor * ggml_dsv4_hc_post(
     return result;
 }
 
-// ggml_kpool_mask
+// ggml_top_k_mask
 
-struct ggml_tensor * ggml_kpool_mask(
+struct ggml_tensor * ggml_top_k_mask(
         struct ggml_context * ctx,
         struct ggml_tensor  * mask,
-        struct ggml_tensor  * score,
         struct ggml_tensor  * top_k,
-        struct ggml_tensor  * pools,
-        struct ggml_tensor  * tail) {
+        struct ggml_tensor  * score,
+        struct ggml_tensor  * blocks,
+        struct ggml_tensor  * extra) {
     GGML_ASSERT(mask->type == GGML_TYPE_F16 || mask->type == GGML_TYPE_F32);
-    GGML_ASSERT(score->type == GGML_TYPE_F32);
-    GGML_ASSERT(top_k->type == GGML_TYPE_I32);
-    GGML_ASSERT(pools->type == GGML_TYPE_I32);
     GGML_ASSERT(mask->nb[0] == ggml_type_size(mask->type));
+    GGML_ASSERT(top_k->type == GGML_TYPE_I32);
+    GGML_ASSERT(top_k->ne[1] % mask->ne[1] == 0 && top_k->ne[2] % mask->ne[2] == 0 && top_k->ne[3] % mask->ne[3] == 0);
 
-    const int64_t n_tokens = mask->ne[1]*mask->ne[2]*mask->ne[3];
-
-    GGML_ASSERT(score->ne[1] == n_tokens && score->ne[2] == 1 && score->ne[3] == 1);
-    GGML_ASSERT(top_k->ne[1] == n_tokens && top_k->ne[2] == 1 && top_k->ne[3] == 1);
-    GGML_ASSERT(pools->ne[1] == score->ne[0] && pools->ne[2] == 1 && pools->ne[3] == 1);
-
-    if (tail) {
-        GGML_ASSERT(tail->type == GGML_TYPE_I32);
-        GGML_ASSERT(tail->ne[1] == n_tokens && tail->ne[2] == 1 && tail->ne[3] == 1);
+    if (score) {
+        GGML_ASSERT(score->type == GGML_TYPE_F32);
+        GGML_ASSERT(score->ne[1] == top_k->ne[1] && score->ne[2] == top_k->ne[2] && score->ne[3] == top_k->ne[3]);
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, mask->type, GGML_MAX_DIMS, mask->ne);
+    if (blocks) {
+        GGML_ASSERT(blocks->type == GGML_TYPE_I32);
+        GGML_ASSERT(blocks->ne[2] == 1 && blocks->ne[3] == 1);
+        GGML_ASSERT(!score || blocks->ne[1] == score->ne[0]);
+    }
 
-    result->op     = GGML_OP_KPOOL_MASK;
+    if (extra) {
+        GGML_ASSERT(extra->type == GGML_TYPE_I32);
+        GGML_ASSERT(extra->ne[1] == top_k->ne[1] && extra->ne[2] == top_k->ne[2] && extra->ne[3] == top_k->ne[3]);
+    }
+
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, mask->type, mask->ne[0], top_k->ne[1], top_k->ne[2], top_k->ne[3]);
+
+    result->op     = GGML_OP_TOP_K_MASK;
     result->src[0] = mask;
-    result->src[1] = score;
-    result->src[2] = top_k;
-    result->src[3] = pools;
-    result->src[4] = tail;
+    result->src[1] = top_k;
+    result->src[2] = score;
+    result->src[3] = blocks;
+    result->src[4] = extra;
 
     return result;
 }

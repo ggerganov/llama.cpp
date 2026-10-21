@@ -165,9 +165,9 @@ static const llm_fused_op_probe llm_fused_op_dsv4_hc_post_probe = {
     /*.n_tokens_per_seq =*/ 1,
 };
 
-static const llm_fused_op_probe llm_fused_op_kpool_mask_probe = {
-    /*.op               =*/ LLM_FUSED_OP_KPOOL_MASK,
-    /*.name             =*/ "fused k-pool mask",
+static const llm_fused_op_probe llm_fused_op_top_k_mask_probe = {
+    /*.op               =*/ LLM_FUSED_OP_TOP_K_MASK,
+    /*.name             =*/ "fused top-k mask",
     /*.n_tokens_per_seq =*/ 1,
 };
 
@@ -334,9 +334,9 @@ llama_context::llama_context(
     cparams.fused_dsv4_hc_post = true;
     cparams.auto_fhc           = true;
 
-    // only the k-pool indexer models build this mask, skip the probe for the others
-    cparams.fused_kpool_mask = true;
-    cparams.auto_fkpm        = hparams.indexer_kpool > 0;
+    // only the indexer models build this mask, skip the probe for the others
+    cparams.fused_top_k_mask = true;
+    cparams.auto_ftkm        = hparams.indexer_top_k > 0;
 
     // with causal attention, the batch size is limited by the context size
     cparams.n_batch = cparams.causal_attn ? std::min(cparams.n_ctx, params.n_batch) : params.n_batch;
@@ -682,10 +682,10 @@ void llama_context::resolve_fused_ops(const llama_memory_context_i * mctx, uint3
         cparams.auto_fhc = false;
     }
 
-    if (cparams.auto_fkpm) {
-        LLAMA_LOG_INFO("%s: resolving fused k-pool mask support:\n", func);
-        resolve(llm_fused_op_kpool_mask_probe, cparams.fused_kpool_mask);
-        cparams.auto_fkpm = false;
+    if (cparams.auto_ftkm) {
+        LLAMA_LOG_INFO("%s: resolving fused top-k mask support:\n", func);
+        resolve(llm_fused_op_top_k_mask_probe, cparams.fused_top_k_mask);
+        cparams.auto_ftkm = false;
     }
 }
 
