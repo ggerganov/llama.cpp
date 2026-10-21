@@ -870,12 +870,12 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
 
     // keep the cells of the live picked pools and the tail, -inf elsewhere: a token sees only the pools that end
     // at or before it and the tail up to itself, all of its own sequence, so the selection needs no kq_mask
-    if (cparams.fused_kpool_mask) {
+    if (cparams.fused_top_k_mask) {
         GGML_ASSERT(kpool*n_top_pool + inp_kpool->tail_idxs->ne[0] == inp_kpool->n_sel);
 
         ggml_tensor * keep = ggml_fill(ctx0, ggml_new_tensor_1d(ctx0, type_mask, n_kv), 0.0f);
-        ggml_tensor * sel  = ggml_kpool_mask(ctx0, keep, score, top_k, inp_kpool->pool_idxs, chunk.tail_idxs);
-        res->add_fused_node({LLM_FUSED_OP_KPOOL_MASK, sel, il});
+        ggml_tensor * sel  = ggml_top_k_mask(ctx0, keep, top_k, score, inp_kpool->pool_idxs, chunk.tail_idxs);
+        res->add_fused_node({LLM_FUSED_OP_TOP_K_MASK, sel, il});
         cb(sel, "indexer_sel", il);
 
         return sel;
@@ -1208,13 +1208,11 @@ ggml_tensor * llama_model_qwen4exp::graph::build_layer_attn_linear(
     // gated normalization, as self.norm(core_attn_out, z) in the reference
     ggml_tensor * attn_out_norm = build_norm_gated(output, model.layers[il].ssm_norm, z_2d, il);
 
-    ggml_tensor * final_output = ggml_reshape_3d(ctx0, attn_out_norm, head_v_dim * num_v_heads, n_seq_tokens, n_seqs);
+    ggml_tensor * final_output = ggml_reshape_2d(ctx0, attn_out_norm, head_v_dim * num_v_heads, n_seq_tokens * n_seqs);
     cb(final_output, "final_output", il);
 
     cur = build_lora_mm(model.layers[il].ssm_out, final_output, model.layers[il].ssm_out_s);
     cb(cur, "linear_attn_out", il);
-
-    cur = ggml_reshape_2d(ctx0, cur, n_embd, n_seq_tokens * n_seqs);
 
     return cur;
 }

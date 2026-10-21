@@ -324,7 +324,7 @@ llama_model_glm5_next::llm_graph_input_kpool * llama_model_glm5_next::graph::bui
         inp->n_sel = (uint32_t) n_sel;
 
         // the scatter maps the dead slots of this mask to dump rows, the fused mask op reads liveness from the scores instead
-        if (!cparams.fused_kpool_mask) {
+        if (!cparams.fused_top_k_mask) {
             inp->sel_mask = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, n_sel, 1, 1, n_tokens);
             ggml_set_input(inp->sel_mask);
             // set_input_kpool always fills the mask, so it stays allocated in every graph
@@ -976,12 +976,11 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
         ggml_tensor * top_k = ggml_top_k(ctx0, score, n_top_pool); // [n_top_pool, n_tokens], UNORDERED
 
         // keep the kq_mask cells of the live picked pools and the tail, -inf elsewhere
-        if (cparams.fused_kpool_mask) {
+        if (cparams.fused_top_k_mask) {
             ggml_tensor * tail = hparams.indexer_kpool_select_tail ? inp_kpool->tail_idxs : nullptr;
             GGML_ASSERT(kpool*n_top_pool + (tail ? tail->ne[0] : 0) == (int64_t) inp_kpool->n_sel);
 
-            ggml_tensor * sel = ggml_kpool_mask(ctx0, kq_mask, score, top_k, inp_kpool->pool_idxs, tail);
-            res->add_fused_node({LLM_FUSED_OP_KPOOL_MASK, sel, il});
+            ggml_tensor * sel = build_fused_top_k_mask(kq_mask, top_k, score, inp_kpool->pool_idxs, tail, il);
             cb(sel, "indexer_sel", il);
 
             return sel;

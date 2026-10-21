@@ -80,6 +80,8 @@ set(GGML_OPENCL_KERNELS
     solve_tri
     im2col_f32
     im2col_f16
+    im2col_3d_f32
+    im2col_3d_f16
     mean
     mul_mv_f16_f16
     mul_mv_f16_f32_1row
@@ -140,6 +142,9 @@ set(GGML_OPENCL_KERNELS
     gemm_noshuffle_q5_0_q8_1_dp4a
     gemm_noshuffle_iq4_nl_q8_1_dp4a
     gemm_noshuffle_q4_0_q8_1_dp4a
+    gemm_coopk_q4_0_q8_1_dp4a
+    gemm_coopk_q4_k_q8_1_dp4a
+    gemm_coopk_q6_k_q8_1_dp4a
     quant_a_q8_1
     gemv_moe_q4_k_f32_ns
     gemm_moe_q5_k_f32_ns

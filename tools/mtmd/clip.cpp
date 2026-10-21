@@ -174,10 +174,6 @@ struct clip_ctx {
 
     bool support_batch = false;
 
-    // for audio gen, reseeded only when the caller asks for another seed
-    std::mt19937 rng{std::random_device{}()};
-    uint32_t rng_seed = UINT32_MAX;
-
     clip_ctx(clip_context_params & ctx_params) {
         flash_attn_type = ctx_params.flash_attn_type;
         no_alloc = ctx_params.no_alloc;
@@ -1593,12 +1589,20 @@ struct clip_model_loader {
                         }
                         hparams.image_resize_algo_rf = hparams.image_resize_algo;
                         hparams.image_resize_algo_ov = hparams.image_resize_algo;
-                        // the tiles stretch the image to the grid (d1-omni vision.py)
-                        if (model.proj_type == PROJECTOR_TYPE_D1OMNI_V) {
-                            hparams.image_pad_rf = PAD_NONE;
-                        }
+                        // the tiles stretch the image to the grid (Lfm2VlImageProcessor, d1-omni vision.py)
+                        hparams.image_pad_rf = PAD_NONE;
                         get_u32(KEY_PROJ_SCALE_FACTOR, hparams.n_merge, false);
+                        // defaults for GGUFs converted before tiling params were written
                         // ref: https://huggingface.co/LiquidAI/LFM2.5-VL-1.6B/blob/main/processor_config.json
+                        hparams.preproc_min_tiles            = 2;
+                        hparams.preproc_max_tiles            = 10;
+                        hparams.preproc_tile_size            = 512;
+                        hparams.preproc_max_pixels_tolerance = 2.0f;
+                        get_u32(KEY_PREPROC_MIN_TILES, hparams.preproc_min_tiles, false);
+                        get_u32(KEY_PREPROC_MAX_TILES, hparams.preproc_max_tiles, false);
+                        get_u32(KEY_PREPROC_TILE_SIZE, hparams.preproc_tile_size, false);
+                        get_f32(KEY_PREPROC_MAX_PIXELS_TOLERANCE, hparams.preproc_max_pixels_tolerance, false);
+                        GGML_ASSERT(hparams.preproc_min_tiles >= 1 && hparams.preproc_min_tiles <= hparams.preproc_max_tiles);
                         hparams.set_limit_image_tokens(64, 256);
                     } break;
                 case PROJECTOR_TYPE_PHI4:
@@ -1617,7 +1621,23 @@ struct clip_model_loader {
                         hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
                         hparams.rope_theta = 10000.0f;
                         get_u32(KEY_SPATIAL_MERGE_SIZE, hparams.n_merge, false);
-                        hparams.set_limit_image_tokens(8, 1024);
+                        get_u32(KEY_PREPROC_IMAGE_SIZE, hparams.image_longest_edge, false);
+                        if (hparams.image_longest_edge > 0) {
+                            const int64_t patch_size = int64_t(hparams.patch_size) * hparams.n_merge;
+                            if (patch_size <= 0) {
+                                throw std::runtime_error("Pixtral merged patch size must be positive");
+                            }
+                            const int64_t n_tokens_per_side =
+                                (hparams.image_longest_edge + patch_size - 1) / patch_size;
+                            if (n_tokens_per_side * patch_size > std::sqrt(std::numeric_limits<int>::max())) {
+                                throw std::runtime_error("Pixtral preprocessing image size is too large");
+                            }
+                            hparams.image_resize_pad         = PAD_NONE;
+                            hparams.image_floor_before_align = true;
+                            hparams.set_limit_image_tokens(0, n_tokens_per_side * n_tokens_per_side);
+                        } else {
+                            hparams.set_limit_image_tokens(8, 1024);
+                        }
                         hparams.set_warmup_n_tokens(256); // avoid OOM on warmup
                     } break;
                 case PROJECTOR_TYPE_LIGHTONOCR:
@@ -1634,6 +1654,8 @@ struct clip_model_loader {
                 case PROJECTOR_TYPE_DOTS_OCR:
                     {
                         hparams.rope_theta = 10000.0f;
+                        hparams.image_resize_pad  = PAD_NONE; // the HF processor resizes to the smart_resize size, no padding
+                        hparams.image_round_half_even = true; // smart_resize uses Python round()
                         get_u32(KEY_PROJ_SCALE_FACTOR, hparams.n_merge);
                         get_u32(KEY_IMAGE_MIN_PIXELS, hparams.image_min_pixels);
                         get_u32(KEY_IMAGE_MAX_PIXELS, hparams.image_max_pixels);
@@ -1723,6 +1745,8 @@ struct clip_model_loader {
                 case PROJECTOR_TYPE_GEMMA4UV:
                     {
                         hparams.rope_theta = 100.0f;
+                        hparams.ffn_op = FFN_GELU;
+                        log_ffn_op = "gelu";
                         hparams.n_merge = 3; // pooling_kernel_size
                         hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
                         get_u32(KEY_PROJ_SCALE_FACTOR, hparams.n_merge, false);
@@ -1750,6 +1774,8 @@ struct clip_model_loader {
                     {
                         hparams.n_merge = 2; // default value for Qwen 2 and 2.5
                         hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
+                        hparams.image_resize_pad  = PAD_NONE; // the HF processor resizes to the smart_resize size, no padding
+                        hparams.image_round_half_even = true; // smart_resize uses Python round()
                         get_u32(KEY_SPATIAL_MERGE_SIZE, hparams.n_merge, false);
                         get_u32(KEY_WIN_ATTN_PATTERN, hparams.n_wa_pattern, model.proj_type == PROJECTOR_TYPE_QWEN25VL); // only 2.5 requires it
                         // ref: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/blob/main/preprocessor_config.json
@@ -1825,6 +1851,8 @@ struct clip_model_loader {
                     {
                         hparams.n_merge = 2; // spatial_merge_size
                         hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
+                        hparams.image_resize_pad  = PAD_NONE; // the HF processor resizes to the smart_resize size, no padding
+                        hparams.image_round_half_even = true; // smart_resize uses Python round()
                         get_u32(KEY_SPATIAL_MERGE_SIZE, hparams.n_merge, false);
                         get_u32(string_format(KEY_N_HEAD_KV, "vision"), hparams.n_head_kv);
                         // 1D banded sliding-window radius (visual_token_window_size); required
@@ -2092,6 +2120,8 @@ struct clip_model_loader {
                 case PROJECTOR_TYPE_EXAONE4_5:
                     {
                         hparams.n_merge = 2;
+                        hparams.image_resize_pad  = PAD_NONE; // the HF processor resizes to the smart_resize size, no padding
+                        hparams.image_round_half_even = true; // smart_resize uses Python round()
                         get_u32(KEY_SPATIAL_MERGE_SIZE, hparams.n_merge, false);
                         get_u32(KEY_WIN_ATTN_PATTERN, hparams.n_wa_pattern, false);
                         get_u32(KEY_IMAGE_MIN_PIXELS, hparams.image_min_pixels);
@@ -4244,8 +4274,9 @@ struct clip_init_result clip_init(const char * fname, struct clip_context_params
 struct clip_cap clip_get_cap(const char * fname) {
     clip_cap res;
     clip_model_loader loader(fname, /* skip_tensors= */ true);
-    res.has_vision = loader.has_vision;
-    res.has_audio  = loader.has_audio;
+    res.has_vision    = loader.has_vision;
+    res.has_audio     = loader.has_audio;
+    res.has_gen_audio = loader.has_gen_audio;
     return res;
 }
 
@@ -4682,6 +4713,59 @@ static std::vector<c2w_state_slot> list_gen_state_slots(const clip_hparams & hpa
     }
 }
 
+// state_out can have another shape than its slot, only the byte size must match
+static void copy_gen_state_out(ggml_tensor * src, ggml_tensor * dst) {
+    GGML_ASSERT(ggml_nbytes(src) == ggml_nbytes(dst));
+    if (src->type == dst->type && ggml_are_same_shape(src, dst) && ggml_is_contiguous(src)) {
+        ggml_backend_tensor_copy(src, dst);
+        return;
+    }
+    std::vector<uint8_t> tmp(ggml_nbytes(src));
+    ggml_backend_tensor_get(src, tmp.data(), 0, tmp.size());
+    ggml_backend_tensor_set(dst, tmp.data(), 0, tmp.size());
+}
+
+clip_gen_state * clip_gen_state_init(clip_ctx * ctx, uint32_t seed) {
+    auto st = std::make_unique<clip_gen_state>();
+    st->rng.seed(seed == UINT32_MAX ? std::random_device{}() : seed);
+
+    const auto slots = list_gen_state_slots(ctx->model.hparams, ctx->model);
+    if (slots.empty()) {
+        return st.release();
+    }
+
+    ggml_init_params params = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * slots.size(),
+        /*.mem_buffer =*/ nullptr,
+        /*.no_alloc   =*/ true,
+    };
+    st->ctx_data.reset(ggml_init(params));
+    for (const auto & slot : slots) {
+        ggml_tensor * t = ggml_new_tensor_2d(st->ctx_data.get(), GGML_TYPE_F32, slot.ne0, slot.ne1);
+        ggml_format_name(t, "gen_state_%s", slot.name.c_str());
+        st->slots.push_back(t);
+    }
+    st->buf.reset(ggml_backend_alloc_ctx_tensors(st->ctx_data.get(), ctx->backend));
+    if (!st->buf) {
+        LOG_ERR("%s: failed to allocate the gen state\n", __func__);
+        return nullptr;
+    }
+    // a zero state is the cold start
+    ggml_backend_buffer_clear(st->buf.get(), 0);
+
+    return st.release();
+}
+
+void clip_gen_state_free(clip_gen_state * state) {
+    delete state;
+}
+
+void clip_gen_state_reset(clip_gen_state * state) {
+    if (state->buf) {
+        ggml_backend_buffer_clear(state->buf.get(), 0);
+    }
+}
+
 clip_enc_state * clip_enc_state_init(clip_ctx * ctx, int32_t n_frames_max) {
     const auto & hparams = ctx->model.hparams;
     if (ctx->proj_type() != PROJECTOR_TYPE_VOXTRAL_RT || hparams.attn_window_size <= 0) {
@@ -4747,9 +4831,9 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
         clip_model_loader::warmup(*ctx, *params->imgs);
     }
 
-    if (params->seed != ctx->rng_seed) {
-        ctx->rng_seed = params->seed;
-        ctx->rng.seed(params->seed == UINT32_MAX ? std::random_device{}() : params->seed);
+    if (params->gen_process != CLIP_GEN_PROCESS_GEN_UNKNOWN && params->gen_state == nullptr) {
+        LOG_ERR("%s: audio gen requires a gen state\n", __func__);
+        return false;
     }
 
     // build the inference graph
@@ -4813,19 +4897,13 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
         ggml_backend_tensor_set(cur, values.data(), 0, ggml_nbytes(cur));
     };
 
-    // upload the decoder state from the previous call, or zero-fill on a cold start
+    // state of the previous call, zero on a cold start
     auto set_gen_state_in = [&]() {
-        size_t offset = 0;
+        const auto & slots = params->gen_state->slots;
+        size_t i = 0;
         for (const auto & slot : list_gen_state_slots(hparams, model)) {
-            ggml_tensor * t = get_inp_tensor(("state_in_" + slot.name).c_str());
-            const size_t nb = ggml_nbytes(t);
-            if (params->state_in && params->state_in->size() >= offset + nb) {
-                ggml_backend_tensor_set(t, params->state_in->data() + offset, 0, nb);
-            } else {
-                std::vector<uint8_t> zeros(nb, 0);
-                ggml_backend_tensor_set(t, zeros.data(), 0, nb);
-            }
-            offset += nb;
+            GGML_ASSERT(i < slots.size());
+            ggml_backend_tensor_copy(slots[i++], get_inp_tensor(("state_in_" + slot.name).c_str()));
         }
     };
 
@@ -5549,7 +5627,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                     std::normal_distribution<float> dist(0.0f, std::sqrt(temp));
                     std::vector<float> noise(ggml_nelements(t));
                     for (auto & v : noise) {
-                        v = dist(ctx->rng);
+                        v = dist(params->gen_state->rng);
                     }
                     set_input_f32("inp_noise", noise);
                 }
@@ -5697,7 +5775,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                     std::uniform_real_distribution<float> dist(0.0f, 1.0f);
                     const int64_t n_acoustic = model.gen_code_head_w->ne[2];
                     for (int64_t g = 0; g < n_acoustic; g++) {
-                        std::vector<float> r = { dist(ctx->rng) };
+                        std::vector<float> r = { dist(params->gen_state->rng) };
                         set_input_f32(("inp_rand_" + std::to_string(g)).c_str(), r);
                     }
                 }
@@ -6227,22 +6305,16 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
         st->n_past += n_new;
     }
 
-    if (params->state_out != nullptr) {
-        auto & state_out = *params->state_out;
-        size_t total = 0;
-        for (const auto & slot : list_gen_state_slots(hparams, model)) {
-            total += (size_t) (slot.ne0 * slot.ne1) * sizeof(float);
-        }
-        state_out.resize(total);
-        size_t offset = 0;
+    if (params->gen_process == CLIP_GEN_PROCESS_GEN_WAV) {
+        const auto & slots = params->gen_state->slots;
+        size_t i = 0;
         for (const auto & slot : list_gen_state_slots(hparams, model)) {
             ggml_tensor * t = ggml_graph_get_tensor(gf, ("state_out_" + slot.name).c_str());
             if (t == nullptr) {
-                GGML_ABORT("state_out requested but graph has no \"state_out_%s\" tensor", slot.name.c_str());
+                GGML_ABORT("graph has no \"state_out_%s\" tensor", slot.name.c_str());
             }
-            const size_t nb = ggml_nbytes(t);
-            ggml_backend_tensor_get(t, state_out.data() + offset, 0, nb);
-            offset += nb;
+            GGML_ASSERT(i < slots.size());
+            copy_gen_state_out(t, slots[i++]);
         }
     }
 

@@ -388,14 +388,14 @@ static ze_result_t init_zes() {
     return res;
 }
 
-ze_result_t get_zes_init_res() {
+static ze_result_t get_zes_init_res() {
     static ze_result_t zes_init_res = init_zes();
     GGML_SYCL_DEBUG("[SYCL] call %s: zesInit result: %d\n", __func__, (int) zes_init_res);
     return zes_init_res;
 }
 #endif
 
-void initialize_sycl_begining() {
+static void initialize_sycl_begining() {
 #ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
     //must be called in initialization stage, before any other Level Zero API calls
     GGML_SYCL_DEBUG("[SYCL] call %s\n", __func__);
@@ -1173,7 +1173,7 @@ static size_t ggml_backend_sycl_buffer_type_get_alignment(ggml_backend_buffer_ty
     GGML_UNUSED(buft);
 }
 
-bool is_bmg_g31_arch(int device) {
+static bool is_bmg_g31_arch(int device) {
     return ggml_sycl_info().devices[device].hw_info.arch == gpu_arch::intel_gpu_bmg_g31;
 }
 
@@ -3154,9 +3154,16 @@ inline void ggml_sycl_op_mul_mat_sycl(
 #endif
 
     // dequantize inside the GEMM instead of writing the f16 weights out and reading them back; src1
-    // goes in its own type, so there is no separate conversion pass
+    // goes in its own type, so there is no separate conversion pass. The A stage
+    // decodes the weight bytes in place, so an installed persistent reorder must be
+    // visible to it: pass the flag through; types without an SoA A-stage decline
+    // inside and this falls through to the reorder-aware conversion route below.
+    bool src0_reordered = false;
+    if (const auto * src0_extra = static_cast<const ggml_tensor_extra_gpu *>(src0->extra)) {
+        src0_reordered = src0_extra->optimized_feature.reorder;
+    }
     if (ggml_is_quantized(src0->type) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] &&
-        ggml_sycl_fused_dequant_gemm(src0->type, src0_dd_i, src1_ddf_i, src1->type, ggml_sycl_src1_prec(dst), dst_dd_i,
+        ggml_sycl_fused_dequant_gemm(src0->type, src0_reordered, src0_dd_i, src1_ddf_i, src1->type, ggml_sycl_src1_prec(dst), dst_dd_i,
                                      row_diff, src1_ncols, ne10, ldc, ctx.pool(), stream)) {
         return;
     }
@@ -6326,7 +6333,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-bool sycl_get_mem_info(int device, size_t * free, size_t * total) {
+static bool sycl_get_mem_info(int device, size_t * free, size_t * total) {
     GGML_SYCL_DEBUG("[SYCL] [%s] g_ggml_sycl_get_mem_api=%d\n",
         __func__, g_ggml_sycl_get_mem_api);
 
@@ -6952,7 +6959,6 @@ static bool do_ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, cons
                 default:
                     return false;
             }
-            break;
         case GGML_OP_MUL_MAT:
         case GGML_OP_MUL_MAT_ID:
             {
@@ -7045,7 +7051,6 @@ static bool do_ggml_backend_sycl_device_supports_op(ggml_backend_dev_t dev, cons
                            (op->src[1]->type == GGML_TYPE_I64 || op->src[1]->type == GGML_TYPE_I32);
                 return res;
             }
-            break;
         case GGML_OP_DSV4_HC_PRE:
             return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32 &&
                 op->type == GGML_TYPE_F32;

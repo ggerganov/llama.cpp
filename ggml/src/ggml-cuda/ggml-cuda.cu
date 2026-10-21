@@ -70,7 +70,7 @@
 #include "ggml-cuda/cumsum.cuh"
 #include "ggml-cuda/fill.cuh"
 #include "ggml-cuda/lightning-indexer.cuh"
-#include "ggml-cuda/kpool-mask.cuh"
+#include "ggml-cuda/top-k-mask.cuh"
 #include "ggml.h"
 
 #include <algorithm>
@@ -458,6 +458,7 @@ const ggml_cuda_device_info & ggml_cuda_info() {
 struct ggml_cuda_pool_leg : public ggml_cuda_pool {
     static const int MAX_BUFFERS = 256;
 
+    ggml_backend_cuda_context & ctx;
     int device;
     struct ggml_cuda_buffer {
         void * ptr = nullptr;
@@ -467,7 +468,8 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
     ggml_cuda_buffer buffer_pool[MAX_BUFFERS] = {};
     size_t pool_size = 0;
 
-    explicit ggml_cuda_pool_leg(int device) :
+    ggml_cuda_pool_leg(ggml_backend_cuda_context & ctx, int device) :
+        ctx(ctx),
         device(device) {
     }
 
@@ -487,6 +489,20 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
                 b.size = 0;
             }
         }
+    }
+
+    // captured CUDA graphs can still use freed buffers, so they must be captured again
+    void invalidate_cuda_graphs() {
+#ifdef USE_CUDA_GRAPH
+        int n_captured = 0;
+        for (const auto & [key, graph] : ctx.cuda_graphs) {
+            n_captured += graph->instance != nullptr;
+        }
+        if (n_captured > 0) {
+            GGML_LOG_DEBUG(GGML_CUDA_NAME " pool[%d]: memory freed, %d captured CUDA graphs must be captured again\n", device, n_captured);
+        }
+        ctx.cuda_graphs.clear();
+#endif // USE_CUDA_GRAPH
     }
 
     void * alloc(size_t size, size_t * actual_size) override {
@@ -539,6 +555,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
                            device, look_ahead_size/1024.0/1024.0, cached_bytes/1024.0/1024.0);
             CUDA_CHECK(cudaDeviceSynchronize());
             clear_pool();
+            invalidate_cuda_graphs();
             err = ggml_cuda_device_malloc(&ptr, look_ahead_size, device);
             if (err == cudaSuccess) {
                 GGML_LOG_DEBUG(GGML_CUDA_NAME " pool[%d]: retry succeeded\n", device);
@@ -567,6 +584,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         ggml_cuda_set_device(device);
         CUDA_CHECK(cudaFree(ptr));
         pool_size -= size;
+        invalidate_cuda_graphs();
     }
 };
 
@@ -721,14 +739,15 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
 };
 #endif // defined(GGML_USE_VMM)
 
-std::unique_ptr<ggml_cuda_pool> ggml_backend_cuda_context::new_pool_for_device(int                  device,
-                                                                               [[maybe_unused]] int stream_no) {
+std::unique_ptr<ggml_cuda_pool> ggml_backend_cuda_context::new_pool_for_device(ggml_backend_cuda_context & ctx,
+                                                                               int                         device,
+                                                                               [[maybe_unused]] int        stream_no) {
 #if defined(GGML_USE_VMM)
     if (ggml_cuda_info().devices[device].vmm) {
         return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_vmm(device));
     }
 #endif // defined(GGML_USE_VMM)
-    return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_leg(device));
+    return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_leg(ctx, device));
 }
 
 // destroying a cuBLAS handle while a graph is being captured in a different thread can result in a CUDA error
@@ -2015,6 +2034,8 @@ static bool ggml_cuda_mul_mat_id_needs_sync(const ggml_tensor * dst, const int c
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
 
+    const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
+
     if (src1->type != GGML_TYPE_F32 || dst->type != GGML_TYPE_F32) {
         return true;
     }
@@ -2033,7 +2054,7 @@ static bool ggml_cuda_mul_mat_id_needs_sync(const ggml_tensor * dst, const int c
         return false;
     }
 
-    if (ggml_cuda_should_use_mmf(src0->type, cc, WARP_SIZE, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
+    if (ggml_cuda_should_use_mmf(src0->type, cc, warp_size, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
         return false;
     }
 
@@ -2051,6 +2072,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     GGML_TENSOR_BINARY_OP_LOCALS
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+    const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
 
     // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
     if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
@@ -2075,7 +2097,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
             return;
         }
 
-        if (ggml_cuda_should_use_mmf(src0->type, cc, WARP_SIZE, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
+        if (ggml_cuda_should_use_mmf(src0->type, cc, warp_size, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
             ggml_cuda_mul_mat_f(ctx, src0, src1, ids, dst);
             return;
         }
@@ -2549,8 +2571,8 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
         case GGML_OP_LIGHTNING_INDEXER:
             ggml_cuda_lightning_indexer(ctx, dst);
             break;
-        case GGML_OP_KPOOL_MASK:
-            ggml_cuda_op_kpool_mask(ctx, dst);
+        case GGML_OP_TOP_K_MASK:
+            ggml_cuda_op_top_k_mask(ctx, dst);
             break;
         default:
             return false;
@@ -5985,7 +6007,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return true;
         case GGML_OP_LIGHTNING_INDEXER:
             return ggml_cuda_lightning_indexer_supported(dev_ctx->device, op);
-        case GGML_OP_KPOOL_MASK:
+        case GGML_OP_TOP_K_MASK:
             return op->type == GGML_TYPE_F16 || op->type == GGML_TYPE_F32;
 
         default:

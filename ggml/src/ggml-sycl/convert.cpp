@@ -85,7 +85,7 @@ static void dequantize_row_q2_K_sycl_reorder(const void *vx, dst_t *y, const int
     stream->parallel_for(
         sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 64), sycl::range<3>(1, 1, 64)),
         [=](sycl::nd_item<3> item_ct1) {
-            dequantize_block_q2_K_reorder(vx, y, item_ct1, nb);
+            dequantize_block_q2_K_reorder(vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2), item_ct1, nb);
         });
 }
 
@@ -129,7 +129,7 @@ static void dequantize_row_q3_K_sycl_reorder(const void *vx, dst_t *y, const int
     stream->parallel_for(
         sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 64), sycl::range<3>(1, 1, 64)),
         [=](sycl::nd_item<3> item_ct1) {
-            dequantize_block_q3_K_reorder(vx, y, item_ct1, nb);
+            dequantize_block_q3_K_reorder(vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2), item_ct1, nb);
         });
 }
 
@@ -177,15 +177,12 @@ static void dequantize_row_q8_0_sycl_reorder(const void *vx, dst_t *y, const int
     dpct::has_capability_or_fail(stream->get_device(),
                                     {sycl::aspect::fp16});
 
+    // flat range<1>, two pairs (4 elements) per item: no nd_range/group math, one vectorized store.
+    // k % QK8_0 == 0 implies k % 4 == 0, so the wide launch covers the row exactly (no tail).
     GGML_ASSERT(k % QK8_0 == 0);
-    const int64_t n_groups = ceil_div(k / 2, SYCL_DEQUANTIZE_BLOCK_SIZE);
-    // decrease global range when it exceeds the max int; the kernel loops to cover the rest
-    const int64_t wg_size  = downsample_sycl_global_range(n_groups, SYCL_DEQUANTIZE_BLOCK_SIZE);
-    stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, n_groups) *
-        sycl::range<3>(1, 1, wg_size),
-        sycl::range<3>(1, 1, wg_size)),
-        [=](sycl::nd_item<3> item_ct1) {
-            dequantize_block_q8_0_reorder(vx, y, k, item_ct1);
+    stream->parallel_for(sycl::range<1>((size_t) (k / 4)),
+        [=](sycl::id<1> idx) {
+            dequantize_block_q8_0_reorder_wide(vx, y, k, idx);
         });
 }
 
@@ -231,7 +228,7 @@ static void dequantize_row_q4_K_sycl_reorder(const void * vx, dst_t * y, const i
 
         cgh.parallel_for(sycl::nd_range<1>(sycl::range<1>(global_size), sycl::range<1>(local_size)),
                          [=](sycl::nd_item<1> item_ct1) {
-                             dequantize_block_q4_K_reorder(vx, y, get_pointer(scale_local_acc), item_ct1, nb);
+                             dequantize_block_q4_K_reorder(vx, y + item_ct1.get_group(0) * QK_K, item_ct1.get_group(0), get_pointer(scale_local_acc), item_ct1, nb);
                          });
     });
 }
@@ -258,7 +255,7 @@ static void dequantize_row_q5_K_sycl_reorder(const void * vx, dst_t * y, const i
         cgh.parallel_for(
             sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 64), sycl::range<3>(1, 1, 64)),
             [=](sycl::nd_item<3> item_ct1) {
-                dequantize_block_q5_K_reorder(vx, y, get_pointer(scale_local_acc), item_ct1, nb);
+                dequantize_block_q5_K_reorder(vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2), get_pointer(scale_local_acc), item_ct1, nb);
             });
     });
 }
@@ -303,7 +300,7 @@ static void dequantize_row_q6_K_sycl_reorder(const void * vx, dst_t * y, const i
 
     stream->parallel_for(
         sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 64), sycl::range<3>(1, 1, 64)),
-        [=](sycl::nd_item<3> item_ct1) { dequantize_block_q6_K_reorder(vx, y, item_ct1, nb); });
+        [=](sycl::nd_item<3> item_ct1) { dequantize_block_q6_K_reorder(vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2), item_ct1, nb); });
 }
 
 template <typename dst_t>
@@ -440,7 +437,8 @@ static void dequantize_row_iq3_xxs_sycl_reorder(const void * vx, dst_t * y, cons
         sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 32), sycl::range<3>(1, 1, 32)),
         [=](sycl::nd_item<3> item_ct1) {
             dequantize_block_iq3_xxs_reorder(
-                vx, y, item_ct1, nb, iq3xxs_grid, ksigns_iq2xs, kmask_iq2xs);
+                vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2), item_ct1, nb,
+                iq3xxs_grid, ksigns_iq2xs, kmask_iq2xs);
         });
 }
 
@@ -472,7 +470,8 @@ static void dequantize_row_iq3_s_sycl_reorder(const void * vx, dst_t * y, const 
     stream->parallel_for(
         sycl::nd_range<3>(sycl::range<3>(1, 1, nb) * sycl::range<3>(1, 1, 32), sycl::range<3>(1, 1, 32)),
         [=](sycl::nd_item<3> item_ct1) {
-            dequantize_block_iq3_s_reorder(vx, y, item_ct1, nb, kmask_iq2xs, iq3s_grid);
+            dequantize_block_iq3_s_reorder(vx, y + item_ct1.get_group(2) * QK_K, item_ct1.get_group(2),
+                                           item_ct1, nb, kmask_iq2xs, iq3s_grid);
         });
 }
 
@@ -757,7 +756,6 @@ to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type, ggml_tensor * dst) {
 #endif
         default:
             GGML_ABORT("fatal error: unsupport data type=%s\n", ggml_type_name(type));
-            return nullptr;
     }
 }
 
@@ -861,7 +859,6 @@ to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type, ggml_tensor *dst) {
 #endif
         default:
             GGML_ABORT("fatal error: unsupport data type=%s\n", ggml_type_name(type));
-            return nullptr;
     }
 }
 
@@ -877,7 +874,6 @@ to_bf16_sycl_t ggml_get_to_bf16_sycl(ggml_type type, ggml_tensor * /*dst*/) {
             return convert_unary_sycl<sycl::ext::oneapi::bfloat16>;
         default:
             GGML_ABORT("fatal error: unsupport data type=%s\n", ggml_type_name(type));
-            return nullptr;
     }
 }
 #endif
