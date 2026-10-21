@@ -49,7 +49,6 @@ struct htp_gdn_kernel_params {
     struct fastdiv_values div_k1;
     struct fastdiv_values div_rq3;
     struct fastdiv_values div_rk3;
-    struct fastdiv_values div_n_threads;
 };
 
 #if defined(__cplusplus)

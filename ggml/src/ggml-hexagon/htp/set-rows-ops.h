@@ -6,16 +6,9 @@
 #include "htp-vtcm.h"
 
 struct htp_set_rows_kernel_params {
-    int32_t  n_threads;
-    int32_t  total_tasks;
-    int32_t  tasks_per_thread;
-    int32_t  vtcm_size;
-
-    // Fastdiv helpers
-    struct fastdiv_values div_ne11;
-    struct fastdiv_values div_ne12;
-    struct fastdiv_values div_tasks_per_thread;
-    struct fastdiv_values div_ne02;
+    uint32_t n_threads;
+    uint32_t total_tasks;
+    uint32_t vtcm_size;
 };
 
 struct htp_set_rows_vtcm_layout {

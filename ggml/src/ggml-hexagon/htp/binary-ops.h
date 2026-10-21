@@ -44,13 +44,13 @@ struct htp_binary_kernel_params {
     uint32_t chunk_size;
     uint32_t chunk_bytes;
 
-    struct fastdiv_values src0_dim1_div;
-    struct fastdiv_values src0_dim2_div;
-    struct fastdiv_values src0_dim12_div;
+    struct fastdiv_values div_ne01;
+    struct fastdiv_values div_ne02;
+    struct fastdiv_values div_ne012;
 
-    struct fastdiv_values src1_dim1_div;
-    struct fastdiv_values src1_dim2_div;
-    struct fastdiv_values src1_dim3_div;
+    struct fastdiv_values div_ne11;
+    struct fastdiv_values div_ne12;
+    struct fastdiv_values div_ne13;
 };
 
 #if defined(__cplusplus)

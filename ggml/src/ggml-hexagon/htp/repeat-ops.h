@@ -12,7 +12,6 @@ struct htp_repeat_kernel_params {
     uint32_t nr3;
 
     struct fastdiv_values div_ne1;
-    struct fastdiv_values div_ne2;
     struct fastdiv_values div_ne12;
     struct fastdiv_values div_ne01;
     struct fastdiv_values div_ne02;

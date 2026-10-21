@@ -587,17 +587,18 @@ int op_ssm_conv_f32(struct htp_ops_context * octx) {
         return HTP_STATUS_VTCM_TOO_SMALL;
     }
 
-    const uint32_t n_threads = octx->n_threads;
+    const uint32_t n_threads          = octx->n_threads;
+    const uint32_t raw_rpt            = fastdiv(nrows + n_threads - 1, &octx->n_threads_div);
+    const uint32_t d_inner_per_thread = hex_round_up(raw_rpt, VLEN_FP32);
 
     struct htp_ssm_conv_vtcm_layout L;
-    htp_ssm_conv_vtcm_layout_build(&L, kparams->vtcm_src0_size_per_thread, kparams->vtcm_src1_size_per_thread,
-                                   kparams->vtcm_dst_size_per_thread, n_threads);
+    htp_ssm_conv_vtcm_layout_build(&L, d_inner_per_thread, kparams->d_conv, kparams->n_t, kparams->d_inner_tile, n_threads);
 
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
 
-    octx->src0_spad.size_per_thread = kparams->vtcm_src0_size_per_thread;
-    octx->src1_spad.size_per_thread = kparams->vtcm_src1_size_per_thread;
-    octx->dst_spad.size_per_thread  = kparams->vtcm_dst_size_per_thread;
+    octx->src0_spad.size_per_thread = L.src0_bytes_per_thread;
+    octx->src1_spad.size_per_thread = L.src1_bytes_per_thread;
+    octx->dst_spad.size_per_thread  = L.dst_bytes_per_thread;
 
     octx->src0_spad.size = L.src0_bytes;
     octx->src1_spad.size = L.src1_bytes;
@@ -609,9 +610,6 @@ int op_ssm_conv_f32(struct htp_ops_context * octx) {
     octx->src0_spad.src  = NULL;
     octx->src1_spad.src  = NULL;
     octx->dst_spad.src   = NULL;
-
-    const uint32_t raw_rpt            = fastdiv(nrows + n_threads - 1, &octx->n_threads_div);
-    const uint32_t d_inner_per_thread = hex_round_up(raw_rpt, VLEN_FP32);
 
     struct htp_ssm_conv_context scctx = {
         .octx             = octx,

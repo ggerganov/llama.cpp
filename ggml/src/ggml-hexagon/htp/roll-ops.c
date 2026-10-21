@@ -38,30 +38,32 @@ static inline uint32_t htp_roll_wrap(int32_t i, uint32_t ne) {
     return (uint32_t) i;
 }
 
-#define htp_roll_preamble                             \
-    const struct htp_tensor * src0 = octx->src[0];    \
-    const struct htp_tensor * dst  = octx->dst;       \
-                                                      \
-    const uint32_t ne0 = dst->ne[0];                  \
-    const uint32_t ne1 = dst->ne[1];                  \
-    const uint32_t ne2 = dst->ne[2];                  \
-    const uint32_t ne3 = dst->ne[3];                  \
-                                                      \
-    const uint32_t nb01 = src0->nb[1];                \
-    const uint32_t nb02 = src0->nb[2];                \
-    const uint32_t nb03 = src0->nb[3];                \
-                                                      \
-    const uint32_t nb1 = dst->nb[1];                  \
-    const uint32_t nb2 = dst->nb[2];                  \
-    const uint32_t nb3 = dst->nb[3];                  \
-                                                      \
-    const int32_t s0 = octx->op_params[0];            \
-    const int32_t s1 = octx->op_params[1];            \
-    const int32_t s2 = octx->op_params[2];            \
-    const int32_t s3 = octx->op_params[3];            \
-                                                      \
-    const uint32_t i0_src0 = htp_roll_wrap(-s0, ne0); \
-    const uint32_t n0      = ne0 - i0_src0;
+#define htp_roll_preamble                                            \
+    const struct htp_tensor * src0 = octx->src[0];                   \
+    const struct htp_tensor * dst  = octx->dst;                      \
+    const struct htp_roll_kernel_params * kparams =                  \
+        (const struct htp_roll_kernel_params *) octx->kernel_params; \
+                                                                     \
+    const uint32_t ne0 = dst->ne[0];                                 \
+    const uint32_t ne1 = dst->ne[1];                                 \
+    const uint32_t ne2 = dst->ne[2];                                 \
+    const uint32_t ne3 = dst->ne[3];                                 \
+                                                                     \
+    const uint32_t nb01 = src0->nb[1];                               \
+    const uint32_t nb02 = src0->nb[2];                               \
+    const uint32_t nb03 = src0->nb[3];                               \
+                                                                     \
+    const uint32_t nb1 = dst->nb[1];                                 \
+    const uint32_t nb2 = dst->nb[2];                                 \
+    const uint32_t nb3 = dst->nb[3];                                 \
+                                                                     \
+    const int32_t s0 = octx->op_params[0];                           \
+    const int32_t s1 = octx->op_params[1];                           \
+    const int32_t s2 = octx->op_params[2];                           \
+    const int32_t s3 = octx->op_params[3];                           \
+                                                                     \
+    const uint32_t i0_src0 = kparams->i0_src0;                       \
+    const uint32_t n0      = kparams->n0;
 
 #define htp_roll_dma_preamble dma_queue * q = octx->ctx->dma[0];
 
@@ -90,10 +92,10 @@ static inline void roll_dma_push_rows(dma_queue *               q,
                                       uint32_t                  src_row,
                                       uint32_t                  nrows,
                                       uint32_t                  row_size,
-                                      uint32_t                  i0_src0) {
+                                      uint32_t                  i0_src0,
+                                      uint32_t                  n0) {
     const dma_addr_t dst_base = dst->data + (size_t) dst_row * row_size;
     const dma_addr_t src_base = src0->data + (size_t) src_row * row_size;
-    const uint32_t   n0       = src0->ne[0] - i0_src0;
 
     roll_dma_push(q, dst_base, src_base + (size_t) i0_src0 * sizeof(float),
                   row_size, row_size, n0 * sizeof(float), nrows);
@@ -124,7 +126,7 @@ static int roll_dma_f32_contiguous(struct htp_ops_context * octx) {
     const uint32_t row_size = ne0 * sizeof(float);
 
     if (s1 == 0 && s2 == 0 && s3 == 0) {
-        roll_dma_push_rows(q, dst, src0, 0, 0, ne1 * ne2 * ne3, row_size, i0_src0);
+        roll_dma_push_rows(q, dst, src0, 0, 0, ne1 * ne2 * ne3, row_size, i0_src0, n0);
         dma_queue_flush(q);
         return HTP_STATUS_OK;
     }
@@ -138,9 +140,9 @@ static int roll_dma_f32_contiguous(struct htp_ops_context * octx) {
             const uint32_t n2_first = ne2 - i2_src0;
 
             roll_dma_push_rows(q, dst, src0, dst_row0, src_row0, n2_first * ne1,
-                               row_size, i0_src0);
+                               row_size, i0_src0, n0);
             roll_dma_push_rows(q, dst, src0, dst_row0 + n2_first * ne1, i03 * ne2 * ne1,
-                               i2_src0 * ne1, row_size, i0_src0);
+                               i2_src0 * ne1, row_size, i0_src0, n0);
         }
 
         dma_queue_flush(q);
@@ -158,9 +160,9 @@ static int roll_dma_f32_contiguous(struct htp_ops_context * octx) {
             const uint32_t src_row0 = (i03 * ne2 + i02) * ne1;
 
             roll_dma_push_rows(q, dst, src0, dst_row0, src_row0 + i1_src0,
-                               n1_first, row_size, i0_src0);
+                               n1_first, row_size, i0_src0, n0);
             roll_dma_push_rows(q, dst, src0, dst_row0 + n1_first, src_row0,
-                               i1_src0, row_size, i0_src0);
+                               i1_src0, row_size, i0_src0, n0);
         }
     }
 
@@ -200,7 +202,6 @@ static int roll_dma_f32_strided(struct htp_ops_context * octx) {
 static void roll_thread_f32(unsigned int nth, unsigned int ith, void * data) {
     struct htp_roll_context * rctx = (struct htp_roll_context *) data;
     struct htp_ops_context * octx = rctx->octx;
-    const struct htp_roll_kernel_params * kparams = rctx->kparams;
 
     htp_roll_preamble;
 
@@ -244,8 +245,6 @@ static void roll_thread_f32(unsigned int nth, unsigned int ith, void * data) {
 
 int execute_op_roll_f32(struct htp_ops_context * octx) {
     htp_roll_preamble;
-    const struct htp_roll_kernel_params * kparams =
-        (const struct htp_roll_kernel_params *) octx->kernel_params;
 
     if (kparams->kernel_type == HTP_ROLL_KERNEL_DMA_CONTIGUOUS) {
         return roll_dma_f32_contiguous(octx);

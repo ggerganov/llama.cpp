@@ -10,14 +10,14 @@
 #include "htp-vtcm.h"
 
 struct htp_sort_kernel_params {
-    int32_t  n_threads;
-    int32_t  order;             // GGML_SORT_ORDER_ASC (0) or GGML_SORT_ORDER_DESC (1)
-    int32_t  is_top_k;          // 1 if TOP_K, 0 if ARGSORT
-    int32_t  chunk_elems;
-    int32_t  n_chunks;
-    int32_t  vtcm_size;
-    int32_t  merge_elems;
-    int32_t  n_slots;
+    uint32_t n_threads;
+    uint32_t order;             // GGML_SORT_ORDER_ASC (0) or GGML_SORT_ORDER_DESC (1)
+    uint32_t is_top_k;          // 1 if TOP_K, 0 if ARGSORT
+    uint32_t chunk_elems;
+    uint32_t n_chunks;
+    uint32_t vtcm_size;
+    uint32_t merge_elems;
+    uint32_t n_slots;
     struct fastdiv_values div_ne01;
     struct fastdiv_values div_ne01_ne02;
 };

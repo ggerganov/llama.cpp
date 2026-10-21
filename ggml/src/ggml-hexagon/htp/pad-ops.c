@@ -501,8 +501,8 @@ int op_pad(struct htp_ops_context * octx) {
     const int32_t rp3 = octx->op_params[7];
     const int32_t circular = octx->op_params[8];
 
-    const uint32_t total_dst_rows = kparams->total_dst_rows;
-    const size_t   type_size      = kparams->type_size;
+    const uint32_t total_dst_rows = kparams->total_rows;
+    const size_t   type_size      = kparams->elem_size;
     const size_t   src_row_size   = src0->ne[0] * type_size;
     const size_t   dst_row_size   = dst->ne[0] * type_size;
 

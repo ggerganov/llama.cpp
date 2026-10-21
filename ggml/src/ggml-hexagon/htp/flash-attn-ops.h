@@ -35,7 +35,6 @@ enum htp_fa_kernel_type {
 struct htp_fa_kernel_params {
     uint8_t  kernel_type;        // enum htp_fa_kernel_type
     uint8_t  head_split;         // 1 = partition by KV heads in multicore, 0 = token partition
-    uint8_t  flags;              // reserved
     uint8_t  n_threads;          // Number of threads to run
 
     // Common parameters
