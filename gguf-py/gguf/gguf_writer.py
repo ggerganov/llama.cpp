@@ -1065,6 +1065,15 @@ class GGUFWriter:
     def add_norm_before_fc(self, value: bool) -> None:
         self.add_bool(Keys.LLM.NORM_BEFORE_FC.format(arch=self.arch), value)
 
+    def add_fc_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.FC_NORM.format(arch=self.arch), value)
+
+    def add_norm_output(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.NORM_OUTPUT.format(arch=self.arch), value)
+
+    def add_lm_head_candidates(self, value: int) -> None:
+        self.add_uint32(Keys.LLM.LM_HEAD_CANDIDATES.format(arch=self.arch), value)
+
     def add_attention_output_group_count(self, count: int) -> None:
         self.add_uint32(Keys.Attention.OUTPUT_GROUP_COUNT.format(arch=self.arch), count)
 

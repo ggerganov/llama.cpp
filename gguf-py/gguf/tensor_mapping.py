@@ -90,6 +90,12 @@ class TensorNameMap:
             "head.decoder",              # modern-bert
             "embedding_projection",      # embeddinggemma2
         ),
+        MODEL_TENSOR.OUTPUT_LR_DOWN: (
+            "efficient_lm_head_down_proj",  # eagle4
+        ),
+        MODEL_TENSOR.OUTPUT_LR: (
+            "efficient_lm_head",            # eagle4
+        ),
         MODEL_TENSOR.DENSE_2_OUT: (
             "dense_2_out",  # embeddinggemma
         ),

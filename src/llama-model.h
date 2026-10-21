@@ -783,6 +783,9 @@ struct llama_model {
     struct ggml_tensor * fc_s = nullptr;
     struct ggml_tensor * d2t = nullptr;  // draft to target vocabulary mapping
 
+    struct ggml_tensor * output_lr_down = nullptr;
+    struct ggml_tensor * output_lr      = nullptr;
+
     // dspark
     struct ggml_tensor * dspark_markov_w1   = nullptr;
     struct ggml_tensor * dspark_markov_w2   = nullptr;

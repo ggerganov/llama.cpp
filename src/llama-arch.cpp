@@ -389,6 +389,9 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TARGET_HIDDEN_SIZE,    "%s.target_hidden_size"   },
     { LLM_KV_NORM_BEFORE_RESIDUAL,  "%s.norm_before_residual" },
     { LLM_KV_NORM_BEFORE_FC,        "%s.norm_before_fc"       },
+    { LLM_KV_FC_NORM,               "%s.fc_norm"              },
+    { LLM_KV_NORM_OUTPUT,           "%s.norm_output"          },
+    { LLM_KV_LM_HEAD_CANDIDATES,    "%s.lm_head_candidates"   },
 
     { LLM_KV_DFLASH_BLOCK_SIZE,       "%s.block_size"       },
     { LLM_KV_DFLASH_CONV_KERNEL_SIZE, "%s.conv_kernel_size" },
@@ -774,6 +777,8 @@ static const std::map<llm_tensor, const char *> LLM_TENSOR_NAMES = {
     { LLM_TENSOR_MASKED_EMBD_ORDERING,                   "masked_embd_ordering" },
     { LLM_TENSOR_FC,                                     "fc" },
     { LLM_TENSOR_D2T,                                    "d2t" },
+    { LLM_TENSOR_OUTPUT_LR_DOWN,                         "output_lr_down" },
+    { LLM_TENSOR_OUTPUT_LR,                              "output_lr" },
     { LLM_TENSOR_DSPARK_MARKOV_W1,                       "markov_w1" },
     { LLM_TENSOR_DSPARK_MARKOV_W2,                       "markov_w2" },
     { LLM_TENSOR_DSPARK_CONF_PROJ,                       "conf_proj" },
@@ -1111,6 +1116,8 @@ static const std::map<llm_tensor, llm_tensor_info> LLM_TENSOR_INFOS = {
     // eagle3
     {LLM_TENSOR_FC,                         {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL_MAT}},
     {LLM_TENSOR_D2T,                        {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_SET_ROWS}},
+    {LLM_TENSOR_OUTPUT_LR_DOWN,             {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL_MAT}},
+    {LLM_TENSOR_OUTPUT_LR,                  {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL_MAT}},
     // dspark
     {LLM_TENSOR_DSPARK_MARKOV_W1,           {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_GET_ROWS}},
     {LLM_TENSOR_DSPARK_MARKOV_W2,           {LLM_TENSOR_LAYER_OUTPUT,    GGML_OP_MUL_MAT}},

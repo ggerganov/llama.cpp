@@ -32,6 +32,24 @@ void llama_model_eagle3::load_arch_hparams(llama_model_loader & ml) {
     // compatible with eagle3.1 (e.g. nvidia/gpt-oss-120b-Eagle3-v3)
     ml.get_key(LLM_KV_NORM_BEFORE_FC, hparams.norm_before_fc, false);
 
+    ml.get_key(LLM_KV_FC_NORM,            hparams.fc_norm,              false);
+    ml.get_key(LLM_KV_NORM_OUTPUT,        hparams.norm_output,          false);
+    ml.get_key(LLM_KV_LM_HEAD_CANDIDATES, hparams.n_lm_head_candidates, false);
+
+    if (hparams.fc_norm && hparams.norm_before_fc) {
+        throw std::runtime_error("EAGLE3: fc_norm and norm_before_fc are exclusive");
+    }
+
+    if (ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false) && hparams.n_swa > 0) {
+        hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
+        ml.get_arr(LLM_KV_ATTENTION_SLIDING_WINDOW_PATTERN, hparams.is_swa_impl);
+        hparams.rope_freq_base_train_swa  = hparams.rope_freq_base_train;
+        hparams.rope_freq_scale_train_swa = hparams.rope_freq_scale_train;
+    }
+
+    LLAMA_LOG_INFO("%s: EAGLE3 fc_norm = %d, norm_output = %d, n_swa = %u, lm_head_candidates = %u\n", __func__,
+            hparams.fc_norm, hparams.norm_output, hparams.n_swa, hparams.n_lm_head_candidates);
+
     type = LLM_TYPE_UNKNOWN;
 }
 
@@ -57,14 +75,33 @@ void llama_model_eagle3::load_arch_tensors(llama_model_loader &) {
     // Feature fusion layer: projects 3 target layers to draft hidden size
     fc = create_tensor(tn(LLM_TENSOR_FC, "weight"), {n_embd_inp, n_embd}, 0);
 
-    // RMSNorm on the fused target features (input to fc), only when norm_before_fc is set.
+    // RMSNorm on the fused target features (input to fc), only when norm_before_fc or fc_norm is set.
     if (hparams.norm_before_fc) {
         output_norm_enc = create_tensor(tn(LLM_TENSOR_ENC_OUTPUT_NORM, "weight"), {n_embd_inp}, 0);
+    } else if (hparams.fc_norm) {
+        const int64_t n_tgt = target_layer_ids.size();
+        output_norm_enc = create_tensor(tn(LLM_TENSOR_ENC_OUTPUT_NORM, "weight"), {n_embd_inp / n_tgt, n_tgt}, 0);
     }
 
     // Output layer (uses draft vocab size)
     output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
     output      = create_tensor(tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_draft_vocab}, TENSOR_NOT_REQUIRED);
+
+    if (hparams.n_lm_head_candidates > 0) {
+        if (d2t) {
+            throw std::runtime_error("EAGLE3: low-rank lm_head with d2t is not supported");
+        }
+        if (hparams.n_lm_head_candidates > n_draft_vocab) {
+            throw std::runtime_error("EAGLE3: lm_head_candidates is larger than the vocab");
+        }
+        const struct ggml_tensor * lr_meta = ml->get_tensor_meta(tn(LLM_TENSOR_OUTPUT_LR_DOWN, "weight").str().c_str());
+        if (!lr_meta) {
+            throw std::runtime_error("EAGLE3: lm_head_candidates is set but output_lr_down is missing");
+        }
+        const int64_t n_rank = lr_meta->ne[1];
+        output_lr_down = create_tensor(tn(LLM_TENSOR_OUTPUT_LR_DOWN, "weight"), {n_embd, n_rank}, 0);
+        output_lr      = create_tensor(tn(LLM_TENSOR_OUTPUT_LR,      "weight"), {n_rank, n_draft_vocab}, 0);
+    }
 
     // Token embeddings (optional - Llama 3.3 70B EAGLE3 has its own)
     const struct ggml_tensor * tok_embd_meta = ml->get_tensor_meta(tn(LLM_TENSOR_TOKEN_EMBD, "weight").str().c_str());
@@ -131,6 +168,12 @@ llama_model_eagle3::graph<true>::graph(const llama_model & model, const llm_grap
     if (hparams.norm_before_fc) {
         cur = build_norm(cur, model.output_norm_enc, NULL, LLM_NORM_RMS, -1);
         cb(cur, "enc_input_norm", -1);
+    } else if (hparams.fc_norm) {
+        const int64_t n_embd_tgt = model.output_norm_enc->ne[0];
+        cur = ggml_reshape_3d(ctx0, cur, n_embd_tgt, model.output_norm_enc->ne[1], n_tokens);
+        cur = build_norm(cur, model.output_norm_enc, NULL, LLM_NORM_RMS, -1);
+        cur = ggml_reshape_2d(ctx0, cur, hparams.n_embd_inp_enc(), n_tokens);
+        cb(cur, "enc_input_norm", -1);
     }
 
     // Feature fusion layer
@@ -191,7 +234,17 @@ llama_model_eagle3::graph<false>::graph(const llama_model & model, const llm_gra
     // inp_pos - contains the positions
     ggml_tensor * inp_pos = build_inp_pos();
 
-    auto * inp_attn = build_attn_inp_kv();
+    ggml_tensor * inp_out_ids = build_inp_out_ids();
+
+    const bool use_iswa = hparams.swa_type != LLAMA_SWA_TYPE_NONE;
+
+    llm_graph_input_attn_kv      * inp_attn      = nullptr;
+    llm_graph_input_attn_kv_iswa * inp_attn_iswa = nullptr;
+    if (use_iswa) {
+        inp_attn_iswa = build_attn_inp_kv_iswa();
+    } else {
+        inp_attn = build_attn_inp_kv();
+    }
 
     const float kq_scale = 1.0f/sqrtf(float(n_embd_head));
 
@@ -252,9 +305,9 @@ llama_model_eagle3::graph<false>::graph(const llama_model & model, const llm_gra
         cb(Qcur, "Qcur_rope", il);
         cb(Kcur, "Kcur_rope", il);
 
-        cur = build_attn(inp_attn,
-                model.layers[il].wo, NULL, nullptr,
-                Qcur, Kcur, Vcur, nullptr, nullptr, nullptr, kq_scale, il);
+        cur = use_iswa
+            ? build_attn(inp_attn_iswa, model.layers[il].wo, NULL, nullptr, Qcur, Kcur, Vcur, nullptr, nullptr, nullptr, kq_scale, il)
+            : build_attn(inp_attn,      model.layers[il].wo, NULL, nullptr, Qcur, Kcur, Vcur, nullptr, nullptr, nullptr, kq_scale, il);
 
         // Add residual and update it
         ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
@@ -281,16 +334,16 @@ llama_model_eagle3::graph<false>::graph(const llama_model & model, const llm_gra
         inpL = cur;
     }
 
-    cur = inpL;
-
-    // Output prenorm state (for next token's g_embeddings in autoregressive generation)
-    ggml_set_output(cur);
-    res->t_h_nextn = cur;
-
-    cur = build_norm(cur,
+    cur = build_norm(inpL,
             model.output_norm, NULL,
             LLM_NORM_RMS, -1);
     cb(cur, "result_norm", -1);
+
+    // Output prenorm state (for next token's g_embeddings in autoregressive generation)
+    res->t_h_nextn = hparams.norm_output ? cur : inpL;
+    ggml_set_output(res->t_h_nextn);
+
+    cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
     // lm_head - projects to draft vocabulary
     // if the draft has no own output projection, inherit the target model's lm_head
@@ -302,7 +355,28 @@ llama_model_eagle3::graph<false>::graph(const llama_model & model, const llm_gra
         GGML_ASSERT(model_other->output != nullptr && "EAGLE3 decoder requires an output projection (own or from target model)");
         output = model_other->output;
     }
-    cur = build_lora_mm(output, cur);
+    if (model.output_lr && n_outputs > 0) {
+        const int64_t n_cand  = hparams.n_lm_head_candidates;
+        const int64_t n_vocab = output->ne[1];
+
+        ggml_tensor * scores = build_lora_mm(model.output_lr, build_lora_mm(model.output_lr_down, cur));
+        cb(scores, "lr_scores", -1);
+
+        ggml_tensor * cand = ggml_top_k(ctx0, scores, n_cand);
+        cb(cand, "lr_cand", -1);
+
+        ggml_tensor * rows = ggml_get_rows(ctx0, output, ggml_reshape_1d(ctx0, cand, n_cand*n_outputs));
+        rows = ggml_reshape_3d(ctx0, rows, n_embd, n_cand, n_outputs);
+
+        ggml_tensor * logits_cand = ggml_mul_mat(ctx0, rows, ggml_reshape_3d(ctx0, cur, n_embd, 1, n_outputs));
+        cb(logits_cand, "lr_logits", -1);
+
+        ggml_tensor * logits = ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_vocab, n_outputs), -INFINITY);
+        cur = ggml_set_rows(ctx0, logits, ggml_reshape_3d(ctx0, logits_cand, 1, n_cand, n_outputs), cand);
+        cur = ggml_reshape_2d(ctx0, cur, n_vocab, n_outputs);
+    } else {
+        cur = build_lora_mm(output, cur);
+    }
 
     if (model.d2t) {
         const int64_t n_draft_vocab = cur->ne[0];

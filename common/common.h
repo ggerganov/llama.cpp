@@ -175,6 +175,7 @@ enum common_speculative_type {
     COMMON_SPECULATIVE_TYPE_NONE,          // no speculative decoding
     COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE,  // standalone draft model speculative decoding
     COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3,  // Eagle3 speculative decoding
+    COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE4,
     COMMON_SPECULATIVE_TYPE_DRAFT_MTP,     // Multi-token prediction
     COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,  // DFlash speculative decoding
     COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,  // DSpark speculative decoding (DFlash + Markov head)
@@ -400,7 +401,7 @@ struct common_params_speculative {
 
     uint32_t need_n_rs_seq() const {
         bool needs_rs_seq = std::any_of(types.begin(), types.end(), [&](auto t) {
-            return t == COMMON_SPECULATIVE_TYPE_DRAFT_MTP || t == COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3 || t == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH || t == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
+            return t == COMMON_SPECULATIVE_TYPE_DRAFT_MTP || t == COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE3 || t == COMMON_SPECULATIVE_TYPE_DRAFT_EAGLE4 || t == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH || t == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
         });
 
         return needs_rs_seq ? draft.n_max : 0u;

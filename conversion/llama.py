@@ -23,6 +23,7 @@ from .base import ModelBase, TextModel, gguf, logger
     "LlavaForConditionalGeneration",
     "VoxtralForConditionalGeneration",
     "LlamaForCausalLMEagle3",
+    "LlamaForCausalLMEagle4",
     "Eagle3LlamaForCausalLM",
     "Eagle3Speculator",
     "Eagle3DraftModel",
@@ -49,6 +50,8 @@ class LlamaModel(TextModel):
         # Detect eagle3 draft checkpoint by hparams (some models don't use a distinct HF arch name)
         if "draft_vocab_size" in self.hparams and self.hparams["num_hidden_layers"] == 1:
             self.is_eagle3 = True
+            self.is_eagle4 = self.hf_arch == "LlamaForCausalLMEagle4"
+            self._eagle4_fc_norm: dict[int, Tensor] = {}
             self.model_arch = gguf.MODEL_ARCH.EAGLE3
             logger.info("Detected EAGLE-3 draft model, switching to EAGLE3 architecture")
             # Re-initialize tensor_map with eagle3 architecture
@@ -75,6 +78,9 @@ class LlamaModel(TextModel):
             # if present, else derive from the target layer count.
             target_num_layers = target_config["num_hidden_layers"]
             aux_layer_ids = eagle3_raw_config.get("eagle_aux_hidden_state_layer_ids")
+            if self.is_eagle4:
+                # EAGLE-4 lists layer outputs, target_layers are layer inputs
+                aux_layer_ids = [i + 1 for i in eagle3_raw_config["eagle_config"]["eagle_aux_hidden_state_layer_ids"]]
             if aux_layer_ids:
                 target_layers = aux_layer_ids
             else:
@@ -102,6 +108,46 @@ class LlamaModel(TextModel):
             norm_before_fc = eagle3_raw_config.get("norm_before_fc", False)
             logger.info(f"EAGLE-3: norm_before_fc = {norm_before_fc}")
             self.gguf_writer.add_norm_before_fc(norm_before_fc)
+
+            if self.is_eagle4:
+                self._set_eagle4_parameters(eagle3_raw_config)
+
+    def _set_eagle4_parameters(self, cfg: dict):
+        unsupported = [
+            ("enable_moe",           cfg.get("enable_moe") is True),
+            ("attn_norm",            cfg.get("attn_norm") is True),
+            ("enable_post_mlp_norm", cfg.get("enable_post_mlp_norm") is True),
+            ("NoPE",                 cfg.get("use_rope") is False or cfg.get("position_embedding_type") == "none" or cfg.get("partial_rotary_factor") == 0),
+            ("num_aux_hidden_states != 3", cfg.get("num_aux_hidden_states", 3) != 3),
+            ("reduced draft vocab",  cfg.get("draft_vocab_size", cfg["vocab_size"]) != cfg["vocab_size"]),
+        ]
+        for name, used in unsupported:
+            if used:
+                raise ValueError(f"EAGLE-4: draft with {name} is not supported")
+
+        fc_norm = bool(cfg.get("fc_norm", cfg.get("enable_fc_norm", False)))
+        norm_output = bool(cfg.get("norm_output", False))
+        logger.info(f"EAGLE-4: fc_norm = {fc_norm}, norm_output = {norm_output}")
+        self.gguf_writer.add_fc_norm(fc_norm)
+        self.gguf_writer.add_norm_output(norm_output)
+
+        window = cfg.get("sliding_window")
+        if (layer_types := cfg.get("layer_types")) is not None:
+            use_swa = layer_types[0] == "sliding_attention"
+        else:
+            use_swa = cfg.get("use_sliding_window", window is not None)
+        if use_swa:
+            if not isinstance(window, int) or window <= 0:
+                raise ValueError(f"EAGLE-4: sliding attention needs a positive sliding_window, got {window}")
+            logger.info(f"EAGLE-4: sliding_window = {window}")
+            self.gguf_writer.add_sliding_window(window)
+            self.gguf_writer.add_sliding_window_pattern([True])
+
+        if (head := cfg.get("efficient_lm_head_config")) is not None:
+            if head.get("type") not in ("low_rank", "weighted_low_rank"):
+                raise ValueError(f"EAGLE-4: efficient_lm_head type {head.get('type')} is not supported")
+            logger.info(f"EAGLE-4: low-rank lm_head rank = {head['rank']}, candidates = {head['num_candidates']}")
+            self.gguf_writer.add_lm_head_candidates(head["num_candidates"])
 
     def set_vocab(self):
         # eagle3: use tokenizer from target model if provided
@@ -250,6 +296,16 @@ class LlamaModel(TextModel):
                 return
             if name.endswith(".hidden_norm.weight"):
                 yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_NORM_2, bid), data_torch)
+                return
+
+        if getattr(self, 'is_eagle4', False):
+            if name == "embed_tokens.weight":
+                return
+            if name.startswith("fc_norm."):
+                self._eagle4_fc_norm[int(name.split(".")[1])] = data_torch
+                if len(self._eagle4_fc_norm) == 3:
+                    yield (self.format_tensor_name(gguf.MODEL_TENSOR.ENC_OUTPUT_NORM),
+                           torch.stack([self._eagle4_fc_norm[i] for i in range(3)]))
                 return
 
         n_head = self.find_hparam(["n_heads", "num_attention_heads"])

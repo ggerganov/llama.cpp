@@ -52,6 +52,25 @@ Supported EAGLE-3 draft models include:
 
 For the full and up-to-date list of supported models, see #18039.
 
+### EAGLE-4 (`draft-eagle4`)
+
+EAGLE-4 dense drafts (`LlamaForCausalLMEagle4`) build on EAGLE-3 and convert to the same `eagle3` architecture.
+On top of EAGLE-3 they use one RMSNorm per target layer before `fc`, feed the normed output to the next draft
+step, use sliding-window attention, and pick the draft tokens with a low-rank `lm_head`: it scores the whole
+vocabulary at a low rank, then the full `lm_head` scores only the top candidates. The `draft-eagle4` type is
+detected from the draft GGUF, so `--spec-type` can be left out.
+
+```bash
+python convert_hf_to_gguf.py EAGLE-Corp/Qwen3.8-27B-EAGLE4 \
+    --target-model-dir Qwen/Qwen3.8-27B --outtype bf16 --outfile Qwen3.8-27B-eagle4.gguf
+
+llama-server -m Qwen3.8-27B.gguf -md Qwen3.8-27B-eagle4.gguf --spec-type draft-eagle4
+```
+
+Only the drafting model is supported: drafts are a single chain, without the EAGLE-4 tree search and cost model.
+Drafts with MoE layers, `attn_norm` or no RoPE (for example the Nemotron 3.5 Super draft) are not supported.
+The EAGLE-4 weights are released under their own license, check it before use.
+
 ### DFlash (`draft-dflash`)
 
 DFlash produces an entire block of draft tokens in a single forward pass (block diffusion) and
@@ -224,7 +243,7 @@ Use exactly one of these options:
 ### General Speculative Parameters
 
 ```
---spec-type [none|draft-simple|draft-eagle3|draft-dflash|draft-dspark|draft-mtp|ngram-cache|ngram-simple|ngram-map-k|ngram-map-k4v|ngram-mod]
+--spec-type [none|draft-simple|draft-eagle3|draft-eagle4|draft-dflash|draft-dspark|draft-mtp|ngram-cache|ngram-simple|ngram-map-k|ngram-map-k4v|ngram-mod]
                                         comma-separated list of types of speculative decoding to use
                                         (default: none)
                                         (env: LLAMA_ARG_SPEC_TYPE)
@@ -367,6 +386,7 @@ Specifies a comma-separated list of speculative decoding types to use.
 | `none` | No speculative decoding (default) |
 | `draft-simple` | Use a simple draft model for speculation |
 | `draft-eagle3` | Use an EAGLE-3 draft model that reads the target's hidden states |
+| `draft-eagle4` | Use an EAGLE-4 draft model (EAGLE-3 draft + low-rank candidate `lm_head`) |
 | `draft-dflash` | Use a DFlash block-diffusion draft model that emits a block per step |
 | `draft-dspark` | Use a DSpark draft model (DFlash backbone + semi-autoregressive Markov head) |
 | `draft-mtp` | Use Multi Token Prediction (MTP) heads from the main model |

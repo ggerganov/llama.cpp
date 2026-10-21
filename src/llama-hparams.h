@@ -67,6 +67,8 @@ struct llama_hparams {
     bool swin_norm;
     bool norm_before_residual = false;
     bool norm_before_fc       = false;
+    bool fc_norm              = false;
+    bool norm_output          = false;
 
     uint32_t n_ctx_train; // context size the model was trained on
     uint32_t n_embd;
@@ -261,6 +263,8 @@ struct llama_hparams {
 
     // output embedding dimension (0 = use n_embd)
     uint32_t n_embd_out_impl = 0;
+
+    uint32_t n_lm_head_candidates = 0;
 
     uint32_t dflash_block_size       = 0;
     uint32_t dflash_conv_kernel_size = 0;
