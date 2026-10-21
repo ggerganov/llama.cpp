@@ -496,7 +496,10 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     memset(&L, 0, sizeof(L));
 
     const uint32_t n_srcs = curr_n + 1;
-    if (k0->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE && k1->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) {
+    if (k0->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE || k1->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) {
+        if (k0->kernel_type != HTP_BINARY_KERNEL_SAME_SHAPE) {
+            kparams = *k1;
+        }
         kparams.n_srcs          = (uint8_t) n_srcs;
         kparams.rows_per_buffer = 0;
 
