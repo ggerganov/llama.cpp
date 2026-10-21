@@ -32,7 +32,8 @@ export function parseWriteFileMeta(section: AgenticSection): WriteFileMeta | nul
 
 	const filePath = extractToolArgPath(args);
 	const fileName = fileNameFromPath(filePath);
-	const content = typeof args.content === 'string' ? args.content : '';
+	// undefined, not '', so an intentionally empty write still renders
+	const content = typeof args.content === 'string' ? args.content : undefined;
 	const language = languageForPath(filePath);
 	const resultObj = tryParseToolResultObject(section.toolResult);
 	const bytesWritten =

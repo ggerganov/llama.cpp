@@ -52,7 +52,7 @@
 
 				<span>{writeFileBody.errorMessage}</span>
 			</div>
-		{:else if writeFileBody?.content}
+		{:else if writeFileBody?.content !== undefined}
 			<SyntaxHighlightedCode
 				code={writeFileBody.content}
 				language={writeFileBody.language}

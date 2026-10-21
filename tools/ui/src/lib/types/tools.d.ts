@@ -37,7 +37,8 @@ export interface WriteFileMeta {
 	fileName?: string;
 	filePath?: string;
 	language: string;
-	content: string;
+	/** Undefined until the args carry a content string; an empty write is ''. */
+	content?: string;
 	bytesWritten?: number;
 	resultMessage?: string;
 	errorMessage?: string;

@@ -64,4 +64,19 @@ describe('file tool calls render their body without a path', () => {
 
 		expect(document.body.textContent).toContain('contents');
 	});
+
+	it('write_file renders an empty code block for a finished empty write', async () => {
+		// content of '' used to fall through to the raw-args fallback
+		const section = makeSection(BuiltInTool.SERVER_WRITE_FILE, '{"content":""}');
+
+		section.toolResult = '{"result":"File written","bytes":0}';
+
+		render(ChatMessageToolCallBlockWriteFile, { isStreaming: false, open: true, section });
+
+		await tick();
+
+		expect(document.querySelector('pre code.hljs')).toBeTruthy();
+		expect(document.body.textContent).not.toContain('"content"');
+		expect(document.body.textContent).toMatch(/0\s*bytes/);
+	});
 });
