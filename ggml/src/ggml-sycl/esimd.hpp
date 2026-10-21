@@ -630,37 +630,93 @@ ESIMD_INLINE simd<uint32_t, 128> xmx_bytes_sub(simd<uint32_t, 128> x, uint32_t z
     return ((x | 0x80808080u) - zero_x4) ^ 0x80808080u;
 }
 
-// Q6_K reorder layout: [ql: nb*128] [qh: nb*64] [scales int8: nb*16] [d: nb*2]
-template <bool SR> struct xmx_traits_q6_k {
-    static constexpr bool short_rows = SR;
-    static constexpr int  nc_wide = 7;
-    static constexpr bool has_min = false;
-    static constexpr bool plain   = false;
-    static constexpr bool min16   = false;
+// How the scales of a quant type enter the DPAS epilogue of a group of 32 (see xmx_group)
+enum class xmx_scale_kind {
+    split,  // two scales per group, one per 16 wide half: the weights are masked to one half for each DPAS
+    min,    // one scale and one min per group: a second DPAS sums the activations for the min term
+    min16,  // a scale and a min per 16 wide half: the scales are folded into the DPAS operands
+    plain,  // one scale per group
+};
 
-    struct ctx {
+// What every quant type states about itself. nc_wide is the tile width from which it takes the large register file.
+template <bool SR, int NC_WIDE, xmx_scale_kind KIND> struct xmx_traits_base {
+    static constexpr bool short_rows = SR;
+    static constexpr int  nc_wide    = NC_WIDE;
+    static constexpr bool has_min    = KIND == xmx_scale_kind::min;
+    static constexpr bool plain      = KIND == xmx_scale_kind::plain;
+    static constexpr bool min16      = KIND == xmx_scale_kind::min16;
+};
+
+// The part of a context every quant type shares: the last row (the clamp of 2D loads), this thread's first row and
+// the number of super-blocks per row. A type adds its array pointers and 2D load pitches.
+struct xmx_ctx_base {
+    unsigned h;
+    int      row0;
+    int      bpr;
+};
+
+ESIMD_INLINE void xmx_ctx_init(xmx_ctx_base & c, int nrows, int bpr, int row0) {
+    c.h    = nrows - 1;
+    c.row0 = row0;
+    c.bpr  = bpr;
+}
+
+// pitch of a 2D load over an array with `bytes` bytes per super-block
+constexpr unsigned xmx_pitch(int bpr, int bytes) {
+    return bpr * bytes - 1;
+}
+
+// per group row scales of the 16 rows, one vector per group
+template <int N> struct xmx_row_scales {
+    simd<float, 16> v[N];
+
+    ESIMD_INLINE simd<float, 16> get(int i) { return v[i]; }
+};
+
+// the 12 packed scale bytes of a super-block (Q3_K, Q4_K, Q5_K) of the 16 rows as three dwords
+ESIMD_INLINE void xmx_load_sc12(const uint8_t *            sc,
+                                const simd<uint32_t, 16> & bi,
+                                simd<uint32_t, 16> &       w0,
+                                simd<uint32_t, 16> &       w1,
+                                simd<uint32_t, 16> &       w2) {
+    using namespace sycl::ext::intel::esimd;
+    w0 = gather<uint32_t, 16>((const uint32_t *) sc, bi * 12);
+    w1 = gather<uint32_t, 16>((const uint32_t *) sc, bi * 12 + 4);
+    w2 = gather<uint32_t, 16>((const uint32_t *) sc, bi * 12 + 8);
+}
+
+// d and dmin (a half2 per super-block, Q2_K, Q4_K, Q5_K) of the 16 rows
+ESIMD_INLINE void xmx_load_dm(const sycl::half *          dm,
+                              const simd<uint32_t, 16> & bi,
+                              simd<float, 16> &          d,
+                              simd<float, 16> &          dmin) {
+    using namespace sycl::ext::intel::esimd;
+    d    = convert<float>(gather<sycl::half, 16>(dm, bi * (2 * (uint32_t) sizeof(sycl::half))));
+    dmin = convert<float>(
+        gather<sycl::half, 16>(dm, bi * (2 * (uint32_t) sizeof(sycl::half)) + (uint32_t) sizeof(sycl::half)));
+}
+
+// Q6_K reorder layout: [ql: nb*128] [qh: nb*64] [scales int8: nb*16] [d: nb*2]
+template <bool SR> struct xmx_traits_q6_k : xmx_traits_base<SR, 7, xmx_scale_kind::split> {
+    struct ctx : xmx_ctx_base {
         const uint8_t *    ql;
         const uint8_t *    qh;
         const int8_t *     scales;
         const sycl::half * dh;
-        unsigned           h, pl, ph, ps;
-        int                row0;
-        int                bpr;
+        unsigned           pl, ph, ps;
     };
 
     static ESIMD_INLINE ctx make(const void * vx, int nrows, int bpr, int row0) {
         const size_t nb = (size_t) nrows * bpr;
         ctx          c;
+        xmx_ctx_init(c, nrows, bpr, row0);
         c.ql     = (const uint8_t *) vx;
         c.qh     = c.ql + nb * (QK_K / 2);
         c.scales = (const int8_t *) (c.qh + nb * (QK_K / 4));
         c.dh     = (const sycl::half *) (c.scales + nb * (QK_K / 16));
-        c.h      = nrows - 1;
-        c.pl     = bpr * (QK_K / 2) - 1;
-        c.ph     = bpr * (QK_K / 4) - 1;
-        c.ps     = bpr * (QK_K / 16) - 1;
-        c.row0   = row0;
-        c.bpr    = bpr;
+        c.pl     = xmx_pitch(bpr, QK_K / 2);
+        c.ph     = xmx_pitch(bpr, QK_K / 4);
+        c.ps     = xmx_pitch(bpr, QK_K / 16);
         return c;
     }
 
@@ -715,52 +771,37 @@ template <bool SR> struct xmx_traits_q6_k {
 
 // Q3_K reorder layout: [qs: nb*64] [hmask: nb*32] [scales: nb*12] [d: nb*2]
 // chunk s of 32: 2 bits from qs byte 32*(s/4)+l at shift 2*(s%4), high bit is hmask[l] bit s, value is q - 4
-template <bool SR> struct xmx_traits_q3_k {
-    static constexpr bool short_rows = SR;
-    static constexpr int  nc_wide = 16;
-    static constexpr bool has_min = false;
-    static constexpr bool plain   = false;
-    static constexpr bool min16   = false;
-
-    struct ctx {
+template <bool SR> struct xmx_traits_q3_k : xmx_traits_base<SR, 16, xmx_scale_kind::split> {
+    struct ctx : xmx_ctx_base {
         const uint8_t *    qs;
         const uint8_t *    hm;
         const uint8_t *    sc;
         const sycl::half * dh;
-        unsigned           h, pq, ph;
-        int                row0;
-        int                bpr;
+        unsigned           pq, ph;
     };
 
     static ESIMD_INLINE ctx make(const void * vx, int nrows, int bpr, int row0) {
         const size_t nb = (size_t) nrows * bpr;
         ctx          c;
-        c.qs   = (const uint8_t *) vx;
-        c.hm   = c.qs + nb * (QK_K / 4);
-        c.sc   = c.hm + nb * (QK_K / 8);
-        c.dh   = (const sycl::half *) (c.sc + nb * 12);
-        c.h    = nrows - 1;
-        c.pq   = bpr * (QK_K / 4) - 1;
-        c.ph   = bpr * (QK_K / 8) - 1;
-        c.row0 = row0;
-        c.bpr  = bpr;
+        xmx_ctx_init(c, nrows, bpr, row0);
+        c.qs = (const uint8_t *) vx;
+        c.hm = c.qs + nb * (QK_K / 4);
+        c.sc = c.hm + nb * (QK_K / 8);
+        c.dh = (const sycl::half *) (c.sc + nb * 12);
+        c.pq = xmx_pitch(bpr, QK_K / 4);
+        c.ph = xmx_pitch(bpr, QK_K / 8);
         return c;
     }
 
-    struct scales_t {
-        simd<float, 16> rs[16];
-
-        ESIMD_INLINE simd<float, 16> get(int gr) { return rs[gr]; }
-    };
+    using scales_t = xmx_row_scales<16>;
 
     static ESIMD_INLINE scales_t load_scales(const ctx & c, int sb, const simd<uint32_t, 16> & rows) {
         using namespace sycl::ext::intel::esimd;
         scales_t           s;
         simd<uint32_t, 16> bi = rows * c.bpr + sb;
-        simd<uint32_t, 16> w0 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12);
-        simd<uint32_t, 16> w1 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12 + 4);
-        simd<uint32_t, 16> w2 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12 + 8);
-        simd<float, 16>    dv = convert<float>(gather<sycl::half, 16>(c.dh, bi * (uint32_t) sizeof(sycl::half)));
+        simd<uint32_t, 16> w0, w1, w2;
+        xmx_load_sc12(c.sc, bi, w0, w1, w2);
+        simd<float, 16> dv = convert<float>(gather<sycl::half, 16>(c.dh, bi * (uint32_t) sizeof(sycl::half)));
 #pragma unroll
         for (int i = 0; i < 16; ++i) {
             const simd<uint32_t, 16> lo   = (i % 8) < 4 ? w0 : w1;
@@ -768,7 +809,7 @@ template <bool SR> struct xmx_traits_q3_k {
             simd<uint32_t, 16>       nib  = (lo >> (8 * bl + (i < 8 ? 0 : 4))) & 0xFu;
             simd<uint32_t, 16>       hi   = ((w2 >> (8 * bl + 2 * (i / 4))) & 3u) << 4;
             simd<int, 16>            code = nib | hi;
-            s.rs[i]                       = convert<float>(code - 32) * dv;
+            s.v[i]                        = convert<float>(code - 32) * dv;
         }
         return s;
     }
@@ -794,57 +835,41 @@ template <bool SR> struct xmx_traits_q3_k {
 // Q4_K and Q5_K (QH) reorder layout: [qs: nb*128] ([qh: nb*32]) [scales: nb*12] [dm: nb*4]
 // group j of 32: nibble of qs byte 32*(j/2)+l (low for even j), Q5_K adds 16 * bit j of qh[l]
 // value is dall * sc_j * q - dmin * m_j, one scale and one min per group
-template <bool QH, bool SR> struct xmx_traits_q45_k {
-    static constexpr bool short_rows = SR;
-    static constexpr int  nc_wide = QH ? 16 : 7;
-    static constexpr bool has_min = true;
-    static constexpr bool plain   = false;
-    static constexpr bool min16   = false;
-
-    struct ctx {
+template <bool QH, bool SR> struct xmx_traits_q45_k : xmx_traits_base<SR, QH ? 16 : 7, xmx_scale_kind::min> {
+    struct ctx : xmx_ctx_base {
         const uint8_t *    qs;
         const uint8_t *    qh;
         const uint8_t *    sc;
         const sycl::half * dm;
-        unsigned           h, pq, ph;
-        int                row0;
-        int                bpr;
+        unsigned           pq, ph;
     };
 
     static ESIMD_INLINE ctx make(const void * vx, int nrows, int bpr, int row0) {
         const size_t nb = (size_t) nrows * bpr;
         ctx          c;
-        c.qs   = (const uint8_t *) vx;
-        c.qh   = c.qs + nb * (QK_K / 2);
-        c.sc   = QH ? c.qh + nb * (QK_K / 8) : c.qh;
-        c.dm   = (const sycl::half *) (c.sc + nb * 12);
-        c.h    = nrows - 1;
-        c.pq   = bpr * (QK_K / 2) - 1;
-        c.ph   = bpr * (QK_K / 8) - 1;
-        c.row0 = row0;
-        c.bpr  = bpr;
+        xmx_ctx_init(c, nrows, bpr, row0);
+        c.qs = (const uint8_t *) vx;
+        c.qh = c.qs + nb * (QK_K / 2);
+        c.sc = QH ? c.qh + nb * (QK_K / 8) : c.qh;
+        c.dm = (const sycl::half *) (c.sc + nb * 12);
+        c.pq = xmx_pitch(bpr, QK_K / 2);
+        c.ph = xmx_pitch(bpr, QK_K / 8);
         return c;
     }
 
     struct scales_t {
-        simd<float, 16> rd[8];
-        simd<float, 16> rm[8];
-
-        ESIMD_INLINE simd<float, 16> get_d(int j) { return rd[j]; }
-
-        ESIMD_INLINE simd<float, 16> get_m(int j) { return rm[j]; }
+        xmx_row_scales<8> d;  // dall * scale of each group
+        xmx_row_scales<8> m;  // dmin * min of each group
     };
 
     static ESIMD_INLINE scales_t load_scales(const ctx & c, int sb, const simd<uint32_t, 16> & rows) {
         using namespace sycl::ext::intel::esimd;
         scales_t           s;
         simd<uint32_t, 16> bi = rows * c.bpr + sb;
-        simd<uint32_t, 16> w0 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12);
-        simd<uint32_t, 16> w1 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12 + 4);
-        simd<uint32_t, 16> w2 = gather<uint32_t, 16>((const uint32_t *) c.sc, bi * 12 + 8);
-        simd<float, 16>    d  = convert<float>(gather<sycl::half, 16>(c.dm, bi * (2 * (uint32_t) sizeof(sycl::half))));
-        simd<float, 16>    dmin = convert<float>(
-            gather<sycl::half, 16>(c.dm, bi * (2 * (uint32_t) sizeof(sycl::half)) + (uint32_t) sizeof(sycl::half)));
+        simd<uint32_t, 16> w0, w1, w2;
+        xmx_load_sc12(c.sc, bi, w0, w1, w2);
+        simd<float, 16> d, dmin;
+        xmx_load_dm(c.dm, bi, d, dmin);
 #pragma unroll
         for (int j = 0; j < 8; ++j) {
             const int          jj = j % 4;
@@ -856,8 +881,8 @@ template <bool QH, bool SR> struct xmx_traits_q45_k {
                 sc = ((w2 >> (8 * jj)) & 0xFu) | (((w0 >> (8 * jj + 6)) & 3u) << 4);
                 m  = ((w2 >> (8 * jj + 4)) & 0xFu) | (((w1 >> (8 * jj + 6)) & 3u) << 4);
             }
-            s.rd[j] = convert<float>(simd<int, 16>(sc)) * d;
-            s.rm[j] = convert<float>(simd<int, 16>(m)) * dmin;
+            s.d.v[j] = convert<float>(simd<int, 16>(sc)) * d;
+            s.m.v[j] = convert<float>(simd<int, 16>(m)) * dmin;
         }
         return s;
     }
@@ -889,51 +914,31 @@ template <bool QH, bool SR> struct xmx_traits_q45_k {
 // Q2_K reorder layout: [qs: nb*64] [scales: nb*16] [dm: nb*4]
 // chunk s of 32: 2 bits from qs byte 32*(s/4)+l at shift 2*(s%4), each 16 wide half has a 4 bit scale and min
 // value is d * (code & 15) * q - dmin * (code >> 4)
-template <bool SR> struct xmx_traits_q2_k {
-    static constexpr bool short_rows = SR;
-    static constexpr int  nc_wide = 16;
-    static constexpr bool has_min = false;
-    static constexpr bool plain   = false;
-    static constexpr bool min16   = true;
-
-    struct ctx {
+template <bool SR> struct xmx_traits_q2_k : xmx_traits_base<SR, 16, xmx_scale_kind::min16> {
+    struct ctx : xmx_ctx_base {
         const uint8_t *    qs;
         const uint8_t *    sc;
         const sycl::half * dm;
-        unsigned           h, pq, ps;
-        int                row0;
-        int                bpr;
+        unsigned           pq, ps;
     };
 
     static ESIMD_INLINE ctx make(const void * vx, int nrows, int bpr, int row0) {
         const size_t nb = (size_t) nrows * bpr;
         ctx          c;
-        c.qs   = (const uint8_t *) vx;
-        c.sc   = c.qs + nb * (QK_K / 4);
-        c.dm   = (const sycl::half *) (c.sc + nb * (QK_K / 16));
-        c.h    = nrows - 1;
-        c.pq   = bpr * (QK_K / 4) - 1;
-        c.ps   = bpr * (QK_K / 16) - 1;
-        c.row0 = row0;
-        c.bpr  = bpr;
+        xmx_ctx_init(c, nrows, bpr, row0);
+        c.qs = (const uint8_t *) vx;
+        c.sc = c.qs + nb * (QK_K / 4);
+        c.dm = (const sycl::half *) (c.sc + nb * (QK_K / 16));
+        c.pq = xmx_pitch(bpr, QK_K / 4);
+        c.ps = xmx_pitch(bpr, QK_K / 16);
         return c;
     }
 
     struct scales_t {
-        simd<uint8_t, 256> code;
+        simd<uint8_t, 256> code;  // 4 bit scale (low) and min (high) of each 16 wide half
         simd<float, 16>    d, dmin;
 
         ESIMD_INLINE simd<uint8_t, 16> byte(int gr) { return code.template select<16, 4>(64 * (gr / 4) + (gr % 4)); }
-
-        ESIMD_INLINE simd<float, 16> get_d(int gr) {
-            simd<uint8_t, 16> c = byte(gr) & (uint8_t) 15;
-            return sycl::ext::intel::esimd::convert<float>(c) * d;
-        }
-
-        ESIMD_INLINE simd<float, 16> get_m(int gr) {
-            simd<uint8_t, 16> c = byte(gr) >> (uint8_t) 4;
-            return sycl::ext::intel::esimd::convert<float>(c) * dmin;
-        }
     };
 
     static ESIMD_INLINE scales_t load_scales(const ctx & c, int sb, const simd<uint32_t, 16> & rows) {
@@ -942,9 +947,7 @@ template <bool SR> struct xmx_traits_q2_k {
         simd<uint32_t, 16> bi  = rows * c.bpr + sb;
         simd<uint32_t, 64> raw = xmx_load_t<4, SR>(c.sc, c.ps, c.h, sb * 4, c.row0);
         s.code                 = raw.template bit_cast_view<uint8_t>();
-        s.d                    = convert<float>(gather<sycl::half, 16>(c.dm, bi * (2 * (uint32_t) sizeof(sycl::half))));
-        s.dmin                 = convert<float>(
-            gather<sycl::half, 16>(c.dm, bi * (2 * (uint32_t) sizeof(sycl::half)) + (uint32_t) sizeof(sycl::half)));
+        xmx_load_dm(c.dm, bi, s.d, s.dmin);
         return s;
     }
 
@@ -965,36 +968,24 @@ template <bool SR> struct xmx_traits_q2_k {
 
 // Q8_0 reorder layout: [qs: nrows*K bytes] [d: one half per 32 weights]
 // the int8 weights feed DPAS as they are, a group is one block with one scale
-template <bool SR> struct xmx_traits_q8_0 {
-    static constexpr bool short_rows = SR;
-    static constexpr int  nc_wide = 16;
-    static constexpr bool has_min = false;
-    static constexpr bool plain   = true;
-    static constexpr bool min16   = false;
-
-    struct ctx {
+template <bool SR> struct xmx_traits_q8_0 : xmx_traits_base<SR, 16, xmx_scale_kind::plain> {
+    struct ctx : xmx_ctx_base {
         const uint8_t *    qs;
         const sycl::half * dh;
-        unsigned           h, pq;
-        int                row0;
-        int                bpr;
+        unsigned           pq;
     };
 
     static ESIMD_INLINE ctx make(const void * vx, int nrows, int bpr, int row0) {
         ctx c;
-        c.qs   = (const uint8_t *) vx;
-        c.dh   = (const sycl::half *) (c.qs + (size_t) nrows * bpr * QK_K);
-        c.h    = nrows - 1;
-        c.pq   = bpr * QK_K - 1;
-        c.row0 = row0;
-        c.bpr  = bpr;
+        xmx_ctx_init(c, nrows, bpr, row0);
+        c.qs = (const uint8_t *) vx;
+        c.dh = (const sycl::half *) (c.qs + (size_t) nrows * bpr * QK_K);
+        c.pq = xmx_pitch(bpr, QK_K);
         return c;
     }
 
     struct scales_t {
-        simd<float, 16> rd[8];
-
-        ESIMD_INLINE simd<float, 16> get_d(int j) { return rd[j]; }
+        xmx_row_scales<8> d;  // scale of each of the 8 blocks of a super-block
     };
 
     static ESIMD_INLINE scales_t load_scales(const ctx & c, int sb, const simd<uint32_t, 16> & rows) {
@@ -1003,7 +994,7 @@ template <bool SR> struct xmx_traits_q8_0 {
         simd<uint32_t, 16> blk = (rows * c.bpr + sb) * (QK_K / QK8_0);
 #pragma unroll
         for (int j = 0; j < 8; ++j) {
-            s.rd[j] = convert<float>(gather<sycl::half, 16>(c.dh, (blk + j) * (uint32_t) sizeof(sycl::half)));
+            s.d.v[j] = convert<float>(gather<sycl::half, 16>(c.dh, (blk + j) * (uint32_t) sizeof(sycl::half)));
         }
         return s;
     }
@@ -1033,6 +1024,19 @@ template <typename T, int NC, bool FUSED> constexpr int xmx_grf() {
     return FUSED || NC >= T::nc_wide ? 256 : 128;
 }
 
+// One DPAS of a block of RC columns: the int32 products of the weights B and the activations A, as float and scaled
+// per weight row. Every quant type sums one or two of these per group of 32.
+template <int RC, int NT>
+ESIMD_INLINE simd<float, RC * NT> xmx_term(const simd<int8_t, 512> &    B,
+                                           const simd<int8_t, RC * 32> & A,
+                                           const simd<float, NT> &       s) {
+    using namespace sycl::ext::intel::esimd;
+    namespace xmx = sycl::ext::intel::esimd::xmx;
+
+    simd<int, RC * NT> C = xmx::dpas<8, RC, int>(B, A);
+    return convert<float>(C) * s.template replicate<RC>();
+}
+
 // one group of 32 of one weight set, accumulated into Cf for all the columns of the tile
 template <typename T, int NC, typename A2T, typename D8T>
 ESIMD_INLINE void xmx_group(simd<float, NC * XMX_ROWS> & Cf,
@@ -1046,7 +1050,6 @@ ESIMD_INLINE void xmx_group(simd<float, NC * XMX_ROWS> & Cf,
                             const int                    g,
                             const int                    part) {
     using namespace sycl::ext::intel::esimd;
-    namespace xmx = sycl::ext::intel::esimd::xmx;
 
     constexpr int  NT    = XMX_ROWS;
     constexpr int  RC    = NC < 8 ? NC : 8;
@@ -1090,10 +1093,10 @@ ESIMD_INLINE void xmx_group(simd<float, NC * XMX_ROWS> & Cf,
         Bm                            = wm.template bit_cast_view<int8_t>();
     }
     if constexpr (T::plain) {
-        rd = sc.get_d(gi);
+        rd = sc.d.get(gi);
     } else if constexpr (T::has_min) {
-        rd = sc.get_d(gi);
-        rm = sc.get_m(gi);
+        rd = sc.d.get(gi);
+        rm = sc.m.get(gi);
     } else if constexpr (T::min16) {
         // scales are applied through Bs and Bm
     } else {
@@ -1109,29 +1112,18 @@ ESIMD_INLINE void xmx_group(simd<float, NC * XMX_ROWS> & Cf,
             d8f[b].template select<RC, RC == 1 ? 1 : 8>(gi).template replicate_vs_w_hs<RC, 1, NT, 0>(0);
         auto Cb = Cf.template select<RC * NT, 1>(b * RC * NT);
 
+        simd<float, RC * NT> z;
         if constexpr (T::plain) {
-            simd<int, RC * NT>   Cd = xmx::dpas<8, RC, int>(B, A);
-            simd<float, RC * NT> z  = convert<float>(Cd) * rd.template replicate<RC>();
-            Cb += z * d8r;
+            z = xmx_term<RC, NT>(B, A, rd);
         } else if constexpr (T::has_min) {
-            simd<int, RC * NT>   Cd = xmx::dpas<8, RC, int>(B, A);
-            simd<int, RC * NT>   Cs = xmx::dpas<8, RC, int>(Ol, A);  // sums of the activations
-            simd<float, RC * NT> z  = convert<float>(Cd) * rd.template replicate<RC>();
-            z -= convert<float>(Cs) * rm.template replicate<RC>();
-            Cb += z * d8r;
+            // the second DPAS (all ones against the activations) is the exact integer sum of the activations
+            z = xmx_term<RC, NT>(B, A, rd) - xmx_term<RC, NT>(Ol, A, rm);
         } else if constexpr (T::min16) {
-            simd<int, RC * NT>   Cs = xmx::dpas<8, RC, int>(Bs, A);
-            simd<int, RC * NT>   Cm = xmx::dpas<8, RC, int>(Bm, A);
-            simd<float, RC * NT> z  = convert<float>(Cs) * sc.d.template replicate<RC>();
-            z -= convert<float>(Cm) * sc.dmin.template replicate<RC>();
-            Cb += z * d8r;
+            z = xmx_term<RC, NT>(Bs, A, sc.d) - xmx_term<RC, NT>(Bm, A, sc.dmin);
         } else {
-            simd<int, RC * NT>   C0 = xmx::dpas<8, RC, int>(Bl, A);
-            simd<int, RC * NT>   C1 = xmx::dpas<8, RC, int>(Bh, A);
-            simd<float, RC * NT> z  = convert<float>(C0) * rs0.template replicate<RC>();
-            z += convert<float>(C1) * rs1.template replicate<RC>();
-            Cb += z * d8r;
+            z = xmx_term<RC, NT>(Bl, A, rs0) + xmx_term<RC, NT>(Bh, A, rs1);
         }
+        Cb += z * d8r;
     }
 }
 
