@@ -5,7 +5,7 @@ from .qwen import Qwen2MoeModel
 
 
 @ModelBase.register("FlintForCausalLM")
-@ModelBase.example("RecursiveSI/flint-preview")
+@ModelBase.example("RecursiveSI/flint")
 class FlintModel(Qwen2MoeModel):
     model_arch = gguf.MODEL_ARCH.FLINT
 
