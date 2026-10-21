@@ -34,16 +34,11 @@ void llama_model_gigachat35::load_arch_hparams(llama_model_loader & ml) {
     ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
     ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
     ml.get_key(LLM_KV_SSM_GROUP_COUNT,    hparams.ssm_n_group);
-    ml.get_key(LLM_KV_SSM_DT_B_C_RMS,     hparams.ssm_dt_b_c_rms, false);
-
-    // Explicit per-layer mask
-    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
-        uint32_t full_attn_interval = 4;
-        ml.get_key(LLM_KV_FULL_ATTENTION_INTERVAL, full_attn_interval, false);
-        for (uint32_t i = 0; i < hparams.n_layer_all; ++i) {
-            hparams.is_recr_impl[i] = (i < hparams.n_layer()) && ((i + 1) % full_attn_interval != 0);
-        }
+    if (hparams.ssm_n_group == 0 || hparams.ssm_dt_rank == 0 || hparams.ssm_dt_rank % hparams.ssm_n_group != 0) {
+        throw std::runtime_error("GigaChat35: SSM head counts must be positive and value heads divisible by key heads");
     }
+
+    ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all);
 
     if (ml.get_key(LLM_KV_ROPE_SCALING_YARN_LOG_MUL, hparams.rope_yarn_log_mul, false)) {
         // [TAG_DEEPSEEK2_YARN_LOG_MUL_FIX]
@@ -292,7 +287,7 @@ llama_model_gigachat35::graph::graph(const llama_model & model, const llm_graph_
         }
         cb(cur, "attn_out", il);
 
-        if (il == n_layer - 1 && inp_out_ids && cparams.embeddings_nextn_masked) {
+        if (il == n_layer - 1 && crop_before_nextn(inp_out_ids)) {
             cur      = ggml_get_rows(ctx0, cur, inp_out_ids);
             residual = ggml_get_rows(ctx0, residual, inp_out_ids);
         }
@@ -330,7 +325,7 @@ llama_model_gigachat35::graph::graph(const llama_model & model, const llm_graph_
     ggml_tensor * cur = build_zero_centered_gated_norm(
             inpL, model.output_norm, model.output_norm_gate_up, model.output_norm_gate_down, -1);
 
-    if (!cparams.embeddings_nextn_masked && inp_out_ids) {
+    if (crop_after_nextn(inp_out_ids)) {
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
     }
 

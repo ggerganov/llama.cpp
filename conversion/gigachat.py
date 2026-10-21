@@ -58,7 +58,7 @@ class Gigachat35Model(DeepseekV2Model):
             self.gguf_writer.add_nextn_predict_layers(self.n_nextn_layers)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # fold the +1 into the weights
+        # All GigaChat norms are zero-centered, including self_attn.norm (unlike Qwen3-Next).
         if name.endswith("norm.weight"):
             data_torch = data_torch.to(torch.float32) + 1
 
