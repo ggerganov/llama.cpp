@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import re
 
-from typing import Callable, Iterable, TYPE_CHECKING, Sequence
+from pathlib import Path
+from typing import Any, Callable, Iterable, TYPE_CHECKING, Sequence
 
 import torch
 
@@ -310,6 +311,57 @@ class Gemma3VisionModel(MmprojModel):
             data_torch = data_torch + 1
 
         yield from super().modify_tensors(data_torch, name, bid)
+
+
+def _is_paligemma_checkpoint(dir_model: Path) -> bool:
+    config_path = dir_model / "config.json"
+    if not config_path.is_file():
+        return False
+    with open(config_path, encoding="utf-8") as f:
+        return json.load(f).get("model_type") == "paligemma"
+
+
+@ModelBase.register_hparams_loader(_is_paligemma_checkpoint)
+def _load_paligemma_hparams(dir_model: Path) -> dict[str, Any]:
+    hparams = ModelBase.load_hparams(dir_model, False, guess=False)
+    # PaliGemma 1 and 2 share the same HF arch, route the text model by its type
+    is_v2 = hparams["text_config"]["model_type"] == "gemma2"
+    hparams["text_config"]["architectures"] = ["PaliGemma2TextModel" if is_v2 else "PaliGemmaTextModel"]
+    return hparams
+
+
+# PaliGemma has no chat template, the prompt is the user content followed by "\n"
+PALIGEMMA_CHAT_TEMPLATE = "{% for message in messages %}{{ message['content'] }}\n{% endfor %}"
+
+
+@ModelBase.register("PaliGemmaTextModel")
+@ModelBase.example("google/paligemma-3b-pt-224")
+class PaliGemmaTextModel(GemmaModel):
+    model_arch = gguf.MODEL_ARCH.GEMMA
+
+    def set_vocab(self):
+        super().set_vocab()
+        self.gguf_writer.add_chat_template(PALIGEMMA_CHAT_TEMPLATE)
+
+
+@ModelBase.register("PaliGemma2TextModel")
+@ModelBase.example("google/paligemma2-3b-pt-224")
+class PaliGemma2TextModel(Gemma2Model):
+    model_arch = gguf.MODEL_ARCH.GEMMA2
+
+    def set_vocab(self):
+        super().set_vocab()
+        self.gguf_writer.add_chat_template(PALIGEMMA_CHAT_TEMPLATE)
+
+
+@ModelBase.register("PaliGemmaForConditionalGeneration")
+@ModelBase.example("google/paligemma-3b-pt-224", "google/paligemma2-3b-pt-224")
+class PaliGemmaVisionModel(MmprojModel):
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_clip_projector_type(gguf.VisionProjectorType.PALIGEMMA)
+        self.gguf_writer.add_vision_attention_layernorm_eps(self.hparams.get("layer_norm_eps", 1e-6))
+        self.gguf_writer.add_vision_use_gelu(True)
 
 
 class ConformerAudioModel(MmprojModel):

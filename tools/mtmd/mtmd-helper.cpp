@@ -267,6 +267,92 @@ int32_t mtmd_helper_eval_chunk_single(mtmd_context * ctx,
     return 0;
 }
 
+// decode all chunks in one batch with non-causal attention, see mtmd_decode_use_non_causal_mixed()
+static int32_t mtmd_helper_eval_chunks_mixed(mtmd_context * ctx,
+                                             struct llama_context * lctx,
+                                             const mtmd_input_chunks * chunks,
+                                             llama_pos n_past,
+                                             llama_seq_id seq_id,
+                                             int32_t n_batch,
+                                             bool logits_last,
+                                             llama_pos * new_n_past) {
+    if (mtmd_decode_use_mrope(ctx)) {
+        LOG_ERR("failed to eval chunks: M-RoPE is not supported in mixed mode\n");
+        return -1;
+    }
+
+    const size_t n_tokens = mtmd_helper_get_n_tokens(chunks);
+    const size_t n_max    = std::min((size_t) n_batch, (size_t) llama_n_ubatch(lctx));
+    if (n_tokens > n_max) {
+        LOG_ERR("failed to eval chunks: the whole prompt must fit in one batch (n_tokens = %zu, n_batch = %d, n_ubatch = %u)\n",
+                n_tokens, n_batch, llama_n_ubatch(lctx));
+        return -1;
+    }
+
+    const int n_embd = llama_model_n_embd_inp(llama_get_model(lctx));
+
+    llama_batch_ext_ptr batch(llama_batch_ext_init(lctx));
+    llama_pos pos = n_past;
+    int32_t   idx = -1;
+
+    for (size_t i = 0; i < mtmd_input_chunks_size(chunks); i++) {
+        auto chunk = mtmd_input_chunks_get(chunks, i);
+        auto chunk_type = mtmd_input_chunk_get_type(chunk);
+
+        if (chunk_type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+            size_t n_text;
+            const auto tokens = mtmd_input_chunk_get_tokens_text(chunk, &n_text);
+            for (size_t j = 0; j < n_text; j++) {
+                idx = llama_batch_ext_add_token(batch.get(), seq_id, tokens[j]);
+                GGML_ASSERT(idx >= 0);
+                llama_batch_ext_set_pos(batch.get(), idx, &pos);
+                pos++;
+            }
+        } else if (chunk_type == MTMD_INPUT_CHUNK_TYPE_IMAGE || chunk_type == MTMD_INPUT_CHUNK_TYPE_AUDIO) {
+            int32_t ret = mtmd_encode_chunk(ctx, chunk);
+            if (ret != 0) {
+                LOG_ERR("failed to encode chunk %zu\n", i);
+                return ret;
+            }
+            // embeddings are copied into the batch, so the next encode can overwrite the output buffer
+            const float * embd = mtmd_get_output_embd(ctx);
+            const size_t n_embd_tokens = mtmd_input_chunk_get_n_tokens(chunk);
+            for (size_t j = 0; j < n_embd_tokens; j++) {
+                const llama_embd e = { embd + j * n_embd, 1, (size_t) n_embd };
+                idx = llama_batch_ext_add_embd(batch.get(), seq_id, e);
+                GGML_ASSERT(idx >= 0);
+                llama_batch_ext_set_pos(batch.get(), idx, &pos);
+                pos++;
+            }
+        } else {
+            GGML_ABORT("chunk type not supported");
+        }
+    }
+
+    if (idx < 0) {
+        LOG_WRN("no tokens to eval\n");
+        return 0;
+    }
+
+    if (logits_last) {
+        llama_batch_ext_set_output_logits(batch.get(), idx, true);
+    }
+
+    const scope_non_causal non_causal(lctx, true);
+
+    int64_t t0 = ggml_time_ms();
+    int32_t ret = llama_process(lctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+    if (ret != 0) {
+        LOG_ERR("failed to decode mixed batch\n");
+        return ret;
+    }
+    LOG_INF("mixed batch decoded (n_tokens = %zu) in %" PRId64 " ms\n", n_tokens, ggml_time_ms() - t0);
+
+    *new_n_past = n_past + mtmd_helper_get_n_pos(chunks);
+
+    return 0;
+}
+
 int32_t mtmd_helper_eval_chunks(mtmd_context * ctx,
                                 struct llama_context * lctx,
                                 const mtmd_input_chunks * chunks,
@@ -279,6 +365,10 @@ int32_t mtmd_helper_eval_chunks(mtmd_context * ctx,
     if (n_chunks == 0) {
         LOG_WRN("no chunks to eval\n");
         return 0;
+    }
+
+    if (mtmd_decode_use_non_causal_mixed(ctx)) {
+        return mtmd_helper_eval_chunks_mixed(ctx, lctx, chunks, n_past, seq_id, n_batch, logits_last, new_n_past);
     }
 
     for (size_t i = 0; i < n_chunks; i++) {

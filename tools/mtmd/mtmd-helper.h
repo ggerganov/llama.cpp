@@ -94,6 +94,7 @@ MTMD_API void mtmd_helper_image_get_decoder_pos(const mtmd_image_tokens * image,
 // helper function that automatically:
 // 1. decode text chunks
 // 2. run mtmd_encode_chunk() on image chunks, then mtmd_get_output_embd() and then decode the embeddings
+// if mtmd_decode_use_non_causal_mixed() is true, all chunks are decoded in one batch with non-causal attention
 // if any of the mtmd_encode_chunk() or decode calls return non-zero, stop and forward the error
 // otherwise, returns 0 on success
 // this function is NOT thread-safe
