@@ -998,11 +998,13 @@ static bool htp_matmul_check_types(
 
 bool htp_kparams_solve_matmul(
     const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
+    const struct ggml_tensor * op,
     struct htp_mm_kernel_params * kparams
 ) {
+    const struct ggml_tensor * src0 = op->src[0];
+    const struct ggml_tensor * src1 = op->src[1];
+    const struct ggml_tensor * dst  = op;
+
     if (!htp_matmul_check_types(src0, src1, dst)) {
         return false;
     }
@@ -1390,7 +1392,7 @@ bool htp_kparams_solve_binary(
     return true;
 }
 
-bool htp_kparams_solve_unary(
+static bool htp_kparams_solve_unary_impl(
     const struct ggml_hexagon_session * sess,
     uint32_t op,
     const struct ggml_tensor * src0,
@@ -1496,7 +1498,28 @@ bool htp_kparams_solve_unary(
     return (col_tile > 0 || vtcm_row_per_thread > 0) && L.total_bytes <= vtcm_size;
 }
 
-bool htp_kparams_solve_get_rows(
+bool htp_kparams_solve_unary(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_unary_kernel_params * kparams
+) {
+    const htp_op_code opcode = htp_op_remap(op);
+    const struct ggml_tensor * src0 = (opcode == HTP_OP_HADAMARD) ? op->src[1] : op->src[0];
+    const struct ggml_tensor * src1 = (opcode == HTP_OP_HADAMARD) ? nullptr    : op->src[1];
+    return htp_kparams_solve_unary_impl(sess, opcode, src0, src1, op, kparams);
+}
+
+bool htp_kparams_solve_rms_norm_mul(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * src0,
+    const struct ggml_tensor * src1,
+    const struct ggml_tensor * dst,
+    struct htp_unary_kernel_params * kparams
+) {
+    return htp_kparams_solve_unary_impl(sess, HTP_OP_RMS_NORM_MUL, src0, src1, dst, kparams);
+}
+
+bool htp_kparams_solve_repeat_get_rows(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * src0,
     const struct ggml_tensor * src1,
@@ -1581,6 +1604,14 @@ bool htp_kparams_solve_get_rows(
         return true;
     }
     return kparams->n_threads > 0 && (size_t) kparams->vtcm_size <= vtcm_size;
+}
+
+bool htp_kparams_solve_get_rows(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_get_rows_kernel_params * kparams
+) {
+    return htp_kparams_solve_repeat_get_rows(sess, op->src[0], op->src[1], op, kparams);
 }
 
 bool htp_kparams_solve_set_rows(
@@ -1863,7 +1894,7 @@ bool htp_kparams_solve_sum_rows(
     return true;
 }
 
-bool htp_kparams_solve_glu(
+bool htp_kparams_solve_unary_mul_glu(
     const struct ggml_hexagon_session * sess,
     uint32_t op,
     const struct ggml_tensor * src0,
@@ -1917,6 +1948,14 @@ bool htp_kparams_solve_glu(
     kparams->vtcm_size           = (uint32_t) L.total_bytes;
 
     return true;
+}
+
+bool htp_kparams_solve_glu(
+    const struct ggml_hexagon_session * sess,
+    const struct ggml_tensor * op,
+    struct htp_glu_kernel_params * kparams
+) {
+    return htp_kparams_solve_unary_mul_glu(sess, htp_op_remap(op), op->src[0], op->src[1], op, kparams);
 }
 
 bool htp_kparams_solve_repeat(

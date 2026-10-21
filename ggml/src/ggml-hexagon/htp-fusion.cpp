@@ -143,7 +143,7 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     if (!is_row_bcast && !is_same_shape) return false;
 
     struct htp_unary_kernel_params kparams;
-    if (!htp_kparams_solve_unary(sess, HTP_OP_RMS_NORM_MUL, src0, weight, dst, &kparams)) {
+    if (!htp_kparams_solve_rms_norm_mul(sess, src0, weight, dst, &kparams)) {
         HEX_VERBOSE("ggml-hex: %s skip RMS_NORM_MUL fusion: VTCM needed (%d) > budget (%zu)\n",
                     htp_session_name(sess), kparams.vtcm_size, htp_session_vtcm_size(sess));
         return false;
@@ -386,7 +386,7 @@ static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode &
     if (repeat_src0->type != repeat_out->type) return false;
 
     struct htp_get_rows_kernel_params kparams;
-    if (!htp_kparams_solve_get_rows(sess, repeat_src0, gr_src1, gr_dst, &kparams) || kparams.vtcm_size == 0) return false;
+    if (!htp_kparams_solve_repeat_get_rows(sess, repeat_src0, gr_src1, gr_dst, &kparams) || kparams.vtcm_size == 0) return false;
 
     prev.opcode  = HTP_OP_GET_ROWS;
     prev.inputs  = { repeat_src0, gr_src1 };
@@ -416,7 +416,7 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     if (htp_inputs_overlap_unsafe(prev, dst, up)) return false;
 
     struct htp_glu_kernel_params kparams;
-    if (!htp_kparams_solve_glu(sess, glu_op, gate, up, dst, &kparams)) return false;
+    if (!htp_kparams_solve_unary_mul_glu(sess, glu_op, gate, up, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
     prev.inputs  = { gate, up };

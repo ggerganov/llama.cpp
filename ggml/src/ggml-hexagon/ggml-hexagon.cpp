@@ -2401,7 +2401,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
 
             if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID) {
                 htp_kparams_solve_matmul(sess,
-                    node.node->src[0], node.node->src[1], node.node,
+                    node.node,
                     (struct htp_mm_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID || node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
@@ -2414,16 +2414,13 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                     (struct htp_fa_kernel_params *) node.kernel_params
                 );
             } else if (htp_op_is_unary(node.opcode)) {
-                const auto & inputs = node.get_inputs();
-                const struct ggml_tensor * src0 = inputs[0];
-                const struct ggml_tensor * src1 = inputs.size() > 1 ? inputs[1] : nullptr;
                 htp_kparams_solve_unary(sess,
-                    node.opcode, src0, src1, node.dst(),
+                    node.node,
                     (struct htp_unary_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_GET_ROWS) {
                 htp_kparams_solve_get_rows(sess,
-                    node.node->src[0], node.node->src[1], node.dst(),
+                    node.node,
                     (struct htp_get_rows_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SET_ROWS) {
@@ -2492,10 +2489,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 );
             } else if (htp_op_is_glu(node.opcode)) {
                 GGML_ASSERT(htp_kparams_solve_glu(sess,
-                    node.opcode,
-                    node.node->src[0],
-                    node.node->src[1],
-                    node.dst(),
+                    node.node,
                     (struct htp_glu_kernel_params *) node.kernel_params
                 ));
             } else if (node.opcode == HTP_OP_REPEAT) {
@@ -3166,12 +3160,17 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
         case GGML_OP_ADD_ID:
         case GGML_OP_SUB:
         case GGML_OP_DIV:
-            supp = htp_kparams_check_binary(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_binary>(sess, op);
             break;
 
         case GGML_OP_MUL_MAT:
+            if (htp_is_hadamard(op)) {
+                supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
+                break;
+            }
+            // fall through
         case GGML_OP_MUL_MAT_ID:
-            supp = htp_kparams_check_matmul(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_matmul>(sess, op);
             break;
 
         case GGML_OP_NORM:
@@ -3184,22 +3183,22 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
         case GGML_OP_SQRT:
         case GGML_OP_LOG:
         case GGML_OP_TRI:
-            supp = htp_kparams_check_unary(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
             break;
 
         case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGMAX:
-            supp = htp_kparams_check_sum_rows(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_sum_rows>(sess, op);
             break;
 
         case GGML_OP_POOL_2D:
         case GGML_OP_POOL_1D:
-            supp = htp_kparams_check_pool_2d(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_pool_2d>(sess, op);
             break;
 
         case GGML_OP_SOFT_MAX:
-            supp = htp_kparams_check_softmax(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_softmax>(sess, op);
             break;
 
         case GGML_OP_UNARY:
@@ -3216,7 +3215,7 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
                 case GGML_UNARY_OP_GELU_ERF:
                 case GGML_UNARY_OP_RELU:
                 case GGML_UNARY_OP_STEP:
-                    supp = htp_kparams_check_unary(sess, op);
+                    supp = htp_kparams_check<htp_kparams_solve_unary>(sess, op);
                     break;
                 default:
                     supp = false;
@@ -3225,82 +3224,82 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
             break;
 
         case GGML_OP_GLU:
-            supp = htp_kparams_check_glu(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_glu>(sess, op);
             break;
 
         case GGML_OP_ROPE:
-            supp = htp_kparams_check_rope(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_rope>(sess, op);
             break;
 
         case GGML_OP_FLASH_ATTN_EXT:
-            supp = htp_kparams_check_flash_attn(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_flash_attn>(sess, op);
             break;
 
         case GGML_OP_SET_ROWS:
-            supp = htp_kparams_check_set_rows(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_set_rows>(sess, op);
             break;
 
         case GGML_OP_GET_ROWS:
-            supp = htp_kparams_check_get_rows(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_get_rows>(sess, op);
             break;
 
         case GGML_OP_DUP:
         case GGML_OP_CPY:
         case GGML_OP_CONT:
-            supp = htp_kparams_check_cpy(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_cpy>(sess, op);
             break;
 
         case GGML_OP_REPEAT:
-            supp = htp_kparams_check_repeat(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_repeat>(sess, op);
             break;
 
         case GGML_OP_ARGSORT:
         case GGML_OP_TOP_K:
-            supp = htp_kparams_check_sort(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_sort>(sess, op);
             break;
 
         case GGML_OP_SSM_CONV:
-            supp = htp_kparams_check_ssm_conv(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_ssm_conv>(sess, op);
             break;
 
         case GGML_OP_IM2COL:
-            supp = htp_kparams_check_im2col(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_im2col>(sess, op);
             break;
 
         case GGML_OP_IM2COL_3D:
-            supp = htp_kparams_check_im2col_3d(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_im2col_3d>(sess, op);
             break;
 
         case GGML_OP_GATED_DELTA_NET:
-            supp = htp_kparams_check_gated_delta_net(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_gated_delta_net>(sess, op);
             break;
 
         case GGML_OP_CUMSUM:
-            supp = htp_kparams_check_cumsum(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_cumsum>(sess, op);
             break;
 
         case GGML_OP_CONCAT:
-            supp = htp_kparams_check_concat(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_concat>(sess, op);
             break;
 
         case GGML_OP_FILL:
-            supp = htp_kparams_check_fill(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_fill>(sess, op);
             break;
 
         case GGML_OP_DIAG:
-            supp = htp_kparams_check_diag(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_diag>(sess, op);
             break;
 
         case GGML_OP_SOLVE_TRI:
-            supp = htp_kparams_check_solve_tri(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_solve_tri>(sess, op);
             break;
 
         case GGML_OP_PAD:
-            supp = htp_kparams_check_pad(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_pad>(sess, op);
             break;
 
         case GGML_OP_ROLL:
-            supp = htp_kparams_check_roll(sess, op);
+            supp = htp_kparams_check<htp_kparams_solve_roll>(sess, op);
             break;
 
         default:
@@ -3495,7 +3494,7 @@ static bool ggml_backend_hexagon_comm_allreduce_tensor(void * comm_ctx_v, struct
 
     for (size_t r = 0; r < n_backends; r++) {
         auto sess = static_cast<ggml_hexagon_session *>(comm_ctx->backends[r]->context);
-        if (!htp_kparams_check_allreduce(sess, tensors[r], (uint32_t) r, (uint32_t) n_backends)) {
+        if (!htp_kparams_check<htp_kparams_solve_allreduce>(sess, tensors[r], (uint32_t) r, (uint32_t) n_backends, false, false, false)) {
             return false;
         }
     }
