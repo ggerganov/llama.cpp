@@ -19,6 +19,9 @@ void ggml_sycl_flash_attn_ext(ggml_backend_sycl_context & ctx, ggml_tensor * dst
 
 bool ggml_sycl_flash_attn_ext_supported(int device, const ggml_tensor * dst);
 
+// True if the call only uses kernels that can be recorded into a SYCL graph (not the oneDNN SDPA or MKL paths).
+bool ggml_sycl_flash_attn_ext_graph_safe(int device, const ggml_tensor * dst);
+
 // Scratch that flash attention needs beyond the output tensor
 struct ggml_sycl_fattn_extra {
     uintptr_t K_buffer_ptr     = 0;   // F16 copy of the K cache

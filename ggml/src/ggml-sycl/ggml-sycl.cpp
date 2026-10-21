@@ -6666,6 +6666,14 @@ static bool check_graph_compatibility(ggml_cgraph * cgraph) {
         switch (node_op) {
             default:
                 break;
+            case GGML_OP_FLASH_ATTN_EXT:
+                // the oneDNN SDPA and MKL flash attention paths depend on events from outside the graph,
+                // which makes recording throw; decode-sized calls use the TILE / VEC kernels and keep the graph
+                if (!ggml_sycl_flash_attn_ext_graph_safe(ggml_sycl_get_device(), cgraph->nodes[i])) {
+                    GGML_LOG_DEBUG("%s: disabling SYCL graphs for a flash attention call that uses oneDNN or MKL\n", __func__);
+                    return false;
+                }
+                break;
             case GGML_OP_CONCAT:
                 // ggml_sycl_op_concat() does a blocking host wait after memcpy operations,
                 // but wait() can't be called on the events returned by a queue recording
