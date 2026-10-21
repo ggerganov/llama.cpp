@@ -747,6 +747,62 @@ static void test_filters(testing & t) {
         "321"
     );
 
+    test_template(t, "unique",
+        "{{ items|unique|join(',') }}",
+        {{"items", json::array({3, 1, 3, 2, 1})}},
+        "3,1,2"
+    );
+
+    test_template(t, "unique case sensitive",
+        "{{ items|unique(case_sensitive=true)|join(',') }}",
+        {{"items", json::array({"a", "A", "b", "B", "a"})}},
+        "a,A,b,B"
+    );
+
+    test_template(t, "unique case sensitive positional",
+        "{{ items|unique(true)|list|length }}",
+        {{"items", json::array({"a", "A", "a"})}},
+        "2"
+    );
+
+    test_template(t, "unique with attribute",
+        "{{ items|unique(attribute='id')|join(attribute='v') }}",
+        {{"items", json::array({
+            json({{"id", "x"}, {"v", 1}}),
+            json({{"id", "y"}, {"v", 2}}),
+            json({{"id", "x"}, {"v", 3}}),
+        })}},
+        "12"
+    );
+
+    test_template(t, "unique with attribute case sensitive",
+        "{{ items|unique(case_sensitive=true, attribute='id')|join(attribute='v') }}",
+        {{"items", json::array({
+            json({{"id", "x"}, {"v", 1}}),
+            json({{"id", "X"}, {"v", 2}}),
+            json({{"id", "x"}, {"v", 3}}),
+        })}},
+        "12"
+    );
+
+    test_template(t, "unique mixed types",
+        "{{ items|unique|list|length }}",
+        {{"items", json::array({1, 1.0, 2, "a", "a"})}},
+        "3"
+    );
+
+    test_template(t, "unique empty",
+        "{{ items|unique|list|length }}",
+        {{"items", json::array()}},
+        "0"
+    );
+
+    test_template(t, "unique length comparison",
+        "{{ (items|unique(case_sensitive=true)|list|length) != (items|length) }}",
+        {{"items", json::array({"call_1", "call_2", "call_1"})}},
+        "True"
+    );
+
     test_template(t, "sort",
         "{% for i in items|sort %}{{ i }}{% endfor %}",
         {{"items", json::array({3, 1, 2})}},
@@ -2009,6 +2065,12 @@ static void test_object_methods(testing & t) {
         "{% for k in obj.keys() %}{{ k }} {% endfor %}",
         {{"obj", {{"a", 1}, {"b", 2}}}},
         "a b "
+    );
+
+    test_template(t, "object | list",
+        "{{ (obj | list) == ['b', 'a'] }} {{ obj | list | join(',') }}",
+        {{"obj", {{"b", 1}, {"a", 2}}}},
+        "True b,a"
     );
 
     test_template(t, "object.values()",

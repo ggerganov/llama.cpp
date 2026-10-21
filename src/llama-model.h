@@ -114,6 +114,8 @@ enum llm_type {
     LLM_TYPE_16x3_8B,
     LLM_TYPE_10B_128x3_66B,
     LLM_TYPE_57B_A14B,
+    LLM_TYPE_816B_A42B,
+    LLM_TYPE_78B_A3_5B,  // Kolibri1
     LLM_TYPE_17B_16E, // llama4 Scout
     LLM_TYPE_17B_128E, // llama4 Maverick
     LLM_TYPE_A13B,
@@ -309,6 +311,7 @@ struct llama_layer {
     struct ggml_tensor * wv_enc    = nullptr;
     struct ggml_tensor * wo_enc    = nullptr;
     struct ggml_tensor * wqkv_gate = nullptr;
+    struct ggml_tensor * wqkv_gate_b = nullptr;
     // K2 Horizon MoVA
     struct ggml_tensor * attn_v_gate   = nullptr;
     struct ggml_tensor * attn_v_gate_b = nullptr;
@@ -326,6 +329,8 @@ struct llama_layer {
     struct ggml_tensor * ffn_post_norm_1  = nullptr; // gemma4
     struct ggml_tensor * ffn_post_norm_2  = nullptr; // gemma4
     struct ggml_tensor * ffn_pre_norm_2   = nullptr; // gemma4
+    struct ggml_tensor * ffn_norm_ada_down = nullptr; // voxtral realtime
+    struct ggml_tensor * ffn_norm_ada_up   = nullptr; // voxtral realtime
     struct ggml_tensor * layer_out_norm   = nullptr;
     struct ggml_tensor * layer_out_norm_b = nullptr;
     struct ggml_tensor * ffn_norm_exps    = nullptr;
@@ -360,6 +365,16 @@ struct llama_layer {
     // ff MoE latent proj
     struct ggml_tensor * ffn_latent_down = nullptr;
     struct ggml_tensor * ffn_latent_up   = nullptr;
+
+    // ff MoE norms around the experts, in latent space
+    struct ggml_tensor * ffn_pre_exp_norm  = nullptr;
+    struct ggml_tensor * ffn_post_exp_norm = nullptr;
+
+    // norm preserving residual coefficients
+    struct ggml_tensor * attn_resid_alpha = nullptr;
+    struct ggml_tensor * attn_resid_beta  = nullptr;
+    struct ggml_tensor * ffn_resid_alpha  = nullptr;
+    struct ggml_tensor * ffn_resid_beta   = nullptr;
 
     // ff shared expert (shexp)
     struct ggml_tensor * ffn_gate_inp_shexp = nullptr;
@@ -709,6 +724,7 @@ struct llama_model {
 
     // for classifier models
     std::vector<std::string> classifier_labels;
+    std::vector<std::string> decision_labels;
 
     struct ggml_tensor * tok_embd   = nullptr;
     struct ggml_tensor * type_embd  = nullptr;

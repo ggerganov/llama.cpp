@@ -28,8 +28,8 @@
 #include "ggml-common.h"
 #include "hex-bitmap.h"
 #include "htp-ctx.h"
+#include "htp-dcache.h"
 #include "htp-ops.h"
-#include "htp-tensor.h"
 #include "htp_iface.h"
 #include "work-queue.h"
 #include "hex-profile.h"
@@ -316,9 +316,17 @@ static int vtcm_release_callback(unsigned int rctx, void * state) {
     return 0;
 }
 
-static int vtcm_alloc(struct htp_context * ctx) {
+static unsigned int vtcm_query_size(void) {
     unsigned int vtcm_size = 8 * 1024 * 1024;  // 8MB default
-    HAP_compute_res_query_VTCM(0, &vtcm_size, NULL, NULL, NULL);
+    unsigned int vtcm_avail;
+    compute_res_vtcm_page_t total_layout, avail_layout;
+    // some images (e.g. FuSa cDSP) fail the query when the layout out-params are NULL
+    HAP_compute_res_query_VTCM(0, &vtcm_size, &total_layout, &vtcm_avail, &avail_layout);
+    return vtcm_size;
+}
+
+static int vtcm_alloc(struct htp_context * ctx) {
+    unsigned int vtcm_size = vtcm_query_size();
 
     compute_res_attr_t attr;
     HAP_compute_res_attr_init(&attr);
@@ -770,9 +778,7 @@ AEEResult htp_iface_hwinfo(remote_handle64 handle, uint32_t * n_threads, uint32_
     *n_hvx     = n_hvx_val;
     *n_hmx     = 1;
 
-    uint32_t vtcm_sz = 8 * 1024 * 1024; // 8MB default fallback
-    HAP_compute_res_query_VTCM(0, (unsigned int *)&vtcm_sz, NULL, NULL, NULL);
-    *vtcm_size = vtcm_sz;
+    *vtcm_size = vtcm_query_size();
 
     return AEE_SUCCESS;
 }
@@ -835,7 +841,7 @@ static int op_fence(struct htp_ops_context * octx) {
     atomic_uint * sync_fence = (atomic_uint *) (uintptr_t) sync->data;
 
     if (mode == 1) {
-        htp_flush_dirty_ranges(ctx);
+        htp_dcache_flush_dirty_ranges(ctx);
 
         htp_mdev_group_barrier(octx);
 
@@ -940,6 +946,7 @@ static int execute_op(struct htp_ops_context * octx) {
         case HTP_OP_UNARY_RELU:
         case HTP_OP_UNARY_STEP:
         case HTP_OP_L2_NORM:
+        case HTP_OP_HADAMARD:
             return op_unary(octx);
 
         case HTP_OP_GLU_SWIGLU:
@@ -1211,7 +1218,7 @@ static int proc_op_req(struct htp_ops_context * octx, struct htp_buf_desc * bufs
             src->ne[0], src->ne[1], src->ne[2], src->ne[3]);
     }
 
-    htp_tensor_flush_all(octx->ctx, octx->src, HTP_OP_MAX_INPUTS);
+    htp_dcache_flush_dirty_tensors(octx->ctx, octx->src, HTP_OP_MAX_INPUTS);
 
     // Prep output tensors
     for (uint32_t i = 0; i < HTP_OP_MAX_OUTPUTS; i++) {
@@ -1227,7 +1234,7 @@ static int proc_op_req(struct htp_ops_context * octx, struct htp_buf_desc * bufs
             dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3]);
     }
 
-    htp_tensor_dirty_all(octx->ctx, octx->dsts, HTP_OP_MAX_OUTPUTS);
+    htp_dcache_mark_dirty_tensors(octx->ctx, octx->dsts, HTP_OP_MAX_OUTPUTS);
 
     htp_mdev_group_barrier(octx);
 
