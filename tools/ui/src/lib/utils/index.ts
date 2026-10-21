@@ -355,6 +355,7 @@ export { getChatCommands } from './chat-commands';
 export {
 	canCompactMessages,
 	compactionCut,
+	compactionTokensBefore,
 	lastContextBearingMessage,
 	sliceAtLastCompaction
 } from './compaction';
