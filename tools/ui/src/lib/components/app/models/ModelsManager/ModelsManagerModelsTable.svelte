@@ -7,8 +7,7 @@
 		hasActiveFilters,
 		modelContextLength,
 		type ModelQuantGroup,
-		type ModelsTableGroup,
-		statusRank
+		type ModelsTableGroup
 	} from './utils';
 	import {
 		ArrowDown,
@@ -89,6 +88,7 @@
 		[GroupedListUnit.GROUPS]: 'families'
 	};
 	let pendingDelete = $state('');
+	let pendingAction = $state(ModelDownloadConfirmAction.DELETE);
 	let deleteOpen = $state(false);
 	/** Repos whose quants are folded away; the rest show them. */
 	const collapsedQuants = new SvelteSet<string>();
@@ -130,6 +130,10 @@
 	// cancel is confirmed once for the whole list, so one dialog serves every row
 	function requestDelete(option: ModelOption): void {
 		pendingDelete = option.model;
+		// an in-flight row cancels (and drops the partials), a paused one deletes
+		pendingAction = modelsStore.status.isDownloadInProgress(option.model)
+			? ModelDownloadConfirmAction.CANCEL
+			: ModelDownloadConfirmAction.DELETE;
 		deleteOpen = true;
 	}
 
@@ -155,10 +159,6 @@
 				return (modelContextLength(a) ?? 0) - (modelContextLength(b) ?? 0);
 			case ModelsTableSortKey.NAME:
 				return a.model.localeCompare(b.model);
-			case ModelsTableSortKey.STATUS:
-				// a running model leads, then one that is being worked on (loading,
-				// sleeping), then the rest; the reported status sorts the row's own cell
-				return statusRank(b) - statusRank(a);
 			default:
 				return 0;
 		}
@@ -253,6 +253,7 @@
 			{onSelect}
 			option={entry.base}
 			selected={selectedId === entry.base.id}
+			sidecarBadges={entry.sidecarBadges}
 		/>
 	{/if}
 {/snippet}
@@ -333,7 +334,7 @@
 {/snippet}
 
 <DialogConfirmDownload
-	action={ModelDownloadConfirmAction.DELETE}
+	action={pendingAction}
 	onClose={() => (deleteOpen = false)}
 	open={deleteOpen}
 	repoWithTag={pendingDelete}
@@ -357,9 +358,7 @@
 			{@render sortHeader(ModelsTableSortKey.CONTEXT, 'Context')}
 		</span>
 
-		<span class="justify-self-center max-md:hidden">
-			{@render sortHeader(ModelsTableSortKey.STATUS, 'Status')}
-		</span>
+		<span class="justify-self-center max-md:hidden">Status</span>
 
 		<span class="text-center max-md:hidden">Actions</span>
 	</div>

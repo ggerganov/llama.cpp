@@ -45,11 +45,65 @@ struct test_registry {
 // mtmd_image
 //
 
+MAKE_TEST(test_image_preprocessor_longest_edge) {
+    clip_hparams hparams;
+    hparams.image_longest_edge = 1540;
+    hparams.patch_size = 14;
+    hparams.n_merge = 2;
+
+    const std::vector<std::pair<clip_image_size, clip_image_size>> cases = {
+        { {  463,  463 }, {  476,  476 } },
+        { {  463,  300 }, {  476,  308 } },
+        { {  448,  280 }, {  448,  280 } },
+        { { 2000, 1000 }, { 1540,  784 } },
+    };
+
+    for (const auto & [input, expected] : cases) {
+        const clip_image_size actual = mtmd_image_preprocessor_longest_edge::get_target_size(hparams, input);
+        const std::string name = std::to_string(input.width) + "x" + std::to_string(input.height);
+        t.assert_equal(name + " width", expected.width, actual.width);
+        t.assert_equal(name + " height", expected.height, actual.height);
+    }
+}
+
+MAKE_TEST(test_image_preprocessor_dyn_size) {
+    // { patch_size, image size, expected size }
+    // a side that is an even number plus .5 merged patches rounds down, like Python round() in smart_resize
+    const std::vector<std::tuple<int, clip_image_size, clip_image_size>> cases = {
+        { 16, {  768, 400 }, {  768, 384 } },
+        { 16, {  800, 336 }, {  800, 320 } },
+        { 16, {  400, 400 }, {  384, 384 } },
+        { 16, {  640, 240 }, {  640, 256 } },
+        { 14, {  966, 560 }, {  952, 560 } },
+    };
+
+    for (const auto & [patch_size, input, expected] : cases) {
+        clip_hparams hparams;
+        hparams.patch_size = patch_size;
+        hparams.n_merge = 2;
+        hparams.image_round_half_even = true;
+        hparams.set_limit_image_tokens(8, 4096);
+
+        const clip_image_size actual = mtmd_image_preprocessor_dyn_size::get_target_size(hparams, input);
+        const std::string name = std::to_string(input.width) + "x" + std::to_string(input.height);
+        t.assert_equal(name + " width", expected.width, actual.width);
+        t.assert_equal(name + " height", expected.height, actual.height);
+    }
+}
+
+static std::string image_size_to_str(const clip_image_size & size) {
+    return std::to_string(size.width) + "x" + std::to_string(size.height);
+}
+
 MAKE_TEST(test_image_preprocessor_lfm2) {
     clip_hparams hparams;
     hparams.patch_size = 16;
     hparams.n_merge = 2;
     hparams.set_limit_image_tokens(64, 256);
+    hparams.preproc_min_tiles            = 2;
+    hparams.preproc_max_tiles            = 10;
+    hparams.preproc_tile_size            = 512;
+    hparams.preproc_max_pixels_tolerance = 2.0f;
 
     // { image size, expected tiling }
     const std::vector<std::pair<clip_image_size, bool>> cases = {
@@ -70,6 +124,38 @@ MAKE_TEST(test_image_preprocessor_lfm2) {
             std::string(expected ? "tiled" : "single"),
             std::string(actual   ? "tiled" : "single"));
     }
+
+    // { image size, expected size from HF smart_resize }
+    const std::vector<std::pair<clip_image_size, clip_image_size>> resize_cases = {
+        { {  400, 600 }, { 384, 608 } }, // 400 / 32 = 12.5 rounds half to even
+        { {  480, 336 }, { 480, 320 } },
+        { {   64, 169 }, { 160, 416 } }, // 169 * beta / 32 is exactly 13 in double
+        { { 1024, 768 }, { 576, 416 } },
+    };
+
+    for (const auto & [size, expected] : resize_cases) {
+        t.assert_equal("smart_resize for " + image_size_to_str(size), image_size_to_str(expected),
+            image_size_to_str(mtmd_image_preprocessor_lfm2::smart_resize(hparams, size)));
+    }
+
+    // { image size, expected grid from HF }
+    const std::vector<std::pair<clip_image_size, clip_image_size>> grid_cases = {
+        { {  720, 1600 }, { 2, 4 } }, // 0.45 is an exact tie between 2/4 and 2/5 in double, not in float
+        { {  420, 1440 }, { 1, 3 } },
+        { {  255, 2160 }, { 1, 8 } },
+        { { 1024,  768 }, { 3, 2 } },
+    };
+
+    for (const auto & [size, expected] : grid_cases) {
+        t.assert_equal("grid for " + image_size_to_str(size), image_size_to_str(expected),
+            image_size_to_str(mtmd_image_preprocessor_lfm2::get_grid_layout(hparams, size.height, size.width)));
+    }
+
+    // do_image_splitting=false
+    hparams.preproc_min_tiles = 1;
+    hparams.preproc_max_tiles = 1;
+    t.assert_equal("tiling for 1024x977 with max_tiles=1", std::string("single"),
+            std::string(mtmd_image_preprocessor_lfm2::should_tile(hparams, { 1024, 977 }) ? "tiled" : "single"));
 }
 
 //

@@ -1,13 +1,13 @@
 import { LOCAL_BACKEND_ID, type ModalityKey } from '$lib/constants';
-import {
-	ModelCapability,
-	ModelGroupKind,
-	ModelsTableGroupKind,
-	ServerModelStatus
-} from '$lib/enums';
+import { ModelCapability, ModelGroupKind, ModelsTableGroupKind } from '$lib/enums';
 import { HuggingFaceService, ModelsService } from '$lib/services';
 import { modelsStore } from '$lib/stores';
-import type { ModelDownloadEntry, ModelDownloadProgress, ModelOption } from '$lib/types/models';
+import type {
+	ModelDownloadEntry,
+	ModelDownloadProgress,
+	ModelOption,
+	ModelSidecarBadge
+} from '$lib/types/models';
 import { detectThinkingSupport, detectToolUseSupport, repoOf } from '$lib/utils';
 
 /** One repo of the table, with the rows it ships as. */
@@ -16,6 +16,8 @@ export interface ModelQuantGroup {
 	key: string;
 	kind: ModelGroupKind;
 	quants: ModelOption[];
+	/** Draft sidecars already on disk, shown as checked sub-lines. */
+	sidecarBadges?: ModelSidecarBadge[];
 }
 
 /** True when any of the manager's filters narrows the table. */
@@ -27,20 +29,6 @@ export function hasActiveFilters(
 	return contextLimit > 0 || modalities.length > 0 || capabilities.length > 0;
 }
 
-/**
- * Order a status sorts behind: loaded first, then a model being worked on
- * (loading, sleeping), then the rest.
- */
-export function statusRank(option: ModelOption): number {
-	const status = modelsStore.getModelStatus(option.model);
-
-	if (modelsStore.isModelRunning(option.model)) return 2;
-
-	if (status === ServerModelStatus.LOADING || status === ServerModelStatus.SLEEPING) return 1;
-
-	return 0;
-}
-
 /** Byte counts of a tracked download: live while it runs, frozen while paused. */
 export function downloadProgressFor(repoWithTag: string): ModelDownloadProgress | null {
 	return (
@@ -50,28 +38,36 @@ export function downloadProgressFor(repoWithTag: string): ModelDownloadProgress 
 }
 
 /**
- * One table row per tracked download, so the table lists them the way it lists
- * any other model. A paused download is already in the router's listing, so its
- * own option is reused; a fresh one stands for its tag alone.
+ * One table row per tracked download, listed like any other model. A paused download
+ * is already in the router's listing, so its own option is reused; a fresh one is
+ * synthesized for its tag alone.
  */
 export function downloadGroups(
 	entries: ModelDownloadEntry[],
-	models: ModelOption[]
+	models: ModelOption[],
+	sidecarsFor: (repo: string) => ModelSidecarBadge[]
 ): ModelQuantGroup[] {
 	return entries.map((entry) => {
-		const option = models.find((candidate) => candidate.model === entry.repoWithTag) ?? {
+		const listed = models.find((candidate) => candidate.model === entry.repoWithTag);
+		// the synthesized option carries backendId, which ModelOption drops on
+		// assignment, so the callers spread it instead of typing this as one
+		const option = listed ?? {
 			backendId: LOCAL_BACKEND_ID,
 			capabilities: [],
 			id: entry.repoWithTag,
 			model: entry.repoWithTag,
 			name: entry.repoWithTag
 		};
+		// a draft still coming down badges the id, an on-disk one keeps its sub-line
+		const sidecars = sidecarsFor(repoOf(entry.repoWithTag));
+		const pending = sidecars.filter((badge) => badge.pending);
 
 		return {
-			base: option,
+			base: { ...option, draftSidecars: pending },
 			key: `download::${entry.repoWithTag}`,
 			kind: ModelGroupKind.QUANTS,
-			quants: [option]
+			quants: [{ ...option, draftSidecars: pending }],
+			sidecarBadges: sidecars.filter((badge) => !badge.pending)
 		};
 	});
 }
