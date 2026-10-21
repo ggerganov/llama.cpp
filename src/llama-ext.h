@@ -10,6 +10,9 @@
 #include <map>
 #include <vector>
 
+// Physical weight blocks, excluding MTP, for offload fitting. Repeated executions do not add weights.
+LLAMA_API int32_t llama_model_n_layer_physical(const struct llama_model * model);
+
 // Reserve a new compute graph. It is valid until the next call to llama_graph_reserve.
 LLAMA_API struct ggml_cgraph * llama_graph_reserve(
         struct llama_context * ctx,
