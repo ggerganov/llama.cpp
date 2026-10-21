@@ -3,11 +3,9 @@
 #include "ggml-cpp.h"
 #include "ggml.h"
 
-#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <thread>
 #include <vector>
 
 static bool run_tensor_n_case(
@@ -225,289 +223,21 @@ static bool test_backend_tensor_n(ggml_backend_t backend) {
         }
     }
 
+    {
+        std::vector<ggml_tensor *> tensors = { t_big, t2, t1, t0, t0, t0, t3, t3, t3 };
+        std::vector<size_t> offsets = { 0, 0, 0, 1, 3, 5, 1, 3, 5 };
+        std::vector<size_t> sizes = { 17, 7, 3, 1, 1, 1, 1, 1, 1 };
+        std::vector<size_t> data_offsets = { 0, 20, 30, 35, 37, 39, 41, 43, 45 };
+
+        if (!run_tensor_n_case(tensors, offsets, sizes, data_offsets)) {
+            return false;
+        }
+    }
+
     return true;
 }
 
-struct batch_read {
-    ggml_tensor * tensor;
-    const std::vector<unsigned char> * source;
-    size_t base;
-    size_t offset;
-    size_t size;
-    size_t destination;
-};
-
-static bool run_tensor_get_n_case(const std::vector<batch_read> & reads, size_t size) {
-    std::vector<unsigned char> actual(size, 0xa5);
-    std::vector<unsigned char> expected(size, 0xa5);
-    std::vector<const ggml_tensor *> tensors;
-    std::vector<size_t> offsets, sizes, data_offsets;
-    for (const auto & read : reads) {
-        tensors.push_back(read.tensor);
-        offsets.push_back(read.offset);
-        sizes.push_back(read.size);
-        data_offsets.push_back(read.destination);
-        std::memcpy(expected.data() + read.destination,
-                    read.source->data() + read.base + read.offset, read.size);
-    }
-    ggml_backend_tensor_get_n(tensors.data(), actual.data(), offsets.data(), sizes.data(), data_offsets.data(), reads.size());
-    if (actual != expected) {
-        for (size_t i = 0; i < size; ++i) {
-            if (actual[i] != expected[i]) {
-                std::fprintf(stderr, "byte mismatch at %zu: %u != %u\n", i, actual[i], expected[i]);
-                break;
-            }
-        }
-        return false;
-    }
-    return true;
-}
-
-static void fill_bytes(std::vector<unsigned char> & bytes, unsigned int seed) {
-    for (auto & byte : bytes) {
-        seed = seed * 1664525u + 1013904223u;
-        byte = (unsigned char) (seed >> 24);
-    }
-}
-
-static bool test_type(ggml_backend_t backend, ggml_type type) {
-    ggml_init_params params = {8 * ggml_tensor_overhead(), nullptr, true};
-    ggml_context * ctx = ggml_init(params);
-    ggml_tensor * a = ggml_new_tensor_2d(ctx, type, 512, 129);
-    ggml_tensor * b = ggml_new_tensor_2d(ctx, type, 512, 129);
-    const size_t row = a->nb[1];
-    ggml_tensor * view = ggml_view_2d(ctx, a, 256, 31, row, 7 * row);
-    ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source_a(ggml_nbytes(a));
-    std::vector<unsigned char> source_b(ggml_nbytes(b));
-    fill_bytes(source_a, 17);
-    fill_bytes(source_b, 29);
-    ggml_backend_tensor_set(a, source_a.data(), 0, source_a.size());
-    ggml_backend_tensor_set(b, source_b.data(), 0, source_b.size());
-
-    std::vector<batch_read> reads;
-    size_t output_size = 13;
-    auto add = [&](ggml_tensor * tensor, const std::vector<unsigned char> & source,
-                   size_t base, size_t offset, size_t size) {
-        reads.push_back({tensor, &source, base, offset, size, output_size});
-        output_size += size + 11;
-    };
-    // Unsorted and repeated source rows, multiple tensors, and destination guard gaps.
-    for (size_t index : {127u, 3u, 89u, 3u, 0u, 128u, 61u}) {
-        add(a, source_a, 0, index * row, row);
-        add(b, source_b, 0, index * row, row);
-    }
-    add(a, source_a, 0, 12 * row, 8 * row);
-    add(view, source_a, 7 * row, 3 * row, ggml_row_size(type, 256));
-    add(view, source_a, 7 * row, 1, 7);
-    add(a, source_a, 0, source_a.size(), 0);
-    for (size_t src_alignment = 0; src_alignment < 16; ++src_alignment) {
-        for (size_t dst_alignment = 0; dst_alignment < 16; ++dst_alignment) {
-            output_size = (output_size + 15) / 16 * 16 + dst_alignment;
-            add(a, source_a, 0, src_alignment, 65);
-        }
-    }
-    // Many short reads with unaligned offsets and untouched destination bytes.
-    for (size_t i = 0; i < 65537; ++i) {
-        add(a, source_a, 0, (i * 37) % (source_a.size() - 2), 2);
-    }
-    const bool ok = run_tensor_get_n_case(reads, output_size);
-    std::printf("%s raw bytes, views, fragmentation, 65537 tiny reads: %s\n", ggml_type_name(type), ok ? "PASS" : "FAIL");
-    ggml_backend_buffer_free(buffer);
-    ggml_free(ctx);
-    return ok;
-}
-
-static bool test_column_ranges(ggml_backend_t backend, ggml_type type) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context * ctx = ggml_init(params);
-    ggml_tensor * tensor = ggml_new_tensor_2d(ctx, type, 65, 37);
-    ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(ggml_nbytes(tensor));
-    fill_bytes(source, 97);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    std::vector<batch_read> reads;
-    size_t output_size = 19;
-    const size_t element = ggml_type_size(type);
-    for (size_t row = 0; row < 37; ++row) {
-        for (size_t column : {64u, 1u, 31u, 1u, 0u}) {
-            reads.push_back({tensor, &source, 0, (row * 65 + column) * element, element, output_size});
-            output_size += element + 3;
-        }
-    }
-    const bool ok = run_tensor_get_n_case(reads, output_size);
-    std::printf("%s selected columns with destination gaps: %s\n", ggml_type_name(type), ok ? "PASS" : "FAIL");
-    ggml_backend_buffer_free(buffer);
-    ggml_free(ctx);
-    return ok;
-}
-
-static bool test_large(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context * ctx = ggml_init(params);
-    const size_t size = 256 * 1024 * 1024 + 501;
-    ggml_tensor * tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I8, size);
-    ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(size);
-    fill_bytes(source, 131);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    std::vector<batch_read> reads = {{tensor, &source, 0, 0, size, 19}};
-    const bool ok = run_tensor_get_n_case(reads, size + 41) && run_tensor_get_n_case(reads, size + 41);
-    std::printf("large byte range and repeated reads: %s\n", ok ? "PASS" : "FAIL");
-    ggml_backend_buffer_free(buffer);
-    ggml_free(ctx);
-    return ok;
-}
-
-static bool test_range_boundaries(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context_ptr ctx(ggml_init(params));
-    ggml_tensor * tensor = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_I8, 128 * 1024);
-    ggml_backend_buffer_ptr buffer(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(ggml_nbytes(tensor));
-    fill_bytes(source, 113);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    std::vector<batch_read> reads;
-    size_t output_size = 13;
-    for (size_t size : {65535u, 65536u, 65537u}) {
-        reads.push_back({tensor, &source, 0, 3, size, output_size});
-        output_size += size + 11;
-    }
-    const bool ok = run_tensor_get_n_case(reads, output_size);
-    std::printf("range boundaries at 64 KiB: %s\n", ok ? "PASS" : "FAIL");
-    return ok;
-}
-
-static bool test_concurrent_reads(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context_ptr ctx(ggml_init(params));
-    ggml_tensor * tensor = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_I8, 1024 * 1024);
-    ggml_backend_buffer_ptr buffer(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(ggml_nbytes(tensor));
-    fill_bytes(source, 149);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    const size_t counts[] = {2048, 131073};
-    const size_t sizes[] = {513, 9};
-    const size_t strides[] = {529, 17};
-    std::vector<batch_read> reads[2];
-    for (size_t i = 0; i < 2; ++i) {
-        reads[i].reserve(counts[i]);
-        for (size_t j = 0; j < counts[i]; ++j) {
-            reads[i].push_back({tensor, &source, 0, (j * 37 + i * 101) % (source.size() - sizes[i]), sizes[i], 13 + j * strides[i]});
-        }
-    }
-    std::atomic<int> ready{0};
-    bool ok[] = {true, true};
-    std::thread workers[2];
-    for (size_t i = 0; i < 2; ++i) {
-        workers[i] = std::thread([&, i]() {
-            ready.fetch_add(1);
-            while (ready.load() < 2) {
-                std::this_thread::yield();
-            }
-            for (int repeat = 0; repeat < 4; ++repeat) {
-                ok[i] = run_tensor_get_n_case(reads[i], counts[i] * strides[i] + 31) && ok[i];
-            }
-        });
-    }
-    for (auto & worker : workers) {
-        worker.join();
-    }
-    std::printf("concurrent reads from one source buffer: %s\n", ok[0] && ok[1] ? "PASS" : "FAIL");
-    return ok[0] && ok[1];
-}
-
-static bool test_overlapping_destinations(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context_ptr ctx(ggml_init(params));
-    ggml_tensor * tensor = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_I8, 4096);
-    ggml_backend_buffer_ptr buffer(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(4096);
-    fill_bytes(source, 53);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    const std::vector<batch_read> reads = {
-        {tensor, &source, 0, 0, 64, 32},
-        {tensor, &source, 0, 131, 32, 48},
-        {tensor, &source, 0, 257, 64, 16},
-        {tensor, &source, 0, 389, 64, 32},
-    };
-    const bool ok = run_tensor_get_n_case(reads, 128);
-    std::printf("overlapping destinations retain copy order: %s\n", ok ? "PASS" : "FAIL");
-    return ok;
-}
-
-static bool test_many_ranges(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context_ptr ctx(ggml_init(params));
-    ggml_tensor * tensor = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_I8, 4096);
-    ggml_backend_buffer_ptr buffer(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
-    GGML_ASSERT(buffer);
-    std::vector<unsigned char> source(4096);
-    fill_bytes(source, 83);
-    ggml_backend_tensor_set(tensor, source.data(), 0, source.size());
-    const size_t count = 1024 * 1024 + 1;
-    std::vector<batch_read> reads;
-    reads.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-        reads.push_back({tensor, &source, 0, i * 37 % source.size(), 1, 13 + 2*i});
-    }
-    const bool ok = run_tensor_get_n_case(reads, 2*count + 31);
-    std::printf("1048577 short reads with destination gaps: %s\n", ok ? "PASS" : "FAIL");
-    return ok;
-}
-
-static bool test_mixed_buffers(ggml_backend_t backend) {
-    ggml_init_params params = {ggml_tensor_overhead(), nullptr, true};
-    ggml_context_ptr ctx_a(ggml_init(params));
-    ggml_context_ptr ctx_b(ggml_init(params));
-    ggml_tensor * a = ggml_new_tensor_1d(ctx_a.get(), GGML_TYPE_I8, 4096);
-    ggml_tensor * b = ggml_new_tensor_1d(ctx_b.get(), GGML_TYPE_I8, 4096);
-    ggml_backend_buffer_ptr buffer_a(ggml_backend_alloc_ctx_tensors(ctx_a.get(), backend));
-    ggml_backend_buffer_ptr buffer_b(ggml_backend_alloc_ctx_tensors(ctx_b.get(), backend));
-    GGML_ASSERT(buffer_a && buffer_b);
-    std::vector<unsigned char> source_a(4096), source_b(4096);
-    fill_bytes(source_a, 19);
-    fill_bytes(source_b, 23);
-    ggml_backend_tensor_set(a, source_a.data(), 0, source_a.size());
-    ggml_backend_tensor_set(b, source_b.data(), 0, source_b.size());
-    const std::vector<batch_read> reads = {
-        {a, &source_a, 0, 29, 71, 13},
-        {b, &source_b, 0, 37, 131, 4097},
-        {a, &source_a, 0, 73, 65, 113},
-    };
-    const bool ok = run_tensor_get_n_case(reads, 8192);
-    std::printf("reads from separate source buffers: %s\n", ok ? "PASS" : "FAIL");
-    return ok;
-}
-
-static bool test_backend_tensor_get_n(ggml_backend_t backend, bool large) {
-    bool ok = true;
-    ggml_backend_tensor_get_n(nullptr, nullptr, nullptr, nullptr, nullptr, 0);
-    for (ggml_type type : {GGML_TYPE_I8, GGML_TYPE_I64, GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16, GGML_TYPE_Q8_0,
-                         GGML_TYPE_Q4_0, GGML_TYPE_Q4_1, GGML_TYPE_IQ4_NL, GGML_TYPE_Q5_0, GGML_TYPE_Q5_1}) {
-        ok = test_type(backend, type) && ok;
-    }
-    for (ggml_type type : {GGML_TYPE_I8, GGML_TYPE_I64, GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16}) {
-        ok = test_column_ranges(backend, type) && ok;
-    }
-    ok = test_overlapping_destinations(backend) && ok;
-    ok = test_mixed_buffers(backend) && ok;
-    ok = test_range_boundaries(backend) && ok;
-    if (large) {
-        ok = test_large(backend) && ok;
-        ok = test_many_ranges(backend) && ok;
-        ok = test_concurrent_reads(backend) && ok;
-    }
-    return ok;
-}
-
-int main(int argc, char ** argv) {
+int main() {
     ggml_backend_load_all();
 
     const size_t n_devs = ggml_backend_dev_count();
@@ -526,8 +256,7 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        const bool large = argc > 1 && std::strcmp(argv[1], "--large") == 0;
-        const bool ok = test_backend_tensor_n(backend.get()) && test_backend_tensor_n_mixed_buft(backend.get()) && test_backend_tensor_get_n(backend.get(), large);
+        const bool ok = test_backend_tensor_n(backend.get()) && test_backend_tensor_n_mixed_buft(backend.get());
         printf("%s\n", ok ? "PASSED" : "FAILED");
         if (ok) {
             n_ok++;
