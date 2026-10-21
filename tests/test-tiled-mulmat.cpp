@@ -363,7 +363,8 @@ static double time_graph_compute_best(ggml_backend_t backend, struct ggml_cgraph
     return best;
 }
 
-// Fetch the repack extra buffer type through the public proc-address API
+// Fetch the repack extra buffer type through the public proc-address API. It is looked up by
+// name: other extra buffer types (e.g. KleidiAI) can be registered before it
 static ggml_backend_buffer_type_t get_cpu_repack_buft(void) {
     ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     if (!cpu_dev) {
@@ -375,9 +376,41 @@ static ggml_backend_buffer_type_t get_cpu_repack_buft(void) {
     if (!get_extra) {
         return NULL;
     }
-    ggml_backend_buffer_type_t * bufts = get_extra(cpu_dev);
-    // the only extra buffer type the CPU backend exposes is CPU_REPACK
-    return (bufts && *bufts) ? *bufts : NULL;
+    for (ggml_backend_buffer_type_t * bufts = get_extra(cpu_dev); bufts && *bufts; ++bufts) {
+        if (strcmp(ggml_backend_buft_name(*bufts), "CPU_REPACK") == 0) {
+            return *bufts;
+        }
+    }
+    return NULL;
+}
+
+// true if the CPU backend reports the named feature (e.g. "NEON", "MATMUL_INT8")
+static bool cpu_has_feature(const char * feature) {
+    ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    if (!cpu_dev) {
+        return false;
+    }
+    ggml_backend_reg_t cpu_reg = ggml_backend_dev_backend_reg(cpu_dev);
+    ggml_backend_get_features_t get_features =
+        (ggml_backend_get_features_t) ggml_backend_reg_get_proc_address(cpu_reg, "ggml_backend_get_features");
+    if (!get_features) {
+        return false;
+    }
+    for (struct ggml_backend_feature * f = get_features(cpu_reg); f && f->name; ++f) {
+        if (strcmp(f->name, feature) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// whether CPU_REPACK must provide a kernel for this weight, mirroring the selection in repack.cpp;
+// on such builds a missing repack is a failure, not a skip
+static bool repack_expected(ggml_type type, int64_t ne1) {
+    if (type == GGML_TYPE_TQ2_0) {
+        return cpu_has_feature("NEON") && cpu_has_feature("MATMUL_INT8") && ne1 % 8 == 0;
+    }
+    return false;
 }
 
 // Correctness of the repacked (CPU_REPACK) GEMV/GEMM kernels against the vec-only reference.
@@ -419,8 +452,15 @@ static void test_matmul_repack(ggml_backend_t backend, int64_t M, int64_t N, int
     }
 
     if (!have_repack) {
-        printf("TEST repack %lldx%lld * %lldx%lld (%s): SKIP (no repack kernel for this type/shape)\n",
-               (long long)M, (long long)N, (long long)N, (long long)K, ggml_type_name(quant_type));
+        if (repack_expected(quant_type, K)) {
+            printf("TEST repack %lldx%lld * %lldx%lld (%s): FAIL (%s)\n",
+                   (long long)M, (long long)N, (long long)N, (long long)K, ggml_type_name(quant_type),
+                   repack_buft ? "CPU_REPACK did not repack the tensor" : "CPU_REPACK buffer type not found");
+            ++n_failed;
+        } else {
+            printf("TEST repack %lldx%lld * %lldx%lld (%s): SKIP (no repack kernel for this type/shape)\n",
+                   (long long)M, (long long)N, (long long)N, (long long)K, ggml_type_name(quant_type));
+        }
         if (buf_rep) {
             ggml_backend_buffer_free(buf_rep);
         }
@@ -799,7 +839,8 @@ int main(int argc, char ** argv) {
     // repack kernel had default correctness coverage. M is the activation row count: 1 takes the
     // GEMV path, a multiple of the row tile takes the clean GEMM path, and anything else exercises
     // the GEMM tail. N spans more than one QK_K block where the type is K-quantized.
-    // TQ2_0 (8x8, i8mm): requires NEON + matmul_int8 and ne1 % 8 == 0, otherwise it SKIPs.
+    // TQ2_0 (8x8, i8mm): requires NEON + matmul_int8 and ne1 % 8 == 0. Where those hold, a
+    // missing repack is a FAIL; elsewhere it SKIPs.
     test_matmul_repack(backend,   1, 512, 256, GGML_TYPE_TQ2_0);  // GEMV, 2 QK_K blocks
     test_matmul_repack(backend,   8, 512, 256, GGML_TYPE_TQ2_0);  // exactly one row tile
     test_matmul_repack(backend,  17, 512, 256, GGML_TYPE_TQ2_0);  // GEMM tail: 2 tiles + 1 row
