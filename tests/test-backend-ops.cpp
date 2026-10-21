@@ -9124,6 +9124,9 @@ struct test_kpool_mask : public test_case {
                 ggml_backend_tensor_set(t, data.data(), 0, data.size()*sizeof(int32_t));
             } else if (strcmp(t->name, "pools") == 0 || strcmp(t->name, "tail") == 0) {
                 init_cells(t);
+            } else {
+                // the harness sentinels and the output, the callback checks the sentinels for NaN
+                init_tensor_uniform(t);
             }
         }
     }
