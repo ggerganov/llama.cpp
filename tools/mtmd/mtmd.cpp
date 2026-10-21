@@ -560,6 +560,9 @@ struct mtmd_context {
     // MiniCPM-V 4.6/4.7 prepends an <image_id>N</image_id> tag before <image>
     bool use_image_id = false;
 
+    // PaliGemma puts BOS after the leading media, not at the start of the prompt
+    bool bos_after_media = false;
+
     // string template for slice image delimiters with row/col (idefics3)
     std::string sli_img_start_tmpl;
 
@@ -788,6 +791,12 @@ struct mtmd_context {
                     // <start_of_image> ... (image embeddings) ... <end_of_image>
                     img_beg = "<start_of_image>";
                     img_end = "<end_of_image>";
+                    image_preproc = std::make_unique<mtmd_image_preprocessor_fixed_size>(ctx_v);
+                } break;
+            case PROJECTOR_TYPE_PALIGEMMA:
+                {
+                    // (image embeddings) <bos> ...
+                    bos_after_media = true;
                     image_preproc = std::make_unique<mtmd_image_preprocessor_fixed_size>(ctx_v);
                 } break;
             case PROJECTOR_TYPE_IDEFICS3:
@@ -1366,20 +1375,26 @@ struct mtmd_tokenizer {
 
         if (vocab != nullptr) {
             if (add_special && llama_vocab_get_add_bos(vocab)) {
-                // if first chunk is text, we add BOS token to first text chunk
+                size_t i_bos = 0;
+                if (ctx->bos_after_media) {
+                    while (i_bos < cur.entries.size() && cur.entries[i_bos].type != MTMD_INPUT_CHUNK_TYPE_TEXT) {
+                        i_bos++;
+                    }
+                }
+                // if the chunk at i_bos is text, we add BOS token to it
                 // otherwise, create a new text chunk with BOS token
-                if (!cur.entries.empty() && cur.entries[0].type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
-                    // add BOS token to the beginning of first text chunk
-                    cur.entries[0].tokens_text.insert(cur.entries[0].tokens_text.begin(), llama_vocab_bos(vocab));
+                if (i_bos < cur.entries.size() && cur.entries[i_bos].type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+                    // add BOS token to the beginning of the text chunk
+                    cur.entries[i_bos].tokens_text.insert(cur.entries[i_bos].tokens_text.begin(), llama_vocab_bos(vocab));
                 } else {
-                    // create a new text chunk with BOS token at the beginning
+                    // create a new text chunk with BOS token at i_bos
                     mtmd_input_chunk bos_chunk{
                         MTMD_INPUT_CHUNK_TYPE_TEXT,
                         {llama_vocab_bos(vocab)},
                         nullptr, // image tokens
                         nullptr, // audio tokens
                     };
-                    cur.entries.insert(cur.entries.begin(), std::move(bos_chunk));
+                    cur.entries.insert(cur.entries.begin() + i_bos, std::move(bos_chunk));
                 }
             }
 
@@ -2367,6 +2382,7 @@ bool mtmd_decode_use_non_causal(const mtmd_context * ctx, const mtmd_input_chunk
             }
         case PROJECTOR_TYPE_GEMMA4UV:
         case PROJECTOR_TYPE_GEMMA3:
+        case PROJECTOR_TYPE_PALIGEMMA:
         case PROJECTOR_TYPE_DEEPSEEK4V:
             return true;
         default:
@@ -2376,6 +2392,8 @@ bool mtmd_decode_use_non_causal(const mtmd_context * ctx, const mtmd_input_chunk
 
 bool mtmd_decode_use_non_causal_mixed(const mtmd_context * ctx) {
     switch (ctx->proj_type_v()) {
+        case PROJECTOR_TYPE_PALIGEMMA:
+            return true;
         default:
             return false;
     }

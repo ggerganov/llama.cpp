@@ -38,6 +38,10 @@ ggml_cgraph * clip_graph_siglip::build() {
             ggml_cont(ctx0, ggml_transpose(ctx0, model.mm_input_proj_w)),
             cur);
 
+    } else if (proj_type == PROJECTOR_TYPE_PALIGEMMA) {
+        cur = build_mm(model.mm_fc_w, cur);
+        cur = ggml_add(ctx0, cur, model.mm_fc_b);
+
     } else if (proj_type == PROJECTOR_TYPE_IDEFICS3) {
         // pixel_shuffle
         // https://github.com/huggingface/transformers/blob/0a950e0bbe1ed58d5401a6b547af19f15f0c195e/src/transformers/models/idefics3/modeling_idefics3.py#L578

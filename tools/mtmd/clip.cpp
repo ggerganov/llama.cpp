@@ -957,6 +957,7 @@ static std::unique_ptr<clip_graph> clip_get_graph_builder(clip_ctx * ctx, const 
 
     switch (ctx->proj_type()) {
         case PROJECTOR_TYPE_GEMMA3:
+        case PROJECTOR_TYPE_PALIGEMMA:
         case PROJECTOR_TYPE_IDEFICS3:
         case PROJECTOR_TYPE_COHERE2V:
         case PROJECTOR_TYPE_LFM2:
@@ -1743,6 +1744,13 @@ struct clip_model_loader {
                         hparams.image_resize_algo = RESIZE_ALGO_BILINEAR;
                         // test model (tinygemma3) has a different value, we optionally read it
                         get_u32(KEY_PROJ_SCALE_FACTOR, hparams.n_merge, false);
+                    } break;
+
+                case PROJECTOR_TYPE_PALIGEMMA:
+                    {
+                        // HF SiglipImageProcessor stretches the image to a fixed square size
+                        hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
+                        hparams.image_resize_pad  = PAD_NONE;
                     } break;
 
                 case PROJECTOR_TYPE_GEMMA4V:
@@ -2830,6 +2838,11 @@ struct clip_model_loader {
                 {
                     model.mm_input_proj_w = get_tensor(TN_MM_INP_PROJ);
                     model.mm_soft_emb_norm_w = get_tensor(TN_MM_SOFT_EMB_N);
+                } break;
+            case PROJECTOR_TYPE_PALIGEMMA:
+                {
+                    model.mm_fc_w = get_tensor(string_format(TN_MM_PROJECTOR, "weight"));
+                    model.mm_fc_b = get_tensor(string_format(TN_MM_PROJECTOR, "bias"));
                 } break;
             case PROJECTOR_TYPE_GEMMA4V:
                 {
@@ -4377,6 +4390,7 @@ int clip_n_output_tokens(const clip_ctx * ctx, const clip_image_f32 * img) {
     switch (proj) {
         case PROJECTOR_TYPE_MLP:
         case PROJECTOR_TYPE_MLP_NORM:
+        case PROJECTOR_TYPE_PALIGEMMA:
         case PROJECTOR_TYPE_JANUS_PRO:
         case PROJECTOR_TYPE_PHI4:
             {
@@ -5660,6 +5674,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
             } break;
         case PROJECTOR_TYPE_GEMMA3:
         case PROJECTOR_TYPE_GEMMA3NV:
+        case PROJECTOR_TYPE_PALIGEMMA:
         case PROJECTOR_TYPE_IDEFICS3:
         case PROJECTOR_TYPE_COHERE2V:
         case PROJECTOR_TYPE_INTERNVL:
@@ -6391,6 +6406,7 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         case PROJECTOR_TYPE_GEMMA4A:
         case PROJECTOR_TYPE_GEMMA4UA:
             return ctx->model.mm_input_proj_w->ne[1];
+        case PROJECTOR_TYPE_PALIGEMMA:
         case PROJECTOR_TYPE_IDEFICS3:
         case PROJECTOR_TYPE_MUSE_SPARK_AUDIO:
             return ctx->model.mm_fc_w->ne[1];

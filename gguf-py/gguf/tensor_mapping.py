@@ -1738,6 +1738,7 @@ class TensorNameMap:
             "model.projector.layers", # Deepseek-OCR
             "visual.merger.proj", # glm4v
             "vit.perceive.mlp", # HunyuanVL
+            "multi_modal_projector.linear", # PaliGemma
         ),
 
         MODEL_TENSOR.V_MMPROJ_MLP: (

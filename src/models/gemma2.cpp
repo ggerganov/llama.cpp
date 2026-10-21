@@ -63,9 +63,8 @@ llama_model_gemma2::graph::graph(const llama_model & model, const llm_graph_para
     ggml_tensor * cur;
     ggml_tensor * inpL;
 
-    inpL = build_inp_embd(model.tok_embd);
-
-    inpL = ggml_scale(ctx0, inpL, sqrtf(n_embd));
+    // important: do not normalize weights for raw embeddings input (i.e. encoded image embeddings)
+    inpL = build_inp_embd(model.tok_embd, sqrtf(n_embd));
     cb(inpL, "inp_scaled", -1);
 
     // inp_pos - contains the positions
