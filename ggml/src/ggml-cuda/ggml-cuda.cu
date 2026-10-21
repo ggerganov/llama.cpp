@@ -30,6 +30,7 @@
 #include "ggml-cuda/getrows.cuh"
 #include "ggml-cuda/im2col.cuh"
 #include "ggml-cuda/mmf.cuh"
+#include "ggml-cuda/mmid.cuh"
 #include "ggml-cuda/mmq.cuh"
 #include "ggml-cuda/mmvf.cuh"
 #include "ggml-cuda/mmvq.cuh"
@@ -1795,6 +1796,11 @@ static bool ggml_cuda_should_fuse_mul_mat(const ggml_tensor * ffn_up,
         return false;
     }
 
+    // the fused kernels read the ids of the node, which may be < 0
+    if (is_mul_mat_id && (ggml_mul_mat_id_skip_neg(ffn_up) || ggml_mul_mat_id_skip_neg(ffn_gate))) {
+        return false;
+    }
+
     const ggml_op expected_bias_op = is_mul_mat ? GGML_OP_ADD : GGML_OP_ADD_ID;
     const ggml_tensor * ffn_up_bias_src   = has_scale ? ffn_up_scale   : ffn_up;
     const ggml_tensor * ffn_gate_bias_src = has_scale ? ffn_gate_scale : ffn_gate;
@@ -1864,6 +1870,9 @@ static bool ggml_cuda_should_fuse_mul_mat(const ggml_tensor * ffn_up,
 }
 
 static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
+    if (ggml_mul_mat_id_skip_neg(tensor)) {
+        return false; // the fused kernels read every id
+    }
     ggml_tensor *       src0 = tensor->src[0];
     ggml_tensor *       src1 = tensor->src[1];
     const ggml_tensor * dst  = tensor;
@@ -1892,6 +1901,9 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
 }
 
 static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+    if (ggml_mul_mat_id_skip_neg(tensor)) {
+        return false; // the fused kernels read every id
+    }
     ggml_tensor *       src0 = tensor->src[0];
     ggml_tensor *       src1 = tensor->src[1];
     const ggml_tensor * dst  = tensor;
@@ -2060,10 +2072,9 @@ static bool ggml_cuda_mul_mat_id_needs_sync(const ggml_tensor * dst, const int c
     return true;
 }
 
-static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+static void ggml_cuda_mul_mat_id_impl(ggml_backend_cuda_context & ctx, ggml_tensor * dst, const ggml_tensor * ids) {
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
-    const ggml_tensor * ids  = dst->src[2];
 
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type  == GGML_TYPE_F32);
@@ -2217,6 +2228,38 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
         ne0, ne0*ts_dst_sorted, ne_get_rows*ne0*ts_dst_sorted, ne_get_rows*ne0*ts_dst_sorted,
         ne_get_rows, 1, 1, sizeof(int32_t), ne_get_rows*sizeof(int32_t), ne_get_rows*sizeof(int32_t),
         nb1, nb2, nb3, stream);
+}
+
+static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+    const ggml_tensor * ids = dst->src[2];
+    if (!ggml_mul_mat_id_skip_neg(dst)) {
+        ggml_cuda_mul_mat_id_impl(ctx, dst, ids);
+        return;
+    }
+
+    // one token on a quantized matrix: the vector kernel reads the ids itself and leaves a skipped expert (id < 0) out
+    if (dst->src[1]->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32 && dst->ne[2] == 1 && ggml_is_quantized(dst->src[0]->type) &&
+            get_mmvq_mmid_max_batch(dst->src[0]->type, ggml_cuda_info().devices[ggml_cuda_get_device()].cc) >= 1) {
+        ggml_cuda_mul_mat_vec_q(ctx, dst->src[0], dst->src[1], ids, dst);
+        return;
+    }
+
+    // the kernels read every id, so the skipped ones point to experts the token does not use, and their rows are zeroed after
+    ggml_cuda_pool_alloc<int32_t> ids_fix(ctx.pool(), ggml_nelements(ids));
+    ggml_cuda_fix_neg_ids(ids, ids_fix.get(), (int) dst->src[0]->ne[2], ctx.stream());
+    CUDA_CHECK(cudaGetLastError());
+
+    ggml_tensor ids_fixed = *ids;
+    ids_fixed.data  = ids_fix.get();
+    ids_fixed.nb[0] = sizeof(int32_t);
+    ids_fixed.nb[1] = ids->ne[0]*ids_fixed.nb[0];
+    ids_fixed.nb[2] = ids->ne[1]*ids_fixed.nb[1];
+    ids_fixed.nb[3] = ids_fixed.nb[2];
+
+    ggml_cuda_mul_mat_id_impl(ctx, dst, &ids_fixed);
+
+    ggml_cuda_zero_neg_rows(ids, dst, ctx.stream());
+    CUDA_CHECK(cudaGetLastError());
 }
 
 static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct ggml_tensor * dst) {
@@ -6067,6 +6110,20 @@ static void ggml_backend_cuda_device_event_synchronize(ggml_backend_dev_t dev, g
     CUDA_CHECK(cudaEventSynchronize((cudaEvent_t)event->context));
 }
 
+static bool ggml_backend_cuda_device_event_query(ggml_backend_dev_t dev, ggml_backend_event_t event) {
+    GGML_UNUSED(dev);
+    const cudaError_t err = cudaEventQuery((cudaEvent_t)event->context);
+    if (err == cudaSuccess) {
+        return true;
+    }
+    if (err == cudaErrorNotReady) {
+        (void) cudaGetLastError(); // an answer, not a failure of the next kernel launch
+        return false;
+    }
+    CUDA_CHECK(err); // a device fault: abort instead of waiting forever
+    return false;
+}
+
 static const ggml_backend_device_i ggml_backend_cuda_device_interface = {
     /* .get_name                = */ ggml_backend_cuda_device_get_name,
     /* .get_description         = */ ggml_backend_cuda_device_get_description,
@@ -6083,6 +6140,7 @@ static const ggml_backend_device_i ggml_backend_cuda_device_interface = {
     /* .event_new               = */ ggml_backend_cuda_device_event_new,
     /* .event_free              = */ ggml_backend_cuda_device_event_free,
     /* .event_synchronize       = */ ggml_backend_cuda_device_event_synchronize,
+    /* .event_query             = */ ggml_backend_cuda_device_event_query,
 };
 
 // backend reg

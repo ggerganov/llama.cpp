@@ -8,6 +8,7 @@
 #include "llama-impl.h"
 #include "llama-memory.h"
 #include "llama-moe-cache.h"
+#include "llama-moe-hybrid.h"
 
 #include "ggml-cpp.h"
 #include "ggml-opt.h"
@@ -308,6 +309,7 @@ private:
 
     llama_memory_ptr memory;
     llama_moe_cache_ptr moe_cache;
+    llama_moe_hybrid_ptr moe_hybrid;
 
     // decode output (2-dimensional array: [n_outputs][n_vocab])
     buffer_view<float> logits = {nullptr, 0};

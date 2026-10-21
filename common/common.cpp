@@ -1750,6 +1750,13 @@ struct llama_context_params common_context_params_to_llama(const common_params &
 
     cparams.moe_cache_size = params.moe_cache_size;
 
+    cparams.moe_hybrid_size        = params.moe_hybrid_size;
+    cparams.moe_hybrid_max_tokens  = params.moe_hybrid_max_tokens;
+    cparams.moe_hybrid_swap_every  = params.moe_hybrid_swap_every;
+    cparams.moe_hybrid_swap_max    = params.moe_hybrid_swap_max;
+    cparams.moe_hybrid_skip_weight = params.moe_hybrid_skip_weight;
+    cparams.moe_hybrid_tail_skip   = params.moe_hybrid_tail_skip;
+
     return cparams;
 }
 

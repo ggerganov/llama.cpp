@@ -23,6 +23,7 @@ struct llama_prec_policy;
 struct llama_hadamard;
 
 class llama_moe_cache;
+class llama_moe_hybrid;
 
 struct llama_memory_context_i;
 
@@ -805,6 +806,7 @@ struct llm_graph_params {
     const llama_memory_context_i * mctx;
     const llama_cross            * cross;
     const llama_moe_cache        * moe_cache;
+    const llama_moe_hybrid       * moe_hybrid;
 
     const llama_prec_policy * prec_policy = nullptr;
 
@@ -1058,6 +1060,16 @@ struct llm_graph_context {
     const llama_memory_context_i * mctx;
     const llama_cross            * cross;
     const llama_moe_cache        * moe_cache;
+    const llama_moe_hybrid       * moe_hybrid;
+
+    // MoE hybrid form (see build_moe_ffn), set while its two expert branches are built:
+    // the device branch reads the slots of the experts (moe_hybrid_dev), both branches skip ids < 0, the CPU branch stays on the CPU
+    mutable bool moe_hybrid_dev = false;
+    mutable bool moe_skip_neg   = false;
+    mutable bool moe_pin_cpu    = false;
+    // set by a model before build_moe_ffn: device work that does not depend on the experts (a shared expert); in the hybrid form it is
+    // added to the graph between the two branches, so the device computes it while the CPU computes the missed experts
+    mutable ggml_tensor * moe_overlap = nullptr;
 
     const llama_prec_policy * prec_policy;
 

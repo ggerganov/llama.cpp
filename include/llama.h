@@ -398,6 +398,13 @@ extern "C" {
 
         size_t moe_cache_size; // device cache in bytes for the experts kept in host memory, split among the devices like the layers, 0 = disabled [EXPERIMENTAL]
 
+        size_t  moe_hybrid_size;        // device memory in bytes for the MoE hybrid mode (resident experts on the device, the others on the CPU), 0 = disabled [EXPERIMENTAL]
+        int32_t moe_hybrid_max_tokens;  // largest batch that runs in the hybrid form (1..31) [EXPERIMENTAL]
+        int32_t moe_hybrid_swap_every;  // generated tokens between two rebalances of the hybrid slots [EXPERIMENTAL]
+        int32_t moe_hybrid_swap_max;    // experts moved per rebalance while generating [EXPERIMENTAL]
+        float   moe_hybrid_skip_weight; // skip CPU execution of non-resident experts whose router weight < skip_weight [EXPERIMENTAL]
+        int32_t moe_hybrid_tail_skip;   // skip CPU execution of non-resident experts whose rank >= tail_skip [EXPERIMENTAL]
+
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
         // currently works only with CPU execution

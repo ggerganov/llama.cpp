@@ -177,3 +177,62 @@ void ggml_cuda_launch_mm_ids_helper(
             break;
     }
 }
+
+static __global__ void mm_ids_fix_neg(
+        const int32_t * __restrict__ ids, int32_t * __restrict__ out, const int n_expert_used, const int n_tokens, const int n_experts,
+        const int64_t si0, const int64_t si1) {
+    const int it = blockIdx.x*blockDim.x + threadIdx.x;
+    if (it >= n_tokens) {
+        return;
+    }
+    int32_t * row = out + (int64_t) it*n_expert_used;
+    for (int k = 0; k < n_expert_used; ++k) {
+        row[k] = ids[it*si1 + k*si0];
+    }
+    int next = 0;
+    for (int k = 0; k < n_expert_used; ++k) {
+        if (row[k] >= 0) {
+            continue;
+        }
+        bool used = true;
+        while (used && next < n_experts) {
+            used = false;
+            for (int j = 0; j < n_expert_used; ++j) {
+                used |= row[j] == next;
+            }
+            next += used;
+        }
+        row[k] = next < n_experts ? next : 0;
+    }
+}
+
+static __global__ void mm_ids_zero_neg(
+        const int32_t * __restrict__ ids, float * __restrict__ dst, const int n_expert_used, const int64_t ne0,
+        const int64_t si0, const int64_t si1, const int64_t nb1, const int64_t nb2) {
+    const int it = blockIdx.x / n_expert_used;
+    const int k  = blockIdx.x % n_expert_used;
+    if (ids[it*si1 + k*si0] >= 0) {
+        return;
+    }
+    float * row = (float *) ((char *) dst + k*nb1 + it*nb2);
+    for (int64_t i = threadIdx.x; i < ne0; i += blockDim.x) {
+        row[i] = 0.0f;
+    }
+}
+
+void ggml_cuda_fix_neg_ids(const ggml_tensor * ids, int32_t * out, int n_experts, cudaStream_t stream) {
+    GGML_ASSERT(ids->type == GGML_TYPE_I32);
+    const int n_expert_used = ids->ne[0];
+    const int n_tokens      = ids->ne[1];
+    const int block = 128;
+    mm_ids_fix_neg<<<(n_tokens + block - 1)/block, block, 0, stream>>>(
+        (const int32_t *) ids->data, out, n_expert_used, n_tokens, n_experts, ids->nb[0]/sizeof(int32_t), ids->nb[1]/sizeof(int32_t));
+}
+
+void ggml_cuda_zero_neg_rows(const ggml_tensor * ids, ggml_tensor * dst, cudaStream_t stream) {
+    const int n_expert_used = ids->ne[0];
+    const int n_tokens      = ids->ne[1];
+    mm_ids_zero_neg<<<n_expert_used*n_tokens, 128, 0, stream>>>(
+        (const int32_t *) ids->data, (float *) dst->data, n_expert_used, dst->ne[0],
+        ids->nb[0]/sizeof(int32_t), ids->nb[1]/sizeof(int32_t), dst->nb[1], dst->nb[2]);
+}

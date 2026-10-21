@@ -597,6 +597,13 @@ struct common_params {
 
     size_t moe_cache_size = 0; // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
 
+    size_t  moe_hybrid_size        = 0;     // GPU memory in bytes for the MoE hybrid mode, 0 = off
+    int32_t moe_hybrid_max_tokens  = 16;    // largest batch that runs in the hybrid form
+    int32_t moe_hybrid_swap_every  = 16;    // generated tokens between two rebalances
+    int32_t moe_hybrid_swap_max    = 32;    // experts moved per rebalance while generating
+    float   moe_hybrid_skip_weight = 0.04f; // skip CPU execution of non-resident experts whose router weight < skip_weight
+    int32_t moe_hybrid_tail_skip   = 6;     // skip CPU execution of non-resident experts whose rank >= tail_skip
+
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see tools/mtmd)

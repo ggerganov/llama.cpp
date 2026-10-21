@@ -1496,6 +1496,10 @@ extern "C" {
             struct ggml_tensor * a,
             enum ggml_op_hint    hint);
 
+    // ids < 0 of a mul_mat_id are skipped, their rows of the result are zero
+    GGML_API void ggml_mul_mat_id_set_skip_neg(struct ggml_tensor * a);
+    GGML_API bool ggml_mul_mat_id_skip_neg(const struct ggml_tensor * a);
+
     // indirect matrix multiplication
     //
     // [TAG_MUL_MAT_ID_DUPLICATE_ID]

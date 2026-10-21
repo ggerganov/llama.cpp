@@ -216,6 +216,8 @@ extern "C" {
         ggml_backend_event_t (*event_new)         (ggml_backend_dev_t dev);
         void                 (*event_free)        (ggml_backend_dev_t dev, ggml_backend_event_t event);
         void                 (*event_synchronize) (ggml_backend_dev_t dev, ggml_backend_event_t event);
+        // (optional) true if the work before the event is done; querying also makes the driver submit the queued work
+        bool                 (*event_query)       (ggml_backend_dev_t dev, ggml_backend_event_t event);
     };
 
     struct ggml_backend_device {

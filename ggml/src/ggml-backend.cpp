@@ -693,6 +693,14 @@ void ggml_backend_event_record(ggml_backend_event_t event, ggml_backend_t backen
     backend->iface.event_record(backend, event);
 }
 
+bool ggml_backend_event_query(ggml_backend_event_t event) {
+    GGML_ASSERT(event);
+    if (event->device->iface.event_query == NULL) {
+        return true;
+    }
+    return event->device->iface.event_query(event->device, event);
+}
+
 void ggml_backend_event_synchronize(ggml_backend_event_t event) {
     GGML_ASSERT(event);
     GGML_ASSERT(event->device->iface.event_synchronize);
@@ -921,6 +929,10 @@ struct ggml_backend_sched_split {
     int inputs_capacity;
     // graph view of this split
     struct ggml_cgraph graph;
+    // early CPU inputs: the split runs as two views, cut after node uid_k - 1; their uids let backends reuse captured graphs
+    int      uid_k;
+    uint64_t uid_head;
+    uint64_t uid_tail;
 };
 
 struct ggml_backend_sched {
@@ -976,6 +988,19 @@ struct ggml_backend_sched {
     size_t context_buffer_size;
 
     bool op_offload;
+
+    // early CPU inputs, see ggml_backend_sched_set_early_cpu_inputs
+    bool early_cpu_inputs;
+    ggml_backend_event_t early_events[GGML_SCHED_MAX_BACKENDS];
+    bool early_tried[GGML_SCHED_MAX_BACKENDS];
+    struct ggml_tensor * early_done[GGML_SCHED_MAX_SPLIT_INPUTS]; // inputs of the next split that are already copied
+    int n_early_done;
+    ggml_backend_event_t early_wait; // recorded after those copies
+    int n_early_last;                // last node of the split that produces one of them
+
+    // Strata Hit Poke: force GPU submission before CPU compute on Windows / WDDM
+    ggml_backend_event_t poke_events[GGML_SCHED_MAX_BACKENDS];
+    bool poke_tried[GGML_SCHED_MAX_BACKENDS];
 
     int debug;
 
@@ -1749,6 +1774,7 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
     // set ids for all splits
     for (int i = 0; i < sched->n_splits; ++i) {
         sched->splits[i].graph.uid = ggml_graph_next_uid();
+        sched->splits[i].uid_k     = -1;
     }
 }
 
@@ -1862,16 +1888,103 @@ static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggm
     }
 }
 
+// wait for an event, busy-waiting when the device can report it without blocking (lower latency than a blocking wait)
+static void ggml_backend_sched_wait_event(ggml_backend_event_t event) {
+    if (event->device->iface.event_query == NULL) {
+        ggml_backend_event_synchronize(event);
+        return;
+    }
+    while (!ggml_backend_event_query(event)) {
+        // spin: the next split runs on this thread as soon as the copies are done
+    }
+}
+
+static bool ggml_backend_sched_is_early_done(ggml_backend_sched_t sched, const struct ggml_tensor * input) {
+    for (int i = 0; i < sched->n_early_done; i++) {
+        if (sched->early_done[i] == input) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// a split of a device followed by a CPU split: the inputs of the CPU split computed by this device are copied right after
+// the last node that produces one of them (n_early_last, -1 = before this split), with an event
+// fills early_done and returns true if there is anything to copy early
+static bool ggml_backend_sched_plan_early(ggml_backend_sched_t sched, int split_id) {
+    sched->n_early_done = 0;
+    if (!sched->early_cpu_inputs || sched->n_copies != 1 || split_id + 1 >= sched->n_splits) {
+        return false;
+    }
+    // the CUDA concurrent-stream optimisation plans its fork/join regions on the whole split: do not cut it
+    static const bool graph_opt = [] { const char * e = getenv("GGML_CUDA_GRAPH_OPT"); return e != nullptr && atoi(e) != 0; }();
+    if (graph_opt) {
+        return false;
+    }
+    struct ggml_backend_sched_split * split = &sched->splits[split_id];
+    struct ggml_backend_sched_split * next  = &sched->splits[split_id + 1];
+    ggml_backend_t split_backend = sched->backends[split->backend_id];
+    ggml_backend_t next_backend  = sched->backends[next->backend_id];
+    if (ggml_backend_dev_type(ggml_backend_get_device(split_backend)) == GGML_BACKEND_DEVICE_TYPE_CPU ||
+        ggml_backend_dev_type(ggml_backend_get_device(next_backend))  != GGML_BACKEND_DEVICE_TYPE_CPU ||
+        split_backend->iface.get_tensor_async == NULL) {
+        return false;
+    }
+    ggml_backend_buffer_type_t dev_buft = ggml_backend_get_default_buffer_type(split_backend);
+    int last = -1;
+    for (int input_id = 0; input_id < next->n_inputs; input_id++) {
+        struct ggml_tensor * input = next->inputs[input_id];
+        if ((input->flags & GGML_TENSOR_FLAG_INPUT) || ggml_backend_sched_is_host_weight(input) ||
+            ggml_backend_sched_get_tensor_backend(sched, input) != split_backend || input->data == NULL ||
+            input->buffer == NULL || ggml_backend_buffer_get_type(input->buffer) != dev_buft) {
+            continue; // copied the usual way
+        }
+        if (sched->n_early_done == GGML_SCHED_MAX_SPLIT_INPUTS) {
+            sched->n_early_done = 0;
+            return false; // too many: the usual way for all of them
+        }
+        for (int j = 0; j < split->graph.n_nodes; j++) {
+            if (split->graph.nodes[j] == input) {
+                last = j > last ? j : last;
+                break;
+            }
+        }
+        sched->early_done[sched->n_early_done++] = input;
+    }
+    if (sched->n_early_done == 0) {
+        return false;
+    }
+    if (sched->early_events[split->backend_id] == NULL && !sched->early_tried[split->backend_id]) {
+        sched->early_tried[split->backend_id] = true;
+        sched->early_events[split->backend_id] = ggml_backend_event_new(ggml_backend_get_device(split_backend));
+    }
+    if (sched->early_events[split->backend_id] == NULL) {
+        sched->n_early_done = 0;
+        return false;
+    }
+    sched->n_early_last = last;
+    return true;
+}
+
 static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
     GGML_ASSERT(sched);
     struct ggml_backend_sched_split * splits = sched->splits;
 
     int prev_backend_id = -1;
 
+    sched->n_early_done = 0;
+    sched->early_wait   = NULL;
+
     for (int split_id = 0; split_id < sched->n_splits; split_id++) {
         struct ggml_backend_sched_split * split = &splits[split_id];
         int split_backend_id = split->backend_id;
         ggml_backend_t split_backend = sched->backends[split_backend_id];
+
+        // the previous split copied some inputs of this one early: wait for the copies, but not for the rest of its work
+        if (sched->early_wait != NULL) {
+            ggml_backend_sched_wait_event(sched->early_wait);
+            sched->early_wait = NULL;
+        }
 
         // ensure the previous split's async work has completed before we start
         // this split, the allocator may have reused buffer regions across splits
@@ -1886,17 +1999,52 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
         // copy the input tensors to the split backend
         // the weights in host memory are copied last, so that the copy callback can read the other inputs of the split
         for (int input_id = 0; input_id < split->n_inputs; input_id++) {
-            if (!ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
+            if (!ggml_backend_sched_is_host_weight(split->inputs[input_id]) && !ggml_backend_sched_is_early_done(sched, split->inputs[input_id])) {
                 ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
             }
         }
+        sched->n_early_done = 0;
         for (int input_id = 0; input_id < split->n_inputs; input_id++) {
             if (ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
                 ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
             }
         }
 
-        if (!sched->callback_eval) {
+        if (!sched->callback_eval && ggml_backend_sched_plan_early(sched, split_id)) {
+            // compute up to the last node the next (CPU) split reads, copy those nodes to it, then compute the rest:
+            // the CPU split starts as soon as its inputs are on the host while this backend keeps computing
+            const int n_nodes = split->graph.n_nodes;
+            const int k = sched->n_early_last + 1;
+            if (split->uid_k != k) {
+                split->uid_k    = k;
+                split->uid_head = ggml_graph_next_uid();
+                split->uid_tail = ggml_graph_next_uid();
+            }
+            if (k > 0) {
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, 0, k);
+                gv.uid = split->uid_head;
+                enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &gv);
+                if (ec != GGML_STATUS_SUCCESS) {
+                    return ec;
+                }
+            }
+            struct ggml_backend_sched_split * next = &splits[split_id + 1];
+            for (int i = 0; i < sched->n_early_done; i++) {
+                struct ggml_tensor * input     = sched->early_done[i];
+                struct ggml_tensor * input_cpy = tensor_copy(input, next->backend_id, sched->cur_copy);
+                ggml_backend_tensor_get_async(split_backend, input, input_cpy->data, 0, ggml_nbytes(input));
+            }
+            ggml_backend_event_record(sched->early_events[split_backend_id], split_backend);
+            sched->early_wait = sched->early_events[split_backend_id];
+            if (k < n_nodes) {
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, k, n_nodes);
+                gv.uid = split->uid_tail;
+                enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &gv);
+                if (ec != GGML_STATUS_SUCCESS) {
+                    return ec;
+                }
+            }
+        } else if (!sched->callback_eval) {
             enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &split->graph);
             if (ec != GGML_STATUS_SUCCESS) {
                 return ec;
@@ -1932,6 +2080,34 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                 }
 
                 j0 = j1;
+            }
+        }
+
+        // Strata breakthrough: Hit Poke on Windows / WDDM
+        // When a GPU split is followed by a CPU split, force WDDM to submit the GPU command buffer
+        // immediately via an event record + query. Without this, WDDM defers the GPU commands in host memory
+        // while the CPU thread executes, killing parallelism between GPU hits and CPU misses.
+        if (split_id + 1 < sched->n_splits && split_backend_id >= 0 && split_backend_id < GGML_SCHED_MAX_BACKENDS) {
+            struct ggml_backend_sched_split * next = &splits[split_id + 1];
+            if (next->backend_id >= 0 && next->backend_id < sched->n_backends) {
+                ggml_backend_t next_backend = sched->backends[next->backend_id];
+                ggml_backend_dev_t split_dev = ggml_backend_get_device(split_backend);
+                ggml_backend_dev_t next_dev  = ggml_backend_get_device(next_backend);
+                if (split_dev != NULL && next_dev != NULL &&
+                    ggml_backend_dev_type(split_dev) != GGML_BACKEND_DEVICE_TYPE_CPU &&
+                    ggml_backend_dev_type(next_dev)  == GGML_BACKEND_DEVICE_TYPE_CPU &&
+                    split_backend->iface.event_record != NULL &&
+                    split_dev->iface.event_new != NULL &&
+                    split_dev->iface.event_query != NULL) {
+                    if (sched->poke_events[split_backend_id] == NULL && !sched->poke_tried[split_backend_id]) {
+                        sched->poke_tried[split_backend_id] = true;
+                        sched->poke_events[split_backend_id] = ggml_backend_event_new(split_dev);
+                    }
+                    if (sched->poke_events[split_backend_id] != NULL) {
+                        ggml_backend_event_record(sched->poke_events[split_backend_id], split_backend);
+                        (void) ggml_backend_event_query(sched->poke_events[split_backend_id]); // WDDM hardware flush
+                    }
+                }
             }
         }
 
@@ -2025,6 +2201,12 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
     for (int b = 0; b < sched->n_backends; b++) {
         for (int c = 0; c < sched->n_copies; c++) {
             ggml_backend_event_free(sched->events[b][c]);
+        }
+        if (sched->early_events[b] != NULL) {
+            ggml_backend_event_free(sched->early_events[b]);
+        }
+        if (sched->poke_events[b] != NULL) {
+            ggml_backend_event_free(sched->poke_events[b]);
         }
     }
     ggml_gallocr_free(sched->galloc);
@@ -2153,6 +2335,11 @@ void ggml_backend_sched_set_copy_callback(ggml_backend_sched_t sched, ggml_backe
     GGML_ASSERT(sched);
     sched->callback_copy = callback;
     sched->callback_copy_user_data = user_data;
+}
+
+void ggml_backend_sched_set_early_cpu_inputs(ggml_backend_sched_t sched, bool enable) {
+    GGML_ASSERT(sched);
+    sched->early_cpu_inputs = enable;
 }
 
 void ggml_backend_sched_set_realloc_callback(ggml_backend_sched_t sched, ggml_backend_sched_realloc_callback callback, void * user_data) {

@@ -3376,6 +3376,18 @@ struct ggml_tensor * ggml_mul_mat(
     return result;
 }
 
+// the last op param, the others are used for the precision of the sources
+#define GGML_MUL_MAT_ID_SKIP_NEG_PARAM (GGML_MAX_OP_PARAMS/sizeof(int32_t) - 1)
+
+void ggml_mul_mat_id_set_skip_neg(struct ggml_tensor * a) {
+    GGML_ASSERT(a->op == GGML_OP_MUL_MAT_ID);
+    ggml_set_op_params_i32(a, GGML_MUL_MAT_ID_SKIP_NEG_PARAM, 1);
+}
+
+bool ggml_mul_mat_id_skip_neg(const struct ggml_tensor * a) {
+    return a->op == GGML_OP_MUL_MAT_ID && ggml_get_op_params_i32(a, GGML_MUL_MAT_ID_SKIP_NEG_PARAM) != 0;
+}
+
 void ggml_mul_mat_set_prec(
         struct ggml_tensor * a,
         enum ggml_prec       prec) {

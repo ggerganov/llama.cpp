@@ -10,6 +10,7 @@
 #include "llama-mmap.h"
 #include "llama-model.h"
 #include "llama-moe-cache.h"
+#include "llama-moe-hybrid.h"
 #include "llama-ext.h"
 #include "llama-sampler.h"
 #include "llama.h"
@@ -359,6 +360,12 @@ llama_context::llama_context(
     cparams.op_offload     = params.op_offload;
     cparams.kv_unified     = params.kv_unified;
     cparams.moe_cache_size = params.moe_cache_size;
+    cparams.moe_hybrid_size        = params.moe_hybrid_size;
+    cparams.moe_hybrid_max_tokens  = params.moe_hybrid_max_tokens;
+    cparams.moe_hybrid_swap_every  = params.moe_hybrid_swap_every;
+    cparams.moe_hybrid_swap_max    = params.moe_hybrid_swap_max;
+    cparams.moe_hybrid_skip_weight = params.moe_hybrid_skip_weight;
+    cparams.moe_hybrid_tail_skip   = params.moe_hybrid_tail_skip;
 
     // initialized later
     cparams.pipeline_parallel = false;
@@ -520,7 +527,8 @@ llama_context::llama_context(
             model.split_mode() == LLAMA_SPLIT_MODE_LAYER &&
             cparams.offload_kqv &&
             !model.has_tensor_overrides() &&
-            cparams.moe_cache_size == 0; // not supported by the MoE cache
+            cparams.moe_cache_size == 0 && // not supported by the MoE cache
+            cparams.moe_hybrid_size == 0;  // nor by the MoE hybrid mode
 
         // pipeline parallelism requires support for async compute and events in all devices
         if (pipeline_parallel) {
@@ -548,8 +556,42 @@ llama_context::llama_context(
             LLAMA_LOG_INFO("%s: pipeline parallelism enabled\n", __func__);
         }
 
+        if (cparams.moe_cache_size > 0 && cparams.moe_hybrid_size > 0) {
+            LLAMA_LOG_WARN("%s: the MoE cache and the MoE hybrid mode exclude each other, using the hybrid mode\n", __func__);
+            cparams.moe_cache_size = 0;
+        }
+
         if (cparams.moe_cache_size > 0) {
             moe_cache = std::make_unique<llama_moe_cache>(model, backend_ptrs, backend_buft, cparams.moe_cache_size);
+        }
+
+        if (cparams.moe_hybrid_size > 0) {
+            // on the first GPU of the context
+            for (size_t i = 0; i < backend_ptrs.size(); ++i) {
+                const auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backend_ptrs[i]));
+                if (dev_type != GGML_BACKEND_DEVICE_TYPE_GPU && dev_type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+                    continue;
+                }
+                // the skipped experts (ids < 0) are honoured by the CPU and CUDA/ROCm kernels only
+                const std::string reg = ggml_backend_reg_name(ggml_backend_dev_backend_reg(ggml_backend_get_device(backend_ptrs[i])));
+                if (reg != "CUDA" && reg != "ROCm" && reg != "MUSA") {
+                    LLAMA_LOG_WARN("%s: MoE hybrid mode is off: it needs a CUDA or ROCm GPU, not %s\n", __func__, reg.c_str());
+                    break;
+                }
+                llama_moe_hybrid_params hp;
+                hp.size        = cparams.moe_hybrid_size;
+                hp.max_tokens  = cparams.moe_hybrid_max_tokens;
+                hp.swap_every  = cparams.moe_hybrid_swap_every;
+                hp.swap_max    = cparams.moe_hybrid_swap_max;
+                hp.skip_weight = cparams.moe_hybrid_skip_weight;
+                hp.tail_skip   = cparams.moe_hybrid_tail_skip;
+                try {
+                    moe_hybrid = std::make_unique<llama_moe_hybrid>(model, backend_ptrs[i], backend_buft[i], hp);
+                } catch (const std::exception & e) {
+                    LLAMA_LOG_WARN("%s: MoE hybrid mode is off: %s\n", __func__, e.what());
+                }
+                break;
+            }
         }
 
         sched_reserve();
@@ -709,6 +751,8 @@ void llama_context::sched_new(size_t max_nodes, bool parallel) {
             backend_ptrs.data(), backend_buft.data(), backend_ptrs.size(), max_nodes, parallel, cparams.op_offload));
 
     ggml_backend_sched_set_copy_callback(sched.get(), sched_copy_experts, this);
+    // the CPU branch of the MoE hybrid form starts when its inputs reach the host, while the device computes the resident experts
+    ggml_backend_sched_set_early_cpu_inputs(sched.get(), moe_hybrid != nullptr);
     ggml_backend_sched_set_realloc_callback(sched.get(), sched_graph_realloc, this);
 }
 
@@ -1565,6 +1609,11 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
         res->set_inputs(&ubatch);
 
         //LLAMA_LOG_INFO("graph set inputs time: %.3f ms\n", (ggml_time_us() - t_start_us)/1000.0);
+    }
+
+    // the MoE hybrid mode moves experts between graph computes only
+    if (moe_hybrid) {
+        moe_hybrid->before_compute(ubatch.n_tokens);
     }
 
     const auto status = graph_compute(res->get_gf(), ubatch.n_tokens > 1);
@@ -2700,6 +2749,7 @@ llm_graph_params llama_context::graph_params(
         /*.mctx        =*/ mctx,
         /*.cross       =*/ &cross,
         /*.moe_cache   =*/ moe_cache.get(),
+        /*.moe_hybrid  =*/ moe_hybrid.get(),
         /*.prec_policy =*/ &model.prec_policy,
         /*.hdmd        =*/ model.hdmd.rot.empty() ? nullptr : &model.hdmd,
         /*.samplers    =*/ sampling.samplers,
@@ -2792,12 +2842,20 @@ bool llama_context::sched_copy_experts(ggml_backend_t backend, const ggml_tensor
         ggml_backend_synchronize(backend);
 
         st.used.assign(n_expert, false);
+        std::vector<int32_t> hy_ids; // the MoE hybrid mode counts the routing of prompt batches here
         for (int64_t i1 = 0; i1 < ids->ne[1]; i1++) {
             for (int64_t i0 = 0; i0 < ids->ne[0]; i0++) {
                 const int32_t id = st.ids_data[i1*ids->nb[1]/sizeof(int32_t) + i0*ids->nb[0]/sizeof(int32_t)];
+                if (lctx->moe_hybrid) {
+                    hy_ids.push_back(id);
+                }
                 GGML_ASSERT(id >= 0 && id < n_expert);
                 st.used[id] = true;
             }
+        }
+
+        if (lctx->moe_hybrid) {
+            lctx->moe_hybrid->count(src, hy_ids.data(), hy_ids.size());
         }
 
         st.ids = ids;
@@ -2814,10 +2872,11 @@ bool llama_context::sched_copy_experts(ggml_backend_t backend, const ggml_tensor
             last++;
         }
 
-        // the experts in the MoE cache are copied from device memory, the others are uploaded
+        // the experts in the MoE cache (or resident in the MoE hybrid mode) are copied from device memory, the others are uploaded
         int64_t next = first;
-        for (int64_t e = first; e <= last && lctx->moe_cache; ) {
-            const int64_t n = lctx->moe_cache->copy_experts(backend, src, dst, e, last);
+        for (int64_t e = first; e <= last && (lctx->moe_cache || lctx->moe_hybrid); ) {
+            const int64_t n = lctx->moe_cache ? lctx->moe_cache->copy_experts(backend, src, dst, e, last)
+                                              : lctx->moe_hybrid->copy_experts(backend, src, dst, e, last);
             if (n == 0) {
                 e++;
                 continue;
@@ -3712,6 +3771,11 @@ llama_memory_breakdown llama_context::memory_breakdown() const {
             ret[buft].context += size;
         }
     }
+    if (moe_hybrid) {
+        for (const auto & [buft, size] : moe_hybrid->memory_breakdown()) {
+            ret[buft].context += size;
+        }
+    }
     if (model.hparams.no_alloc) {
         for (size_t i = 0; i < backends.size(); ++i) {
             ggml_backend_t             backend = backends[i].get();
@@ -4002,6 +4066,12 @@ llama_context_params llama_context_default_params() {
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.moe_cache_size              =*/ 0,
+        /*.moe_hybrid_size             =*/ 0,
+        /*.moe_hybrid_max_tokens       =*/ 16,
+        /*.moe_hybrid_swap_every       =*/ 16,
+        /*.moe_hybrid_swap_max         =*/ 32,
+        /*.moe_hybrid_skip_weight      =*/ 0.04f,
+        /*.moe_hybrid_tail_skip        =*/ 6,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
         /*.embeddings                  =*/ false,

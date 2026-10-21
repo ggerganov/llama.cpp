@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 #include "llama-model.h"
 #include "llama-moe-cache.h"
+#include "llama-moe-hybrid.h"
 #include "llama-batch.h"
 #include "llama-cparams.h"
 #include "llama-sampler.h"
@@ -1571,6 +1572,7 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
     mctx             (params.mctx),
     cross            (params.cross),
     moe_cache        (params.moe_cache),
+    moe_hybrid       (params.moe_hybrid),
     prec_policy      (params.prec_policy),
     hdmd             (params.hdmd),
     samplers         (params.samplers),
@@ -1676,7 +1678,13 @@ ggml_tensor * llm_graph_context::build_lora_mm_id(
     // the experts in the MoE cache are selected by their slots
     ggml_tensor * res = slots == nullptr ?
         ggml_mul_mat_id(ctx0, w, cur, ids) :
-        ggml_mul_mat_id(ctx0, moe_cache->get_experts(w), cur, slots);
+        ggml_mul_mat_id(ctx0, moe_hybrid_dev ? moe_hybrid->bank(w) : moe_cache->get_experts(w), cur, slots);
+    if (moe_skip_neg) {
+        ggml_mul_mat_id_set_skip_neg(res);
+    }
+    if (moe_pin_cpu) {
+        ggml_backend_sched_set_tensor_backend(sched, res, backend_cpu);
+    }
 
     if (prec_policy) {
         prec_policy->apply(res);
@@ -2318,6 +2326,34 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     // the experts of host-resident layers may be read from the MoE cache
     ggml_tensor * slots = build_moe_cache_slots(selected_experts, up_exps, gate_exps, down_exps, gate_up_exps, il);
 
+    // MoE hybrid mode (llama-moe-hybrid.h): for small batches the resident experts run on the device and the others on the CPU from the
+    // host copy, at the same time (prompt batches are counted in llama_context::sched_copy_experts instead)
+    ggml_tensor * hy_route = nullptr; // CPU op: the ids of the CPU branch, and the routing counts
+    ggml_tensor * hy_slots = nullptr; // device: the slot of each selected expert, -1 if not resident
+    if (moe_hybrid != nullptr && slots == nullptr && moe_hybrid->usable(il, n_tokens) && selected_experts->type == GGML_TYPE_I32) {
+        const bool hdmd_experts = hdmd && (hdmd->rot.count(up_exps) || hdmd->rot.count(gate_exps) || hdmd->rot.count(down_exps) || hdmd->rot.count(gate_up_exps));
+        bool plain = !weight_before_ffn && !hdmd_experts && loras->empty() && post_exp_norm == nullptr &&
+            !(up_exps_b || gate_exps_b || down_exps_b || gate_up_exps_b) && !(up_exps_s || gate_exps_s || down_exps_s);
+        for (ggml_tensor * w : { up_exps, gate_exps, down_exps, gate_up_exps }) {
+            plain = plain && (w == nullptr || moe_hybrid->bank(w) != nullptr);
+        }
+        if (plain) {
+            ggml_tensor * ids_c = ggml_cont(ctx0, selected_experts); // [n_expert_used, n_tokens]
+            // right after the routing, so the scheduler copies the ids to the host before the device computes the experts
+            ggml_build_forward_expand(gf, ids_c);
+            ggml_tensor * sl = ggml_get_rows(ctx0, moe_hybrid->slot_table(il), ggml_reshape_1d(ctx0, ids_c, ggml_nelements(ids_c))); // [1, n_expert_used*n_tokens]
+            if (ggml_backend_supports_op(moe_hybrid->backend(), sl)) {
+                ggml_backend_sched_set_tensor_backend(sched, sl, moe_hybrid->backend());
+                cb(sl, "ffn_moe_hybrid_slots", il);
+                hy_slots = ggml_reshape_2d(ctx0, sl, ids_c->ne[0], ids_c->ne[1]);
+                ggml_tensor * w_c = ggml_cont(ctx0, weights);
+                ggml_build_forward_expand(gf, w_c);
+                hy_route = moe_hybrid->build_route(ctx0, ids_c, w_c, il);
+                cb(hy_route, "ffn_moe_hybrid_route", il);
+            }
+        }
+    }
+
     cur = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
 
     if (weight_before_ffn) {
@@ -2329,6 +2365,34 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
 
     ggml_tensor * up = nullptr;
     ggml_tensor * experts = nullptr;
+
+    // the hybrid form runs the block below twice (it keeps upstream's indentation): pass 0 = the resident experts on the device
+    // (their slots, -1 for the others), pass 1 = the others on the CPU from the host experts (-1 for the resident ones).
+    // mul_mat_id leaves zero rows for ids < 0, so the two results add up
+    ggml_tensor * hy_cur      = cur;
+    ggml_tensor * hy_selected = selected_experts;
+    ggml_tensor * hy_dev      = nullptr;
+    const int n_pass = hy_slots != nullptr ? 2 : 1;
+    for (int pass = 0; pass < n_pass; ++pass) {
+    if (n_pass == 2) {
+        moe_skip_neg = true;
+        if (pass == 0) {
+            slots          = hy_slots;
+            moe_hybrid_dev = true;
+        } else {
+            hy_dev = experts;
+            ggml_build_forward_expand(gf, hy_dev);
+            // device work that the model wants to overlap with the CPU branch (a shared expert)
+            if (moe_overlap != nullptr) {
+                ggml_build_forward_expand(gf, moe_overlap);
+            }
+            cur              = hy_cur;
+            selected_experts = hy_route;
+            slots            = nullptr;
+            moe_hybrid_dev   = false;
+            moe_pin_cpu      = true;
+        }
+    }
 
     if (gate_up_exps) {
         // merged gate_up path: one mul_mat_id, then split into gate and up views
@@ -2491,6 +2555,17 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     if (!weight_before_ffn) {
         experts = ggml_mul(ctx0, experts, weights);
         cb(experts, "ffn_moe_weighted", il);
+    }
+    } // passes
+    if (n_pass == 2) {
+        moe_skip_neg     = false;
+        moe_pin_cpu      = false;
+        selected_experts = hy_selected;
+        ggml_backend_sched_set_tensor_backend(sched, experts, backend_cpu);
+        // the CPU branch is added to the device branch on the device
+        experts = ggml_add(ctx0, hy_dev, experts);
+        ggml_backend_sched_set_tensor_backend(sched, experts, moe_hybrid->backend());
+        cb(experts, "ffn_moe_hybrid", il);
     }
 
     ggml_build_forward_expand(gf, experts);

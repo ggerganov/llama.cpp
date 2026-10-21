@@ -57,6 +57,13 @@ struct llama_cparams {
 
     size_t moe_cache_size;
 
+    size_t  moe_hybrid_size;
+    int32_t moe_hybrid_max_tokens;
+    int32_t moe_hybrid_swap_every;
+    int32_t moe_hybrid_swap_max;
+    float   moe_hybrid_skip_weight;
+    int32_t moe_hybrid_tail_skip;
+
     std::vector<bool> embeddings_layer_inp; // [n_layer()] extract input embeddings for layer
 
     enum llama_context_type ctx_type;

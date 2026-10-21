@@ -2788,6 +2788,70 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
     add_opt(common_arg(
+        {"--moe-hybrid-mib"}, "N",
+        "MoE hybrid mode: GPU memory in MiB for the experts kept in the CPU (--cpu-moe / --n-cpu-moe). Each such layer keeps the same number "
+        "of its most used experts on the GPU; for small batches the GPU computes those while the CPU computes the others, at the same time. "
+        "Experts are moved after a prompt and every 32 generated tokens (default: 0, disabled)",
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_size = (size_t) value*1024*1024;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_MIB"));
+    add_opt(common_arg(
+        {"--moe-hybrid-max-tokens"}, "N",
+        string_format("MoE hybrid mode: largest batch that uses it, 1..64; larger batches stream the experts to the GPU (default: %d)", params.moe_hybrid_max_tokens),
+        [](common_params & params, int value) {
+            if (value < 1 || value > 64) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_max_tokens = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_MAX_TOKENS"));
+    add_opt(common_arg(
+        {"--moe-hybrid-swap-every"}, "N",
+        string_format("MoE hybrid mode: generated tokens between two rebalances of the GPU slots (default: %d)", params.moe_hybrid_swap_every),
+        [](common_params & params, int value) {
+            if (value < 1) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_swap_every = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_SWAP_EVERY"));
+    add_opt(common_arg(
+        {"--moe-hybrid-swap-max"}, "N",
+        string_format("MoE hybrid mode: experts moved per rebalance while generating, over all layers; after a prompt up to 2048 move "
+                      "at once (default: %d)", params.moe_hybrid_swap_max),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_swap_max = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_SWAP_MAX"));
+    add_opt(common_arg(
+        {"--moe-hybrid-skip-weight"}, "F",
+        string_format("MoE hybrid mode: skip CPU computation of non-resident experts whose router weight is below F, 0 = off (default: %.2f)", (double) params.moe_hybrid_skip_weight),
+        [](common_params & params, const std::string & value) {
+            float val = std::stof(value);
+            if (val < 0.0f || val > 1.0f) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_skip_weight = val;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_SKIP_WEIGHT"));
+    add_opt(common_arg(
+        {"--moe-hybrid-tail-skip"}, "N",
+        string_format("MoE hybrid mode: skip CPU computation of non-resident experts ranked N or higher, 0 = off (default: %d)", params.moe_hybrid_tail_skip),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_hybrid_tail_skip = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_HYBRID_TAIL_SKIP"));
+    add_opt(common_arg(
         {"-ncffn", "--n-cpu-ffn"}, "N",
         "keep the dense FFN weights of the first N layers in the CPU\n"
         "(dense models; for MoE expert weights use --n-cpu-moe)",

@@ -127,6 +127,8 @@ extern "C" {
     GGML_API void                 ggml_backend_event_free(ggml_backend_event_t event);
     GGML_API void                 ggml_backend_event_record(ggml_backend_event_t event, ggml_backend_t backend);
     GGML_API void                 ggml_backend_event_synchronize(ggml_backend_event_t event);
+    // true if the work before the event is done (also when the backend cannot tell); does not block
+    GGML_API bool                 ggml_backend_event_query(ggml_backend_event_t event);
     GGML_API void                 ggml_backend_event_wait(ggml_backend_t backend, ggml_backend_event_t event);
 
     //
@@ -374,6 +376,10 @@ extern "C" {
 
     // Set a callback to be called when the inputs weights of a split are being copied
     GGML_API void                 ggml_backend_sched_set_copy_callback(ggml_backend_sched_t sched, ggml_backend_sched_copy_callback callback, void * user_data);
+
+    // A device split followed by a CPU split: copy the CPU split's inputs to the host right after the nodes that produce them
+    // (with an event), then let the device compute the rest of its split while the CPU split runs. Single copy (no pipeline parallelism) only
+    GGML_API void                 ggml_backend_sched_set_early_cpu_inputs(ggml_backend_sched_t sched, bool enable);
 
     // Set a callback to be called when the compute buffers of a graph are being reallocated
     GGML_API void                 ggml_backend_sched_set_realloc_callback(ggml_backend_sched_t sched, ggml_backend_sched_realloc_callback callback, void * user_data);
