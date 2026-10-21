@@ -1875,8 +1875,7 @@ void ggml_hexagon_session::enqueue_cpy(const ggml_tensor * src, ggml_tensor * ds
 
     cpy_node.init(node);
     const bool ok = htp_kparams_solve(this, node, cpy_node.kernel_params);
-    const auto * kparams = (const struct htp_copy_kernel_params *) cpy_node.kernel_params;
-    if (ok && !with_fence && kparams->total_elems == 0) {
+    if (ok && !with_fence && cpy_node.kparams<htp_copy_kernel_params>()->total_elems == 0) {
         return;
     }
     this->enqueue_op(cpy_node);
@@ -1928,7 +1927,7 @@ void ggml_hexagon_session::enqueue_allreduce(
 
     htp_kparams_solve_allreduce(
         this, dst, rank, n_ranks, false, false, /*is_shard_ok=*/ false,
-        (struct htp_allreduce_kernel_params *) ar_node.kernel_params);
+        ar_node.kparams<htp_allreduce_kernel_params>());
 
     this->enqueue_op(ar_node);
 }
@@ -2397,7 +2396,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
             }
 
             GGML_ASSERT(htp_kparams_solve(sess, node.node, node.kernel_params));
-            if (node.opcode == HTP_OP_CPY && ((const struct htp_copy_kernel_params *) node.kernel_params)->total_elems == 0) {
+            if (node.opcode == HTP_OP_CPY && node.kparams<htp_copy_kernel_params>()->total_elems == 0) {
                 continue;
             }
 

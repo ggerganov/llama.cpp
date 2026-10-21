@@ -69,7 +69,7 @@ static bool is_supported_mul_mat_id_nx_kernel(const ggml_tensor * src0, const st
 static bool fuse_allreduce_add(const ggml_hexagon_session * sess, htp_opnode & prev, const htp_opnode & cur) {
     if (opt_ar_select != 2 || prev.opcode != HTP_OP_ALLREDUCE) return false;
 
-    const auto * ar_kparams = (const struct htp_allreduce_kernel_params *) prev.kernel_params;
+    const auto * ar_kparams = prev.kparams<htp_allreduce_kernel_params>();
     const uint32_t rank    = (uint32_t) ar_kparams->rank;
     const uint32_t n_ranks = (uint32_t) ar_kparams->n_ranks;
 
@@ -123,7 +123,7 @@ static bool fuse_allreduce_add(const ggml_hexagon_session * sess, htp_opnode & p
         prev.outputs = { add_dst };
     }
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -153,7 +153,7 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     prev.inputs  = { src0, weight };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -197,7 +197,7 @@ static bool fuse_mul_mat_add(const ggml_hexagon_session * sess, htp_opnode & pre
     const ggml_tensor * dst  = cur.dst();
     if (!ggml_are_same_shape(prev.dst(), dst)) return false;
 
-    const auto * orig_kparams = (const struct htp_mm_kernel_params *) prev.kernel_params;
+    const auto * orig_kparams = prev.kparams<htp_mm_kernel_params>();
     struct htp_mm_kernel_params kparams;
     if (!htp_kparams_solve_matmul_add(sess, src0, src1, src2, dst, &kparams) ||
         orig_kparams->collapse != kparams.collapse) {
@@ -223,7 +223,7 @@ static bool fuse_mul_mat_add(const ggml_hexagon_session * sess, htp_opnode & pre
     prev.inputs  = { src0, src1, src2 };
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -239,8 +239,8 @@ static bool fuse_mul_mat_nx(const ggml_hexagon_session * sess, htp_opnode & prev
     const ggml_tensor * x_in = cur.src1();
     const ggml_tensor * d_in = cur.dst();
 
-    auto * orig_kparams = (struct htp_mm_kernel_params *) prev.kernel_params;
-    const auto * cur_kparams = (const struct htp_mm_kernel_params *) cur.kernel_params;
+    auto * orig_kparams = prev.kparams<htp_mm_kernel_params>();
+    const auto * cur_kparams = cur.kparams<htp_mm_kernel_params>();
 
     if (x_in != x || w_in->type != w0->type || w_in->ne[0] != w0->ne[0] ||
         w0->ne[2] != 1 || w0->ne[3] != 1 || w_in->ne[2] != 1 || w_in->ne[3] != 1 ||
@@ -265,7 +265,7 @@ static bool fuse_mul_mat_nx(const ggml_hexagon_session * sess, htp_opnode & prev
         }
         if (!is_supported_mul_mat_nx_kernel(w0, &kparams)) return false;
 
-        memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+        prev.set_kparams(kparams);
         prev.opcode = HTP_OP_MUL_MAT_NX;
     }
 
@@ -289,8 +289,8 @@ static bool fuse_mul_mat_id_nx(const ggml_hexagon_session * sess, htp_opnode & p
     const ggml_tensor * ids_in = cur.node->src[2];
     const ggml_tensor * d_in   = cur.dst();
 
-    auto * orig_kparams = (struct htp_mm_kernel_params *) prev.kernel_params;
-    const auto * cur_kparams = (const struct htp_mm_kernel_params *) cur.kernel_params;
+    auto * orig_kparams = prev.kparams<htp_mm_kernel_params>();
+    const auto * cur_kparams = cur.kparams<htp_mm_kernel_params>();
 
     if (x_in != x || ids_in != ids || w_in->type != w0->type ||
         w_in->ne[0] != w0->ne[0] || w_in->ne[2] != w0->ne[2] ||
@@ -312,7 +312,7 @@ static bool fuse_mul_mat_id_nx(const ggml_hexagon_session * sess, htp_opnode & p
     prev.inputs.insert(prev.inputs.begin() + curr_n, w_in);
     prev.outputs.push_back(d_in);
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -358,7 +358,7 @@ static bool fuse_ssm_conv_silu(const ggml_hexagon_session * sess, htp_opnode & p
     GGML_UNUSED(sess);
     if (prev.opcode != HTP_OP_SSM_CONV) return false;
 
-    auto * kparams = (struct htp_ssm_conv_kernel_params *) prev.kernel_params;
+    auto * kparams = prev.kparams<htp_ssm_conv_kernel_params>();
     if (kparams->silu) return false;
     if (!htp_match_consumer(prev, cur, /*commutative=*/ false)) return false;
 
@@ -392,7 +392,7 @@ static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode &
     prev.inputs  = { repeat_src0, gr_src1 };
     prev.outputs = { gr_dst };
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -423,15 +423,15 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     prev.outputs = { dst };
     prev.fused.push_back(cur.node);
     memset(prev.params, 0, sizeof(prev.params));
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
 static bool fuse_mul_mul_scalar(const ggml_hexagon_session * sess, htp_opnode & prev, const htp_opnode & cur) {
     if (prev.opcode != HTP_OP_MUL || prev.inputs.size() != 2) return false;
 
-    const auto * k0 = (const struct htp_binary_kernel_params *) prev.kernel_params;
-    const auto * k1 = (const struct htp_binary_kernel_params *) cur.kernel_params;
+    const auto * k0 = prev.kparams<htp_binary_kernel_params>();
+    const auto * k1 = cur.kparams<htp_binary_kernel_params>();
     if (k0->kernel_type != HTP_BINARY_KERNEL_SCALAR || k1->kernel_type != HTP_BINARY_KERNEL_SCALAR) return false;
     if (k0->src1_strided || k1->src1_strided) return false;
 
@@ -459,7 +459,7 @@ static bool fuse_mul_mul_scalar(const ggml_hexagon_session * sess, htp_opnode & 
     prev.inputs.push_back(src2);
     prev.outputs[0] = dst;
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 
@@ -469,8 +469,8 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     const uint32_t curr_n = (uint32_t) prev.inputs.size();
     if (curr_n < 2 || curr_n >= HTP_OP_MAX_INPUTS) return false;
 
-    const auto * k0 = (const struct htp_binary_kernel_params *) prev.kernel_params;
-    const auto * k1 = (const struct htp_binary_kernel_params *) cur.kernel_params;
+    const auto * k0 = prev.kparams<htp_binary_kernel_params>();
+    const auto * k1 = cur.kparams<htp_binary_kernel_params>();
     const bool k0_ok = (k0->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) ||
                        (k0->kernel_type == HTP_BINARY_KERNEL_CHUNKED && !k0->is_scalar);
     const bool k1_ok = (k1->kernel_type == HTP_BINARY_KERNEL_SAME_SHAPE) ||
@@ -535,7 +535,7 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
     prev.inputs.push_back(new_src);
     prev.outputs[0] = dst;
     prev.fused.push_back(cur.node);
-    memcpy(prev.kernel_params, &kparams, sizeof(kparams));
+    prev.set_kparams(kparams);
     return true;
 }
 

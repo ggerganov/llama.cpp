@@ -127,6 +127,27 @@ struct htp_opnode {
         return outputs;
     }
 
+    template <typename T>
+    T * kparams() {
+        static_assert(sizeof(T) <= sizeof(kernel_params), "kparams size exceeds HTP_OP_MAX_KERN_PARAMS");
+        static_assert(alignof(T) <= alignof(int32_t), "kparams alignment exceeds int32_t");
+        return reinterpret_cast<T *>(kernel_params);
+    }
+
+    template <typename T>
+    const T * kparams() const {
+        static_assert(sizeof(T) <= sizeof(kernel_params), "kparams size exceeds HTP_OP_MAX_KERN_PARAMS");
+        static_assert(alignof(T) <= alignof(int32_t), "kparams alignment exceeds int32_t");
+        return reinterpret_cast<const T *>(kernel_params);
+    }
+
+    template <typename T>
+    void set_kparams(const T & kp) {
+        static_assert(sizeof(T) <= sizeof(kernel_params), "kparams size exceeds HTP_OP_MAX_KERN_PARAMS");
+        static_assert(alignof(T) <= alignof(int32_t), "kparams alignment exceeds int32_t");
+        memcpy(kernel_params, &kp, sizeof(T));
+    }
+
     std::string name() const;
 };
 

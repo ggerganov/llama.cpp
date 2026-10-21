@@ -37,7 +37,7 @@ std::string htp_opnode::name() const {
         case HTP_OP_MUL:
         case HTP_OP_DIV:
             if (!fused.empty()) {
-                const auto * kp = (const struct htp_binary_kernel_params *) kernel_params;
+                const auto * kp = kparams<htp_binary_kernel_params>();
                 if (kp->kernel_type != HTP_BINARY_KERNEL_SCALAR) {
                     switch (opcode) {
                         case HTP_OP_ADD: return "ADD_NX";
@@ -142,7 +142,7 @@ static std::string format_kernel_params(const htp_opnode & node) {
     if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID ||
         node.opcode == HTP_OP_MUL_MAT_NX || node.opcode == HTP_OP_MUL_MAT_ID_NX ||
         node.opcode == HTP_OP_MUL_MAT_ADD) {
-        const auto * kparams = (const struct htp_mm_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_mm_kernel_params>();
         const char * path = "unknown";
         int32_t type = kparams->kernel_type;
         if (type == HTP_MM_KERNEL_HMX_2D || type == HTP_MM_KERNEL_HMX_BATCHED) {
@@ -155,7 +155,7 @@ static std::string format_kernel_params(const htp_opnode & node) {
         }
         snprintf(str, max_size, "%s vtcm %d", path, (int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
-        const auto * kparams = (const struct htp_fa_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_fa_kernel_params>();
         const char * path = "unknown";
         int32_t type = kparams->kernel_type;
         if (type == HTP_FA_KERNEL_HMX) {
@@ -165,7 +165,7 @@ static std::string format_kernel_params(const htp_opnode & node) {
         }
         snprintf(str, max_size, "%s vtcm %d", path, (int) kparams->vtcm_size);
     } else if (htp_op_is_unary(node.opcode)) {
-        const auto * kparams = (const struct htp_unary_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_unary_kernel_params>();
         snprintf(str, max_size, "%s vtcm %d", kparams->col_tile ? "wide-row" : "row-block", (int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_MDEV_GROUP && node.node) {
         snprintf(str, max_size, "idx %d count %d", (int) node.node->op_params[0], (int) node.dst()->ne[1]);
@@ -174,28 +174,28 @@ static std::string format_kernel_params(const htp_opnode & node) {
     } else if (node.opcode == HTP_OP_ALLREDUCE && node.node) {
         snprintf(str, max_size, "seq 0x%x -> 0x%x", (uint32_t) node.node->op_params[0], (uint32_t) node.node->op_params[1]);
     } else if (node.opcode == HTP_OP_SSM_CONV) {
-        const auto * kparams = (const struct htp_ssm_conv_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_ssm_conv_kernel_params>();
         snprintf(str, max_size, "%s vtcm %d", kparams->n_t == 1 ? "decode" : "prefill", (int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_SOFTMAX) {
-        const auto * kparams = (const struct htp_softmax_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_softmax_kernel_params>();
         snprintf(str, max_size, "k%d nth %d vtcm %d", (int) kparams->kernel_type, (int) kparams->n_threads, (int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_GATED_DELTA_NET) {
-        const auto * kparams = (const struct htp_gdn_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_gdn_kernel_params>();
         const char * path = (kparams->kernel_type == HTP_GDN_KERNEL_HMX_CHUNKED) ? "hmx-chunked" : "hvx-recurrent";
         snprintf(str, max_size, "%s-%s vtcm %u", path, kparams->kda ? "kda" : "scalar",
                  (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID ||
                node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
-        const auto * kparams = (const struct htp_binary_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_binary_kernel_params>();
         snprintf(str, max_size, "vtcm %u", (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
-        const auto * kparams = (const struct htp_sort_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_sort_kernel_params>();
         snprintf(str, max_size, "%s nth %d nchk %d chk %d vtcm %d",
                  node.opcode == HTP_OP_TOP_K ? "top_k" : "argsort",
                  (int) kparams->n_threads, (int) kparams->n_chunks,
                  (int) kparams->chunk_elems, (int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_GET_ROWS) {
-        const auto * kparams = (const struct htp_get_rows_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_get_rows_kernel_params>();
         const char * ktype_str = "unknown";
         switch (kparams->kernel_type) {
             case HTP_GET_ROWS_KERNEL_SAMETYPE: ktype_str = "sametype"; break;
@@ -204,25 +204,25 @@ static std::string format_kernel_params(const htp_opnode & node) {
         }
         snprintf(str, max_size, "%s%s vtcm %u", ktype_str, kparams->n_threads > 1 ? "-multi" : "", (unsigned int) kparams->vtcm_size);
     } else if (htp_op_is_glu(node.opcode)) {
-        const auto * kparams = (const struct htp_glu_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_glu_kernel_params>();
         snprintf(str, max_size, "nth %d vtcm %u", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_PAD) {
-        const auto * kparams = (const struct htp_pad_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_pad_kernel_params>();
         snprintf(str, max_size, "k%d nth %d vtcm %u", (int) kparams->kernel_type, (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_CUMSUM) {
-        const auto * kparams = (const struct htp_cumsum_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_cumsum_kernel_params>();
         snprintf(str, max_size, "%s nth %d vtcm %u", kparams->use_dma ? "dma" : "hvx", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_FILL) {
-        const auto * kparams = (const struct htp_fill_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_fill_kernel_params>();
         snprintf(str, max_size, "%s nth %d", kparams->kernel_type == HTP_FILL_KERNEL_CONTIGUOUS ? "contig" : "strided", (int) kparams->n_threads);
     } else if (node.opcode == HTP_OP_ROLL) {
-        const auto * kparams = (const struct htp_roll_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_roll_kernel_params>();
         snprintf(str, max_size, "k%d nth %d", (int) kparams->kernel_type, (int) kparams->n_threads);
     } else if (node.opcode == HTP_OP_DIAG) {
-        const auto * kparams = (const struct htp_diag_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_diag_kernel_params>();
         snprintf(str, max_size, "%s nth %d vtcm %u", kparams->use_dma ? "dma" : "hvx", (int) kparams->n_threads, (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_SOLVE_TRI) {
-        const auto * kparams = (const struct htp_solve_tri_kernel_params *) node.kernel_params;
+        const auto * kparams = node.kparams<htp_solve_tri_kernel_params>();
         snprintf(str, max_size, "%s nth %d", kparams->batched ? "batched" : "chunked", (int) kparams->n_threads);
     } else {
         snprintf(str, max_size, "----");
