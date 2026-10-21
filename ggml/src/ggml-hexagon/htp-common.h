@@ -131,6 +131,7 @@ void htp_precompute_get_rows_params(
 bool htp_precompute_glu_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * src0,
+    const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
     struct htp_glu_kernel_params * kparams
 );

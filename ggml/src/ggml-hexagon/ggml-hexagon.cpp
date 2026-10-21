@@ -3863,12 +3863,29 @@ static void ggml_hexagon_precompute_sum_rows_params(
 bool htp_precompute_glu_params(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * src0,
+    const struct ggml_tensor * src1,
     const struct ggml_tensor * dst,
     struct htp_glu_kernel_params * kparams
 ) {
     memset(kparams, 0, sizeof(*kparams));
 
-    const size_t   elem_size           = ggml_type_size(dst->type);
+    if ((src0->type != GGML_TYPE_F32 && src0->type != GGML_TYPE_F16) || dst->type != src0->type) {
+        return false;
+    }
+
+    const size_t elem_size = ggml_type_size(src0->type);
+    const auto is_valid_src = [elem_size](const struct ggml_tensor * t) {
+        return ggml_is_contiguous_1(t) && t->nb[0] == elem_size &&
+               (t->ne[1] <= 1 || t->nb[1] >= (size_t) t->ne[0] * elem_size);
+    };
+
+    if (!is_valid_src(src0) || !ggml_is_contiguous(dst)) {
+        return false;
+    }
+    if (src1 && (src1->type != src0->type || !ggml_are_same_shape(src0, src1) || !is_valid_src(src1))) {
+        return false;
+    }
+
     const size_t   dst_row_size        = dst->ne[0] * elem_size;
     const uint32_t src0_nrows          = src0->ne[1] * src0->ne[2] * src0->ne[3];
     const uint32_t min_rows_per_thread = (uint32_t) (std::max<size_t>(1, (128 + dst_row_size - 1) / dst_row_size));
@@ -4493,7 +4510,7 @@ static bool ggml_hexagon_precompute_cpy_params(
 }
 
 static bool ggml_hexagon_op_mul_mat_use_fwht(const struct ggml_tensor * dst) {
-    if (dst->op != GGML_OP_MUL_MAT || ggml_get_op_params_i32(dst, 1) != GGML_HINT_SRC0_IS_HADAMARD) {
+    if (!htp_is_hadamard(dst)) {
         return false;
     }
 
@@ -4515,7 +4532,7 @@ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * s
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
 
-    if (ggml_get_op_params_i32(dst, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
+    if (htp_is_hadamard(dst)) {
         if (!ggml_hexagon_op_mul_mat_use_fwht(dst)) {
             return false;
         }
@@ -4937,41 +4954,8 @@ static bool ggml_hexagon_supported_pool_1d(const struct ggml_hexagon_session * s
 }
 
 static bool ggml_hexagon_supported_glu(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    const struct ggml_tensor * src0 = op->src[0];
-    const struct ggml_tensor * src1 = op->src[1];
-    const struct ggml_tensor * dst  = op;
-
-    if (src0->type != GGML_TYPE_F32 && src0->type != GGML_TYPE_F16) {
-        return false;
-    }
-    if (dst->type != src0->type) {
-        return false;
-    }
-
-    const size_t elem_size = ggml_type_size(src0->type);
-    if (!ggml_is_contiguous_1(src0) || src0->nb[0] != elem_size ||
-        (src0->ne[1] > 1 && src0->nb[1] < (size_t) src0->ne[0] * elem_size)) {
-        return false;
-    }
-    if (!ggml_is_contiguous(dst)) {
-        return false;
-    }
-
-    if (src1) {
-        if (src1->type != src0->type) {
-            return false;
-        }
-        if (!ggml_are_same_shape(src0, src1)) {
-            return false;
-        }
-        if (!ggml_is_contiguous_1(src1) || src1->nb[0] != elem_size ||
-            (src1->ne[1] > 1 && src1->nb[1] < (size_t) src1->ne[0] * elem_size)) {
-            return false;
-        }
-    }
-
     struct htp_glu_kernel_params kparams;
-    return htp_precompute_glu_params(sess, src0, dst, &kparams);
+    return htp_precompute_glu_params(sess, op->src[0], op->src[1], op, &kparams);
 }
 
 static bool ggml_hexagon_supported_softmax(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
@@ -6094,10 +6078,7 @@ static htp_op_code op_remap_to_htp(const ggml_tensor * t) {
     switch (t->op) {
         case GGML_OP_FLASH_ATTN_EXT:  return HTP_OP_FLASH_ATTN_EXT;
         case GGML_OP_MUL_MAT:
-            if (ggml_get_op_params_i32(t, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
-                return HTP_OP_HADAMARD;
-            }
-            return HTP_OP_MUL_MAT;
+            return htp_is_hadamard(t) ? HTP_OP_HADAMARD : HTP_OP_MUL_MAT;
         case GGML_OP_MUL_MAT_ID:      return HTP_OP_MUL_MAT_ID;
         case GGML_OP_MUL:             return HTP_OP_MUL;
         case GGML_OP_ADD:             return HTP_OP_ADD;
@@ -6324,6 +6305,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
             } else if (htp_op_is_glu(node.opcode)) {
                 GGML_ASSERT(htp_precompute_glu_params(sess,
                     node.node->src[0],
+                    node.node->src[1],
                     node.dst(),
                     (struct htp_glu_kernel_params *) node.kernel_params
                 ));

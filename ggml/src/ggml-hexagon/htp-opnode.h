@@ -54,6 +54,10 @@ struct htp_opvec {
     }
 };
 
+static inline bool htp_is_hadamard(const struct ggml_tensor * t) {
+    return t && t->op == GGML_OP_MUL_MAT && ggml_get_op_params_i32(t, 1) == GGML_HINT_SRC0_IS_HADAMARD;
+}
+
 struct htp_opnode {
     const ggml_tensor * node   { nullptr };
     htp_op_code         opcode { HTP_OP_INVALID };
@@ -63,7 +67,7 @@ struct htp_opnode {
     std::vector<std::shared_ptr<ggml_tensor>>          dummy;
 
     htp_opvec<const ggml_tensor *, HTP_OP_MAX_FUSED>   fused;
-    htp_opvec<const ggml_tensor *, HTP_OP_MAX_FUSED>   inputs;
+    htp_opvec<const ggml_tensor *, HTP_OP_MAX_INPUTS>  inputs;
     htp_opvec<const ggml_tensor *, HTP_OP_MAX_OUTPUTS> outputs;
 
     int n_active_src(const ggml_tensor * t) const {
@@ -85,7 +89,7 @@ struct htp_opnode {
         memcpy(this->params, this->node->op_params, sizeof(this->params));
 
         // Build inputs (preserving optional nullptrs)
-        if (this->node->op == GGML_OP_MUL_MAT && ggml_get_op_params_i32(this->node, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
+        if (htp_is_hadamard(this->node)) {
             this->inputs.push_back(this->node->src[1]);
         } else {
             int n_inputs = n_active_src(this->node);
@@ -115,7 +119,7 @@ struct htp_opnode {
         return dummy.back().get();
     }
 
-    const htp_opvec<const ggml_tensor *, HTP_OP_MAX_FUSED> & get_inputs() const {
+    const htp_opvec<const ggml_tensor *, HTP_OP_MAX_INPUTS> & get_inputs() const {
         return inputs;
     }
 

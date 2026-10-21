@@ -56,7 +56,7 @@ std::string htp_opnode::name() const {
     if (!node) {
         return "";
     }
-    if (node->op == GGML_OP_MUL_MAT && ggml_get_op_params_i32(node, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
+    if (htp_is_hadamard(node)) {
         return "MUL_MAT_HADAMARD";
     }
 

@@ -21,8 +21,15 @@ static inline bool htp_same_shape_and_contiguity(const ggml_tensor * a, const gg
 }
 
 static inline bool htp_inplace_overlap_unsafe(const ggml_tensor * dst, const ggml_tensor * in) {
-    return htp_tensors_overlap(dst, in) &&
-           (dst->data != in->data || dst->nb[1] != in->nb[1] || dst->nb[2] != in->nb[2] || dst->nb[3] != in->nb[3]);
+    return htp_tensors_overlap(dst, in) && (dst->data != in->data || !ggml_are_same_stride(dst, in));
+}
+
+static inline bool htp_inputs_overlap_unsafe(const htp_opnode & prev, const ggml_tensor * dst, const ggml_tensor * extra = nullptr) {
+    if (extra && htp_inplace_overlap_unsafe(dst, extra)) return true;
+    for (const auto * in : prev.inputs) {
+        if (htp_inplace_overlap_unsafe(dst, in)) return true;
+    }
+    return false;
 }
 
 static inline bool htp_match_consumer(
@@ -246,11 +253,8 @@ static bool fuse_allreduce_add(const ggml_hexagon_session * sess, htp_opnode & p
                                                   res_tensor->ne[1] == 1 && res_tensor->ne[2] == 1 && res_tensor->ne[3] == 1);
     if (!is_same_shape && !is_row_bcast) return false;
 
-    if (is_same_shape) {
-        if (ar_local->nb[1] != res_tensor->nb[1] || ar_local->nb[2] != res_tensor->nb[2] || ar_local->nb[3] != res_tensor->nb[3]) {
-            return false;
-        }
-        if (ggml_is_contiguous(ar_local) != ggml_is_contiguous(res_tensor)) return false;
+    if (is_same_shape && !ggml_are_same_stride(ar_local, res_tensor)) {
+        return false;
     }
     if (ggml_is_contiguous(ar_local) != ggml_is_contiguous(add_dst)) return false;
 
@@ -292,7 +296,7 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     const ggml_tensor * src0 = prev.src0();
     const ggml_tensor * dst  = cur.dst();
     if (src0->type != GGML_TYPE_F32 || src0->ne[0] != weight->ne[0] || !htp_same_shape_and_contiguity(prev.dst(), dst)) return false;
-    if (htp_inplace_overlap_unsafe(dst, src0) || htp_inplace_overlap_unsafe(dst, weight)) return false;
+    if (htp_inputs_overlap_unsafe(prev, dst, weight)) return false;
 
     const bool is_row_bcast  = (weight->ne[1] == 1 && weight->ne[2] == 1 && weight->ne[3] == 1);
     const bool is_same_shape = ggml_are_same_shape(src0, weight);
@@ -322,9 +326,7 @@ static bool fuse_rms_norm_scale(const ggml_hexagon_session * sess, htp_opnode & 
     const ggml_tensor * src0 = prev.src0();
     const ggml_tensor * dst  = cur.dst();
     if (src0->type != GGML_TYPE_F32 || !htp_same_shape_and_contiguity(prev.dst(), dst)) return false;
-    for (const auto * in : prev.inputs) {
-        if (htp_inplace_overlap_unsafe(dst, in)) return false;
-    }
+    if (htp_inputs_overlap_unsafe(prev, dst)) return false;
 
     float scale = 0.0f;
     float bias  = 0.0f;
@@ -524,9 +526,7 @@ static bool fuse_gdn_cpy(const ggml_hexagon_session * sess, htp_opnode & prev, c
         return false;
     }
 
-    if (cpy_dst->ne[0] != D || cpy_dst->ne[1] != n_seqs || cpy_dst->nb[0] != sizeof(float)) return false;
-    if (n_seqs > 1 && cpy_dst->nb[1] != (size_t) D * sizeof(float)) return false;
-    if (n_written > 1 && (cpy_dst->ne[2] != n_written || cpy_dst->nb[2] != (size_t) D * n_seqs * sizeof(float))) {
+    if (cpy_dst->ne[0] != D || cpy_dst->ne[1] != n_seqs || cpy_dst->ne[2] != n_written || !ggml_is_contiguous(cpy_dst)) {
         return false;
     }
 
@@ -545,11 +545,7 @@ static bool fuse_ssm_conv_silu(const ggml_hexagon_session * sess, htp_opnode & p
 
     const ggml_tensor * conv_dst = prev.dst();
     const ggml_tensor * dst      = cur.dst();
-    if (dst->type != GGML_TYPE_F32 || !htp_same_shape_and_contiguity(conv_dst, dst)) return false;
-    if (conv_dst->nb[0] != dst->nb[0] || conv_dst->nb[1] != dst->nb[1] ||
-        conv_dst->nb[2] != dst->nb[2] || conv_dst->nb[3] != dst->nb[3]) {
-        return false;
-    }
+    if (!ggml_are_same_layout(conv_dst, dst)) return false;
     if (htp_tensors_overlap(dst, prev.src0()) || htp_tensors_overlap(dst, prev.src1())) return false;
 
     kparams->silu   = 1;
@@ -599,16 +595,10 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
 
     const ggml_tensor * gate = prev.src0();
     const ggml_tensor * dst  = cur.dst();
-    const size_t elem_size   = ggml_type_size(gate->type);
-    if ((glu_op == HTP_OP_GLU_GEGLU_QUICK || glu_op == HTP_OP_GLU_GEGLU_ERF) && gate->type != GGML_TYPE_F32) return false;
-    if (!ggml_are_same_shape(gate, up)) return false;
-    if (!ggml_is_contiguous_1(gate) || !ggml_is_contiguous_1(up) || !ggml_is_contiguous(dst)) return false;
-    if (gate->nb[0] != elem_size || up->nb[0] != elem_size) return false;
-    if (gate->ne[1] > 1 && (gate->nb[1] < (size_t) gate->ne[0] * elem_size || up->nb[1] < (size_t) up->ne[0] * elem_size)) return false;
-    if (htp_inplace_overlap_unsafe(dst, gate) || htp_inplace_overlap_unsafe(dst, up)) return false;
+    if (htp_inputs_overlap_unsafe(prev, dst, up)) return false;
 
     struct htp_glu_kernel_params kparams;
-    if (!htp_precompute_glu_params(sess, gate, dst, &kparams)) return false;
+    if (!htp_precompute_glu_params(sess, gate, up, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
     prev.inputs  = { gate, up };
@@ -630,11 +620,10 @@ static bool fuse_mul_mul_scalar(const ggml_hexagon_session * sess, htp_opnode & 
     const ggml_tensor * src2 = nullptr;
     if (!htp_match_consumer(prev, cur, /*commutative=*/ false, &src2)) return false;
 
-    const ggml_tensor * src0 = prev.src0();
     const ggml_tensor * src1 = prev.src1();
     const ggml_tensor * dst  = cur.dst();
     if (!ggml_are_same_shape(src1, src2) || !htp_same_shape_and_contiguity(prev.dst(), dst)) return false;
-    if (htp_inplace_overlap_unsafe(dst, src0) || htp_inplace_overlap_unsafe(dst, src1) || htp_inplace_overlap_unsafe(dst, src2)) return false;
+    if (htp_inputs_overlap_unsafe(prev, dst, src2)) return false;
 
     const size_t vtcm_size = htp_session_vtcm_size(sess);
     struct htp_binary_kernel_params kparams = *k0;
@@ -681,11 +670,7 @@ static bool fuse_binary_nx(const ggml_hexagon_session * sess, htp_opnode & prev,
         !htp_same_shape_and_contiguity(prev.dst(), dst)) {
         return false;
     }
-
-    if (htp_inplace_overlap_unsafe(dst, new_src)) return false;
-    for (const auto * in : prev.inputs) {
-        if (htp_inplace_overlap_unsafe(dst, in)) return false;
-    }
+    if (htp_inputs_overlap_unsafe(prev, dst, new_src)) return false;
 
     const size_t vtcm_size = htp_session_vtcm_size(sess);
     struct htp_binary_kernel_params kparams = *k0;
@@ -738,7 +723,7 @@ bool htp_fusion_can_stack(const struct ggml_tensor * a) {
     switch (a->op) {
         case GGML_OP_MUL_MAT:
             if (!htp_fusion_enabled(HTP_FUSE_MUL_MAT_NX)) return false;
-            if (ggml_get_op_params_i32(a, 1) == GGML_HINT_SRC0_IS_HADAMARD) return false;
+            if (htp_is_hadamard(a)) return false;
             if (a->src[0]->ne[2] != 1 || a->src[0]->ne[3] != 1) return false;
             return ggml_is_quantized(a->src[0]->type);
         case GGML_OP_MUL_MAT_ID:
@@ -803,7 +788,7 @@ void htp_fusion_tag_graph(struct ggml_cgraph * graph) {
              op == GGML_OP_UNARY    || op == GGML_OP_ADD   || op == GGML_OP_SUB    ||
              op == GGML_OP_MUL      || op == GGML_OP_DIV   || op == GGML_OP_MUL_MAT_ID ||
              op == GGML_OP_SSM_CONV ||
-             (op == GGML_OP_MUL_MAT && ggml_get_op_params_i32(graph->nodes[i], 1) != GGML_HINT_SRC0_IS_HADAMARD)) &&
+             (op == GGML_OP_MUL_MAT && !htp_is_hadamard(graph->nodes[i]))) &&
             ggml_node_has_n_uses(graph, i, 1)) {
             extra->flags |= HTP_TENSOR_FUSEABLE;
         }
