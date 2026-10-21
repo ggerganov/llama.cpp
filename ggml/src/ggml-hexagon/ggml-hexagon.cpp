@@ -1874,7 +1874,7 @@ void ggml_hexagon_session::enqueue_cpy(const ggml_tensor * src, ggml_tensor * ds
     }
 
     cpy_node.init(node);
-    const bool ok = htp_precompute_cpy_params(this, node, (struct htp_copy_kernel_params *) cpy_node.kernel_params);
+    const bool ok = htp_kparams_solve_cpy(this, node, (struct htp_copy_kernel_params *) cpy_node.kernel_params);
     const auto * kparams = (const struct htp_copy_kernel_params *) cpy_node.kernel_params;
     if (ok && !with_fence && kparams->total_elems == 0) {
         return;
@@ -1926,7 +1926,7 @@ void ggml_hexagon_session::enqueue_allreduce(
         ar_node.outputs.push_back(src_tensors[i]);
     }
 
-    htp_precompute_allreduce_params(
+    htp_kparams_solve_allreduce(
         this, dst, rank, n_ranks, false, false, /*is_shard_ok=*/ false,
         (struct htp_allreduce_kernel_params *) ar_node.kernel_params);
 
@@ -2336,174 +2336,6 @@ ggml_hexagon_session::~ggml_hexagon_session() noexcept(true) {
 
 // ** backend interface
 
-static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * sess, const struct ggml_tensor * dst) {
-    if (htp_is_hadamard(dst)) {
-        struct htp_unary_kernel_params ukparams;
-        return htp_precompute_unary_params(sess, HTP_OP_HADAMARD, dst->src[1], nullptr, dst, &ukparams);
-    }
-    struct htp_mm_kernel_params kparams;
-    return htp_precompute_matmul_params(sess, dst->src[0], dst->src[1], dst, &kparams);
-}
-
-static bool ggml_hexagon_supported_mul_mat_id(const struct ggml_hexagon_session * sess, const struct ggml_tensor * dst) {
-    struct htp_mm_kernel_params kparams;
-    return htp_precompute_matmul_params(sess, dst->src[0], dst->src[1], dst, &kparams);
-}
-
-static bool ggml_hexagon_supported_binary(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_binary_kernel_params kparams;
-    return htp_precompute_binary_params(sess, htp_op_remap(op), op->src[0], op->src[1], op, &kparams);
-}
-
-static bool ggml_hexagon_supported_add_id(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_binary_kernel_params kparams;
-    return htp_precompute_binary_params(sess, HTP_OP_ADD_ID, op->src[0], op->src[1], op, &kparams, op->src[2]);
-}
-
-static bool ggml_hexagon_supported_unary(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_unary_kernel_params kparams;
-    return htp_precompute_unary_params(sess, htp_op_remap(op), op->src[0], op->src[1], op, &kparams);
-}
-
-static bool ggml_hexagon_supported_glu(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_glu_kernel_params kparams;
-    return htp_precompute_glu_params(sess, htp_op_remap(op), op->src[0], op->src[1], op, &kparams);
-}
-
-static bool ggml_hexagon_supported_sum(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_sum_rows_kernel_params kparams;
-    return htp_precompute_sum_rows_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_sum_rows(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_sum_rows_kernel_params kparams;
-    return htp_precompute_sum_rows_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_argmax(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_sum_rows_kernel_params kparams;
-    return htp_precompute_sum_rows_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_softmax(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_softmax_kernel_params kparams;
-    return htp_precompute_softmax_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_rope(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_rope_kernel_params kparams;
-    return htp_precompute_rope_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_flash_attn_ext(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_fa_kernel_params kparams;
-    return htp_precompute_flash_attn_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_set_rows(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_set_rows_kernel_params kparams;
-    return htp_precompute_set_rows_params(sess, op->src[0], op->src[1], op->src[2] ? op->src[2] : op, &kparams);
-}
-
-static bool ggml_hexagon_supported_get_rows(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_get_rows_kernel_params kparams;
-    return htp_precompute_get_rows_params(sess, op->src[0], op->src[1], op, &kparams);
-}
-
-static bool ggml_hexagon_supported_argsort(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_sort_kernel_params kparams;
-    return htp_precompute_sort_params(sess, op, false, &kparams);
-}
-
-static bool ggml_hexagon_supported_top_k(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_sort_kernel_params kparams;
-    return htp_precompute_sort_params(sess, op, true, &kparams);
-}
-
-static bool ggml_hexagon_supported_ssm_conv(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_ssm_conv_kernel_params kparams;
-    return htp_precompute_ssm_conv_params(sess, op->src[0], op->src[1], op, &kparams);
-}
-
-static bool ggml_hexagon_supported_gated_delta_net(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_gdn_kernel_params kparams;
-    return htp_precompute_gated_delta_net_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_pool_2d(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_pool_2d_kernel_params kparams;
-    return htp_precompute_pool_2d_params(sess, op->src[0], op, &kparams, false);
-}
-
-static bool ggml_hexagon_supported_pool_1d(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_pool_2d_kernel_params kparams;
-    return htp_precompute_pool_2d_params(sess, op->src[0], op, &kparams, true);
-}
-
-static bool ggml_hexagon_supported_im2col(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_im2col_kernel_params kparams;
-    return htp_precompute_im2col_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_im2col_3d(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_im2col_kernel_params kparams;
-    return htp_precompute_im2col_3d_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_pad(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_pad_kernel_params kparams;
-    return htp_precompute_pad_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_cumsum(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_cumsum_kernel_params kparams;
-    return htp_precompute_cumsum_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_diag(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_diag_kernel_params kparams;
-    return htp_precompute_diag_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_solve_tri(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_solve_tri_kernel_params kparams;
-    return htp_precompute_solve_tri_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_tri(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    return htp_precompute_tri_params(sess, op);
-}
-
-static bool ggml_hexagon_supported_cpy(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_copy_kernel_params kparams;
-    return htp_precompute_cpy_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_cont(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_copy_kernel_params kparams;
-    return htp_precompute_cpy_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_repeat(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_repeat_kernel_params kparams;
-    return htp_precompute_repeat_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_concat(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_concat_kernel_params kparams;
-    return htp_precompute_concat_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_fill(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_fill_kernel_params kparams;
-    return htp_precompute_fill_params(sess, op, &kparams);
-}
-
-static bool ggml_hexagon_supported_roll(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
-    struct htp_roll_kernel_params kparams;
-    return htp_precompute_roll_params(sess, op, &kparams);
-}
-
 static const char * ggml_backend_hexagon_name(ggml_backend_t backend) {
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     return sess->c_name();
@@ -2568,77 +2400,74 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
             }
 
             if (node.opcode == HTP_OP_MUL_MAT || node.opcode == HTP_OP_MUL_MAT_ID) {
-                htp_precompute_matmul_params(sess,
+                htp_kparams_solve_matmul(sess,
                     node.node->src[0], node.node->src[1], node.node,
-                    (struct htp_mm_kernel_params *)node.kernel_params
+                    (struct htp_mm_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID || node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
-                const ggml_tensor * src1 = node.node->src[1];
-                const ggml_tensor * src2 = (node.opcode == HTP_OP_ADD_ID) ? node.node->src[2] : nullptr;
-                GGML_ASSERT(htp_precompute_binary_params(sess,
-                    node.opcode, node.node->src[0], src1, node.node,
-                    (struct htp_binary_kernel_params *) node.kernel_params, src2));
-            } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
-                htp_precompute_flash_attn_params(sess,
+                GGML_ASSERT(htp_kparams_solve_binary(sess,
                     node.node,
-                    (struct htp_fa_kernel_params *)node.kernel_params
+                    (struct htp_binary_kernel_params *) node.kernel_params));
+            } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
+                htp_kparams_solve_flash_attn(sess,
+                    node.node,
+                    (struct htp_fa_kernel_params *) node.kernel_params
                 );
             } else if (htp_op_is_unary(node.opcode)) {
                 const auto & inputs = node.get_inputs();
                 const struct ggml_tensor * src0 = inputs[0];
                 const struct ggml_tensor * src1 = inputs.size() > 1 ? inputs[1] : nullptr;
-                htp_precompute_unary_params(sess,
+                htp_kparams_solve_unary(sess,
                     node.opcode, src0, src1, node.dst(),
-                    (struct htp_unary_kernel_params *)node.kernel_params
+                    (struct htp_unary_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_GET_ROWS) {
-                htp_precompute_get_rows_params(sess,
+                htp_kparams_solve_get_rows(sess,
                     node.node->src[0], node.node->src[1], node.dst(),
-                    (struct htp_get_rows_kernel_params *)node.kernel_params
+                    (struct htp_get_rows_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SET_ROWS) {
-                htp_precompute_set_rows_params(sess,
-                    node.node->src[0], node.node->src[1], node.dst(),
-                    (struct htp_set_rows_kernel_params *)node.kernel_params
+                htp_kparams_solve_set_rows(sess,
+                    node.node,
+                    (struct htp_set_rows_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_ROPE) {
-                htp_precompute_rope_params(sess,
+                htp_kparams_solve_rope(sess,
                     node.node,
-                    (struct htp_rope_kernel_params *)node.kernel_params
+                    (struct htp_rope_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SSM_CONV) {
-                htp_precompute_ssm_conv_params(sess,
-                    node.node->src[0], node.node->src[1], node.dst(),
-                    (struct htp_ssm_conv_kernel_params *)node.kernel_params
+                htp_kparams_solve_ssm_conv(sess,
+                    node.node,
+                    (struct htp_ssm_conv_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SOFTMAX) {
-                htp_precompute_softmax_params(sess,
+                htp_kparams_solve_softmax(sess,
                     node.node,
-                    (struct htp_softmax_kernel_params *)node.kernel_params
+                    (struct htp_softmax_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_GATED_DELTA_NET) {
-                htp_precompute_gated_delta_net_params(sess,
+                htp_kparams_solve_gated_delta_net(sess,
                     node.node,
-                    (struct htp_gdn_kernel_params *)node.kernel_params
+                    (struct htp_gdn_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
-                htp_precompute_sort_params(sess,
+                htp_kparams_solve_sort(sess,
                     node.node,
-                    node.opcode == HTP_OP_TOP_K,
                     (struct htp_sort_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_POOL_2D || node.opcode == HTP_OP_POOL_1D) {
-                htp_precompute_pool_2d_params(
-                    sess, node.node->src[0], node.dst(),
-                    (struct htp_pool_2d_kernel_params *)node.kernel_params,
-                    node.opcode == HTP_OP_POOL_1D);
+                htp_kparams_solve_pool_2d(sess,
+                    node.node,
+                    (struct htp_pool_2d_kernel_params *) node.kernel_params
+                );
             } else if (node.opcode == HTP_OP_CONCAT) {
-                htp_precompute_concat_params(sess,
+                htp_kparams_solve_concat(sess,
                     node.node,
                     (struct htp_concat_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_CPY || node.opcode == HTP_OP_CPY_FENCE) {
-                const bool ok = htp_precompute_cpy_params(sess,
+                const bool ok = htp_kparams_solve_cpy(sess,
                     node.node,
                     (struct htp_copy_kernel_params *) node.kernel_params
                 );
@@ -2647,22 +2476,22 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                     continue;
                 }
             } else if (node.opcode == HTP_OP_IM2COL) {
-                htp_precompute_im2col_params(sess,
+                htp_kparams_solve_im2col(sess,
                     node.node,
                     (struct htp_im2col_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_IM2COL_3D) {
-                htp_precompute_im2col_3d_params(sess,
+                htp_kparams_solve_im2col_3d(sess,
                     node.node,
                     (struct htp_im2col_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SUM_ROWS || node.opcode == HTP_OP_SUM || node.opcode == HTP_OP_ARGMAX) {
-                htp_precompute_sum_rows_params(sess,
+                htp_kparams_solve_sum_rows(sess,
                     node.node,
                     (struct htp_sum_rows_kernel_params *) node.kernel_params
                 );
             } else if (htp_op_is_glu(node.opcode)) {
-                GGML_ASSERT(htp_precompute_glu_params(sess,
+                GGML_ASSERT(htp_kparams_solve_glu(sess,
                     node.opcode,
                     node.node->src[0],
                     node.node->src[1],
@@ -2670,37 +2499,37 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                     (struct htp_glu_kernel_params *) node.kernel_params
                 ));
             } else if (node.opcode == HTP_OP_REPEAT) {
-                htp_precompute_repeat_params(sess,
+                htp_kparams_solve_repeat(sess,
                     node.node,
                     (struct htp_repeat_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_PAD) {
-                htp_precompute_pad_params(sess,
+                htp_kparams_solve_pad(sess,
                     node.node,
                     (struct htp_pad_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_CUMSUM) {
-                htp_precompute_cumsum_params(sess,
+                htp_kparams_solve_cumsum(sess,
                     node.node,
                     (struct htp_cumsum_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_FILL) {
-                htp_precompute_fill_params(sess,
+                htp_kparams_solve_fill(sess,
                     node.node,
                     (struct htp_fill_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_ROLL) {
-                htp_precompute_roll_params(sess,
+                htp_kparams_solve_roll(sess,
                     node.node,
                     (struct htp_roll_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_DIAG) {
-                htp_precompute_diag_params(sess,
+                htp_kparams_solve_diag(sess,
                     node.node,
                     (struct htp_diag_kernel_params *) node.kernel_params
                 );
             } else if (node.opcode == HTP_OP_SOLVE_TRI) {
-                htp_precompute_solve_tri_params(sess,
+                htp_kparams_solve_solve_tri(sess,
                     node.node,
                     (struct htp_solve_tri_kernel_params *) node.kernel_params
                 );
@@ -3334,21 +3163,15 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
 
         case GGML_OP_MUL:
         case GGML_OP_ADD:
+        case GGML_OP_ADD_ID:
         case GGML_OP_SUB:
         case GGML_OP_DIV:
-            supp = ggml_hexagon_supported_binary(sess, op);
+            supp = htp_kparams_check_binary(sess, op);
             break;
 
         case GGML_OP_MUL_MAT:
-            supp = ggml_hexagon_supported_mul_mat(sess, op);
-            break;
-
         case GGML_OP_MUL_MAT_ID:
-            supp = ggml_hexagon_supported_mul_mat_id(sess, op);
-            break;
-
-        case GGML_OP_ADD_ID:
-            supp = ggml_hexagon_supported_add_id(sess, op);
+            supp = htp_kparams_check_matmul(sess, op);
             break;
 
         case GGML_OP_NORM:
@@ -3357,37 +3180,26 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
         case GGML_OP_SCALE:
         case GGML_OP_CLAMP:
         case GGML_OP_LEAKY_RELU:
-            supp = ggml_hexagon_supported_unary(sess, op);
-            break;
-
         case GGML_OP_SQR:
         case GGML_OP_SQRT:
         case GGML_OP_LOG:
-            supp = ggml_hexagon_supported_unary(sess, op);
+        case GGML_OP_TRI:
+            supp = htp_kparams_check_unary(sess, op);
             break;
 
         case GGML_OP_SUM:
-            supp = ggml_hexagon_supported_sum(sess, op);
-            break;
-
         case GGML_OP_SUM_ROWS:
-            supp = ggml_hexagon_supported_sum_rows(sess, op);
-            break;
-
         case GGML_OP_ARGMAX:
-            supp = ggml_hexagon_supported_argmax(sess, op);
+            supp = htp_kparams_check_sum_rows(sess, op);
             break;
 
         case GGML_OP_POOL_2D:
-            supp = ggml_hexagon_supported_pool_2d(sess, op);
-            break;
-
         case GGML_OP_POOL_1D:
-            supp = ggml_hexagon_supported_pool_1d(sess, op);
+            supp = htp_kparams_check_pool_2d(sess, op);
             break;
 
         case GGML_OP_SOFT_MAX:
-            supp = ggml_hexagon_supported_softmax(sess, op);
+            supp = htp_kparams_check_softmax(sess, op);
             break;
 
         case GGML_OP_UNARY:
@@ -3404,7 +3216,7 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
                 case GGML_UNARY_OP_GELU_ERF:
                 case GGML_UNARY_OP_RELU:
                 case GGML_UNARY_OP_STEP:
-                    supp = ggml_hexagon_supported_unary(sess, op);
+                    supp = htp_kparams_check_unary(sess, op);
                     break;
                 default:
                     supp = false;
@@ -3413,92 +3225,82 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
             break;
 
         case GGML_OP_GLU:
-            supp = ggml_hexagon_supported_glu(sess, op);
+            supp = htp_kparams_check_glu(sess, op);
             break;
 
         case GGML_OP_ROPE:
-            supp = ggml_hexagon_supported_rope(sess, op);
+            supp = htp_kparams_check_rope(sess, op);
             break;
 
         case GGML_OP_FLASH_ATTN_EXT:
-            supp = ggml_hexagon_supported_flash_attn_ext(sess, op);
+            supp = htp_kparams_check_flash_attn(sess, op);
             break;
 
         case GGML_OP_SET_ROWS:
-            supp = ggml_hexagon_supported_set_rows(sess, op);
+            supp = htp_kparams_check_set_rows(sess, op);
             break;
 
         case GGML_OP_GET_ROWS:
-            supp = ggml_hexagon_supported_get_rows(sess, op);
+            supp = htp_kparams_check_get_rows(sess, op);
             break;
 
         case GGML_OP_DUP:
         case GGML_OP_CPY:
-            supp = ggml_hexagon_supported_cpy(sess, op);
-            break;
-
         case GGML_OP_CONT:
-            supp = ggml_hexagon_supported_cont(sess, op);
+            supp = htp_kparams_check_cpy(sess, op);
             break;
 
         case GGML_OP_REPEAT:
-            supp = ggml_hexagon_supported_repeat(sess, op);
+            supp = htp_kparams_check_repeat(sess, op);
             break;
 
         case GGML_OP_ARGSORT:
-            supp = ggml_hexagon_supported_argsort(sess, op);
-            break;
-
         case GGML_OP_TOP_K:
-            supp = ggml_hexagon_supported_top_k(sess, op);
+            supp = htp_kparams_check_sort(sess, op);
             break;
 
         case GGML_OP_SSM_CONV:
-            supp = ggml_hexagon_supported_ssm_conv(sess, op);
+            supp = htp_kparams_check_ssm_conv(sess, op);
             break;
 
         case GGML_OP_IM2COL:
-            supp = ggml_hexagon_supported_im2col(sess, op);
+            supp = htp_kparams_check_im2col(sess, op);
             break;
 
         case GGML_OP_IM2COL_3D:
-            supp = ggml_hexagon_supported_im2col_3d(sess, op);
+            supp = htp_kparams_check_im2col_3d(sess, op);
             break;
 
         case GGML_OP_GATED_DELTA_NET:
-            supp = ggml_hexagon_supported_gated_delta_net(sess, op);
+            supp = htp_kparams_check_gated_delta_net(sess, op);
             break;
 
         case GGML_OP_CUMSUM:
-            supp = ggml_hexagon_supported_cumsum(sess, op);
+            supp = htp_kparams_check_cumsum(sess, op);
             break;
 
         case GGML_OP_CONCAT:
-            supp = ggml_hexagon_supported_concat(sess, op);
+            supp = htp_kparams_check_concat(sess, op);
             break;
 
         case GGML_OP_FILL:
-            supp = ggml_hexagon_supported_fill(sess, op);
+            supp = htp_kparams_check_fill(sess, op);
             break;
 
         case GGML_OP_DIAG:
-            supp = ggml_hexagon_supported_diag(sess, op);
+            supp = htp_kparams_check_diag(sess, op);
             break;
 
         case GGML_OP_SOLVE_TRI:
-            supp = ggml_hexagon_supported_solve_tri(sess, op);
-            break;
-
-        case GGML_OP_TRI:
-            supp = ggml_hexagon_supported_tri(sess, op);
+            supp = htp_kparams_check_solve_tri(sess, op);
             break;
 
         case GGML_OP_PAD:
-            supp = ggml_hexagon_supported_pad(sess, op);
+            supp = htp_kparams_check_pad(sess, op);
             break;
 
         case GGML_OP_ROLL:
-            supp = ggml_hexagon_supported_roll(sess, op);
+            supp = htp_kparams_check_roll(sess, op);
             break;
 
         default:
@@ -3693,8 +3495,7 @@ static bool ggml_backend_hexagon_comm_allreduce_tensor(void * comm_ctx_v, struct
 
     for (size_t r = 0; r < n_backends; r++) {
         auto sess = static_cast<ggml_hexagon_session *>(comm_ctx->backends[r]->context);
-        struct htp_allreduce_kernel_params kparams;
-        if (!htp_precompute_allreduce_params(sess, tensors[r], (uint32_t) r, (uint32_t) n_backends, false, false, /*is_shard_ok=*/ false, &kparams)) {
+        if (!htp_kparams_check_allreduce(sess, tensors[r], (uint32_t) r, (uint32_t) n_backends)) {
             return false;
         }
     }

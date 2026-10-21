@@ -101,7 +101,7 @@ static bool fuse_allreduce_add(const ggml_hexagon_session * sess, htp_opnode & p
     const bool is_shard_ok = n_ranks <= HTP_OP_MAX_OUTPUTS && add_dst->data == ar_local->data;
 
     struct htp_allreduce_kernel_params kparams;
-    if (!htp_precompute_allreduce_params(sess, add_dst, rank, n_ranks, true, is_row_bcast, is_shard_ok, &kparams)) {
+    if (!htp_kparams_solve_allreduce(sess, add_dst, rank, n_ranks, true, is_row_bcast, is_shard_ok, &kparams)) {
         HEX_VERBOSE("ggml-hex: %s skip ALLREDUCE_ADD fusion: solver failed\n", htp_session_name(sess));
         return false;
     }
@@ -143,7 +143,7 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     if (!is_row_bcast && !is_same_shape) return false;
 
     struct htp_unary_kernel_params kparams;
-    if (!htp_precompute_unary_params(sess, HTP_OP_RMS_NORM_MUL, src0, weight, dst, &kparams)) {
+    if (!htp_kparams_solve_unary(sess, HTP_OP_RMS_NORM_MUL, src0, weight, dst, &kparams)) {
         HEX_VERBOSE("ggml-hex: %s skip RMS_NORM_MUL fusion: VTCM needed (%d) > budget (%zu)\n",
                     htp_session_name(sess), kparams.vtcm_size, htp_session_vtcm_size(sess));
         return false;
@@ -199,7 +199,7 @@ static bool fuse_mul_mat_add(const ggml_hexagon_session * sess, htp_opnode & pre
 
     const auto * orig_kparams = (const struct htp_mm_kernel_params *) prev.kernel_params;
     struct htp_mm_kernel_params kparams;
-    if (!htp_precompute_fused_matmul_add_params(sess, src0, src1, src2, dst, &kparams) ||
+    if (!htp_kparams_solve_matmul_add(sess, src0, src1, src2, dst, &kparams) ||
         orig_kparams->collapse != kparams.collapse) {
         return false;
     }
@@ -258,9 +258,9 @@ static bool fuse_mul_mat_nx(const ggml_hexagon_session * sess, htp_opnode & prev
         struct htp_mm_kernel_params kparams;
         if (collapse) {
             const ggml_tensor x_collapsed = htp_tensor_collapse_rows(x);
-            if (!htp_precompute_fused_mmnx_params(sess, w0, &x_collapsed, curr_n + 1, &kparams)) return false;
+            if (!htp_kparams_solve_mmnx(sess, w0, &x_collapsed, curr_n + 1, &kparams)) return false;
             kparams.collapse = 1;
-        } else if (!htp_precompute_fused_mmnx_params(sess, w0, x, curr_n + 1, &kparams)) {
+        } else if (!htp_kparams_solve_mmnx(sess, w0, x, curr_n + 1, &kparams)) {
             return false;
         }
         if (!is_supported_mul_mat_nx_kernel(w0, &kparams)) return false;
@@ -303,7 +303,7 @@ static bool fuse_mul_mat_id_nx(const ggml_hexagon_session * sess, htp_opnode & p
     if (d_in->nb[1] == prev.node->nb[1]) {
         kparams = *orig_kparams;
         kparams.n_weights = curr_n + 1;
-    } else if (!htp_precompute_fused_mmidnx_params(sess, w0, x, d_in, curr_n + 1, &kparams)) {
+    } else if (!htp_kparams_solve_mmidnx(sess, w0, x, d_in, curr_n + 1, &kparams)) {
         return false;
     }
     if (!is_supported_mul_mat_id_nx_kernel(w0, &kparams)) return false;
@@ -386,7 +386,7 @@ static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode &
     if (repeat_src0->type != repeat_out->type) return false;
 
     struct htp_get_rows_kernel_params kparams;
-    if (!htp_precompute_get_rows_params(sess, repeat_src0, gr_src1, gr_dst, &kparams) || kparams.vtcm_size == 0) return false;
+    if (!htp_kparams_solve_get_rows(sess, repeat_src0, gr_src1, gr_dst, &kparams) || kparams.vtcm_size == 0) return false;
 
     prev.opcode  = HTP_OP_GET_ROWS;
     prev.inputs  = { repeat_src0, gr_src1 };
@@ -416,7 +416,7 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     if (htp_inputs_overlap_unsafe(prev, dst, up)) return false;
 
     struct htp_glu_kernel_params kparams;
-    if (!htp_precompute_glu_params(sess, glu_op, gate, up, dst, &kparams)) return false;
+    if (!htp_kparams_solve_glu(sess, glu_op, gate, up, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
     prev.inputs  = { gate, up };
