@@ -994,7 +994,7 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             LOG("FP8 attention: tensor split requires flash attention, skipping disabled cases\n");
             continue;
         }
-        for (int scaled : { 1, 2, 3 }) {
+        for (int scaled : { 0, 1, 2, 3 }) {
             const float sk = scaled & 1 ? 0.03125f : 1.0f;
             const float sv = scaled & 2 ? 0.125f : 1.0f;
             ggml_backend_tensor_set(k_scale, &sk, 0, sizeof(sk));
@@ -1002,15 +1002,15 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             model->layers[0].k_cache_scale = scaled & 1 ? k_scale : nullptr;
             model->layers[0].v_cache_scale = scaled & 2 ? v_scale : nullptr;
 
-            std::vector<float> tensors[4];
+            std::vector<float> tensors[6];
             auto params = llama_context_default_params();
             params.n_ctx = 256;
             params.n_batch = n_tokens;
             params.n_ubatch = n_tokens;
             params.n_threads = 1;
             params.n_threads_batch = 1;
-            params.type_k = scaled & 1 ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
-            params.type_v = scaled & 2 ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
+            params.type_k = scaled == 0 || (scaled & 1) ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
+            params.type_v = scaled == 0 || (scaled & 2) ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
             params.flash_attn_type = flash;
             params.offload_kqv = offload_kqv;
             if (model->split_mode() == LLAMA_SPLIT_MODE_TENSOR) {
@@ -1056,16 +1056,23 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             }
             params.cb_eval_user_data = tensors;
             params.cb_eval = [](ggml_tensor * t, bool ask, void * user_data) {
-                const char * names[] = { "Qcur-0", "Kcur-0", "Vcur-0", "kqv_out-0" };
-                for (int i = 0; i < 4; ++i) {
+                const char * names[] = { "Qcur-0", "Kcur-0", "Vcur-0", "kqv_out-0", "kq-0", "kqv-0" };
+                for (int i = 0; i < 6; ++i) {
                     if (strcmp(t->name, names[i]) != 0) {
                         continue;
                     }
                     if (!ask) {
-                        GGML_ASSERT(t->type == GGML_TYPE_F32 && ggml_is_contiguous(t));
                         auto & data = static_cast<std::vector<float> *>(user_data)[i];
-                        data.resize(ggml_nelements(t));
-                        ggml_backend_tensor_get(t, data.data(), 0, data.size()*sizeof(float));
+                        ggml_tensor * value = t;
+                        if (i >= 4) {
+                            GGML_ASSERT(t->op == GGML_OP_MUL_MAT);
+                            value = t->src[2];
+                        }
+                        if (value) {
+                            GGML_ASSERT(value->type == GGML_TYPE_F32 && ggml_is_contiguous(value));
+                            data.resize(ggml_nelements(value));
+                            ggml_backend_tensor_get(value, data.data(), 0, data.size()*sizeof(float));
+                        }
                     }
                     return true;
                 }
@@ -1076,8 +1083,12 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             GGML_ASSERT(lctx->get_cparams().flash_attn == (flash == LLAMA_FLASH_ATTN_TYPE_ENABLED));
             get_logits(model, lctx.get(), { 1, 2, 3, 4 });
             llama_synchronize(lctx.get());
-            for (const auto & data : tensors) {
-                GGML_ASSERT(data.size() == (size_t) (head_size*n_head*n_tokens));
+            for (int i = 0; i < 4; ++i) {
+                GGML_ASSERT(tensors[i].size() == (size_t) (head_size*n_head*n_tokens));
+            }
+            if (flash == LLAMA_FLASH_ATTN_TYPE_DISABLED) {
+                GGML_ASSERT(tensors[4] == (params.type_k == GGML_TYPE_F8_E4M3 ? std::vector<float>{ sk } : std::vector<float>{}));
+                GGML_ASSERT(tensors[5] == (params.type_v == GGML_TYPE_F8_E4M3 ? std::vector<float>{ sv } : std::vector<float>{}));
             }
 
             // Round the original K/V independently of the cache write graph.
@@ -1627,8 +1638,10 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                     if (logits_cpu.empty()) {
                         model_and_ctx_cpu = get_model_and_ctx(gguf_ctx.get(), nullptr, seed, stdev, {}, LLAMA_SPLIT_MODE_LAYER, encode);
                         logits_cpu = get_logits(model_and_ctx_cpu.first.get(), model_and_ctx_cpu.second.get(), tokens, encode);
-                        if (arch == LLM_ARCH_LLAMA && !moe) {
+                        if ((arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_GEMMA3) && !moe) {
                             check_fp8_attention(model_and_ctx_cpu.first.get());
+                        }
+                        if (arch == LLM_ARCH_LLAMA && !moe) {
                             check_fp8_context_shift(model_and_ctx_cpu.first.get());
                         }
                     }
@@ -1637,7 +1650,7 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                         model_and_ctx_dev = get_model_and_ctx(gguf_ctx.get(), nullptr, seed, stdev, dc.devs, dc.split_mode, encode, overrides, dc.moe_cache_size);
                         logits_dev = get_logits(model_and_ctx_dev.first.get(), model_and_ctx_dev.second.get(), tokens, encode);
                         const double nmse_val = nmse(logits_cpu, logits_dev);
-                        if (arch == LLM_ARCH_LLAMA && !moe && !dc.devs.empty() && ggml_backend_dev_type(dc.devs[0]) != GGML_BACKEND_DEVICE_TYPE_CPU) {
+                        if ((arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_GEMMA3) && !moe && !dc.devs.empty() && ggml_backend_dev_type(dc.devs[0]) != GGML_BACKEND_DEVICE_TYPE_CPU) {
                             check_fp8_attention(model_and_ctx_dev.first.get());
                             check_fp8_attention(model_and_ctx_dev.first.get(), false);
                         }
