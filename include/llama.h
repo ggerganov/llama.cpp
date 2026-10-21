@@ -426,8 +426,11 @@ extern "C" {
         // can be utilized in various ways, for example by sharing results or llama_memory between 2 contexts
         struct llama_context * ctx_other;
 
-        // [EXPERIMENTAL] draft contexts: compute only the lowest token ids plus this many best-scoring others per output (0 = full LM head)
+        // [EXPERIMENTAL] draft contexts: compute only the lowest token ids plus this many best-scoring others per output (0 = off, full LM head, no mode with only the lowest ids)
         uint32_t n_vocab_dynamic;
+
+        // [EXPERIMENTAL] rank of the projection that scores those others (0 = default 512, at most the head width), only used when n_vocab_dynamic > 0
+        uint32_t vocab_dynamic_rank;
     };
 
     struct llama_model_tensor_override {

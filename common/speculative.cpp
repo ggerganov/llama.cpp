@@ -2622,7 +2622,8 @@ common_speculative_init_result::common_speculative_init_result(
     cparams.n_rs_seq  = 0;
     cparams.ctx_other = ctx_tgt;
 
-    cparams.n_vocab_dynamic = params.speculative.draft.vocab_dynamic;
+    cparams.n_vocab_dynamic    = params.speculative.draft.vocab_dynamic;
+    cparams.vocab_dynamic_rank = params.speculative.draft.vocab_dynamic_rank;
 
     std::string model_path;
     if (has_draft) {

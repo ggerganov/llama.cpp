@@ -282,7 +282,7 @@ private:
     // ggml_backend_sched realloc callback, counts and traces the graph reallocations of this context
     static void sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph * graph, bool backend_ids_changed, bool graph_size_changed, void * user_data);
 
-    void vsub_init(uint32_t n_dynamic);
+    void vsub_init(uint32_t n_dynamic, uint32_t n_rank);
     void vsub_init_head(ggml_tensor * w, const llama_vocab_subset::head & head);
 
     // disable auto fused ops (Flash Attention, Gated Delta Net) whose op lands on a device

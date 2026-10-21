@@ -14,6 +14,7 @@
 #include <vector>
 
 static const int32_t n_vocab = 40960;
+static const int32_t n_embd  = 64;
 static const int32_t n_base  = 32768;        // the lowest ids the reduced head always computes
 static const int32_t eos     = n_vocab - 1;  // above the base, so it has to be picked on its own
 
@@ -34,7 +35,7 @@ static gguf_context * make_metadata() {
     gguf_set_val_str(meta, "general.architecture",                   "llama");
     gguf_set_val_u32(meta, "llama.vocab_size",                       n_vocab);
     gguf_set_val_u32(meta, "llama.context_length",                   256);
-    gguf_set_val_u32(meta, "llama.embedding_length",                 64);
+    gguf_set_val_u32(meta, "llama.embedding_length",                 n_embd);
     gguf_set_val_u32(meta, "llama.feed_forward_length",              128);
     gguf_set_val_u32(meta, "llama.block_count",                      1);
     gguf_set_val_u32(meta, "llama.attention.head_count",             2);
@@ -57,7 +58,7 @@ static gguf_context * make_metadata() {
 }
 
 // decodes the same tokens as the full head and returns the number of mismatches
-static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect) {
+static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect, uint32_t rank = 0) {
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx           = 256;
     cparams.n_batch         = 64;
@@ -66,7 +67,8 @@ static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect) {
     cparams.n_threads_batch = 4;
 
     llama_context * ctx_full = llama_init_from_model(model, cparams);
-    cparams.n_vocab_dynamic = n_dynamic;
+    cparams.n_vocab_dynamic    = n_dynamic;
+    cparams.vocab_dynamic_rank = rank;
     llama_context * ctx_dyn  = llama_init_from_model(model, cparams);
     if (ctx_full == nullptr || ctx_dyn == nullptr) {
         fprintf(stderr, "%s: failed to create the contexts\n", __func__);
@@ -129,7 +131,11 @@ static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect) {
                 fprintf(stderr, "%s: K = %u: %d logits computed, expected %d\n", __func__, n_dynamic, n_finite, n_expect);
                 n_fail++;
             }
-            // the scorer has the full rank of this small head, so the best tokens of each output are always picked
+            // a lower rank only changes which tokens get picked, and those are still exact
+            if (rank != 0 && rank < (uint32_t) n_embd) {
+                continue;
+            }
+            // the rank is at least this small head's width, so the best tokens of each output are always picked
             if (best_dyn != best_full) {
                 fprintf(stderr, "%s: K = %u: best token %d, full head %d\n", __func__, n_dynamic, best_dyn, best_full);
                 n_fail++;
@@ -170,6 +176,8 @@ int main(void) {
     n_fail += run(model, 1024,                n_base + 1024);
     n_fail += run(model, n_vocab - n_base,    n_vocab);
     n_fail += run(model, n_vocab - n_base + 1, n_vocab); // too many dynamic rows, falls back to the full head
+    n_fail += run(model, 1024,                n_base + 1024, 16);   // low rank, F16 scorer
+    n_fail += run(model, 1024,                n_base + 1024, 1000); // capped at the head's width
 
     llama_model_free(model);
     gguf_free(meta);

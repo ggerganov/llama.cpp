@@ -4208,7 +4208,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
 
     add_opt(common_arg(
         {"--spec-draft-vocab-dynamic"}, "N",
-        string_format("smaller draft LM head: score only the lowest token ids plus the N others that a low-rank projection ranks best for each draft token (default: %d = full LM head, suggested: 16384)", params.speculative.draft.vocab_dynamic),
+        string_format("smaller draft LM head: score only the lowest token ids plus the N others that a low-rank projection ranks best for each draft token (default: %d, 0 = off, full LM head, there is no mode with only the lowest ids; suggested: 16384)", params.speculative.draft.vocab_dynamic),
         [](common_params & params, int value) {
             if (value < 0) {
                 throw std::invalid_argument("invalid value");
@@ -4216,6 +4216,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.speculative.draft.vocab_dynamic = value;
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_VOCAB_DYNAMIC"));
+    add_opt(common_arg(
+        {"--spec-draft-vocab-dynamic-rank"}, "N",
+        string_format("rank of the low-rank projection that --spec-draft-vocab-dynamic ranks tokens with, only used with it; capped at the model's hidden size, larger ranks take longer to load (default: %d, 0 = 512)", params.speculative.draft.vocab_dynamic_rank),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.speculative.draft.vocab_dynamic_rank = value;
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_VOCAB_DYNAMIC_RANK"));
     add_opt(common_arg(
         {"--spec-draft-p-split", "--draft-p-split"}, "P",
         string_format("speculative decoding split probability (default: %.2f)", (double)params.speculative.draft.p_split),

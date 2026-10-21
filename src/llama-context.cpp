@@ -487,7 +487,7 @@ llama_context::llama_context(
     // reduced LM head, must exist before the graph is reserved
     if (!hparams.vocab_only && params.n_vocab_dynamic > 0) {
         try {
-            vsub_init(params.n_vocab_dynamic);
+            vsub_init(params.n_vocab_dynamic, params.vocab_dynamic_rank);
         } catch (const std::exception & e) {
             // e.g. out of memory, the draft still works with the full head
             LLAMA_LOG_WARN("%s: vocab_subset: %s, using the full LM head\n", __func__, e.what());
@@ -495,6 +495,9 @@ llama_context::llama_context(
             vsub_bufs.clear();
             vsub_ctxs.clear();
         }
+    }
+    if (params.n_vocab_dynamic == 0 && params.vocab_dynamic_rank > 0) {
+        LLAMA_LOG_WARN("%s: vocab_subset: vocab_dynamic_rank has no effect without n_vocab_dynamic\n", __func__);
     }
 
     // init backends
@@ -2743,7 +2746,7 @@ void llama_context::sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph 
 
 // reduced draft LM head: the lowest ids stay exact, the rest are ranked by a low-rank scorer
 static constexpr int64_t vsub_n_base = 32768;
-static constexpr int64_t vsub_rank   = 512;
+static constexpr int64_t vsub_rank   = 512; // default scorer rank
 
 // modified Gram-Schmidt on the columns of q [n_rows, n_cols]
 static void vsub_orth(std::vector<double> & q, int64_t n_rows, int64_t n_cols) {
@@ -2771,7 +2774,7 @@ static void vsub_orth(std::vector<double> & q, int64_t n_rows, int64_t n_cols) {
     }
 }
 
-void llama_context::vsub_init(uint32_t n_dynamic) {
+void llama_context::vsub_init(uint32_t n_dynamic, uint32_t n_rank) {
     const int64_t t_start_us = ggml_time_us();
 
     const int64_t n_vocab = model.vocab.n_tokens();
@@ -2783,6 +2786,9 @@ void llama_context::vsub_init(uint32_t n_dynamic) {
                 __func__, n_dynamic, n_vocab);
         return;
     }
+
+    // 0 = the default rank
+    const int64_t n_rank_use = n_rank > 0 ? (int64_t) n_rank : vsub_rank;
 
     // the model's head, the MTP heads, and the target's head for drafters that have none (DFlash, EAGLE3)
     std::vector<ggml_tensor *> cands = { model.output };
@@ -2819,8 +2825,14 @@ void llama_context::vsub_init(uint32_t n_dynamic) {
         }
 
         // the scorer only ranks ids, Q8_0 is precise enough
-        const int64_t   rank = std::min(vsub_rank, w->ne[0]);
+        const int64_t   rank = std::min(n_rank_use, w->ne[0]);
         const ggml_type type = rank % ggml_blck_size(GGML_TYPE_Q8_0) == 0 ? GGML_TYPE_Q8_0 : GGML_TYPE_F16;
+        if (n_rank == 0) {
+            LLAMA_LOG_INFO("%s: vocab_subset: rank 0 (default), using %" PRId64 " for %s%s\n",
+                    __func__, rank, w->name, rank < vsub_rank ? ", capped at its width" : "");
+        } else if (n_rank > rank) {
+            LLAMA_LOG_WARN("%s: vocab_subset: rank %u is above the width of %s, using %" PRId64 "\n", __func__, n_rank, w->name, rank);
+        }
 
         ggml_init_params ip = {
             /*.mem_size   =*/ 3*ggml_tensor_overhead(),
@@ -4291,6 +4303,7 @@ llama_context_params llama_context_default_params() {
         /*.n_sampler                   =*/ 0,
         /*.ctx_other                   =*/ nullptr,
         /*.n_vocab_dynamic             =*/ 0,
+        /*.vocab_dynamic_rank          =*/ 0,
     };
 
     return result;
