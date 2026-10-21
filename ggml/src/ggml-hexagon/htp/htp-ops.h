@@ -38,11 +38,6 @@ enum htp_data_type {
     HTP_TYPE_INVALID
 };
 
-// Constants for internal types
-#define QK_Q8_0_TILED  128  // 32x32 Q8_0 tiled layout
-
-
-
 // Do not reorder first 4 (used as an index)
 enum htp_op_code {
     HTP_OP_MUL = 0,
