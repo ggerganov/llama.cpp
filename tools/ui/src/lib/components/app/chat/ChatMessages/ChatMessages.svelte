@@ -86,8 +86,8 @@
 			await conversationsStore.navigateToSibling(siblingId);
 		},
 
-		regenerateCompaction: async (message: DatabaseMessage, modelOverride?: string) => {
-			await chatStore.regenerateCompaction(message.id, modelOverride);
+		regenerateCompaction: async (message: DatabaseMessage) => {
+			await chatStore.regenerateCompaction(message.id);
 			refreshAllMessages();
 		},
 
