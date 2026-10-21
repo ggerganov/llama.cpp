@@ -9,6 +9,7 @@
 
 #include "server-common.h"
 
+#include <filesystem>
 #include <random>
 #include <sstream>
 #include <fstream>
@@ -32,6 +33,60 @@
 #include <poll.h>
 #include <unistd.h>
 #endif
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
+#include <windows.h>
+#elif defined(__APPLE__) && defined(__MACH__)
+#include <mach-o/dyld.h>
+#include <limits.h>
+#else
+#include <unistd.h>
+#endif
+
+std::filesystem::path get_server_exec_path() {
+#if defined(_WIN32)
+    wchar_t buf[32768] = { 0 };  // Large buffer to handle long paths
+    DWORD len = GetModuleFileNameW(nullptr, buf, _countof(buf));
+    if (len == 0 || len >= _countof(buf)) {
+        throw std::runtime_error("GetModuleFileNameW failed or path too long");
+    }
+    return std::filesystem::path(buf);
+#elif defined(__APPLE__) && defined(__MACH__)
+    char small_path[PATH_MAX];
+    uint32_t size = sizeof(small_path);
+
+    if (_NSGetExecutablePath(small_path, &size) == 0) {
+        // resolve any symlinks to get absolute path
+        try {
+            return std::filesystem::canonical(std::filesystem::path(small_path));
+        } catch (...) {
+            return std::filesystem::path(small_path);
+        }
+    } else {
+        // buffer was too small, allocate required size and call again
+        std::vector<char> buf(size);
+        if (_NSGetExecutablePath(buf.data(), &size) == 0) {
+            try {
+                return std::filesystem::canonical(std::filesystem::path(buf.data()));
+            } catch (...) {
+                return std::filesystem::path(buf.data());
+            }
+        }
+        throw std::runtime_error("_NSGetExecutablePath failed after buffer resize");
+    }
+#else
+    char path[FILENAME_MAX];
+    ssize_t count = readlink("/proc/self/exe", path, FILENAME_MAX);
+    if (count <= 0) {
+        throw std::runtime_error("failed to resolve /proc/self/exe");
+    }
+    return std::filesystem::path(std::string(path, count));
+#endif
+}
 
 json format_error_response(const std::string & message, const enum error_type type) {
     std::string type_str;
@@ -147,7 +202,8 @@ const char * get_media_marker() {
 // model output modalities
 //
 
-std::vector<std::string> server_model_output_modalities(common_decision_type decision_type) {
+std::vector<std::string> server_model_output_modalities(common_decision_type decision_type, bool has_cap_chat, bool has_cap_tts) {
+    std::vector<std::string> out;
     switch (decision_type) {
         case COMMON_DECISION_TYPE_OPENJEV:
         case COMMON_DECISION_TYPE_LEV:
@@ -160,13 +216,28 @@ std::vector<std::string> server_model_output_modalities(common_decision_type dec
         case COMMON_DECISION_TYPE_VLLM_D3:
         case COMMON_DECISION_TYPE_LFM2_D1:
         case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
-            return {"decisions"};
+        case COMMON_DECISION_TYPE_H2O_LIGHTNING:
+            out = {"decisions"};
+            break;
         case COMMON_DECISION_TYPE_GRANITE_SWITCH:
-            return {"text", "decisions"};
+            out = {"text", "decisions"};
+            break;
         default:
-            // fallback when there is no decision type or the metadata is bad
-            return {"text"};
+            // a tts-only model cannot generate text
+            if (has_cap_chat || !has_cap_tts) {
+                // fallback when there is no decision type or the metadata is bad
+                out = {"text"};
+            }
+            break;
     }
+    if (has_cap_tts) {
+        out.push_back("audio");
+    }
+    return out;
+}
+
+std::vector<std::string> server_model_output_modalities(const llama_model * model, bool has_cap_chat, bool has_cap_tts) {
+    return server_model_output_modalities(common_get_decision_type(model), has_cap_chat, has_cap_tts);
 }
 
 json server_model_architecture_json(
