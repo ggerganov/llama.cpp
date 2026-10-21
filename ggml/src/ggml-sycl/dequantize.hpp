@@ -817,25 +817,34 @@ static void dequantize_block_q4_0(const void * __restrict__ vx, dst_t * __restri
     }
 }
 
+// four qs bytes per item, all inside one 32-element block: two vec<dst_t,4> stores.
+// float math, same products as the scalar kernel; nibble order kept (lo at +0, hi at +16).
 template<typename dst_t>
-static void dequantize_block_q4_0_reorder(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
-                                  const sycl::nd_item<3> &item_ct1) {
-    // one thread per qs byte, like dequantize_block<dequantize_q4_0>; the reorder layout makes the byte reads contiguous
-    // grid-stride loop because the launcher may shrink the work-group to keep the global range below INT_MAX
-    // float math, not dequantize_q4_0_reorder: that helper computes in half with GGML_SYCL_F16, which changes f32 output
-    const sycl::half * d_ptr  = (const sycl::half *) ((const uint8_t *) vx + k/2);
-    const int64_t      stride = item_ct1.get_local_range(2) * item_ct1.get_group_range(2);
+static void dequantize_block_q4_0_reorder_wide(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
+                                               const sycl::id<1> idx) {
+    const int64_t i   = (int64_t) idx[0];
+    const int64_t ib  = i / 4;
+    const int64_t iqs = 4 * (i % 4);
 
-    for (int64_t iq = item_ct1.get_global_id(2); iq < k/2; iq += stride) {
-        const int64_t ib  = iq / (QK4_0/2);
-        const int64_t iqs = iq % (QK4_0/2);
-        const int     vq  = ((const uint8_t *) vx)[iq];
-        const float   d   = float(d_ptr[ib]);
+    const uint8_t *    qs    = (const uint8_t *) vx;
+    const sycl::half * d_ptr = (const sycl::half *) ((const uint8_t *) vx + k/2);
 
-        dst_t * y = yy + ib*QK4_0 + iqs;
-        y[0]       = d * ((vq & 0xF) - 8);
-        y[QK4_0/2] = d * ((vq >>  4) - 8);
-    }
+    const float d = float(d_ptr[ib]);
+    const uint8_t * q = qs + ib*(QK4_0/2) + iqs;
+
+    sycl::vec<float, 4> lo, hi;
+    lo[0] = d * ((q[0] & 0xF) - 8);
+    lo[1] = d * ((q[1] & 0xF) - 8);
+    lo[2] = d * ((q[2] & 0xF) - 8);
+    lo[3] = d * ((q[3] & 0xF) - 8);
+    hi[0] = d * ((q[0] >>  4) - 8);
+    hi[1] = d * ((q[1] >>  4) - 8);
+    hi[2] = d * ((q[2] >>  4) - 8);
+    hi[3] = d * ((q[3] >>  4) - 8);
+
+    dst_t * yb = yy + ib*QK4_0 + iqs;
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(yb)           = lo.convert<dst_t, sycl::rounding_mode::automatic>();
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(yb + QK4_0/2) = hi.convert<dst_t, sycl::rounding_mode::automatic>();
 }
 
 // Dequantize Q8_0 from reorder layout: [all qs (k bytes)][all d values]

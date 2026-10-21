@@ -158,15 +158,12 @@ static void dequantize_row_q4_0_sycl_reorder(const void *vx, dst_t *y, const int
     dpct::has_capability_or_fail(stream->get_device(),
                                     {sycl::aspect::fp16});
 
+    // flat range<1>, four qs bytes (8 outputs) per item: two vectorized stores.
+    // k % QK4_0 == 0 gives whole 32-element blocks, so the k/8 launch covers every row exactly.
     GGML_ASSERT(k % QK4_0 == 0);
-    const int64_t n_groups = ceil_div(k / 2, SYCL_DEQUANTIZE_BLOCK_SIZE);
-    // decrease global range when it exceeds the max int; the kernel loops to cover the rest
-    const int64_t wg_size  = downsample_sycl_global_range(n_groups, SYCL_DEQUANTIZE_BLOCK_SIZE);
-    stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, n_groups) *
-        sycl::range<3>(1, 1, wg_size),
-        sycl::range<3>(1, 1, wg_size)),
-        [=](sycl::nd_item<3> item_ct1) {
-            dequantize_block_q4_0_reorder(vx, y, k, item_ct1);
+    stream->parallel_for(sycl::range<1>((size_t) (k / 8)),
+        [=](sycl::id<1> idx) {
+            dequantize_block_q4_0_reorder_wide(vx, y, k, idx);
         });
 }
 
