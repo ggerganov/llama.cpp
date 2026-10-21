@@ -47,7 +47,9 @@ add_library(mtmd
             models/kimivl.cpp
             models/kimik25.cpp
             models/nemotron-v2-vl.cpp
+            models/nemotron-omni.cpp
             models/muse-glimmer.cpp
+            models/muse-spark-audio.cpp
             models/llama4.cpp
             models/llava.cpp
             models/minicpmv.cpp
@@ -68,6 +70,7 @@ add_library(mtmd
             models/step3vl.cpp
             models/siglip.cpp
             models/whisper-enc.cpp
+            models/voxtral-rt.cpp
             models/deepseekocr.cpp
             models/deepseekocr2.cpp
             models/mobilenetv5.cpp
