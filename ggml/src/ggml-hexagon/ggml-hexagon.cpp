@@ -1874,7 +1874,7 @@ void ggml_hexagon_session::enqueue_cpy(const ggml_tensor * src, ggml_tensor * ds
     }
 
     cpy_node.init(node);
-    const bool ok = htp_kparams_solve_cpy(this, node, (struct htp_copy_kernel_params *) cpy_node.kernel_params);
+    const bool ok = htp_kparams_solve(this, node, cpy_node.kernel_params);
     const auto * kparams = (const struct htp_copy_kernel_params *) cpy_node.kernel_params;
     if (ok && !with_fence && kparams->total_elems == 0) {
         return;

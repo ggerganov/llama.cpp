@@ -333,7 +333,7 @@ static bool htp_flash_attn_is_hmx_eligible(
     return S >= s_cross;
 }
 
-bool htp_kparams_solve_flash_attn(
+static bool htp_kparams_solve_flash_attn(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_fa_kernel_params * kparams
@@ -468,7 +468,7 @@ bool htp_kparams_solve_flash_attn(
     return true;
 }
 
-bool htp_kparams_solve_gated_delta_net(
+static bool htp_kparams_solve_gated_delta_net(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_gdn_kernel_params * kparams
@@ -995,7 +995,7 @@ static bool htp_matmul_check_types(
     }
 }
 
-bool htp_kparams_solve_matmul(
+static bool htp_kparams_solve_matmul(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_mm_kernel_params * kparams
@@ -1169,7 +1169,7 @@ bool htp_kparams_solve_mmidnx(
     return ok;
 }
 
-bool htp_kparams_solve_binary(
+static bool htp_kparams_solve_binary(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op_tensor,
     struct htp_binary_kernel_params * kparams
@@ -1497,7 +1497,7 @@ static bool htp_kparams_solve_unary_impl(
     return (col_tile > 0 || vtcm_row_per_thread > 0) && L.total_bytes <= vtcm_size;
 }
 
-bool htp_kparams_solve_unary(
+static bool htp_kparams_solve_unary(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_unary_kernel_params * kparams
@@ -1605,7 +1605,7 @@ bool htp_kparams_solve_repeat_get_rows(
     return kparams->n_threads > 0 && (size_t) kparams->vtcm_size <= vtcm_size;
 }
 
-bool htp_kparams_solve_get_rows(
+static bool htp_kparams_solve_get_rows(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_get_rows_kernel_params * kparams
@@ -1613,7 +1613,7 @@ bool htp_kparams_solve_get_rows(
     return htp_kparams_solve_repeat_get_rows(sess, op->src[0], op->src[1], op, kparams);
 }
 
-bool htp_kparams_solve_set_rows(
+static bool htp_kparams_solve_set_rows(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_set_rows_kernel_params * kparams
@@ -1649,7 +1649,7 @@ bool htp_kparams_solve_set_rows(
     return vtcm_layout.total_bytes <= htp_session_vtcm_size(sess);
 }
 
-bool htp_kparams_solve_softmax(
+static bool htp_kparams_solve_softmax(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_softmax_kernel_params * kparams
@@ -1744,7 +1744,7 @@ bool htp_kparams_solve_softmax(
     return true;
 }
 
-bool htp_kparams_solve_rope(
+static bool htp_kparams_solve_rope(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_rope_kernel_params * kparams
@@ -1842,7 +1842,7 @@ bool htp_kparams_solve_rope(
     return true;
 }
 
-bool htp_kparams_solve_sum_rows(
+static bool htp_kparams_solve_sum_rows(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_sum_rows_kernel_params * kparams
@@ -1949,7 +1949,7 @@ bool htp_kparams_solve_unary_mul_glu(
     return true;
 }
 
-bool htp_kparams_solve_glu(
+static bool htp_kparams_solve_glu(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_glu_kernel_params * kparams
@@ -1957,7 +1957,7 @@ bool htp_kparams_solve_glu(
     return htp_kparams_solve_unary_mul_glu(sess, htp_op_remap(op), op->src[0], op->src[1], op, kparams);
 }
 
-bool htp_kparams_solve_repeat(
+static bool htp_kparams_solve_repeat(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_repeat_kernel_params * kparams
@@ -1995,7 +1995,7 @@ bool htp_kparams_solve_repeat(
     return true;
 }
 
-bool htp_kparams_solve_ssm_conv(
+static bool htp_kparams_solve_ssm_conv(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_ssm_conv_kernel_params * kparams
@@ -2094,7 +2094,7 @@ bool htp_kparams_solve_ssm_conv(
     return L.total_bytes <= vtcm_size;
 }
 
-bool htp_kparams_solve_sort(
+static bool htp_kparams_solve_sort(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_sort_kernel_params * kparams
@@ -2158,7 +2158,7 @@ static void htp_pool_interior_range(
     }
 }
 
-bool htp_kparams_solve_pool_2d(
+static bool htp_kparams_solve_pool_2d(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_pool_2d_kernel_params * kparams
@@ -2258,7 +2258,7 @@ bool htp_kparams_solve_pool_2d(
     return true;
 }
 
-bool htp_kparams_solve_concat(
+static bool htp_kparams_solve_concat(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_concat_kernel_params * kparams
@@ -2362,7 +2362,7 @@ bool htp_kparams_solve_concat(
     return false;
 }
 
-bool htp_kparams_solve_cpy(
+static bool htp_kparams_solve_cpy(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_copy_kernel_params * kparams
@@ -2528,7 +2528,7 @@ static bool im2col_3d_calc_output_size(
     return true;
 }
 
-bool htp_kparams_solve_im2col(
+static bool htp_kparams_solve_im2col(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_im2col_kernel_params * kparams
@@ -2697,7 +2697,7 @@ bool htp_kparams_solve_im2col(
     return false;
 }
 
-bool htp_kparams_solve_im2col_3d(
+static bool htp_kparams_solve_im2col_3d(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_im2col_kernel_params * kparams
@@ -2875,7 +2875,7 @@ bool htp_kparams_solve_im2col_3d(
     return false;
 }
 
-bool htp_kparams_solve_pad(
+static bool htp_kparams_solve_pad(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_pad_kernel_params * kparams
@@ -2933,7 +2933,7 @@ bool htp_kparams_solve_pad(
     return true;
 }
 
-bool htp_kparams_solve_cumsum(
+static bool htp_kparams_solve_cumsum(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_cumsum_kernel_params * kparams
@@ -2967,7 +2967,7 @@ bool htp_kparams_solve_cumsum(
     return true;
 }
 
-bool htp_kparams_solve_fill(
+static bool htp_kparams_solve_fill(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_fill_kernel_params * kparams
@@ -3005,7 +3005,7 @@ bool htp_kparams_solve_fill(
     return true;
 }
 
-bool htp_kparams_solve_roll(
+static bool htp_kparams_solve_roll(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_roll_kernel_params * kparams
@@ -3065,7 +3065,7 @@ bool htp_kparams_solve_roll(
     return true;
 }
 
-bool htp_kparams_solve_diag(
+static bool htp_kparams_solve_diag(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_diag_kernel_params * kparams
@@ -3124,7 +3124,7 @@ bool htp_kparams_solve_diag(
     return true;
 }
 
-bool htp_kparams_solve_solve_tri(
+static bool htp_kparams_solve_solve_tri(
     const struct ggml_hexagon_session * sess,
     const struct ggml_tensor * op,
     struct htp_solve_tri_kernel_params * kparams
