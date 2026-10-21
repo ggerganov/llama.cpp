@@ -166,6 +166,7 @@ static std::vector<llama_token> get_tokens(const uint32_t n_tokens, const uint32
 static bool host_experts_test(const llm_arch arch) {
     switch (arch) {
         case LLM_ARCH_DEEPSEEK2:
+        case LLM_ARCH_QWEN3MOE:
             return true;
         default:
             return false;
@@ -208,6 +209,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     } else if (arch == LLM_ARCH_QWEN3 || arch == LLM_ARCH_MUSE_GLIMMER || arch == LLM_ARCH_AFMOE) {
         n_head = 4;
     } else if (arch == LLM_ARCH_DEEPSEEK2
+            || arch == LLM_ARCH_QWEN3MOE
             || arch == LLM_ARCH_DEEPSEEK32
             || arch == LLM_ARCH_GLM_DSA
             || arch == LLM_ARCH_DOTS3NOTE
@@ -611,7 +613,8 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
         const std::vector<ggml_backend_dev_t> & devs,
         const llama_split_mode split_mode = LLAMA_SPLIT_MODE_LAYER, bool encode = false,
         const llama_model_tensor_buft_override * tensor_buft_overrides = nullptr, const size_t moe_cache_size = 0,
-        llama_model_set_tensor_data_t tensor_filler = set_tensor_data, const bool fp8_scales = false) {
+        llama_model_set_tensor_data_t tensor_filler = set_tensor_data, const bool fp8_scales = false,
+        const uint32_t n_ubatch = 64) {
     GGML_ASSERT((gguf_ctx == nullptr) != (file == nullptr));
     llama_model_params model_params = llama_model_default_params();
     model_params.progress_callback = silent_model_load_progress;
@@ -626,7 +629,7 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
     ctx_params.n_threads = 4;
     ctx_params.n_threads_batch = 4;
     if (!encode) {
-        ctx_params.n_ubatch = 64;
+        ctx_params.n_ubatch = n_ubatch;
     }
     if (moe_cache_size > 0) {
         // the MoE cache is only used for small ubatches
@@ -867,6 +870,57 @@ static void test_fp8_requantize(const size_t seed, const float stdev) {
             }
         }
     }
+}
+
+static bool check_moe_cache_scales(llama_model * model, const std::vector<llama_token> & tokens,
+        const std::vector<ggml_backend_dev_t> & devs, const llama_model_tensor_buft_override * overrides,
+        size_t cache_size, size_t seed, float stdev) {
+    std::unique_ptr<FILE, int (*)(FILE *)> file(tmpfile(), fclose);
+    if (!file) {
+        return true;
+    }
+    size_t ctx_size = 0;
+    for (const auto & layer : model->layers) {
+        if (const ggml_tensor * w = layer.ffn_down_exps) {
+            ctx_size += ggml_tensor_overhead() + GGML_PAD(w->ne[1]*w->ne[2]*sizeof(float), GGML_MEM_ALIGN);
+        }
+    }
+    for (int granularity = 0; granularity < 3; ++granularity) {
+        ggml_context_ptr scale_ctx(ggml_init({ ctx_size, nullptr, false }));
+        llama_model_saver ms(model);
+        ms.add_kv_from_model();
+        ms.add_tensors_from_model();
+        for (size_t il = 0; il < model->layers.size(); ++il) {
+            const ggml_tensor * w = model->layers[il].ffn_down_exps;
+            if (w == nullptr) {
+                continue;
+            }
+            ggml_tensor * s = granularity == 2 ? ggml_new_tensor_2d(scale_ctx.get(), GGML_TYPE_F32, w->ne[1], w->ne[2]) :
+                ggml_new_tensor_1d(scale_ctx.get(), GGML_TYPE_F32, granularity == 0 ? 1 : w->ne[2]);
+            ggml_set_name(s, LLM_TN(model->arch)(LLM_TENSOR_FFN_DOWN_EXPS, "scale", il).str().c_str());
+            std::vector<float> values(ggml_nelements(s));
+            fill_normal(values, s->name, { seed, 0.25f });
+            for (float & v : values) {
+                v += 1.0f;
+            }
+            memcpy(s->data, values.data(), ggml_nbytes(s));
+            ms.add_tensor(s);
+        }
+        rewind(file.get());
+        ms.save(file.get());
+        rewind(file.get());
+        auto reference = get_model_and_ctx(nullptr, file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, 0, set_tensor_data, false, 2);
+        const auto expected = get_logits(reference.first.get(), reference.second.get(), tokens);
+        rewind(file.get());
+        auto cached = get_model_and_ctx(nullptr, file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, cache_size);
+        const auto actual = get_logits(cached.first.get(), cached.second.get(), tokens);
+        const double error = nmse(expected, actual);
+        if (!(error <= 1e-6)) {
+            fprintf(stderr, "MoE cache scale granularity %d: NMSE %g\n", granularity, error);
+            return false;
+        }
+    }
+    return true;
 }
 
 // entries [n/4, n/2) are embd rows, decoded either as token/embd/token chunks or as one mixed batch
@@ -1636,6 +1690,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                             }
                             test_ok = false;
                         }
+                    }
+
+                    if (dc.moe_cache_size > 0 && arch == LLM_ARCH_QWEN3MOE && !check_moe_cache_scales(model_and_ctx_dev.first.get(), tokens, dc.devs, overrides, dc.moe_cache_size, seed, stdev)) {
+                        test_ok = false;
+                        status_nmse = "\033[1;31mFAIL\033[0m (cache scales)";
                     }
 
                     FILE * file = tmpfile(); // Can be null on Windows without administrator privileges.
