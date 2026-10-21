@@ -8070,7 +8070,7 @@ ggml_backend_reg_t ggml_backend_sycl_reg() {
     return &reg;
 }
 
-void set_device_active(int device) {
+static void set_device_active(int device) {
     ggml_sycl_device_info & info = ggml_sycl_info();
     info.devices[device].active = true;
     int cnt = 0;
