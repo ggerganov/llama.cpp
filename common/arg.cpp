@@ -4252,6 +4252,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_P_MIN"));
     add_opt(common_arg(
+        {"--spec-tree-branches"}, "N",
+        string_format("max branches of the draft tree, with N > 1 --spec-draft-n-max is the node budget (default: %d, 1 = chain)",
+                      params.speculative.draft.n_branches),
+        [](common_params & params, int value) {
+            if (value < 1 || value > (int) llama_max_parallel_sequences()) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.speculative.draft.n_branches = value;
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_TREE_BRANCHES"));
+    add_opt(common_arg(
         {"--spec-draft-backend-sampling"},
         {"--no-spec-draft-backend-sampling"},
         string_format("offload draft sampling to the backend (default: %s)",

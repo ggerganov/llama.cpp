@@ -18,6 +18,7 @@
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
+#include "speculative-tree.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "base64.hpp"
@@ -134,6 +135,64 @@ static std::vector<llama_token> server_sample_and_accept_synth(
     return result;
 }
 
+// returns why the parameters do not support tree drafting (--spec-tree-branches > 1), empty if they do
+static std::string server_spec_tree_unsupported(const common_params & params) {
+    const auto & spec = params.speculative;
+
+    // every slot uses one sequence per branch
+    if (params.n_parallel * spec.draft.n_branches > (int32_t) llama_max_parallel_sequences()) {
+        return string_format("requires --parallel * --spec-tree-branches <= %d", (int32_t) llama_max_parallel_sequences());
+    }
+
+    // the other drafters keep per-sequence state that assumes a chain
+    bool has_type = false;
+    for (const auto type : spec.types) {
+        switch (type) {
+            case COMMON_SPECULATIVE_TYPE_NONE:
+                break;
+            case COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE:
+            case COMMON_SPECULATIVE_TYPE_NGRAM_SIMPLE:
+            case COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K:
+            case COMMON_SPECULATIVE_TYPE_NGRAM_MAP_K4V:
+            case COMMON_SPECULATIVE_TYPE_NGRAM_MOD:
+            case COMMON_SPECULATIVE_TYPE_NGRAM_CACHE:
+                has_type = true;
+                break;
+            default:
+                return "does not support --spec-type " + common_speculative_type_to_str(type);
+        }
+    }
+
+    if (!has_type) {
+        return "requires --spec-type draft-simple or ngram-*";
+    }
+
+    if (spec.has_synth()) {
+        return "does not support synthetic acceptance";
+    }
+
+    // TODO: rejection sampling over the children of a node
+    if (spec.draft.probabilistic) {
+        return "does not support --spec-draft-sampling probabilistic";
+    }
+
+    if (!params.mmproj.path.empty()) {
+        return "does not support multimodal input (--mmproj)";
+    }
+
+    if (spec.draft.n_max < spec.draft.n_branches) {
+        return "requires --spec-draft-n-max >= --spec-tree-branches";
+    }
+
+    // the trees of all slots are verified in one batch
+    const int32_t n_tree_max = params.n_parallel * (1 + common_speculative_n_max(&spec));
+    if (n_tree_max > params.n_batch) {
+        return string_format("requires --batch-size >= %d (the roots and nodes of the trees of all slots)", n_tree_max);
+    }
+
+    return "";
+}
+
 // state diagram: https://github.com/ggml-org/llama.cpp/pull/9283
 enum slot_state {
     SLOT_STATE_IDLE,
@@ -157,6 +216,7 @@ struct server_batch {
         bool is_prompt; // for stats tracking
         int32_t decision_order = 0;
         int32_t i_embd = -1; // row in embd, -1 if this is a token
+        std::vector<llama_seq_id> seq_ids; // sequences of a draft tree entry, empty = { id_slot }
     };
     std::vector<token> tokens;
     int32_t n_tokens_alloc = 0;
@@ -183,6 +243,15 @@ struct server_batch {
             return false;
         }
         tokens.push_back({ id_slot, token, { pos, 0, 0, 0 }, output, is_prompt });
+        return true;
+    }
+
+    // same, with the entry shared by the sequences in seq_ids
+    bool add(int32_t id_slot, llama_token token, llama_pos pos, bool output, bool is_prompt, const std::vector<llama_seq_id> & seq_ids) {
+        if (!add(id_slot, token, pos, output, is_prompt)) {
+            return false;
+        }
+        tokens.back().seq_ids = seq_ids;
         return true;
     }
 
@@ -246,6 +315,8 @@ struct server_batch {
             const auto & t = tokens[i];
             if (t.i_embd >= 0) {
                 view.add_embd({ embd.data() + (size_t) t.i_embd * n_embd, 1, (size_t) n_embd }, t.pos.data(), t.id_slot, t.output);
+            } else if (!t.seq_ids.empty()) {
+                view.add(t.token, t.pos[0], t.seq_ids, t.output);
             } else {
                 view.add(t.token, t.pos[0], t.id_slot, t.output);
             }
@@ -299,6 +370,18 @@ struct server_slot {
     common_prompt_checkpoint spec_ckpt;
     bool spec_is_replay = false;
     std::mt19937 spec_synth_rng;
+
+    // draft tree with --spec-tree-branches > 1, spec_draft holds the tokens of its nodes
+    common_speculative_tree spec_tree;
+
+    // sequence of each tree branch, [0] = id, empty without tree drafting
+    std::vector<llama_seq_id> spec_tree_seqs;
+
+    // the branch sequences are copies of the slot sequence, kept between rounds
+    bool spec_tree_synced = false;
+
+    // time spent copying the slot to the branches and committing the accepted path
+    int64_t t_spec_tree_mem_us = 0;
 
     // TODO: move members that belong to the task (such as `generated`, `has_new_line`) to task_results_state
     //       see https://github.com/ggml-org/llama.cpp/pull/18283#issuecomment-3710175837
@@ -378,7 +461,18 @@ struct server_slot {
 
         mem.seq_rm(id, -1, -1);
 
+        spec_tree_drop();
+
         prompt.clear();
+    }
+
+    // drop the branch copies, the next tree round copies the slot sequence again
+    void spec_tree_drop() {
+        for (size_t b = 1; b < spec_tree_seqs.size(); ++b) {
+            mem.seq_rm(spec_tree_seqs[b], -1, -1);
+        }
+
+        spec_tree_synced = false;
     }
 
     std::vector<common_adapter_lora_info> lora;
@@ -428,9 +522,11 @@ struct server_slot {
 
         if (can_speculate()) {
             spec_draft.clear();
+            spec_tree.clear();
             spec_i_batch.clear();
             spec_ckpt.clear();
         }
+        t_spec_tree_mem_us = 0;
         generated_tokens.clear();
         generated_token_probs.clear();
         json_schema = json();
@@ -608,12 +704,39 @@ struct server_slot {
                 if (audio_stream) {
                     inp_embd.clear(); // rows are consumed, the next step produces new ones
                 }
+            } else if (spec_tree_synced) {
+                // keep the branch copies in step with the slot
+                add_ok &= batch.add(id, sampled, prompt.tokens.pos_next(), true, false, spec_tree_seqs);
             } else {
                 add_ok &= batch.add(id, sampled, prompt.tokens.pos_next(), true, false);
             }
 
             SLT_DBG(*this, "slot decode token, id=%d, n_ctx = %d, n_tokens = %d, truncated = %d\n",
                     sampled, n_ctx, prompt.n_tokens(), truncated);
+        } else if (!spec_tree.empty()) {
+            SLT_DBG(*this, "generate_draft: id=%d, #tokens=%zu, #draft=%zu, #branches=%d, pos_next=%d\n",
+                    sampled, prompt.tokens.size(), spec_draft.size(), spec_tree.n_branches(), prompt.tokens.pos_next());
+
+            GGML_ASSERT(spec_i_batch.empty());
+            GGML_ASSERT(spec_tree.size() == (int32_t) spec_draft.size());
+
+            // each branch is decoded in its own sequence, a copy of the slot that the commit keeps in step
+            const int64_t t_start = ggml_time_us();
+            if (!spec_tree_synced || !common_speculative_tree_synced(mem, spec_tree_seqs)) {
+                common_speculative_tree_fork(mem, spec_tree_seqs);
+                spec_tree_synced = true;
+            }
+            t_spec_tree_mem_us += ggml_time_us() - t_start;
+
+            const llama_pos pos0 = prompt.tokens.pos_next();
+
+            // the root and the nodes are shared by the branches through them
+            spec_i_batch.push_back(batch.size());
+            add_ok &= batch.add(id, sampled, pos0, true, false, spec_tree.node_seqs(-1, spec_tree_seqs));
+            for (int32_t i = 0; i < spec_tree.size(); i++) {
+                spec_i_batch.push_back(batch.size());
+                add_ok &= batch.add(id, spec_tree.tokens[i], pos0 + 1 + spec_tree.depth[i], true, false, spec_tree.node_seqs(i, spec_tree_seqs));
+            }
         } else {
             SLT_DBG(*this, "generate_draft: id=%d, #tokens=%zu, #draft=%zu, pos_next=%d\n",
                     sampled, prompt.tokens.size(), spec_draft.size(), prompt.tokens.pos_next());
@@ -786,6 +909,12 @@ struct server_slot {
                     draft_ratio, n_draft_accepted, n_draft_total, mean_acc_len);
             SLT_TRC(*this,
                     "     acc per pos = (%s)\n", acceptance_rates_per_pos.c_str());
+
+            if (!spec_tree_seqs.empty()) {
+                SLT_INF(*this,
+                        "    tree seq ops = %10.2f ms (%8.3f ms per step, branch copies + commits)\n",
+                        t_spec_tree_mem_us / 1000.0, n_draft_verif_steps > 0 ? t_spec_tree_mem_us / 1000.0 / n_draft_verif_steps : 0.0);
+            }
         }
 
         common_speculative_print_stats(spec);
@@ -1190,6 +1319,19 @@ private:
         const bool is_resume = sleeping;
 
         params_base = params;
+
+        const bool spec_tree = params_base.speculative.draft.n_branches > 1;
+        if (spec_tree) {
+            const std::string err = server_spec_tree_unsupported(params_base);
+            if (!err.empty()) {
+                SRV_ERR("--spec-tree-branches %d %s\n", params_base.speculative.draft.n_branches, err.c_str());
+                return false;
+            }
+
+            // see common_context_params_to_llama()
+            SRV_INF("--spec-tree-branches %d: the contexts use a unified KV cache\n", params_base.speculative.draft.n_branches);
+        }
+
         const auto output_limits = server_output_limits(params_base);
         params_base.n_outputs_max = output_limits.total;
         params_base.n_outputs_max_per_seq = output_limits.per_seq;
@@ -1483,6 +1625,19 @@ private:
             ctx_dft_seq_rm_type = common_context_can_seq_rm(ctx_dft);
         }
 
+        if (spec_tree) {
+            if (!spec) {
+                SRV_ERR("%s", "--spec-tree-branches requires an initialized speculative decoding context\n");
+                return false;
+            }
+
+            // TODO: recurrent and hybrid models (no partial seq_rm here) need a state per branch
+            if (ctx_tgt_seq_rm_type != COMMON_CONTEXT_SEQ_RM_TYPE_PART || (ctx_dft && ctx_dft_seq_rm_type != COMMON_CONTEXT_SEQ_RM_TYPE_PART)) {
+                SRV_ERR("%s", "--spec-tree-branches requires target and draft models with an attention-only KV cache (no recurrent or hybrid models)\n");
+                return false;
+            }
+        }
+
         if (spec) {
             SRV_TRC("%s", "speculative decoding context initialized\n");
         } else {
@@ -1505,6 +1660,13 @@ private:
             slot.mem.init(ctx_tgt, ctx_dft);
             slot.spec    = spec.get();
             slot.n_ctx   = n_ctx_slot();
+
+            if (spec_tree) {
+                const int32_t n_branches = params_base.speculative.draft.n_branches;
+                for (int32_t b = 0; b < n_branches; ++b) {
+                    slot.spec_tree_seqs.push_back(common_speculative_branch_seq(params_base.n_parallel, n_branches, i, b));
+                }
+            }
 
             slot.mctx                   = mctx;
             slot.prompt.tokens.has_mtmd = mctx != nullptr;
@@ -2027,6 +2189,12 @@ private:
 
             // TODO: check verify if this actually works with TTS
             use_backend_sampling &= task.type != SERVER_TASK_TYPE_TTS;
+
+            // TODO: the backend samples the outputs of a sequence, the nodes of a draft tree are in several sequences
+            if (use_backend_sampling && !slot.spec_tree_seqs.empty()) {
+                SLT_WRN(slot, "%s", "backend sampling is not supported with --spec-tree-branches, sampling on the CPU\n");
+                use_backend_sampling = false;
+            }
 
             // TODO: tmp until backend sampling is fully implemented
             if (use_backend_sampling) {
@@ -3675,6 +3843,8 @@ private:
                 slot.mem.seq_rm (slot.id, n_keep            , n_keep + n_discard);
                 slot.mem.seq_add(slot.id, n_keep + n_discard, slot.prompt.tokens.pos_next(), -n_discard);
 
+                slot.spec_tree_drop();
+
                 // add generated tokens to cache
                 // ref: https://github.com/ggml-org/llama.cpp/pull/16818#discussion_r2473269481
                 {
@@ -3769,6 +3939,11 @@ private:
                             /* .temp     = */ slot.task->params.sampling.temp,
                             /* .seed     = */ slot.task->params.sampling.seed,
                         };
+
+                        if (!slot.spec_tree_seqs.empty()) {
+                            slot.spec_tree.clear();
+                            common_speculative_get_draft_params(spec.get(), slot.id).result_tree = &slot.spec_tree;
+                        }
 
                         drafting.push_back(&slot);
                     }
@@ -3884,6 +4059,9 @@ private:
                         slot.stats.update_prompt_start();
 
                         slot.state = SLOT_STATE_PROCESSING_PROMPT;
+
+                        // the new prompt edits the slot sequence, the branch copies are made again on the first tree
+                        slot.spec_tree_drop();
 
                         SLT_TRC(slot, "new prompt, n_ctx_slot = %d, n_keep = %d, task.n_tokens = %d\n",
                                 slot.n_ctx, slot.task->params.n_keep, slot.task->n_tokens());
@@ -4808,7 +4986,30 @@ private:
                 const bool use_rejection = slot.use_spec_rejection() && !slot.spec_draft_q.empty();
 
                 std::vector<llama_token> accepted;
-                if (!synth_probs.empty()) {
+                if (!slot.spec_tree.empty()) {
+                    // the root was followed by the n_draft nodes in the prompt
+                    const llama_pos pos0 = slot.prompt.tokens.pos_next() - 1 - (llama_pos) n_draft;
+
+                    std::vector<int32_t> path;
+                    accepted = common_speculative_tree_sample_and_accept(slot.smpl.get(), slot.ctx_tgt, slot.spec_tree, spec_i_batch, path);
+
+                    // the accepted tokens were sampled at the root and at the nodes of the path
+                    std::vector<int32_t> i_batch_path = { spec_i_batch[0] };
+                    for (const int32_t node : path) {
+                        i_batch_path.push_back(spec_i_batch[node + 1]);
+                    }
+                    spec_i_batch = std::move(i_batch_path);
+
+                    // keep the accepted path in the slot sequence, the branches become copies of it again
+                    const int64_t t_start = ggml_time_us();
+                    common_speculative_tree_commit(slot.mem, slot.spec_tree, path, slot.spec_tree_seqs, pos0);
+                    slot.t_spec_tree_mem_us += ggml_time_us() - t_start;
+
+                    SLT_DBG(slot, "accepted %zu/%d tree nodes, %d branches, accepted branch = %d\n", path.size(), slot.spec_tree.size(),
+                            slot.spec_tree.n_branches(), path.empty() ? 0 : slot.spec_tree.branches[path.back()][0]);
+
+                    slot.spec_tree.clear();
+                } else if (!synth_probs.empty()) {
                     // synthetic acceptance replaces verification entirely, so it comes first
                     accepted = server_sample_and_accept_synth(
                             slot.smpl.get(), slot.ctx_tgt, spec_i_batch, slot.spec_draft,

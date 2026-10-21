@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from utils import *
 
@@ -210,6 +212,204 @@ def test_with_ctx_shift():
     assert res.body["truncated"] == True
 
 
+@pytest.mark.parametrize("n_branches", [2, 3, 4])
+def test_tree_same_as_no_draft(n_branches: int, tmp_path):
+    global server
+    requests = [
+        {
+            "prompt": "I believe the meaning of life is",
+            "temperature": 0.0,
+            "top_k": 1,
+            "n_predict": 48,
+            "return_tokens": True,
+        },
+        {
+            "prompt": "I believe the meaning of life is",
+            "temperature": 0.2,
+            "top_k": 5,
+            "seed": 4242,
+            "n_predict": 48,
+            "return_tokens": True,
+        },
+    ]
+
+    server.model_draft = None
+    server.spec_type = None
+    server.start()
+    tokens_no_draft = []
+    for request in requests:
+        res = server.make_request("POST", "/completion", data=request)
+        assert res.status_code == 200
+        tokens_no_draft.append(res.body["tokens"])
+    server.stop()
+
+    # a low split probability makes the drafter branch often
+    create_server()
+    server.spec_tree_branches = n_branches
+    server.spec_draft_p_split = 0.01
+    server.debug = True
+    server.log_path = str(tmp_path / "server.log")
+    server.start()
+    for request, tokens in zip(requests, tokens_no_draft):
+        res = server.make_request("POST", "/completion", data=request)
+        assert res.status_code == 200
+        assert res.body["timings"]["draft_n"] > 0
+        assert res.body["tokens"] == tokens
+    server.stop()
+
+    with open(server.log_path, encoding="utf-8", errors="replace") as f:
+        log = f.read()
+    branches = [int(m) for m in re.findall(r"#branches=(\d+)", log)]
+    assert len(branches) > 0
+    assert max(branches) > 1
+    assert max(branches) <= n_branches
+    # some rounds accept a path that is not the first branch
+    accepted = [int(m) for m in re.findall(r"accepted branch = (\d+)", log)]
+    assert max(accepted) > 0
+
+
+def test_tree_ngram_chain():
+    global server
+    request = {
+        "prompt": "one two three four five six seven eight nine ten. " * 6,
+        "temperature": 0.0,
+        "top_k": 1,
+        "n_predict": 96,
+        "return_tokens": True,
+    }
+
+    server.model_draft = None
+    server.spec_type = None
+    server.start()
+    res = server.make_request("POST", "/completion", data=request)
+    assert res.status_code == 200
+    tokens_no_draft = res.body["tokens"]
+    server.stop()
+
+    # n-gram drafters cannot branch, their drafts are verified as single-branch trees
+    create_server()
+    server.model_draft = None
+    server.spec_type = "ngram-simple"
+    server.spec_tree_branches = 2
+    server.start()
+    res = server.make_request("POST", "/completion", data=request)
+    assert res.status_code == 200
+    assert res.body["timings"]["draft_n"] > 0
+    assert res.body["tokens"] == tokens_no_draft
+
+
+def test_tree_backend_sampling_falls_back_to_cpu(tmp_path):
+    global server
+    request = {
+        "prompt": "I believe the meaning of life is",
+        "temperature": 0.0,
+        "n_predict": 32,
+        "return_tokens": True,
+    }
+
+    server.model_draft = None
+    server.spec_type = None
+    server.start()
+    res = server.make_request("POST", "/completion", data=request)
+    assert res.status_code == 200
+    tokens_no_draft = res.body["tokens"]
+    server.stop()
+
+    create_server()
+    server.spec_tree_branches = 3
+    server.spec_draft_p_split = 0.01
+    server.backend_sampling = True
+    server.log_path = str(tmp_path / "server.log")
+    server.start()
+    res = server.make_request("POST", "/completion", data={**request, "backend_sampling": True})
+    assert res.status_code == 200
+    assert res.body["timings"]["draft_n"] > 0
+    assert res.body["tokens"] == tokens_no_draft
+    server.stop()
+
+    with open(server.log_path, encoding="utf-8", errors="replace") as f:
+        assert "backend sampling is not supported with --spec-tree-branches" in f.read()
+
+
+def test_tree_ctx_limit_and_shift():
+    global server
+    server.n_ctx = 256
+    server.enable_ctx_shift = True
+    server.spec_tree_branches = 3
+    server.spec_draft_p_split = 0.01
+    server.start()
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "Hello " * 248,
+        "temperature": 0.0,
+        "top_k": 1,
+        "n_predict": 256,
+    })
+    assert res.status_code == 200
+    assert len(res.body["content"]) > 0
+    assert res.body["tokens_predicted"] == 256
+    assert res.body["truncated"] == True
+
+
+def test_tree_multi_slots():
+    global server
+    # short outputs that stay clear of near-tied tokens, other batch shapes can flip those
+    requests = [{
+        "prompt": prompt,
+        "temperature": 0.0,
+        "top_k": 1,
+        "n_predict": 20,
+        "return_tokens": True,
+    } for prompt in [
+        "I believe the meaning of life is",
+        "The quick brown fox",
+        "In the forest the owl said",
+        "I believe the meaning of life is",
+    ]]
+
+    server.n_slots = 2
+    server.model_draft = None
+    server.spec_type = None
+    server.start()
+    tokens_no_draft = []
+    for request in requests:
+        res = server.make_request("POST", "/completion", data=request)
+        assert res.status_code == 200
+        tokens_no_draft.append(res.body["tokens"])
+    server.stop()
+
+    # the slots draft and verify their trees in the same batches
+    create_server()
+    server.n_slots = 2
+    server.spec_tree_branches = 3
+    server.spec_draft_p_split = 0.01
+    server.start()
+    results = parallel_function_calls([(server.make_request, ("POST", "/completion", request)) for request in requests])
+    for res, tokens in zip(results, tokens_no_draft):
+        assert res.status_code == 200
+        assert res.body["timings"]["draft_n"] > 0
+        assert res.body["tokens"] == tokens
+
+
+@pytest.mark.parametrize("config,error", [
+    ({"n_slots": 128},                                 "requires --parallel * --spec-tree-branches <= 256"),
+    ({"model_draft": None, "spec_type": None},         "requires --spec-type"),
+    ({"spec_type": "draft-eagle3"},                    "does not support --spec-type draft-eagle3"),
+    ({"spec_draft_sampling": "probabilistic"},         "does not support --spec-draft-sampling probabilistic"),
+    ({"spec_synth_rates": [0.5] * 8},                  "does not support synthetic acceptance"),
+    ({"spec_draft_n_max": 2, "spec_draft_n_min": 1},   "requires --spec-draft-n-max >= --spec-tree-branches"),
+])
+def test_tree_unsupported_config(config: dict, error: str, tmp_path):
+    global server
+    server.spec_tree_branches = 3
+    for key, value in config.items():
+        setattr(server, key, value)
+    server.log_path = str(tmp_path / "server.log")
+    with pytest.raises(RuntimeError):
+        server.start()
+    with open(server.log_path, encoding="utf-8", errors="replace") as f:
+        assert error in f.read()
+
+
 @pytest.mark.parametrize("n_slots,n_requests", [
     (1, 2),
     (2, 2),
@@ -231,7 +431,8 @@ def test_multi_requests_parallel(n_slots: int, n_requests: int):
         assert match_regex("(wise|kind|owl|answer)+", res.body["content"])
 
 
-def test_draft_token_probs():
+@pytest.mark.parametrize("n_branches", [1, 3])
+def test_draft_token_probs(n_branches: int):
     # tokens accepted from the draft must carry the target model's probabilities,
     # same as without speculative decoding (#24271)
     global server
@@ -252,6 +453,9 @@ def test_draft_token_probs():
     server.stop()
 
     create_server()
+    if n_branches > 1:
+        server.spec_tree_branches = n_branches
+        server.spec_draft_p_split = 0.01
     server.start()
     res = server.make_request("POST", "/completion", data=request)
     assert res.status_code == 200

@@ -424,15 +424,16 @@ bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
 
         uint32_t new_head = cells.size();
 
-        for (uint32_t i = 0; i < cells.size(); ++i) {
-            if (!cells.pos_in(i, p0, p1)) {
-                continue;
-            }
+        // visit only the cells of the sequence in [p0, p1), the removal below edits the set
+        std::vector<uint32_t> idxs;
+        const auto & sp = cells.seq_pos_get(seq_id);
+        for (auto it = sp.lower_bound({ p0, 0 }); it != sp.end() && it->first < p1; ++it) {
+            idxs.push_back(it->second);
+        }
 
-            if (cells.seq_has(i, seq_id) && cells.seq_rm(i, seq_id)) {
-                if (new_head == cells.size()) {
-                    new_head = i;
-                }
+        for (const uint32_t i : idxs) {
+            if (cells.seq_rm(i, seq_id)) {
+                new_head = std::min(new_head, i);
             }
         }
 
@@ -500,14 +501,10 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
             p1 = std::numeric_limits<llama_pos>::max();
         }
 
-        for (uint32_t i = 0; i < cells.size(); ++i) {
-            if (!cells.pos_in(i, p0, p1)) {
-                continue;
-            }
-
-            if (cells.seq_has(i, seq_id_src)) {
-                cells.seq_add(i, seq_id_dst);
-            }
+        // visit only the cells of the source sequence in [p0, p1)
+        const auto & sp = cells.seq_pos_get(seq_id_src);
+        for (auto it = sp.lower_bound({ p0, 0 }); it != sp.end() && it->first < p1; ++it) {
+            cells.seq_add(it->second, seq_id_dst);
         }
 
         return;
@@ -1055,13 +1052,12 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
 
                 // can we use this cell? either:
                 //  - the cell is empty
-                //  - the cell is occupied only by one sequence:
-                //    - (disabled) mask causally, if the sequence is the same as the one we are inserting
-                //    - mask SWA, using current max pos for that sequence in the cache
+                //  - (disabled) mask causally, if the cell holds only the sequence we are inserting
+                //  - mask SWA, using current max pos for every sequence of the cell in the cache
                 //                always insert in the cell with minimum pos
                 bool can_use = cells.is_empty(idx);
 
-                if (!can_use && cells.seq_count(idx) == 1) {
+                if (!can_use) {
                     const llama_pos pos_cell = cells.pos_get(idx);
 
                     // (disabled) causal mask
@@ -1070,12 +1066,14 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
                     //    can_use = pos_cell >= pos;
                     //}
 
-                    if (!can_use) {
-                        const llama_seq_id seq_id_cell = cells.seq_get(idx);
+                    // SWA mask
+                    const auto & seqs = cells.seq_get_all(idx);
 
-                        // SWA mask
-                        if (llama_hparams::is_masked_swa(n_swa, swa_type, pos_cell, cells.seq_pos_max(seq_id_cell) + 1)) {
-                            can_use = true;
+                    can_use = swa_type != LLAMA_SWA_TYPE_NONE;
+                    for (int sid = 0, n = seqs.count(); n > 0 && can_use; ++sid) {
+                        if (seqs.test(sid)) {
+                            can_use = llama_hparams::is_masked_swa(n_swa, swa_type, pos_cell, cells.seq_pos_max(sid) + 1);
+                            n--;
                         }
                     }
                 }
@@ -1138,12 +1136,15 @@ void llama_kv_cache::apply_ubatch(const slot_info & sinfo, const llama_ubatch & 
             const auto idx = sinfo.idxs[s][ii];
 
             if (!cells.is_empty(idx)) {
-                assert(cells.seq_count(idx) == 1);
+                const auto &    seqs = cells.seq_get_all(idx);
+                const llama_pos pos  = cells.pos_get(idx);
 
-                const llama_seq_id seq_id = cells.seq_get(idx);
-                const llama_pos    pos    = cells.pos_get(idx);
-
-                seq_pos_max_rm[seq_id] = std::max(seq_pos_max_rm[seq_id], pos);
+                for (int sid = 0, n = seqs.count(); n > 0; ++sid) {
+                    if (seqs.test(sid)) {
+                        seq_pos_max_rm[sid] = std::max(seq_pos_max_rm[sid], pos);
+                        n--;
+                    }
+                }
 
                 cells.rm(idx);
             }

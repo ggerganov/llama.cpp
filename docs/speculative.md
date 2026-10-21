@@ -13,6 +13,22 @@ The `llama-server` application supports several implementations of speculative d
 A much smaller model (called the _draft model_) generates drafts.
 A draft model is the most used approach in speculative decoding.
 
+### Draft Trees (`--spec-tree-branches`)
+
+With `--spec-tree-branches N` (N > 1), `draft-simple` drafts a tree instead of a chain. Each leaf grows by its top candidate, and the next candidates with a probability above `--spec-draft-p-split` start new branches, up to N branches. `--spec-draft-n-max` is then the total number of tree nodes.
+
+The target model verifies all nodes in one batch, with each branch in its own sequence, and keeps the longest path that matches its own samples.
+
+```
+llama-server [...] -md draft.gguf --spec-type draft-simple --spec-draft-n-max 4 --spec-tree-branches 4
+```
+
+- The contexts use a unified KV cache and every server slot uses N sequences, so `--parallel * N` must not exceed 256.
+- `--batch-size` must hold the trees of all slots: at least `--parallel * (1 + --spec-draft-n-max)`.
+- n-gram types can be combined with it, their drafts are verified as chains.
+- Not supported yet: `--spec-draft-sampling probabilistic`, synthetic acceptance, `--mmproj` and the other draft types. Backend sampling falls back to the CPU.
+- The gain over a chain depends on the hardware, the models and the context length, compare both with the SPEED-Bench client (see [Benchmarking](#benchmarking)).
+
 ### EAGLE-3 (`draft-eagle3`)
 
 EAGLE-3 uses a small draft model that reads the target model's hidden states to predict the next tokens, so it
@@ -256,6 +272,9 @@ Use exactly one of these options:
 --spec-draft-p-min, --draft-p-min       P
                                         minimum speculative decoding probability (greedy) (default: 0.00)
                                         (env: LLAMA_ARG_SPEC_DRAFT_P_MIN)
+--spec-tree-branches                    N
+                                        max branches of the draft tree, with N > 1 --spec-draft-n-max is the node budget (default: 1, 1 = chain)
+                                        (env: LLAMA_ARG_SPEC_TREE_BRANCHES)
 --spec-draft-ngl, -ngld, --gpu-layers-draft, --n-gpu-layers-draft  N
                                         max. number of draft model layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)
                                         (env: LLAMA_ARG_N_GPU_LAYERS_DRAFT)
