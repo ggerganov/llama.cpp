@@ -1289,65 +1289,16 @@ struct ggml_hexagon_opbatch {
         return bi;
     }
 
-    bool same_shape(const htp_tensor * h, const ggml_tensor * t) const {
+    static void init_tensor_shape(htp_tensor & h, const ggml_tensor * t) {
         auto extra = (htp_tensor_extra *) t->extra;
 
-        const bool is_tiled = (extra->flags & HTP_TENSOR_TILED) != 0;
-        const int64_t ne0_padded = hex_round_up(t->ne[0], 32);
-        const int64_t ne1_padded = hex_round_up(t->ne[1], 32);
-
-        int64_t nb1 = is_tiled ? (int64_t) htp_tiled_row_size(t->type, ne0_padded) : t->nb[1];
-        int64_t nb2 = is_tiled ? nb1 * ne1_padded : t->nb[2];
-        int64_t nb3 = is_tiled ? nb2 * t->ne[2]   : t->nb[3];
-        int64_t nb0 = (is_tiled && (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16)) ? sizeof(ggml_fp16_t) : t->nb[0];
-        enum ggml_type expected_type = (is_tiled && (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : t->type;
-
-        return (h->type == expected_type) &&
-               (h->ne[0] == t->ne[0]) && (h->ne[1] == t->ne[1]) && (h->ne[2] == t->ne[2]) && (h->ne[3] == t->ne[3]) &&
-               (h->nb[0] == nb0) && (h->nb[1] == nb1) && (h->nb[2] == nb2) && (h->nb[3] == nb3);
-    }
-
-    // add tensor and return its index
-    int add_tensor(const ggml_tensor * t) {
-        // Lookup by tensor ptr
-        auto it = t_map.find(t);
-        if (it != t_map.end()) { return it->second; }
-
-        // Lookup by tensor data and shape
-        auto range = d_map.equal_range(t->data);
-        for (auto dit = range.first; dit != range.second; ++dit) {
-            htp_tensor * h = &h_tens[dit->second];
-            if (same_shape(h, t)) {
-                t_map.insert({t, dit->second});
-                return dit->second;
-            }
-        }
-
-        auto extra = (htp_tensor_extra *) t->extra;
-        auto sbuf  = static_cast<ggml_hexagon_shared_buffer *>(t->buffer->context);
-
-        // Add new tensor to the batch
-        int ti = n_tens++;
-        GGML_ASSERT(n_tens <= n_tens_max);
-
-        t_map.insert({t,       ti});
-        d_map.insert({t->data, ti});
-
-        uint64_t t_offset = (uint8_t *) t->data - sbuf->base();
-        size_t   t_size   = ggml_nbytes(t);
-
-        htp_tensor &h = h_tens[ti];
-        h.bi    = add_buffer(sbuf);
-        h.ti    = ti;
-        h.data  = t_offset;
         h.type  = t->type;
         h.ne[0] = t->ne[0];
         h.ne[1] = t->ne[1];
         h.ne[2] = t->ne[2];
         h.ne[3] = t->ne[3];
 
-        const bool is_tiled = (extra->flags & HTP_TENSOR_TILED) != 0;
-        if (is_tiled) {
+        if (extra->flags & HTP_TENSOR_TILED) {
             if (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_BF16) {
                 h.type  = GGML_TYPE_F16;
                 h.nb[0] = sizeof(ggml_fp16_t);
@@ -1360,16 +1311,60 @@ struct ggml_hexagon_opbatch {
             h.nb[2] = h.nb[1] * ne1_padded;
             h.nb[3] = h.nb[2] * h.ne[2];
             h.size  = h.nb[3] * h.ne[3];
-            t_size  = h.size;
         } else {
-            h.size  = t_size;
-            h.nb[0] = t->nb[0]; h.nb[1] = t->nb[1]; h.nb[2] = t->nb[2]; h.nb[3] = t->nb[3];
+            h.nb[0] = t->nb[0];
+            h.nb[1] = t->nb[1];
+            h.nb[2] = t->nb[2];
+            h.nb[3] = t->nb[3];
+            h.size  = ggml_nbytes(t);
         }
 
         h.flags = extra->flags & (HTP_TENSOR_WEIGHT | HTP_TENSOR_TILED | HTP_TENSOR_FENCE);
+    }
+
+    static bool same_shape(const htp_tensor & a, const htp_tensor & b) {
+        return (a.type == b.type) &&
+               (a.ne[0] == b.ne[0]) && (a.ne[1] == b.ne[1]) && (a.ne[2] == b.ne[2]) && (a.ne[3] == b.ne[3]) &&
+               (a.nb[0] == b.nb[0]) && (a.nb[1] == b.nb[1]) && (a.nb[2] == b.nb[2]) && (a.nb[3] == b.nb[3]);
+    }
+
+    // add tensor and return its index
+    int add_tensor(const ggml_tensor * t) {
+        // Lookup by tensor ptr
+        auto it = t_map.find(t);
+        if (it != t_map.end()) { return it->second; }
+
+        htp_tensor shape {};
+        init_tensor_shape(shape, t);
+
+        // Lookup by tensor data and shape
+        auto range = d_map.equal_range(t->data);
+        for (auto dit = range.first; dit != range.second; ++dit) {
+            if (same_shape(h_tens[dit->second], shape)) {
+                t_map.insert({t, dit->second});
+                return dit->second;
+            }
+        }
+
+        auto sbuf = static_cast<ggml_hexagon_shared_buffer *>(t->buffer->context);
+
+        // Add new tensor to the batch
+        int ti = n_tens++;
+        GGML_ASSERT(n_tens <= n_tens_max);
+
+        t_map.insert({t,       ti});
+        d_map.insert({t->data, ti});
+
+        uint64_t t_offset = (uint8_t *) t->data - sbuf->base();
+
+        htp_tensor & h = h_tens[ti];
+        h      = shape;
+        h.bi   = add_buffer(sbuf);
+        h.ti   = ti;
+        h.data = t_offset;
 
         HEX_VERBOSE("ggml-hex: %s add-tensor #%u %s : bi %d data %p offset %zu size %zu flags 0x%x : %zu:%zu:%zu:%zu\n", sess->c_name(),
-                ti, t->name, h.bi, (void*) t->data, (size_t) t_offset, t_size, h.flags,
+                ti, t->name, h.bi, (void*) t->data, (size_t) t_offset, (size_t) h.size, h.flags,
                 (size_t) h.ne[0], (size_t) h.ne[1], (size_t) h.ne[2], (size_t) h.ne[3]);
 
         return ti;
