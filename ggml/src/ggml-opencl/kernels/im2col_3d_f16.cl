@@ -85,6 +85,6 @@ kernel void kernel_im2col_3d_f16(
         const long offset_src =
             (long)(in * ic + iic) * stride_q + (long)iid * stride_z +
             (long)iih * stride_y + (long)iiw * stride_x;
-        dst[offset_dst] = src1[offset_src];
+        dst[offset_dst] = convert_half_rte(src1[offset_src]);
     }
 }
