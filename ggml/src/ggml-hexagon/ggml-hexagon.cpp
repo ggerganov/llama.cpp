@@ -595,8 +595,25 @@ struct ggml_hexagon_session {
     std::atomic<uint64_t> batch_rsp_seq{0};
     std::atomic<uint32_t> last_error{HTP_STATUS_OK};
 
+    // Concurrency hardening: a second execution context (e.g. an async/pipelined
+    // scheduler, or a ViT encode worker issuing ops on the same shared device
+    // session) may call the batch machinery while the loop thread is inside
+    // fill/submit/drain. A torn op_batch submit or an interleaved response drain
+    // trips the response-sequence assert (forensics: flush_pending rsp.seq !=
+    // batch_rsp_seq+1, session log 20261019_2055).
+    // recursive_mutex: flush_batch's push-fail path re-enters flush_pending.
+    std::recursive_mutex batch_mx;
+
     uint64_t                cached_uid = 0;
     std::vector<htp_opnode> cached_nodes;
+    // Graph node cache made race-safe: the bare cached_nodes vector was swapped
+    // with no lock, and a swap destroyed the vector another execution context was
+    // iterating in its enqueue loop -> use-after-free (Scudo invalid-chunk abort,
+    // tombstone 2026-10-20). shared_ptr snapshot: each graph compute iterates a
+    // snapshot that outlives any concurrent swap; cache_mx only guards the
+    // check/assign pair.
+    std::mutex                                     cache_mx;
+    std::shared_ptr<const std::vector<htp_opnode>> cached_nodes_snap;
 
     ggml_hexagon_mdev_group                mdev;
     ggml_backend_dev_t                     dev       = nullptr;
@@ -2607,6 +2624,7 @@ struct ggml_hexagon_opqueue {
 };
 
 void ggml_hexagon_session::flush_peers() {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     auto vpeers = std::move(virt_peers);
     virt_peers.clear();
     for (auto * peer : vpeers) {
@@ -2625,11 +2643,13 @@ void ggml_hexagon_session::flush_peers() {
 }
 
 void ggml_hexagon_session::flush_async() {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     flush_peers();
     flush_batch();
 }
 
 void ggml_hexagon_session::flush_pending(bool all) {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     for (auto & sub : this->mdev.sessions) {
         sub->flush_pending(all);
         if (sub->last_error > HTP_STATUS_OK) {
@@ -2685,12 +2705,14 @@ void ggml_hexagon_session::flush_sync(bool all) {
 }
 
 void ggml_hexagon_session::start_batch() {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     if (this->mdev.count > 1) {
         enqueue_mdev_group();
     }
 }
 
 void ggml_hexagon_session::flush_batch(size_t min_ops) {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     if (op_batch->n_ops < min_ops) { return; }
 
     op_batch->sort_buffers();
@@ -2738,6 +2760,7 @@ void ggml_hexagon_session::flush_batch(size_t min_ops) {
 }
 
 void ggml_hexagon_session::enqueue_op(const htp_opnode & node) {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     auto clone_tensor_buffer = [this](const ggml_tensor * t) {
         auto sbuf = this->mmap_tensor(t);
         if (!sbuf) return;
@@ -2777,6 +2800,7 @@ void ggml_hexagon_session::enqueue_op(const htp_opnode & node) {
 }
 
 void ggml_hexagon_session::enqueue_mdev_group() {
+    std::lock_guard<std::recursive_mutex> lock(batch_mx);
     htp_opnode group_node(HTP_OP_MDEV_GROUP);
 
     uint8_t * fence_slot = this->mdev_fence_slot;
@@ -6915,11 +6939,17 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
 
     const std::vector<htp_opnode> * nodes_ptr = nullptr;
     std::vector<htp_opnode> computed_nodes;
+    std::shared_ptr<const std::vector<htp_opnode>> use_nodes;
 
-    // Check for cache hit
-    bool cache_hit = (graph->uid != 0 && sess->cached_uid == graph->uid);
-    if (cache_hit) {
-        nodes_ptr = &sess->cached_nodes;
+    // Check for cache hit (snapshot acquire under lock)
+    {
+        std::lock_guard<std::mutex> lock(sess->cache_mx);
+        if (graph->uid != 0 && sess->cached_uid == graph->uid && sess->cached_nodes_snap) {
+            use_nodes = sess->cached_nodes_snap;
+        }
+    }
+    if (use_nodes) {
+        nodes_ptr = use_nodes.get();
     } else {
         // Tag fusable tensors in graph
         for (int i = 0; i < graph->n_nodes; i++) {
@@ -7064,11 +7094,14 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
         }
 
         if (graph->uid != 0) {
-            sess->cached_uid   = graph->uid;
-            sess->cached_nodes = std::move(computed_nodes);
-            nodes_ptr = &sess->cached_nodes;
+            std::lock_guard<std::mutex> lock(sess->cache_mx);
+            sess->cached_uid        = graph->uid;
+            sess->cached_nodes_snap = std::make_shared<const std::vector<htp_opnode>>(std::move(computed_nodes));
+            use_nodes               = sess->cached_nodes_snap;
+            nodes_ptr               = use_nodes.get();
         } else {
-            nodes_ptr = &computed_nodes;
+            use_nodes = std::make_shared<const std::vector<htp_opnode>>(std::move(computed_nodes));
+            nodes_ptr = use_nodes.get();
         }
     }
 
