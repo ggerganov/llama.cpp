@@ -541,9 +541,9 @@ if (GGML_CPU_ALL_VARIANTS)
             ggml_add_cpu_backend_variant(android_armv9.2_1    DOTPROD MATMUL_INT8 FP16_VECTOR_ARITHMETIC SVE SME)
             ggml_add_cpu_backend_variant(android_armv9.2_2    DOTPROD MATMUL_INT8 FP16_VECTOR_ARITHMETIC SVE SVE2 SME)
         elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
-            # Follows the Android feature sets: Snapdragon-class parts have
-            # i8mm without SVE, and the last entry covers SVE2 parts. No SME
-            # variant until Windows on Arm hardware has it.
+            # Mirrors the Android feature sets: armv8.6_1 covers parts with
+            # i8mm but no SVE, armv9.0_1 the SVE2 parts. SME is left out
+            # because none of it was validated on SME hardware.
             ggml_add_cpu_backend_variant(windows_armv8.0_1)
             ggml_add_cpu_backend_variant(windows_armv8.2_1    DOTPROD)
             ggml_add_cpu_backend_variant(windows_armv8.2_2    DOTPROD FP16_VECTOR_ARITHMETIC)
