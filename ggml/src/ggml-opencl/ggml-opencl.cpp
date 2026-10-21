@@ -30064,7 +30064,7 @@ static void ggml_cl_im2col_3d(ggml_backend_t backend, const ggml_tensor * src0, 
     const int32_t d0 = ((const int32_t*)(dst->op_params))[6];
     const int32_t d1 = ((const int32_t*)(dst->op_params))[7];
     const int32_t d2 = ((const int32_t*)(dst->op_params))[8];
-    const int32_t IC = ((const int32_t*)(dst->op_params))[9];
+    const cl_long IC = ((const int32_t*)(dst->op_params))[9];
 
     const cl_long N  = src1->ne[3] / IC;
     const cl_long ID = src1->ne[2];
