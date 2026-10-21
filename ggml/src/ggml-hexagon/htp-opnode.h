@@ -14,7 +14,13 @@
 #include "htp/matmul-ops.h"
 #include "htp/flash-attn-ops.h"
 #include "htp/unary-ops.h"
+#include "htp/binary-ops.h"
 #include "htp/allreduce-ops.h"
+#include "htp/ssm-conv.h"
+#include "htp/gated-delta-net-ops.h"
+#include "htp/softmax-ops.h"
+#include "htp/argsort-ops.h"
+#include "htp/get-rows-ops.h"
 
 struct htp_opnode {
     ggml_tensor * node   { nullptr };
@@ -41,13 +47,19 @@ struct htp_opnode {
     void init(ggml_tensor * node) {
         this->node = node;
         if (this->node) {
-            this->name = ggml_op_desc(this->node);
+            if (this->node->op == GGML_OP_MUL_MAT &&
+                ggml_get_op_params_i32(this->node, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
+                this->name = "MUL_MAT_HADAMARD";
+                this->inputs.push_back(this->node->src[1]);
+            } else {
+                this->name = ggml_op_desc(this->node);
 
-            // Build inputs (preserving optional nullptrs)
-            int n_inputs = n_active_src(this->node);
-            this->inputs.resize(n_inputs, nullptr);
-            for (int i = 0; i < n_inputs; i++) {
-                this->inputs[i] = this->node->src[i];
+                // Build inputs (preserving optional nullptrs)
+                int n_inputs = n_active_src(this->node);
+                this->inputs.resize(n_inputs, nullptr);
+                for (int i = 0; i < n_inputs; i++) {
+                    this->inputs[i] = this->node->src[i];
+                }
             }
 
             // Build outputs
@@ -118,6 +130,10 @@ struct htp_opnode {
     bool stackable() const {
         switch (this->op()) {
             case GGML_OP_MUL_MAT:
+                if (ggml_get_op_params_i32(this->node, 1) == GGML_HINT_SRC0_IS_HADAMARD) {
+                    return false;
+                }
+                return ggml_is_quantized(this->src0()->type);
             case GGML_OP_MUL_MAT_ID:
                 return ggml_is_quantized(this->src0()->type);
             default:
@@ -320,15 +336,13 @@ struct htp_opformat {
             const auto * kparams = (const struct htp_mm_kernel_params *) node.kernel_params;
             const char * path = "unknown";
             int32_t type = kparams->kernel_type;
-            if (type == HTP_MM_KERNEL_HMX_2D || type == HTP_MM_KERNEL_HMX_F16_BATCHED) {
-                path = "hmx-tiled";
+            if (type == HTP_MM_KERNEL_HMX_2D || type == HTP_MM_KERNEL_HMX_BATCHED) {
+                path = (kparams->tile_size > 0) ? "hmx-tiled" : "hmx-flat";
             } else if (type == HTP_MM_KERNEL_HVX_F16_F16_VTCM || type == HTP_MM_KERNEL_HVX_F32_F32_VTCM ||
-                       type == HTP_MM_KERNEL_HVX_QUANT_ROW    || type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
-                path = "hvx-tiled";
-            } else if (type == HTP_MM_KERNEL_HVX_F16_F16_DDR  || type == HTP_MM_KERNEL_HVX_F16_F32_DDR ||
-                       type == HTP_MM_KERNEL_HVX_F32_F32_DDR  || type == HTP_MM_KERNEL_HVX_F32_F16_DDR ||
-                       type == HTP_MM_KERNEL_HVX_QUANT_ROW_FLAT) {
+                       type == HTP_MM_KERNEL_HVX_BF16_F32_VTCM) {
                 path = "hvx-flat";
+            } else if (type == HTP_MM_KERNEL_HVX_QUANT_ROW || type == HTP_MM_KERNEL_HVX_QUANT_BLOCK) {
+                path = "hvx-tiled";
             }
             snprintf(str, max_size, "%s vtcm %d", path, (int) kparams->vtcm_size);
         } else if (node.opcode == HTP_OP_FLASH_ATTN_EXT) {
@@ -350,9 +364,40 @@ struct htp_opformat {
             snprintf(str, max_size, "seq 0x%x", (uint32_t) node.node->op_params[0]);
         } else if (node.opcode == HTP_OP_ALLREDUCE && node.node) {
             snprintf(str, max_size, "seq 0x%x -> 0x%x", (uint32_t) node.node->op_params[0], (uint32_t) node.node->op_params[1]);
+        } else if (node.opcode == HTP_OP_SSM_CONV) {
+            const auto * kparams = (const struct htp_ssm_conv_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s vtcm %d", kparams->n_t == 1 ? "decode" : "prefill", (int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_SOFTMAX) {
+            const auto * kparams = (const struct htp_softmax_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "k%d nth %d vtcm %d", (int) kparams->kernel_id, (int) kparams->n_threads, (int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_GATED_DELTA_NET) {
+            const auto * kparams = (const struct htp_gdn_kernel_params *) node.kernel_params;
+            const char * path = (kparams->kernel_type == HTP_GDN_KERNEL_HMX_CHUNKED) ? "hmx-chunked" : "hvx-recurrent";
+            snprintf(str, max_size, "%s-%s vtcm %u", path, kparams->kda ? "kda" : "scalar",
+                     (unsigned int) (kparams->vtcm_size ? kparams->vtcm_size : kparams->vtcm_per_thread * kparams->n_threads));
+        } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID ||
+                   node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
+            const auto * kparams = (const struct htp_binary_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "vtcm %u", (unsigned int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_ARGSORT || node.opcode == HTP_OP_TOP_K) {
+            const auto * kparams = (const struct htp_sort_kernel_params *) node.kernel_params;
+            snprintf(str, max_size, "%s nth %d nchk %d chk %d vtcm %d",
+                     node.opcode == HTP_OP_TOP_K ? "top_k" : "argsort",
+                     (int) kparams->n_threads, (int) kparams->n_chunks,
+                     (int) kparams->chunk_elems, (int) kparams->vtcm_size);
+        } else if (node.opcode == HTP_OP_GET_ROWS) {
+            const auto * kparams = (const struct htp_get_rows_kernel_params *) node.kernel_params;
+            const char * ktype_str = "unknown";
+            switch (kparams->kernel_type) {
+                case HTP_GET_ROWS_KERNEL_SAMETYPE: ktype_str = "sametype"; break;
+                case HTP_GET_ROWS_KERNEL_TILED:    ktype_str = "tiled"; break;
+                case HTP_GET_ROWS_KERNEL_FLAT:     ktype_str = "flat"; break;
+            }
+            snprintf(str, max_size, "%s%s vtcm %u", ktype_str, kparams->n_threads > 1 ? "-multi" : "", (unsigned int) kparams->vtcm_size);
         } else {
             snprintf(str, max_size, "----");
         }
+
     }
 
     void format(const htp_opnode & node) {
