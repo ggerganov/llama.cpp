@@ -18,7 +18,7 @@ class FlintModel(Qwen2MoeModel):
         self.gguf_writer.add_expert_shared_count(
             self.hparams["shared_expert_intermediate_size"] // self.hparams["moe_intermediate_size"]
         )
-        self.gguf_writer.add_expert_weights_norm(True)
+        self.gguf_writer.add_expert_weights_norm(self.hparams["norm_topk_prob"])
         self.gguf_writer.add_expert_weights_scale(1.0)
         self.gguf_writer.add_sliding_window(self.hparams["sliding_window"])
         self.gguf_writer.add_sliding_window_pattern([

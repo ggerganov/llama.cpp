@@ -1940,7 +1940,7 @@ class TextModel(ModelBase):
             # ref: https://huggingface.co/CohereLabs/North-Mini-Code-1.0
             res = "cohere2moe"
         if chkhsh == "d5420e601e979078c670bc503d9ac411c311fa76b76a76267c31e0d6ba816637":
-            # ref: https://huggingface.co/RecursiveSI/flint-preview
+            # ref: https://huggingface.co/RecursiveSI/flint
             res = "flint"
         if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
             # ref: https://huggingface.co/Qwen/Qwen1.5-7B
