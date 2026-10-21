@@ -11,21 +11,13 @@
 
 struct htp_sort_kernel_params {
     int32_t  n_threads;
-    int32_t  total_rows;
-    int32_t  row_start;
-    int32_t  row_end;
-    int32_t  ne00;
-    int32_t  k;
     int32_t  order;             // GGML_SORT_ORDER_ASC (0) or GGML_SORT_ORDER_DESC (1)
     int32_t  is_top_k;          // 1 if TOP_K, 0 if ARGSORT
-    int32_t  use_dma;           // 1 if DMA enabled
     int32_t  chunk_elems;
     int32_t  n_chunks;
     int32_t  vtcm_size;
-    int32_t  phase1_slot_size;
     int32_t  merge_elems;
     int32_t  n_slots;
-    int32_t  pad;
     struct fastdiv_values div_ne01;
     struct fastdiv_values div_ne01_ne02;
 };

@@ -19,21 +19,7 @@ enum htp_softmax_kernel_type {
 struct htp_softmax_kernel_params {
     uint8_t  kernel_type;
     uint32_t n_threads;
-    uint32_t src0_nrows;
-    uint32_t src0_nrows_per_thread;
     uint32_t vtcm_size;
-
-    uint32_t vtcm_src0_size_per_thread;
-    uint32_t vtcm_src1_size_per_thread;
-    uint32_t vtcm_dst_size_per_thread;
-
-    uint32_t src0_row_size_aligned;
-    uint32_t src1_row_size_aligned;
-    uint32_t dst_row_size_aligned;
-
-    uint32_t src0_spad_half_size;
-    uint32_t src1_spad_half_size;
-    uint32_t dst_spad_half_size;
 
     uint32_t n_head;
     uint32_t n_head_log2;

@@ -49,9 +49,6 @@ struct htp_fa_kernel_params {
     float    logit_softcap;
     uint32_t vtcm_size;
 
-    uint32_t qrows;
-    uint32_t qrows_per_thread;
-    uint32_t qrow_start;
     float    m0;
     float    m1;
     uint32_t n_head_log2;
@@ -67,8 +64,6 @@ struct htp_fa_kernel_params {
     union {
         struct {
             uint32_t g_br;
-            uint32_t row_buf_stride;
-            uint32_t mask_buf_row_stride;
             int32_t  mask_broadcast;
             int32_t  pipeline;
             struct fastdiv_values div_G;
@@ -85,6 +80,8 @@ struct htp_fa_kernel_params {
 
 #if defined(__cplusplus)
 static_assert(sizeof(struct htp_fa_kernel_params) <= 128, "htp_fa_kernel_params is too large for kernel_params blob");
+#else
+_Static_assert(sizeof(struct htp_fa_kernel_params) <= 128, "htp_fa_kernel_params is too large for kernel_params blob");
 #endif
 
 // VTCM region layout for the HMX flash-attention kernel.

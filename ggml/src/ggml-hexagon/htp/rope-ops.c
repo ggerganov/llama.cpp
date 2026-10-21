@@ -753,7 +753,7 @@ static int execute_op_rope_f32(struct htp_ops_context * octx) {
         const size_t ff_size = src2->ne[0] * sizeof(float);
         float * vtcm_freq_factors = VTCM_LAYOUT_PTR(float, octx->ctx->vtcm_base, layout.off_freq_factors);
         dma_queue_push(dma_q, dma_make_data(vtcm_freq_factors, src2->data),
-                       kparams->freq_factors_size, 0, ff_size, 1);
+                       layout.freq_factors_size_aligned, 0, ff_size, 1);
         dma_queue_pop(dma_q);
         rctx.freq_factors = vtcm_freq_factors;
     }
@@ -785,7 +785,7 @@ static int execute_op_rope_f32(struct htp_ops_context * octx) {
     rctx.src0_row_stride       = src0_row_stride;
     rctx.dst_row_size          = dst_row_size;
     rctx.dst_row_stride        = dst_row_stride;
-    rctx.src0_row_size_aligned = kparams->src0_row_size_aligned;
+    rctx.src0_row_size_aligned = layout.src0_row_size_aligned;
 
     rctx.src0_nrows            = nrows;
     rctx.nrows                 = nrows;

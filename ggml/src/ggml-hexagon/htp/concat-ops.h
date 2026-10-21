@@ -15,8 +15,6 @@ enum htp_concat_kernel_type {
 };
 
 struct htp_concat_transposed_params {
-    uint32_t spad0_size_per_thread;
-    uint32_t spad1_size_per_thread;
     struct fastdiv_values div_ne2;
 };
 

@@ -29,12 +29,9 @@ struct htp_pool_2d_kernel_params {
     uint32_t stride_y;
     int32_t  pad_x;
     int32_t  pad_y;
-    uint32_t src_plane_bytes;
-    uint32_t dst_plane_bytes;
-    uint32_t src_plane_bytes_aligned;
-    uint32_t dst_plane_bytes_aligned;
     uint32_t n_threads;
     uint32_t planes;
+    uint32_t planes_per_chunk;
     uint32_t pool_op;
     uint32_t avg_divide_count;
     uint32_t ox_lo;
@@ -52,6 +49,8 @@ struct htp_pool_vtcm_layout {
     size_t   total_bytes;
     size_t   off_src;
     size_t   off_dst;
+    uint32_t src_plane_bytes;
+    uint32_t dst_plane_bytes;
     size_t   src_bytes_per_thread;
     size_t   dst_bytes_per_thread;
     size_t   src_spad_half_size;
@@ -60,14 +59,19 @@ struct htp_pool_vtcm_layout {
 
 static inline void htp_pool_vtcm_layout_build(
     struct htp_pool_vtcm_layout * L,
-    size_t   src_plane_aligned,
-    size_t   dst_plane_aligned,
+    uint32_t src_x,
+    uint32_t src_y,
+    uint32_t dst_x,
+    uint32_t dst_y,
     uint32_t n_threads
 ) {
-    L->src_spad_half_size   = src_plane_aligned;
-    L->dst_spad_half_size   = dst_plane_aligned;
-    L->src_bytes_per_thread = 2 * src_plane_aligned;
-    L->dst_bytes_per_thread = 2 * dst_plane_aligned;
+    // Full-plane double buffering (256 bytes guard space for vector loads)
+    L->src_plane_bytes      = src_x * src_y * sizeof(float);
+    L->dst_plane_bytes      = dst_x * dst_y * sizeof(float);
+    L->src_spad_half_size   = hex_round_up(L->src_plane_bytes + 256, 128);
+    L->dst_spad_half_size   = hex_round_up(L->dst_plane_bytes, 128);
+    L->src_bytes_per_thread = 2 * L->src_spad_half_size;
+    L->dst_bytes_per_thread = 2 * L->dst_spad_half_size;
 
     size_t off = 0;
     VTCM_LAYOUT_ALLOC(off, off_src, L->src_bytes_per_thread * n_threads);
@@ -84,13 +88,7 @@ static inline bool htp_pool_solve_layout(
     uint32_t n_threads,
     size_t   vtcm_budget
 ) {
-    // Full-plane double buffering (256 bytes guard space for vector loads)
-    const size_t src_plane_bytes   = (size_t) src_x * src_y * sizeof(float);
-    const size_t dst_plane_bytes   = (size_t) dst_x * dst_y * sizeof(float);
-    const size_t src_plane_aligned = hex_round_up((uint32_t) src_plane_bytes + 256, 128);
-    const size_t dst_plane_aligned = hex_round_up((uint32_t) dst_plane_bytes, 128);
-
-    htp_pool_vtcm_layout_build(layout, src_plane_aligned, dst_plane_aligned, n_threads);
+    htp_pool_vtcm_layout_build(layout, src_x, src_y, dst_x, dst_y, n_threads);
     return layout->total_bytes <= vtcm_budget;
 }
 

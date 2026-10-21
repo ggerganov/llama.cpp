@@ -187,9 +187,12 @@ int op_diag_f32(struct htp_ops_context * octx) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
+    const size_t src_batch_size = src0->ne[0] * sizeof(float);
+    const size_t dst_row_size   = dst->ne[0] * sizeof(float);
+
+    struct htp_diag_vtcm_layout layout = { 0 };
     if (kparams->use_dma) {
-        struct htp_diag_vtcm_layout layout;
-        htp_diag_vtcm_layout_build(&layout, kparams->src_batch_size_aligned, kparams->dst_row_size_aligned, n_threads);
+        htp_diag_vtcm_layout_build(&layout, src_batch_size, dst_row_size, n_threads);
 
         octx->src0_spad.size_per_thread = layout.src0_bytes_per_thread;
         octx->dst_spad.size_per_thread  = layout.dst_bytes_per_thread;
@@ -204,10 +207,10 @@ int op_diag_f32(struct htp_ops_context * octx) {
     struct htp_diag_context dctx = {
         .octx                   = octx,
         .kparams                = kparams,
-        .src_batch_size         = kparams->src_batch_size,
-        .dst_row_size           = kparams->dst_row_size,
-        .src_batch_size_aligned = kparams->src_batch_size_aligned,
-        .dst_row_size_aligned   = kparams->dst_row_size_aligned,
+        .src_batch_size         = src_batch_size,
+        .dst_row_size           = dst_row_size,
+        .src_batch_size_aligned = layout.src_batch_size_aligned,
+        .dst_row_size_aligned   = layout.dst_row_size_aligned,
         .batches_per_thread     = fastdiv(nbatches + n_threads - 1, &octx->n_threads_div),
         .total_batches          = nbatches,
         .batch_start            = batch_start,

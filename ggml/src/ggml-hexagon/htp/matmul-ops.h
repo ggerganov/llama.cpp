@@ -74,10 +74,7 @@ struct htp_mm_kernel_params {
     int32_t  aligned_tile_size;  // Aligned weight tile size (padded to 128)
     int32_t  act_row_size;       // Row size for activation scratchpad
     int32_t  vtcm_size;          // Total required scratchpad size in VTCM
-    int32_t  vtcm_src0_size;     // src0 scratchpad size in VTCM
-    int32_t  vtcm_act_size;      // activation scratchpad size in VTCM
     int32_t  vtcm_bias_size;     // bias scratchpad size in VTCM (fused only)
-    int32_t  vtcm_dst_size;      // dst scratchpad size in VTCM
 
     // Precomputed division values
     struct fastdiv_values div_ne12_ne1;

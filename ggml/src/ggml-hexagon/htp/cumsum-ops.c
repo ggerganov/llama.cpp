@@ -215,15 +215,16 @@ int op_cumsum_f32(struct htp_ops_context * octx) {
     const struct htp_cumsum_kernel_params * kparams =
         (const struct htp_cumsum_kernel_params *) octx->kernel_params;
 
-    const uint32_t total_rows        = kparams->total_rows;
-    const size_t   dst_data_row_size = dst->ne[0] * sizeof(float);
+    const uint32_t total_rows   = kparams->total_rows;
+    const size_t   src_row_size = src0->nb[1];
+    const size_t   dst_row_size = dst->nb[1];
 
     uint32_t row_start = 0;
     uint32_t nrows     = total_rows;
 
     if (octx->ctx->mdev.count > 1) {
         uint32_t rows_per_chunk = 0;
-        htp_tensor_mdev_rows_per_chunk(dst, sizeof(float), (uint32_t) dst_data_row_size, &rows_per_chunk);
+        htp_tensor_mdev_rows_per_chunk(dst, sizeof(float), (uint32_t) dst_row_size, &rows_per_chunk);
         const struct htp_tensor_mdev_range range = htp_tensor_mdev_partition(total_rows, rows_per_chunk, octx->ctx->mdev.idx, octx->ctx->mdev.count, &octx->ctx->mdev.count_div);
         row_start = range.start;
         nrows     = range.count;
@@ -243,9 +244,9 @@ int op_cumsum_f32(struct htp_ops_context * octx) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
+    struct htp_cumsum_vtcm_layout layout = { 0 };
     if (kparams->use_dma) {
-        struct htp_cumsum_vtcm_layout layout;
-        htp_cumsum_vtcm_layout_build(&layout, kparams->src_row_size_aligned, kparams->dst_row_size_aligned, n_threads);
+        htp_cumsum_vtcm_layout_build(&layout, src_row_size, dst_row_size, n_threads);
 
         octx->src0_spad.size_per_thread = layout.src0_bytes_per_thread;
         octx->dst_spad.size_per_thread  = layout.dst_bytes_per_thread;
@@ -259,10 +260,10 @@ int op_cumsum_f32(struct htp_ops_context * octx) {
 
     struct htp_cumsum_context cctx = {
         .octx                 = octx,
-        .src_row_size         = kparams->src_row_size,
-        .dst_row_size         = kparams->dst_row_size,
-        .src_row_size_aligned = kparams->src_row_size_aligned,
-        .dst_row_size_aligned = kparams->dst_row_size_aligned,
+        .src_row_size         = src_row_size,
+        .dst_row_size         = dst_row_size,
+        .src_row_size_aligned = layout.src_row_size_aligned,
+        .dst_row_size_aligned = layout.dst_row_size_aligned,
         .rows_per_thread      = fastdiv(nrows + n_threads - 1, &octx->n_threads_div),
         .total_rows           = nrows,
         .row_start            = row_start,

@@ -18,12 +18,6 @@ enum htp_copy_kernel_type {
 };
 
 struct htp_copy_convert_params {
-    uint32_t              src0_buf_size;
-    uint32_t              dst_buf_size;
-    uint32_t              spad0_size_per_thread;
-    uint32_t              spad1_size_per_thread;
-    uint32_t              src0_row_stride;  // row pitch in the VTCM buffers
-    uint32_t              dst_row_stride;
     uint32_t              blk_rows;         // rows moved per DMA descriptor
     struct fastdiv_values div_ne01;
     struct fastdiv_values div_ne02_ne01;
@@ -75,10 +69,14 @@ struct htp_copy_convert_vtcm_layout {
 
 static inline void htp_copy_convert_vtcm_layout_build(
     struct htp_copy_convert_vtcm_layout * L,
-    uint32_t src0_row_stride,
-    uint32_t dst_row_stride,
+    uint32_t ne00,
+    uint32_t src_type_size,
+    uint32_t dst_type_size,
     uint32_t blk_rows,
     uint32_t n_threads) {
+
+    const uint32_t src0_row_stride = hex_round_up(ne00 * src_type_size, 256);
+    const uint32_t dst_row_stride  = hex_round_up(ne00 * dst_type_size, 256);
 
     L->src0_row_stride       = src0_row_stride;
     L->dst_row_stride        = dst_row_stride;
@@ -115,7 +113,7 @@ static inline void htp_copy_convert_solve_layout(
         blk_rows = 1;
     }
 
-    htp_copy_convert_vtcm_layout_build(layout, src0_row_stride, dst_row_stride, blk_rows, n_threads);
+    htp_copy_convert_vtcm_layout_build(layout, ne00, src_type_size, dst_type_size, blk_rows, n_threads);
 }
 
 #if defined(__cplusplus)

@@ -803,8 +803,8 @@ int op_im2col(struct htp_ops_context * octx) {
     ictx.pe_dst_row_bytes       = kparams->dst_row_bytes;
     ictx.pe_vtcm_src            = VTCM_LAYOUT_PTR(uint8_t, base, layout.off_src);
     ictx.pe_vtcm_dst            = VTCM_LAYOUT_PTR(uint8_t, base, layout.off_dst);
-    ictx.pe_src_size_per_thread = kparams->src_bytes_per_thread;
-    ictx.pe_dst_size_per_thread = kparams->dst_bytes_per_thread;
+    ictx.pe_src_size_per_thread = layout.src_bytes_per_thread;
+    ictx.pe_dst_size_per_thread = layout.dst_bytes_per_thread;
     ictx.pe_owb                 = kparams->owb;
     ictx.pe_wb                  = kparams->wb;
     ictx.pe_nbpr                = kparams->nbpr;
@@ -887,8 +887,8 @@ int op_im2col_3d(struct htp_ops_context * octx) {
     ictx.pe_dst_row_bytes       = kparams->dst_row_bytes;
     ictx.pe_vtcm_src            = VTCM_LAYOUT_PTR(uint8_t, base, layout.off_src);
     ictx.pe_vtcm_dst            = VTCM_LAYOUT_PTR(uint8_t, base, layout.off_dst);
-    ictx.pe_src_size_per_thread = kparams->src_bytes_per_thread;
-    ictx.pe_dst_size_per_thread = kparams->dst_bytes_per_thread;
+    ictx.pe_src_size_per_thread = layout.src_bytes_per_thread;
+    ictx.pe_dst_size_per_thread = layout.dst_bytes_per_thread;
     ictx.pe_owb                 = kparams->owb;
     ictx.pe_wb                  = kparams->wb;
     ictx.pe_nbpr                = kparams->nbpr;

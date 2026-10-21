@@ -19,9 +19,6 @@ struct htp_ssm_conv_kernel_params {
     uint32_t vtcm_src1_size_per_thread;
     uint32_t vtcm_dst_size_per_thread;
 
-    uint32_t vtcm_src0_size;
-    uint32_t vtcm_src1_size;
-    uint32_t vtcm_dst_size;
     uint32_t vtcm_size;
     uint32_t silu;
 

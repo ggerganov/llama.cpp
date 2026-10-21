@@ -183,7 +183,7 @@ static std::string format_kernel_params(const htp_opnode & node) {
         const auto * kparams = (const struct htp_gdn_kernel_params *) node.kernel_params;
         const char * path = (kparams->kernel_type == HTP_GDN_KERNEL_HMX_CHUNKED) ? "hmx-chunked" : "hvx-recurrent";
         snprintf(str, max_size, "%s-%s vtcm %u", path, kparams->kda ? "kda" : "scalar",
-                 (unsigned int) (kparams->vtcm_size ? kparams->vtcm_size : kparams->vtcm_per_thread * kparams->n_threads));
+                 (unsigned int) kparams->vtcm_size);
     } else if (node.opcode == HTP_OP_MUL || node.opcode == HTP_OP_ADD || node.opcode == HTP_OP_ADD_ID ||
                node.opcode == HTP_OP_SUB || node.opcode == HTP_OP_DIV) {
         const auto * kparams = (const struct htp_binary_kernel_params *) node.kernel_params;

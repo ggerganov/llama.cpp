@@ -1741,15 +1741,11 @@ static int execute_op_unary(struct htp_ops_context * octx) {
 
     const uint32_t n_threads = octx->n_threads;
 
-    const size_t src0_row_size_aligned = kparams->src0_row_size_aligned;
-    const size_t dst_row_size_aligned  = kparams->dst_row_size_aligned;
-
     // Always 0 for F16 - htp_unary_solve_layout() keeps F16 on the row-block path,
     // since only F32 has unary_task_f32_tiled_* kernels.
     const uint32_t col_tile = kparams->col_tile;
 
     size_t src1_data_row_size = 0;
-    size_t src1_row_size_aligned = kparams->src1_row_size_aligned;
     bool broadcast_weight = kparams->broadcast_weight;
     const struct htp_tensor * src1 = NULL;
 
@@ -1769,14 +1765,13 @@ static int execute_op_unary(struct htp_ops_context * octx) {
     octx->src1_spad.src = NULL;
     octx->dst_spad.src  = NULL;
 
-    FARF(HIGH, "%s: (%ux%ux%ux%u) -> (%ux%ux%ux%u) : src0-vtcm-size %u src1-vtcm-size %u dst-vtcm-size %u\n", op_type,
-         src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
-         kparams->vtcm_src0_size_per_thread * n_threads, kparams->vtcm_src1_size_per_thread * n_threads,
-         kparams->vtcm_dst_size_per_thread * n_threads);
-
     struct htp_unary_vtcm_layout L;
-    htp_unary_vtcm_layout_build(&L, kparams->vtcm_src0_size_per_thread, kparams->vtcm_src1_size_per_thread,
-                                kparams->vtcm_dst_size_per_thread, kparams->n_threads);
+    htp_unary_vtcm_layout_build(&L, octx->op, src0_data_row_size, dst_data_row_size, src1_data_row_size,
+                                src0_elem_size, col_tile, kparams->block, broadcast_weight, kparams->n_threads);
+
+    FARF(HIGH, "%s: (%ux%ux%ux%u) -> (%ux%ux%ux%u) : src0-vtcm-size %zu src1-vtcm-size %zu dst-vtcm-size %zu\n", op_type,
+         src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
+         L.src0_bytes * n_threads, L.src1_bytes * n_threads, L.dst_bytes * n_threads);
 
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
     struct htp_unary_context uctx = {
@@ -1794,13 +1789,13 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         .src1_data_row_size    = src1_data_row_size,
         .dst_data_row_size     = dst_data_row_size,
 
-        .src0_row_size_aligned = src0_row_size_aligned,
-        .src1_row_size_aligned = src1_row_size_aligned,
-        .dst_row_size_aligned  = dst_row_size_aligned,
+        .src0_row_size_aligned = L.src0_row_size_aligned,
+        .src1_row_size_aligned = L.src1_row_size_aligned,
+        .dst_row_size_aligned  = L.dst_row_size_aligned,
 
-        .src0_vtcm_half_size   = kparams->vtcm_src0_size_per_thread >> 1,
-        .src1_vtcm_half_size   = (octx->op == HTP_OP_RMS_NORM_MUL) ? (kparams->vtcm_src1_size_per_thread >> (broadcast_weight ? 0 : 1)) : 0,
-        .dst_vtcm_half_size    = kparams->vtcm_dst_size_per_thread >> 1,
+        .src0_vtcm_half_size   = L.src0_bytes >> 1,
+        .src1_vtcm_half_size   = (octx->op == HTP_OP_RMS_NORM_MUL) ? (L.src1_bytes >> (broadcast_weight ? 0 : 1)) : 0,
+        .dst_vtcm_half_size    = L.dst_bytes >> 1,
 
         .block                 = kparams->block,
         .nc                    = src0->ne[0],
@@ -1811,9 +1806,9 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         .vtcm_src1             = VTCM_LAYOUT_PTR_OPTIONAL(uint8_t, base, L.off_src1, L.src1_bytes > 0),
         .vtcm_dst              = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst),
 
-        .vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread,
-        .vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread,
-        .vtcm_dst_size_per_thread  = kparams->vtcm_dst_size_per_thread,
+        .vtcm_src0_size_per_thread = L.src0_bytes,
+        .vtcm_src1_size_per_thread = L.src1_bytes,
+        .vtcm_dst_size_per_thread  = L.dst_bytes,
     };
 
     FARF(HIGH, "%s: %s mode (col_tile %u)\n", op_type, col_tile ? "tiled" : "row-block", col_tile);

@@ -454,6 +454,7 @@ struct htp_sort_chunk_ctx {
     struct htp_ops_context *              octx;
     const struct htp_sort_kernel_params * kparams;
     uint8_t *                             phase1_base;
+    size_t                                phase1_slot_size;
     float *                               merge_values;
     int32_t *                             merge_indices;
     uint32_t                              real_count[HTP_MAX_NTHREADS];
@@ -464,15 +465,16 @@ static void htp_sort_chunk_job(unsigned int n, unsigned int i, void * data) {
     struct htp_ops_context * octx = cctx->octx;
     const struct htp_sort_kernel_params * kparams = cctx->kparams;
     const struct htp_tensor * src0 = octx->src[0];
+    const struct htp_tensor * dst  = octx->dst;
 
     uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
-    uint32_t ne00        = (uint32_t) kparams->ne00;
+    uint32_t ne00        = src0->ne[0];
     uint32_t chunk_base  = i * chunk_elems;
 
     uint32_t real_count = (chunk_base < ne00) ? MIN(chunk_elems, ne00 - chunk_base) : 0;
     cctx->real_count[i] = real_count;
 
-    uint8_t * spad = cctx->phase1_base + (size_t) kparams->phase1_slot_size * i;
+    uint8_t * spad = cctx->phase1_base + cctx->phase1_slot_size * i;
     float *   values_buf  = (float *) spad;
     int32_t * indices_buf = (int32_t *) (spad + chunk_elems * sizeof(float));
 
@@ -483,7 +485,7 @@ static void htp_sort_chunk_job(unsigned int n, unsigned int i, void * data) {
     const dma_addr_t src_addr = src0->data + (size_t) chunk_base * sizeof(float);
 
     if (kparams->is_top_k) {
-        uint32_t k = (uint32_t) kparams->k;
+        uint32_t k = dst->ne[0];
         uint32_t local_k = MIN(k, chunk_elems);
 
         if (real_count == 0) {
@@ -561,7 +563,7 @@ static void htp_argsort_merge_l1_job(unsigned int n, unsigned int i, void * data
     uint32_t count0 = cctx->real_count[c0];
     uint32_t count1 = cctx->real_count[c1];
 
-    size_t slot_size = (size_t) kparams->phase1_slot_size;
+    size_t slot_size = cctx->phase1_slot_size;
     uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
 
     const float *   val0 = (const float *)   (cctx->phase1_base + slot_size * c0);
@@ -589,7 +591,7 @@ static void htp_argsort_merge_l2_job(unsigned int n, unsigned int i, void * data
     struct htp_sort_chunk_ctx * cctx = mctx->cctx;
     const struct htp_sort_kernel_params * kparams = cctx->kparams;
 
-    size_t slot_size = (size_t) kparams->phase1_slot_size;
+    size_t slot_size = cctx->phase1_slot_size;
     uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
 
     uint32_t off0 = (4 * i) * chunk_elems;
@@ -617,6 +619,9 @@ struct htp_sort_multi_row_ctx {
     struct htp_ops_context *              octx;
     const struct htp_sort_kernel_params * kparams;
     uint8_t *                             phase1_base;
+    size_t                                phase1_slot_size;
+    uint32_t                              row_start;
+    uint32_t                              row_end;
     uint32_t                              nrows_per_thread;
 };
 
@@ -709,7 +714,7 @@ static void htp_sort_multi_row_job(unsigned int n, unsigned int ith, void * data
     const struct htp_tensor * src0 = octx->src[0];
     const struct htp_tensor * dst  = octx->dst;
 
-    uint32_t ne00 = (uint32_t) kparams->ne00;
+    uint32_t ne00 = src0->ne[0];
     uint32_t ne01 = src0->ne[1];
     uint32_t ne02 = src0->ne[2];
 
@@ -721,16 +726,16 @@ static void htp_sort_multi_row_job(unsigned int n, unsigned int ith, void * data
     uint32_t nb2 = dst->nb[2];
     uint32_t nb3 = dst->nb[3];
 
-    uint32_t row_start = (uint32_t) kparams->row_start;
-    uint32_t row_end   = (uint32_t) kparams->row_end;
+    uint32_t row_start = mctx->row_start;
+    uint32_t row_end   = mctx->row_end;
     uint32_t r_start   = row_start + ith * mctx->nrows_per_thread;
     uint32_t r_end     = MIN(r_start + mctx->nrows_per_thread, row_end);
 
     if (r_start >= r_end) return;
 
-    size_t spad_offset = ith * (size_t) (kparams->phase1_slot_size * kparams->n_slots);
+    size_t slot_size = mctx->phase1_slot_size;
+    size_t spad_offset = ith * slot_size * (size_t) kparams->n_slots;
     uint8_t * thread_spad = mctx->phase1_base + spad_offset;
-    size_t slot_size = (size_t) kparams->phase1_slot_size;
 
     uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
     float *   values_buf  = (float *) thread_spad;
@@ -740,7 +745,7 @@ static void htp_sort_multi_row_job(unsigned int n, unsigned int ith, void * data
     struct htp_thread_trace * tr = &octx->ctx->trace[ith];
 
     bool is_top_k = kparams->is_top_k != 0;
-    uint32_t k = (uint32_t) kparams->k;
+    uint32_t k = dst->ne[0];
     enum ggml_sort_order order = (enum ggml_sort_order) kparams->order;
 
     const uint32_t src_bytes = ne00 * sizeof(float);
@@ -855,18 +860,10 @@ static int op_sort_common(struct htp_ops_context * octx, bool is_top_k) {
     uint32_t ne00 = src0->ne[0];
     uint32_t k    = dst->ne[0];
 
-    struct htp_sort_kernel_params kparams_local;
     const struct htp_sort_kernel_params * kparams = (const struct htp_sort_kernel_params *) octx->kernel_params;
 
     if (!htp_ops_context_set_n_threads(octx, kparams->n_threads)) {
         return HTP_STATUS_INVAL_PARAMS;
-    }
-
-    if (octx->ctx->mdev.count > 1) {
-        memcpy(&kparams_local, kparams, sizeof(kparams_local));
-        kparams_local.row_start = (int32_t) row_start;
-        kparams_local.row_end   = (int32_t) row_end;
-        kparams = &kparams_local;
     }
 
     struct htp_sort_vtcm_layout layout;
@@ -890,11 +887,12 @@ static int op_sort_common(struct htp_ops_context * octx, bool is_top_k) {
 
     if (total_rows == 1 && kparams->n_chunks > 1) {
         struct htp_sort_chunk_ctx cctx;
-        cctx.octx          = octx;
-        cctx.kparams       = kparams;
-        cctx.phase1_base   = phase1_base;
-        cctx.merge_values  = merge_values;
-        cctx.merge_indices = merge_indices;
+        cctx.octx             = octx;
+        cctx.kparams          = kparams;
+        cctx.phase1_base      = phase1_base;
+        cctx.phase1_slot_size = layout.phase1_slot_size;
+        cctx.merge_values     = merge_values;
+        cctx.merge_indices    = merge_indices;
         memset(cctx.real_count, 0, sizeof(cctx.real_count));
 
         work_queue_run(octx->ctx->work_queue, htp_sort_chunk_job, &cctx, (uint32_t) kparams->n_chunks);
@@ -945,7 +943,7 @@ static int op_sort_common(struct htp_ops_context * octx, bool is_top_k) {
                 struct htp_argsort_merge_l2_ctx l2ctx = { &cctx, asc };
                 work_queue_run(octx->ctx->work_queue, htp_argsort_merge_l2_job, &l2ctx, 2);
 
-                size_t slot_size = (size_t) kparams->phase1_slot_size;
+                size_t slot_size = layout.phase1_slot_size;
                 uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
 
                 const float *   val0 = (const float *) phase1_base;
@@ -982,7 +980,7 @@ static int op_sort_common(struct htp_ops_context * octx, bool is_top_k) {
                 htp_trace_event_stop(tr, HTP_TRACE_EVT_HVX_COMP, 0);
                 dma_sync_write(octx->ctx->dma[0], dst->data, final_idx, ne00 * sizeof(int32_t));
             } else if (kparams->n_chunks == 2) {
-                size_t slot_size = (size_t) kparams->phase1_slot_size;
+                size_t slot_size = layout.phase1_slot_size;
                 uint32_t chunk_elems = (uint32_t) kparams->chunk_elems;
 
                 const float *   val0 = (const float *)   (phase1_base);
@@ -1006,9 +1004,12 @@ static int op_sort_common(struct htp_ops_context * octx, bool is_top_k) {
     }
 
     struct htp_sort_multi_row_ctx mctx;
-    mctx.octx        = octx;
-    mctx.kparams     = kparams;
-    mctx.phase1_base = phase1_base;
+    mctx.octx             = octx;
+    mctx.kparams          = kparams;
+    mctx.phase1_base      = phase1_base;
+    mctx.phase1_slot_size = layout.phase1_slot_size;
+    mctx.row_start        = row_start;
+    mctx.row_end          = row_end;
 
     uint32_t dst_row_bytes = (uint32_t) dst_row_size;
     uint32_t rows_per_chunk = 0;

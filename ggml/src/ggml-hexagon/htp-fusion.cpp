@@ -1,13 +1,6 @@
 #include "htp-fusion.h"
+#include "htp-kparams.h"
 #include "ggml-impl.h"
-
-#include "htp/allreduce-ops.h"
-#include "htp/binary-ops.h"
-#include "htp/get-rows-ops.h"
-#include "htp/glu-ops.h"
-#include "htp/matmul-ops.h"
-#include "htp/ssm-conv.h"
-#include "htp/unary-ops.h"
 
 #include <algorithm>
 #include <cstring>
@@ -54,159 +47,6 @@ static inline bool htp_match_consumer(
         return true;
     }
     return false;
-}
-
-static bool htp_matmul_add_can_collapse(
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * src2,
-    const struct ggml_tensor * dst
-) {
-    if (!htp_matmul_can_collapse(src0, src1, dst)) {
-        return false;
-    }
-    if (!src2) {
-        return true;
-    }
-    const int64_t src2_nrows = src2->ne[1] * src2->ne[2] * src2->ne[3];
-    if (src2_nrows == 1) {
-        return true;
-    }
-    size_t s2;
-    return src2->nb[0] == ggml_type_size(src2->type) &&
-           ggml_are_same_shape(src2, dst) &&
-           htp_rows_stride(src2->ne, src2->nb, &s2);
-}
-
-static void htp_precompute_fused_matmul_add_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * src2,
-    const struct ggml_tensor * dst,
-    struct htp_mm_kernel_params * kparams
-) {
-    if (htp_matmul_add_can_collapse(src0, src1, src2, dst)) {
-        const ggml_tensor src1_collapsed = htp_tensor_collapse_rows(src1);
-        const ggml_tensor dst_collapsed  = htp_tensor_collapse_rows(dst);
-        const ggml_tensor src2_collapsed = (src2 && (src2->ne[1] * src2->ne[2] * src2->ne[3] > 1))
-                                           ? htp_tensor_collapse_rows(src2)
-                                           : (src2 ? *src2 : ggml_tensor{});
-        const struct ggml_tensor * p_src2 = src2 ? &src2_collapsed : nullptr;
-        const size_t src2_size = p_src2 ? hex_round_up(ggml_nbytes(p_src2), 128) : 0;
-        htp_precompute_matmul_params_impl(sess, src0, &src1_collapsed, &dst_collapsed, p_src2 ? p_src2->nb[1] : 0, src2_size, kparams);
-        kparams->collapse = 1;
-        return;
-    }
-    const size_t src2_size = src2 ? hex_round_up(ggml_nbytes(src2), 128) : 0;
-    htp_precompute_matmul_params_impl(sess, src0, src1, dst, src2 ? src2->nb[1] : 0, src2_size, kparams);
-}
-
-static void htp_precompute_fused_mmnx_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * act,
-    int32_t n_weights,
-    struct htp_mm_kernel_params * kparams
-) {
-    const uint32_t n_threads   = htp_session_n_threads(sess);
-    const uint32_t n_hmx       = htp_session_n_hmx(sess);
-    const size_t   vtcm_budget = htp_session_vtcm_size(sess);
-
-    memset(kparams, 0, sizeof(*kparams));
-    kparams->n_threads = n_threads;
-
-    const int ne00 = src0->ne[0];
-    const int ne01 = src0->ne[1];
-    const int ne02 = src0->ne[2];
-    const int ne03 = src0->ne[3];
-
-    const int ne10 = act->ne[0];
-    const int ne11 = act->ne[1];
-    const int ne12 = act->ne[2];
-    const int ne13 = act->ne[3];
-
-    const bool is_tiled    = htp_tensor_is_tiled(src0);
-    const int  wtype       = (is_tiled && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_BF16)) ? GGML_TYPE_F16 : src0->type;
-    const int  ne00_padded = is_tiled ? hex_round_up(ne00, 32) : ne00;
-    const int  ne11_padded = hex_round_up(ne11, 32);
-    const int  ne01_tiled  = hex_round_up(ne01, 32);
-    const bool is_batched  = (ne02 * ne03 > 1 || ne12 * ne13 > 1);
-
-    const bool hmx_enabled = (n_hmx > 0) && (opt_mm_select >= 2);
-    if (hmx_enabled && htp_matmul_is_hmx_eligible(src0, act, nullptr, false, is_batched)) {
-        if (htp_precompute_hmx_mm_params(sess, src0, act, nullptr, wtype, ne00_padded, ne01_tiled, ne02, ne11, ne12, ne11_padded, false, is_batched, 0, vtcm_budget, kparams)) {
-            kparams->n_weights = n_weights;
-            goto finalize;
-        }
-    }
-
-    if (!is_tiled || act->type != GGML_TYPE_F32 || ne10 % 32 != 0) {
-        kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
-        return;
-    }
-
-    {
-        const int    act_nrows     = ne11 * ne12 * ne13;
-        const size_t act_row_size  = htp_mm_tiled_act_row_size(wtype, ne10);
-        const size_t src0_row_size = src0->nb[1];
-
-        const uint32_t max_prefetch = (act_nrows > HTP_MM_HMX_MIN_NROWS) ? 2 : 16;
-        uint32_t best_n_prefetch = 2;
-        for (uint32_t d = max_prefetch; d >= 2; d /= 2) {
-            struct htp_mm_hvx_vtcm_layout L;
-            htp_mm_hvx_vtcm_layout_build(
-                &L, HTP_MM_KERNEL_HVX_QUANT_ROW, wtype, ne10, act_nrows, n_threads,
-                0, src0_row_size, act_row_size, 0, d, false, true
-            );
-            if (L.total_bytes <= vtcm_budget) {
-                best_n_prefetch = d;
-                break;
-            }
-        }
-
-        struct htp_mm_hvx_vtcm_layout L;
-        htp_mm_hvx_vtcm_layout_build(
-            &L, HTP_MM_KERNEL_HVX_QUANT_ROW, wtype, ne10, act_nrows, n_threads,
-            0, src0_row_size, act_row_size, 0, best_n_prefetch, false, true
-        );
-
-        if (opt_mm_select >= 1 && L.total_bytes <= vtcm_budget) {
-            kparams->kernel_type       = HTP_MM_KERNEL_HVX_QUANT_ROW;
-            kparams->tile_size         = htp_tensor_get_tile_size(wtype);
-            kparams->aligned_tile_size = htp_tensor_get_tile_padded_size(wtype);
-            kparams->act_row_size      = act_row_size;
-            kparams->vtcm_src0_size    = L.src0_bytes;
-            kparams->vtcm_act_size     = L.act_bytes;
-            kparams->vtcm_bias_size    = 0;
-            kparams->vtcm_dst_size     = L.dst_bytes;
-            kparams->vtcm_size         = L.total_bytes;
-            kparams->n_prefetch        = best_n_prefetch;
-            kparams->n_weights         = n_weights;
-        } else {
-            kparams->kernel_type = HTP_MM_KERNEL_UNSUPPORTED;
-            return;
-        }
-    }
-
-finalize:
-    kparams->div_ne12_ne1 = init_fastdiv_values(ne12 * ne11);
-    kparams->div_ne1      = init_fastdiv_values(ne11);
-    kparams->div_r2       = init_fastdiv_values(ne02 > 0 ? ne12 / ne02 : 1);
-    kparams->div_r3       = init_fastdiv_values(ne03 > 0 ? ne13 / ne03 : 1);
-    kparams->div_ne12     = init_fastdiv_values(ne12);
-}
-
-static void htp_precompute_fused_mmidnx_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * act,
-    const struct ggml_tensor * dst,
-    int32_t n_weights,
-    struct htp_mm_kernel_params * kparams
-) {
-    htp_precompute_matmul_params_impl(sess, src0, act, dst, 0, 0, kparams);
-    kparams->n_weights = n_weights;
 }
 
 static bool is_supported_mul_mat_nx_kernel(const ggml_tensor * src0, const struct htp_mm_kernel_params * kparams) {
@@ -303,8 +143,7 @@ static bool fuse_rms_norm_mul(const ggml_hexagon_session * sess, htp_opnode & pr
     if (!is_row_bcast && !is_same_shape) return false;
 
     struct htp_unary_kernel_params kparams;
-    htp_precompute_unary_params(sess, HTP_OP_RMS_NORM_MUL, src0, weight, dst, &kparams);
-    if (kparams.block == 0 || (size_t) kparams.vtcm_size > htp_session_vtcm_size(sess)) {
+    if (!htp_precompute_unary_params(sess, HTP_OP_RMS_NORM_MUL, src0, weight, dst, &kparams)) {
         HEX_VERBOSE("ggml-hex: %s skip RMS_NORM_MUL fusion: VTCM needed (%d) > budget (%zu)\n",
                     htp_session_name(sess), kparams.vtcm_size, htp_session_vtcm_size(sess));
         return false;
@@ -360,20 +199,13 @@ static bool fuse_mul_mat_add(const ggml_hexagon_session * sess, htp_opnode & pre
 
     const auto * orig_kparams = (const struct htp_mm_kernel_params *) prev.kernel_params;
     struct htp_mm_kernel_params kparams;
-    htp_precompute_fused_matmul_add_params(sess, src0, src1, src2, dst, &kparams);
-    if (kparams.kernel_type == HTP_MM_KERNEL_UNSUPPORTED || orig_kparams->collapse != kparams.collapse) {
+    if (!htp_precompute_fused_matmul_add_params(sess, src0, src1, src2, dst, &kparams) ||
+        orig_kparams->collapse != kparams.collapse) {
         return false;
     }
 
     const int src1_nrows = src1->ne[1] * src1->ne[2] * src1->ne[3];
     if (kparams.n_hmx == 0 && src1_nrows != 1) return false;
-
-    const size_t vtcm_size = htp_session_vtcm_size(sess);
-    if ((size_t) kparams.vtcm_size > vtcm_size) {
-        HEX_VERBOSE("ggml-hex: %s skip MUL_MAT_ADD fusion: VTCM needed (%d) > budget (%zu)\n",
-                    htp_session_name(sess), kparams.vtcm_size, vtcm_size);
-        return false;
-    }
 
     if (kparams.n_hmx > 0 && orig_kparams->n_hmx > 0) {
         if (kparams.m_chunk < orig_kparams->m_chunk ||
@@ -426,19 +258,13 @@ static bool fuse_mul_mat_nx(const ggml_hexagon_session * sess, htp_opnode & prev
         struct htp_mm_kernel_params kparams;
         if (collapse) {
             const ggml_tensor x_collapsed = htp_tensor_collapse_rows(x);
-            htp_precompute_fused_mmnx_params(sess, w0, &x_collapsed, curr_n + 1, &kparams);
+            if (!htp_precompute_fused_mmnx_params(sess, w0, &x_collapsed, curr_n + 1, &kparams)) return false;
             kparams.collapse = 1;
-        } else {
-            htp_precompute_fused_mmnx_params(sess, w0, x, curr_n + 1, &kparams);
+        } else if (!htp_precompute_fused_mmnx_params(sess, w0, x, curr_n + 1, &kparams)) {
+            return false;
         }
         if (!is_supported_mul_mat_nx_kernel(w0, &kparams)) return false;
 
-        const size_t vtcm_size = htp_session_vtcm_size(sess);
-        if ((size_t) kparams.vtcm_size > vtcm_size) {
-            HEX_VERBOSE("ggml-hex: %s skip NX fusion: VTCM needed (%d) > budget (%zu)\n",
-                        htp_session_name(sess), kparams.vtcm_size, vtcm_size);
-            return false;
-        }
         memcpy(prev.kernel_params, &kparams, sizeof(kparams));
         prev.opcode = HTP_OP_MUL_MAT_NX;
     }
@@ -477,17 +303,10 @@ static bool fuse_mul_mat_id_nx(const ggml_hexagon_session * sess, htp_opnode & p
     if (d_in->nb[1] == prev.node->nb[1]) {
         kparams = *orig_kparams;
         kparams.n_weights = curr_n + 1;
-    } else {
-        htp_precompute_fused_mmidnx_params(sess, w0, x, d_in, curr_n + 1, &kparams);
-    }
-    if (!is_supported_mul_mat_id_nx_kernel(w0, &kparams)) return false;
-
-    const size_t vtcm_size = htp_session_vtcm_size(sess);
-    if ((size_t) kparams.vtcm_size > vtcm_size) {
-        HEX_VERBOSE("ggml-hex: %s skip ID NX fusion: VTCM needed (%d) > budget (%zu)\n",
-                    htp_session_name(sess), kparams.vtcm_size, vtcm_size);
+    } else if (!htp_precompute_fused_mmidnx_params(sess, w0, x, d_in, curr_n + 1, &kparams)) {
         return false;
     }
+    if (!is_supported_mul_mat_id_nx_kernel(w0, &kparams)) return false;
 
     prev.opcode = HTP_OP_MUL_MAT_ID_NX;
     prev.inputs.insert(prev.inputs.begin() + curr_n, w_in);
@@ -564,11 +383,10 @@ static bool fuse_repeat_get_rows(const ggml_hexagon_session * sess, htp_opnode &
     const ggml_tensor * gr_dst      = cur.dst();
 
     if (repeat_src0->ne[0] != repeat_out->ne[0] || repeat_src0->ne[1] != repeat_out->ne[1]) return false;
-    if (repeat_src0->type != repeat_out->type || !ggml_is_contiguous_rows(repeat_src0)) return false;
+    if (repeat_src0->type != repeat_out->type) return false;
 
     struct htp_get_rows_kernel_params kparams;
-    htp_precompute_get_rows_params(sess, repeat_src0, gr_src1, gr_dst, &kparams);
-    if (kparams.vtcm_size == 0 || (size_t) kparams.vtcm_size > htp_session_vtcm_size(sess)) return false;
+    if (!htp_precompute_get_rows_params(sess, repeat_src0, gr_src1, gr_dst, &kparams) || kparams.vtcm_size == 0) return false;
 
     prev.opcode  = HTP_OP_GET_ROWS;
     prev.inputs  = { repeat_src0, gr_src1 };
@@ -598,7 +416,7 @@ static bool fuse_unary_mul_glu(const ggml_hexagon_session * sess, htp_opnode & p
     if (htp_inputs_overlap_unsafe(prev, dst, up)) return false;
 
     struct htp_glu_kernel_params kparams;
-    if (!htp_precompute_glu_params(sess, gate, up, dst, &kparams)) return false;
+    if (!htp_precompute_glu_params(sess, glu_op, gate, up, dst, &kparams)) return false;
 
     prev.opcode  = glu_op;
     prev.inputs  = { gate, up };

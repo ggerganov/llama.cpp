@@ -503,7 +503,8 @@ int op_pad(struct htp_ops_context * octx) {
 
     const uint32_t total_dst_rows = kparams->total_dst_rows;
     const size_t   type_size      = kparams->type_size;
-    const size_t   dst_row_size   = kparams->dst_row_size;
+    const size_t   src_row_size   = src0->ne[0] * type_size;
+    const size_t   dst_row_size   = dst->ne[0] * type_size;
 
     uint32_t row_start = 0;
     uint32_t nrows     = total_dst_rows;
@@ -530,9 +531,9 @@ int op_pad(struct htp_ops_context * octx) {
         return HTP_STATUS_NO_SUPPORT;
     }
 
+    struct htp_pad_vtcm_layout layout = { 0 };
     if (kparams->use_dma) {
-        struct htp_pad_vtcm_layout layout;
-        htp_pad_vtcm_layout_build(&layout, kparams->src_row_size_aligned, kparams->dst_row_size_aligned, n_threads);
+        htp_pad_vtcm_layout_build(&layout, src_row_size, dst_row_size, n_threads);
 
         octx->src0_spad.size_per_thread = layout.src0_bytes_per_thread;
         octx->dst_spad.size_per_thread  = layout.dst_bytes_per_thread;
@@ -555,10 +556,10 @@ int op_pad(struct htp_ops_context * octx) {
         .total_dst_rows       = nrows,
         .row_start            = row_start,
         .type_size            = type_size,
-        .src_row_size         = kparams->src_row_size,
-        .src_row_size_aligned = kparams->src_row_size_aligned,
+        .src_row_size         = src_row_size,
+        .src_row_size_aligned = layout.src_row_size_aligned,
         .dst_row_size         = dst_row_size,
-        .dst_row_size_aligned = kparams->dst_row_size_aligned,
+        .dst_row_size_aligned = layout.dst_row_size_aligned,
     };
 
     FARF(HIGH, "pad-hvx%s%s: (%ux%ux%ux%u) -> (%ux%ux%ux%u) pads=(%d,%d,%d,%d,%d,%d,%d,%d)\n",

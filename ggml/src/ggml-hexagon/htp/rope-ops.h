@@ -11,12 +11,7 @@
 
 struct htp_rope_kernel_params {
     uint32_t n_threads;
-    uint32_t src0_nrows;
-    uint32_t src0_nrows_per_thread;
     uint32_t vtcm_size;
-    uint32_t spad_per_thread;
-    uint32_t src0_row_size_aligned;
-    uint32_t freq_factors_size;
 
     struct fastdiv_values div_ne2_ne1;
     struct fastdiv_values div_ne1;

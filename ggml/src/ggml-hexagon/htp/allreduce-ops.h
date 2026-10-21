@@ -50,6 +50,12 @@ struct htp_allreduce_kernel_params {
     int32_t mode;                 // enum htp_allreduce_mode: FULL or SHARDED_FANOUT
 };
 
+#if defined(__cplusplus)
+static_assert(sizeof(struct htp_allreduce_kernel_params) <= 128, "htp_allreduce_kernel_params is too large for kernel_params blob");
+#else
+_Static_assert(sizeof(struct htp_allreduce_kernel_params) <= 128, "htp_allreduce_kernel_params is too large for kernel_params blob");
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -950,9 +950,12 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     const size_t src0_row_stride = src0->nb[1];
     const size_t src1_row_stride = src1 ? src1->nb[1] : src0->nb[1];
 
-    const size_t src0_row_size_aligned = kparams->src0_row_size_aligned;
-    const size_t src1_row_size_aligned = kparams->src1_row_size_aligned;
-    const size_t dst_row_size_aligned  = kparams->dst_row_size_aligned;
+    struct htp_glu_vtcm_layout L;
+    htp_glu_vtcm_layout_build(&L, dst_row_size, n_threads, kparams->vtcm_row_per_thread);
+
+    const size_t src0_row_size_aligned = L.row_size_aligned;
+    const size_t src1_row_size_aligned = L.row_size_aligned;
+    const size_t dst_row_size_aligned  = L.row_size_aligned;
 
     // Make sure the reserved vtcm size is sufficient
     if (kparams->vtcm_row_per_thread == 0 || octx->ctx->vtcm_size < kparams->vtcm_size) {
@@ -962,14 +965,14 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     }
 
     if (src1) {
-        FARF(HIGH, "%s: %ux%ux%ux%u x %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %u src1-vtcm-size %u dst-vtcm-size %u\n",
+        FARF(HIGH, "%s: %ux%ux%ux%u x %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %zu src1-vtcm-size %zu dst-vtcm-size %zu\n",
              op_type, src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], src1->ne[0], src1->ne[1], src1->ne[2],
-             src1->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], kparams->vtcm_src0_size_per_thread * n_threads,
-             kparams->vtcm_src1_size_per_thread * n_threads, kparams->vtcm_dst_size_per_thread * n_threads);
+             src1->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], L.src0_bytes_per_thread * n_threads,
+             L.src1_bytes_per_thread * n_threads, L.dst_bytes_per_thread * n_threads);
     } else {
-        FARF(HIGH, "%s: %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %u src1-vtcm-size %u dst-vtcm-size %u\n", op_type,
+        FARF(HIGH, "%s: %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %zu src1-vtcm-size %zu dst-vtcm-size %zu\n", op_type,
              src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
-             kparams->vtcm_src0_size_per_thread * n_threads, kparams->vtcm_src1_size_per_thread * n_threads, kparams->vtcm_dst_size_per_thread * n_threads);
+             L.src0_bytes_per_thread * n_threads, L.src1_bytes_per_thread * n_threads, L.dst_bytes_per_thread * n_threads);
     }
 
     // Prepare context
@@ -991,23 +994,20 @@ static int execute_op_glu_f32(struct htp_ops_context * octx) {
     gctx.src0_row_stride = src0_row_stride;
     gctx.src1_row_stride = src1_row_stride;
 
-    struct htp_glu_vtcm_layout L;
-    htp_glu_vtcm_layout_build(&L, src0_row_size_aligned, src1_row_size_aligned, dst_row_size_aligned, n_threads, kparams->vtcm_row_per_thread);
-
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
     gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0);
     gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src1);
     gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
 
-    gctx.vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread;
-    gctx.vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread;
-    gctx.vtcm_dst_size_per_thread  = kparams->vtcm_dst_size_per_thread;
+    gctx.vtcm_src0_size_per_thread = (uint32_t) L.src0_bytes_per_thread;
+    gctx.vtcm_src1_size_per_thread = (uint32_t) L.src1_bytes_per_thread;
+    gctx.vtcm_dst_size_per_thread  = (uint32_t) L.dst_bytes_per_thread;
 
-    gctx.src0_spad_half_size = kparams->vtcm_src0_size_per_thread >> 1;
-    gctx.src1_spad_half_size = kparams->vtcm_src1_size_per_thread >> 1;
-    gctx.dst_spad_half_size  = kparams->vtcm_dst_size_per_thread  >> 1;
+    gctx.src0_spad_half_size = gctx.vtcm_src0_size_per_thread >> 1;
+    gctx.src1_spad_half_size = gctx.vtcm_src1_size_per_thread >> 1;
+    gctx.dst_spad_half_size  = gctx.vtcm_dst_size_per_thread  >> 1;
 
-    gctx.block      = kparams->block;
+    gctx.block      = L.block;
     gctx.src0_nrows = nrows;
     gctx.row_start  = row_start;
 
@@ -1116,9 +1116,12 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     const size_t src0_row_stride = src0->nb[1];
     const size_t src1_row_stride = src1 ? src1->nb[1] : src0->nb[1];
 
-    const size_t src0_row_size_aligned = kparams->src0_row_size_aligned;
-    const size_t src1_row_size_aligned = kparams->src1_row_size_aligned;
-    const size_t dst_row_size_aligned  = kparams->dst_row_size_aligned;
+    struct htp_glu_vtcm_layout L;
+    htp_glu_vtcm_layout_build(&L, dst_row_size, n_threads, kparams->vtcm_row_per_thread);
+
+    const size_t src0_row_size_aligned = L.row_size_aligned;
+    const size_t src1_row_size_aligned = L.row_size_aligned;
+    const size_t dst_row_size_aligned  = L.row_size_aligned;
 
     // Make sure the reserved vtcm size is sufficient
     if (kparams->vtcm_row_per_thread == 0 || octx->ctx->vtcm_size < kparams->vtcm_size) {
@@ -1128,14 +1131,14 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     }
 
     if (src1) {
-        FARF(HIGH, "%s: %ux%ux%ux%u x %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %u src1-vtcm-size %u dst-vtcm-size %u\n",
+        FARF(HIGH, "%s: %ux%ux%ux%u x %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %zu src1-vtcm-size %zu dst-vtcm-size %zu\n",
              op_type, src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], src1->ne[0], src1->ne[1], src1->ne[2],
-             src1->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], kparams->vtcm_src0_size_per_thread * n_threads,
-             kparams->vtcm_src1_size_per_thread * n_threads, kparams->vtcm_dst_size_per_thread * n_threads);
+             src1->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], L.src0_bytes_per_thread * n_threads,
+             L.src1_bytes_per_thread * n_threads, L.dst_bytes_per_thread * n_threads);
     } else {
-        FARF(HIGH, "%s: %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %u src1-vtcm-size %u dst-vtcm-size %u\n", op_type,
+        FARF(HIGH, "%s: %ux%ux%ux%u -> %ux%ux%ux%u : src0-vtcm-size %zu src1-vtcm-size %zu dst-vtcm-size %zu\n", op_type,
              src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3],
-             kparams->vtcm_src0_size_per_thread * n_threads, kparams->vtcm_src1_size_per_thread * n_threads, kparams->vtcm_dst_size_per_thread * n_threads);
+             L.src0_bytes_per_thread * n_threads, L.src1_bytes_per_thread * n_threads, L.dst_bytes_per_thread * n_threads);
     }
 
     // Prepare context
@@ -1157,23 +1160,20 @@ static int execute_op_glu_f16(struct htp_ops_context * octx) {
     gctx.src0_row_stride = src0_row_stride;
     gctx.src1_row_stride = src1_row_stride;
 
-    struct htp_glu_vtcm_layout L;
-    htp_glu_vtcm_layout_build(&L, src0_row_size_aligned, src1_row_size_aligned, dst_row_size_aligned, n_threads, kparams->vtcm_row_per_thread);
-
     uint8_t * const base = (uint8_t *) octx->ctx->vtcm_base;
     gctx.vtcm_src0 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src0);
     gctx.vtcm_src1 = VTCM_LAYOUT_PTR(uint8_t, base, L.off_src1);
     gctx.vtcm_dst  = VTCM_LAYOUT_PTR(uint8_t, base, L.off_dst);
 
-    gctx.vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread;
-    gctx.vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread;
-    gctx.vtcm_dst_size_per_thread  = kparams->vtcm_dst_size_per_thread;
+    gctx.vtcm_src0_size_per_thread = (uint32_t) L.src0_bytes_per_thread;
+    gctx.vtcm_src1_size_per_thread = (uint32_t) L.src1_bytes_per_thread;
+    gctx.vtcm_dst_size_per_thread  = (uint32_t) L.dst_bytes_per_thread;
 
-    gctx.src0_spad_half_size = kparams->vtcm_src0_size_per_thread >> 1;
-    gctx.src1_spad_half_size = kparams->vtcm_src1_size_per_thread >> 1;
-    gctx.dst_spad_half_size  = kparams->vtcm_dst_size_per_thread  >> 1;
+    gctx.src0_spad_half_size = gctx.vtcm_src0_size_per_thread >> 1;
+    gctx.src1_spad_half_size = gctx.vtcm_src1_size_per_thread >> 1;
+    gctx.dst_spad_half_size  = gctx.vtcm_dst_size_per_thread  >> 1;
 
-    gctx.block      = kparams->block;
+    gctx.block      = L.block;
     gctx.src0_nrows = nrows;
     gctx.row_start  = row_start;
 

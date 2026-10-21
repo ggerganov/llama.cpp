@@ -37,13 +37,9 @@ static inline void htp_im2col_vtcm_layout_build(
 
 struct htp_im2col_kernel_params {
     uint8_t  kernel_type;
-    uint8_t  is_2d;
-    uint8_t  is_3d;
     uint8_t  n_threads;
 
     uint32_t vtcm_size;
-    uint32_t src_bytes_per_thread;
-    uint32_t dst_bytes_per_thread;
     uint32_t src_row_bytes;
     uint32_t dst_row_bytes;
 

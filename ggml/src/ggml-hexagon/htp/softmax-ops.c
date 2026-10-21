@@ -553,17 +553,17 @@ static int execute_op_softmax_f32(struct htp_ops_context * octx) {
         .vtcm_dst              = VTCM_LAYOUT_PTR(uint8_t, vtcm_base, layout.off_dst),
         .vtcm_src1             = VTCM_LAYOUT_PTR_OPTIONAL(uint8_t, vtcm_base, layout.off_src1, kparams->use_src1),
 
-        .vtcm_src0_size_per_thread = kparams->vtcm_src0_size_per_thread,
-        .vtcm_src1_size_per_thread = kparams->vtcm_src1_size_per_thread,
-        .vtcm_dst_size_per_thread  = kparams->vtcm_dst_size_per_thread,
+        .vtcm_src0_size_per_thread = (uint32_t) layout.src0_bytes_per_thread,
+        .vtcm_src1_size_per_thread = (uint32_t) layout.src1_bytes_per_thread,
+        .vtcm_dst_size_per_thread  = (uint32_t) layout.dst_bytes_per_thread,
 
-        .src0_spad_half_size   = kparams->src0_spad_half_size,
-        .src1_spad_half_size   = kparams->src1_spad_half_size,
-        .dst_spad_half_size    = kparams->dst_spad_half_size,
+        .src0_spad_half_size   = (uint32_t) layout.src0_spad_half_size,
+        .src1_spad_half_size   = (uint32_t) layout.src1_spad_half_size,
+        .dst_spad_half_size    = (uint32_t) layout.dst_spad_half_size,
 
-        .src0_row_size_aligned = kparams->src0_row_size_aligned,
-        .src1_row_size_aligned = kparams->src1_row_size_aligned,
-        .dst_row_size_aligned  = kparams->dst_row_size_aligned,
+        .src0_row_size_aligned = (uint32_t) layout.src0_spad_half_size,
+        .src1_row_size_aligned = (uint32_t) layout.src1_spad_half_size,
+        .dst_row_size_aligned  = (uint32_t) layout.dst_spad_half_size,
 
         .use_f16               = kparams->use_f16 != 0,
 

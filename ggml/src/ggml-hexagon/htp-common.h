@@ -99,82 +99,8 @@ const char * htp_session_name(const struct ggml_hexagon_session * sess);
 size_t       htp_session_vtcm_size(const struct ggml_hexagon_session * sess);
 uint32_t     htp_session_n_threads(const struct ggml_hexagon_session * sess);
 uint32_t     htp_session_n_hmx(const struct ggml_hexagon_session * sess);
+uint32_t     htp_session_mdev_count(const struct ggml_hexagon_session * sess);
 
-bool htp_precompute_allreduce_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * dst,
-    uint32_t rank,
-    uint32_t n_ranks,
-    bool has_add,
-    bool is_row_bcast,
-    bool is_shard_ok,
-    struct htp_allreduce_kernel_params * kparams
-);
-
-void htp_precompute_unary_params(
-    const struct ggml_hexagon_session * sess,
-    uint32_t op,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
-    struct htp_unary_kernel_params * kparams
-);
-
-void htp_precompute_get_rows_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
-    struct htp_get_rows_kernel_params * kparams
-);
-
-bool htp_precompute_glu_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
-    struct htp_glu_kernel_params * kparams
-);
-
-void htp_precompute_matmul_params_impl(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
-    size_t src2_row_size,
-    size_t src2_size,
-    struct htp_mm_kernel_params * kparams
-);
-
-bool htp_precompute_hmx_mm_params(
-    const struct ggml_hexagon_session * sess,
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * act,
-    const struct ggml_tensor * dst,
-    int wtype,
-    int ne00_padded,
-    int ne01_padded,
-    int ne02,
-    int ne11,
-    int ne12,
-    int ne11_padded,
-    bool is_matmul_id,
-    bool is_batched,
-    size_t src2_size,
-    size_t vtcm_budget,
-    struct htp_mm_kernel_params * kparams
-);
-
-bool htp_matmul_is_hmx_eligible(
-    const struct ggml_tensor * src0,
-    const struct ggml_tensor * src1,
-    const struct ggml_tensor * dst,
-    bool is_matmul_id,
-    bool is_batched
-);
-
-bool        htp_rows_stride(const int64_t * ne, const size_t * nb, size_t * stride);
-bool        htp_matmul_can_collapse(const struct ggml_tensor * src0, const struct ggml_tensor * src1, const struct ggml_tensor * dst);
-ggml_tensor htp_tensor_collapse_rows(const struct ggml_tensor * t);
+htp_op_code  htp_op_remap(const struct ggml_tensor * t);
 
 #endif // HTP_COMMON_H

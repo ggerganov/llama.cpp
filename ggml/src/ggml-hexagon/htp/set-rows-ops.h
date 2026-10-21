@@ -2,6 +2,7 @@
 #define HTP_SET_ROWS_OPS_H
 
 #include "hex-fastdiv.h"
+#include "htp-tensor.h"
 #include "htp-vtcm.h"
 
 struct htp_set_rows_kernel_params {
@@ -35,22 +36,8 @@ static inline void htp_set_rows_vtcm_layout_build(
     uint32_t ne00,
     uint32_t n_threads) {
 
-    size_t src0_row_size = ne00 * 4;
-    size_t dst_row_size = 0;
-    switch (dst_type) {
-        case 0: // HTP_TYPE_F32
-            dst_row_size = ne00 * 4;
-            break;
-        case 1: // HTP_TYPE_F16
-            dst_row_size = ne00 * 2;
-            break;
-        case 8: // HTP_TYPE_Q8_0
-            dst_row_size = (ne00 >> 5) * 34;
-            break;
-        default:
-            dst_row_size = 0;
-            break;
-    }
+    size_t src0_row_size = ne00 * sizeof(float);
+    size_t dst_row_size  = htp_tensor_get_row_size(dst_type, ne00);
 
     size_t src0_row_size_aligned = (src0_row_size + 255) & ~255;
     size_t dst_row_size_aligned  = (dst_row_size + 255) & ~255;

@@ -37,13 +37,7 @@ struct htp_gdn_kernel_params {
     uint32_t K;
 
     uint32_t total_rows;
-    uint32_t row_start;
-    uint32_t nrows;
-    uint32_t rows_per_thread;
-
     uint32_t kda;
-    uint32_t state_aligned;
-    uint32_t vtcm_per_thread;
     uint32_t vtcm_size;
     uint32_t state_seq_stride;
     uint32_t state_size_per_snap;
