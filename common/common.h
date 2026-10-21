@@ -374,6 +374,18 @@ struct common_params_speculative_ngram_cache {
     std::string lookup_cache_dynamic; // path of dynamic ngram cache file for lookup decoding
 };
 
+// LMCache: conversation states kept in RAM / on disk and restored for a prompt that starts with one (llama-server)
+struct common_params_lmcache {
+    bool        enabled      = false;
+    int32_t     chunk_size   = 256;   // prompts are matched in steps of this many tokens
+    int32_t     ram_mb       = 8192;  // RAM for the states
+    bool        disk_enabled = false; // also keep them on disk (survives restarts)
+    std::string disk_dir     = "./data/lmcache";
+    int32_t     disk_max_mb  = 65536;
+    int32_t     disk_idle_sec = 30;   // write new states to disk only after this many seconds without requests (and at shutdown)
+    int32_t     max_checkpoints = 4;  // context checkpoints kept with each saved state (half the earliest, half the latest)
+};
+
 struct common_params_speculative {
     std::vector<enum common_speculative_type> types = { COMMON_SPECULATIVE_TYPE_NONE };
 
@@ -640,6 +652,7 @@ struct common_params {
     int32_t kv_unified_per_slot = 0;     // max context per parallel slot; 0 = unset
     int32_t checkpoint_min_step = 8192;  // minimum spacing between context checkpoints
     int32_t cache_ram_mib       = 8192;  // -1 = no limit, 0 - disable, 1 = 1 MiB, etc.
+    common_params_lmcache lmcache;       // --lmcache, see tools/server/server-lmcache.h
     bool    cache_ram_explicit  = false; // set by --cache-ram, decision models disable the cache otherwise
 
     // llama-connect params

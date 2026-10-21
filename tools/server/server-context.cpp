@@ -6,6 +6,7 @@
 #include "server-common.h"
 #include "server-decision.h"
 #include "server-http.h"
+#include "server-lmcache.h"
 #include "server-task.h"
 #include "server-queue.h"
 #include "server-schema.h"
@@ -259,6 +260,8 @@ struct server_slot {
 
     llama_context * ctx_tgt = nullptr;
     llama_context * ctx_dft = nullptr;
+
+    server_lmcache * lmcache = nullptr; // --lmcache, shared by the slots
 
     common_memory mem;
 
@@ -644,6 +647,11 @@ struct server_slot {
             GGML_ASSERT(task);
 
             SLT_INF(*this, "stop processing: n_tokens = %d, truncated = %d\n", prompt.n_tokens(), truncated);
+
+            // LMCache: keep the finished conversation (its state holds exactly these tokens), text-only, without a draft model
+            if (lmcache && !task->is_child() && !task->is_stateless() && ctx_dft == nullptr && !prompt.tokens.has_mtmd) {
+                lmcache->save(ctx_tgt, id, prompt.tokens.get_tokens(), prompt.checkpoints);
+            }
 
             t_last_used = ggml_time_us();
 
@@ -1092,6 +1100,7 @@ private:
     int n_empty_consecutive = 0;
 
     std::unique_ptr<server_prompt_cache> prompt_cache;
+    std::unique_ptr<server_lmcache>      lmcache;
 
     server_metrics metrics;
 
@@ -1584,6 +1593,14 @@ private:
             SRV_TRC("%s", "prompt cache is disabled - use `--cache-ram N` to enable it\n");
         }
         SRV_TRC("%s", "for more info see https://github.com/ggml-org/llama.cpp/pull/16391\n");
+
+        if (params_base.lmcache.enabled) {
+            lmcache = std::make_unique<server_lmcache>(params_base.lmcache,
+                    llama_model_is_recurrent(model_tgt) || llama_model_is_hybrid(model_tgt));
+            for (auto & slot : slots) {
+                slot.lmcache = lmcache.get();
+            }
+        }
 
         if (params_base.n_ctx_checkpoints > 0) {
             SRV_TRC("context checkpoints enabled, max = %d, min spacing = %d\n",
@@ -3970,6 +3987,35 @@ private:
                             if (slot.task->params.cache_prompt && !slot.task->is_stateless()) {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 n_past = slot.prompt.tokens.get_common_prefix(input_tokens);
+
+                                // LMCache: a conversation saved by any slot (or a previous run) from which this prompt can resume further than
+                                // from the slot's own state replaces it; only where nothing below cuts n_past back on its own
+                                if (lmcache && slot.ctx_dft == nullptr && !input_tokens.has_mtmd && slot.task->n_tokens_shared == 0 &&
+                                    n_decision_first < 0 && slot.alora_invocation_start <= 0) {
+                                    server_lmcache::restored r;
+                                    if (lmcache->restore(ctx_tgt, slot.id, input_tokens.get_tokens(), (size_t) n_past, r)) {
+                                        // the slot now holds the entry exactly as if it had processed it: its tokens, its state and its
+                                        // checkpoints; the slot's own checkpoints stay valid inside the tokens both share with the prompt
+                                        std::list<common_prompt_checkpoint> ckpts;
+                                        const llama_pos n_valid = (llama_pos) std::min<size_t>((size_t) n_past, r.n_common);
+                                        for (auto & c : slot.prompt.checkpoints) {
+                                            if (c.pos_max < n_valid) {
+                                                ckpts.push_back(std::move(c));
+                                            }
+                                        }
+                                        for (auto & c : r.checkpoints) {
+                                            const bool dup = std::any_of(ckpts.begin(), ckpts.end(), [&](const auto & k) { return k.pos_max == c.pos_max; });
+                                            if (!dup) {
+                                                ckpts.push_back(std::move(c));
+                                            }
+                                        }
+                                        ckpts.sort([](const auto & x, const auto & y) { return x.pos_max < y.pos_max; });
+                                        slot.prompt.tokens      = server_tokens(r.tokens, false);
+                                        slot.prompt.checkpoints = std::move(ckpts);
+                                        // the shared tokens; the code below goes back to a checkpoint if the state must be cut back
+                                        n_past = (int) r.n_common;
+                                    }
+                                }
 
                                 // the children start from the shared prefix, do not go past it
                                 if (slot.task->n_tokens_shared > 0) {

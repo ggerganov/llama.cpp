@@ -1725,6 +1725,106 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_CACHE_RAM").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
     add_opt(common_arg(
+        {"--lmcache"},
+        "LMCache: keep the state of finished conversations and restore the longest one whose tokens start a new prompt, from any slot "
+        "(default: disabled)",
+        [](common_params & params) {
+            params.lmcache.enabled = true;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-chunk-size"}, "N",
+        string_format("LMCache: prompts are matched in steps of N tokens, 16..8192 (default: %d)", params.lmcache.chunk_size),
+        [](common_params & params, int value) {
+            if (value < 16 || value > 8192) {
+                throw std::invalid_argument("invalid lmcache chunk size");
+            }
+            params.lmcache.chunk_size = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_CHUNK_SIZE").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-ram-mb"}, "N",
+        string_format("LMCache: RAM in MiB for the states (default: %d)", params.lmcache.ram_mb),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid lmcache ram size");
+            }
+            params.lmcache.ram_mb = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_RAM_MB").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-disk"},
+        "LMCache: also keep the states on disk, they survive restarts (default: disabled)",
+        [](common_params & params) {
+            params.lmcache.disk_enabled = true;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_DISK").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-disk-dir"}, "DIR",
+        string_format("LMCache: folder for the states on disk (default: %s)", params.lmcache.disk_dir.c_str()),
+        [](common_params & params, const std::string & value) {
+            params.lmcache.disk_dir = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_DISK_DIR").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-disk-max-mb"}, "N",
+        string_format("LMCache: disk space in MiB, the oldest files go first (default: %d)", params.lmcache.disk_max_mb),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid lmcache disk max size");
+            }
+            params.lmcache.disk_max_mb = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_DISK_MAX_MB").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-disk-idle-sec"}, "N",
+        string_format("LMCache: write new states to disk only after N seconds without requests, and at shutdown; the earlier turns of a "
+                      "conversation are not written (default: %d)", params.lmcache.disk_idle_sec),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid lmcache disk idle time");
+            }
+            params.lmcache.disk_idle_sec = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_DISK_IDLE_SEC").set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-checkpoints"}, "N",
+        string_format("LMCache: context checkpoints kept with each saved state, half the earliest and half the latest; they let a later prompt "
+                      "that changes earlier (a compacted conversation) restart near the change (default: %d, 0 = none)", params.lmcache.max_checkpoints),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid lmcache checkpoint count");
+            }
+            params.lmcache.max_checkpoints = value;
+        }
+    ).set_env("LLAMA_ARG_LMCACHE_CHECKPOINTS").set_examples({LLAMA_EXAMPLE_SERVER}));
+    // accepted so older launch settings keep working; they do nothing
+    add_opt(common_arg(
+        {"--lmcache-blend"},
+        "LMCache: ignored (not implemented), kept for compatibility",
+        [](common_params &) {}
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-blend-recompute"}, "F",
+        "LMCache: ignored (not implemented), kept for compatibility",
+        [](common_params &, const std::string &) {}
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-blend-min-tokens"}, "N",
+        "LMCache: ignored (not implemented), kept for compatibility",
+        [](common_params &, int) {}
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-compress"}, "TYPE",
+        "LMCache: ignored (states are stored as they are), kept for compatibility",
+        [](common_params &, const std::string &) {}
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
+        {"--lmcache-async-save"}, {"--no-lmcache-async-save"},
+        "LMCache: ignored (disk writes are always on a background thread), kept for compatibility",
+        [](common_params &, bool) {}
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    add_opt(common_arg(
         {"-kvu", "--kv-unified"},
         {"-no-kvu", "--no-kv-unified"},
         "use single unified KV buffer shared across all sequences (default: enabled if number of slots is auto)",
