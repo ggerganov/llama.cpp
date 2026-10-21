@@ -3840,9 +3840,10 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
                         }
 
                         // Metaspace prepend_scheme "first": add U+2581 only at the start of the input
+                        static const std::string escaped_space = "\xE2\x96\x81";
                         if (metaspace_prepend_scheme == LLAMA_METASPACE_PREPEND_SCHEME_FIRST &&
-                            &fragment == &fragment_buffer.front() && text.rfind("\xe2\x96\x81", 0) != 0) {
-                            text.insert(0, "\xe2\x96\x81");
+                            &fragment == &fragment_buffer.front() && text.rfind(escaped_space, 0) != 0) {
+                            text.insert(0, escaped_space);
                         }
 
 #ifdef PRETOKENIZERDEBUG
