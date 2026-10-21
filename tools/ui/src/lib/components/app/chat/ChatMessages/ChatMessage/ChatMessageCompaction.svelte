@@ -3,7 +3,6 @@
 	import {
 		ChatMessageActionIcons,
 		ChatMessageAssistantModel,
-		ChatMessageAssistantProcessingInfo,
 		ChatMessageAssistantStatistics,
 		ChatMessageEditForm,
 		CollapsibleContentBlock,
@@ -51,13 +50,18 @@
 		if (isSummarizing) processingState.startMonitoring();
 	});
 
-	// The toggle only names the phase: the numbers live in the body, where the
-	// processing line reports them the way an assistant turn does.
+	// The header carries the run: the prompt progress until the summary starts
+	// streaming, the phase after that. There is nothing to collapse before the
+	// first summary token arrives.
 	const runningLabel = $derived.by(() => {
 		// The prompt is through: whatever streams in now is the summary itself.
-		if (hasContent) return COMPACTION_GENERATING_LABEL;
+		if (hasContent) return `${COMPACTION_RUNNING_LABEL} — ${COMPACTION_GENERATING_LABEL}`;
 
-		return `${COMPACTION_RUNNING_LABEL}...`;
+		const progress = processingState.getPromptProgressText();
+
+		return progress
+			? `${COMPACTION_RUNNING_LABEL} — ${progress}`
+			: `${COMPACTION_RUNNING_LABEL}...`;
 	});
 
 	// Shrinking the branch is the feature's own headline, so the finished
@@ -93,6 +97,7 @@
 		<CollapsibleContentBlock
 			bind:open
 			class="my-2"
+			collapsible={hasContent}
 			icon={FoldVertical}
 			iconClass="h-3.5 w-3.5"
 			onToggle={() => (userChoseOpen = open)}
@@ -100,16 +105,6 @@
 			{title}
 			variant="divider"
 		>
-			{#if isSummarizing}
-				<div class="mt-2">
-					<ChatMessageAssistantProcessingInfo
-						modelLoadingText={null}
-						position="inline"
-						{processingState}
-					/>
-				</div>
-			{/if}
-
 			<MarkdownContent class="text-muted-foreground" content={message.content} />
 
 			<!-- The summary's own metadata lives with the summary, so the divider

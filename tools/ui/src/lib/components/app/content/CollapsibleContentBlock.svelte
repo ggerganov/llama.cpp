@@ -21,6 +21,11 @@
 		 * section boundary in the conversation instead of decorating a message.
 		 */
 		variant?: 'default' | 'divider';
+		/**
+		 * Render the header only, without a chevron or a body, for a block that
+		 * has nothing to show yet and turns into a collapsible once it has.
+		 */
+		collapsible?: boolean;
 		onToggle?: () => void;
 		children: Snippet;
 	}
@@ -28,6 +33,7 @@
 	let {
 		children,
 		class: className = '',
+		collapsible = true,
 		icon: IconComponent,
 		iconClass = ICON_CLASS_DEFAULT,
 		iconUrl = null,
@@ -58,6 +64,27 @@
 	{/if}
 {/snippet}
 
+{#snippet dividerRow()}
+	<span aria-hidden="true" class="h-px min-w-4 flex-1 bg-current opacity-25"></span>
+
+	<div class="flex min-w-0 items-center gap-1.5">
+		{@render toggleIcon('')}
+
+		{@render toggleTitle('text-xs whitespace-nowrap')}
+
+		{#if collapsible}
+			<ChevronDown
+				class={cn(
+					'size-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-150 ease-out',
+					open && 'rotate-180'
+				)}
+			/>
+		{/if}
+	</div>
+
+	<span aria-hidden="true" class="h-px min-w-4 flex-1 bg-current opacity-25"></span>
+{/snippet}
+
 {#snippet toggleTitle(layoutClass: string)}
 	<span
 		class={cn(
@@ -86,26 +113,15 @@
 	}}
 	{open}
 >
-	{#if variant === 'divider'}
+	{#if variant === 'divider' && !collapsible}
+		<div class="flex w-full items-center gap-2 py-1.5 text-muted-foreground">
+			{@render dividerRow()}
+		</div>
+	{:else if variant === 'divider'}
 		<Collapsible.Trigger
 			class="flex w-full cursor-pointer items-center gap-2 py-1.5 text-muted-foreground"
 		>
-			<span aria-hidden="true" class="h-px min-w-4 flex-1 bg-current opacity-25"></span>
-
-			<div class="flex min-w-0 items-center gap-1.5">
-				{@render toggleIcon('')}
-
-				{@render toggleTitle('text-xs whitespace-nowrap')}
-
-				<ChevronDown
-					class={cn(
-						'size-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-150 ease-out',
-						open && 'rotate-180'
-					)}
-				/>
-			</div>
-
-			<span aria-hidden="true" class="h-px min-w-4 flex-1 bg-current opacity-25"></span>
+			{@render dividerRow()}
 
 			<span class="sr-only">Toggle content</span>
 		</Collapsible.Trigger>
@@ -133,16 +149,18 @@
 		</Collapsible.Trigger>
 	{/if}
 
-	<Collapsible.Content>
-		<!-- Collapsible.Content renders its children unconditionally and only sets
-		     `hidden`, so a closed block would keep re-rendering its whole body on
-		     every streamed token. Gate on `open` so collapsed content costs nothing. -->
-		{#if open}
-			<div class="pl-1.5 grid min-w-0" style="min-height: var(--min-message-height);">
-				<div class="min-w-0 border-l border-muted-foreground/20 pl-4 pb-2 my-2">
-					{@render children()}
+	{#if collapsible}
+		<Collapsible.Content>
+			<!-- Collapsible.Content renders its children unconditionally and only sets
+			     `hidden`, so a closed block would keep re-rendering its whole body on
+			     every streamed token. Gate on `open` so collapsed content costs nothing. -->
+			{#if open}
+				<div class="pl-1.5 grid min-w-0" style="min-height: var(--min-message-height);">
+					<div class="min-w-0 border-l border-muted-foreground/20 pl-4 pb-2 my-2">
+						{@render children()}
+					</div>
 				</div>
-			</div>
-		{/if}
-	</Collapsible.Content>
+			{/if}
+		</Collapsible.Content>
+	{/if}
 </Collapsible.Root>
