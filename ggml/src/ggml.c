@@ -546,9 +546,6 @@ static BOOL CALLBACK ggml_time_init_once(PINIT_ONCE once, PVOID param, PVOID *ct
     QueryPerformanceFrequency(&t);
     timer_freq = t.QuadPart;
 
-    // The multiplication by 1000 or 1000000 below can cause an overflow if timer_freq
-    // and the uptime is high enough.
-    // We subtract the program start time to reduce the likelihood of that happening.
     QueryPerformanceCounter(&t);
     timer_start = t.QuadPart;
 
@@ -561,12 +558,14 @@ void ggml_time_init(void) {
 int64_t ggml_time_ms(void) {
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
-    return ((t.QuadPart-timer_start) * 1000) / timer_freq;
+    const int64_t ticks = t.QuadPart - timer_start;
+    return (ticks / timer_freq) * 1000 + ((ticks % timer_freq) * 1000) / timer_freq;
 }
 int64_t ggml_time_us(void) {
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
-    return ((t.QuadPart-timer_start) * 1000000) / timer_freq;
+    const int64_t ticks = t.QuadPart - timer_start;
+    return (ticks / timer_freq) * 1000000 + ((ticks % timer_freq) * 1000000) / timer_freq;
 }
 #else
 void ggml_time_init(void) {}
