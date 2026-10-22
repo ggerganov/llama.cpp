@@ -966,8 +966,13 @@ struct ggml_backend_sched {
     ggml_backend_sched_eval_callback callback_eval;
     void * callback_eval_user_data;
 
+    bool input_batch;
+    ggml_backend_buffer_t input_batch_buffer;
+
     ggml_backend_sched_copy_callback callback_copy;
     void * callback_copy_user_data;
+    ggml_backend_sched_copy_callback callback_copy_async;
+    void * callback_copy_async_user_data;
 
     ggml_backend_sched_realloc_callback callback_realloc;
     void * callback_realloc_user_data;
@@ -1820,7 +1825,7 @@ static bool ggml_backend_sched_is_host_weight(const struct ggml_tensor * t) {
         ggml_backend_buffer_is_host(t->buffer);
 }
 
-static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggml_backend_sched_split * split, struct ggml_tensor * input) {
+static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggml_backend_sched_split * split, struct ggml_tensor * input, bool same_stream) {
     const int split_backend_id = split->backend_id;
     ggml_backend_t split_backend = sched->backends[split_backend_id];
     ggml_backend_t input_backend = ggml_backend_sched_get_tensor_backend(sched, input);
@@ -1834,6 +1839,11 @@ static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggm
             ggml_backend_synchronize(split_backend);
         }
         ggml_backend_tensor_copy(input, input_cpy);
+        return;
+    }
+
+    if (same_stream && sched->callback_copy_async != NULL && ggml_backend_sched_is_host_weight(input) &&
+        sched->callback_copy_async(split_backend, input, input_cpy, &split->graph, sched->callback_copy_async_user_data)) {
         return;
     }
 
@@ -1862,11 +1872,93 @@ static void ggml_backend_sched_copy_input(ggml_backend_sched_t sched, struct ggm
     }
 }
 
-static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
+static bool ggml_backend_sched_copy_input_batch(ggml_backend_sched_t sched, struct ggml_backend_sched_split * split) {
+    constexpr int max_inputs = 128;
+    if (split->n_inputs > max_inputs) {
+        return false;
+    }
+    ggml_backend_t backend = sched->backends[split->backend_id];
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend));
+    using copy_batch_fn = bool (*)(ggml_backend_t, const ggml_tensor * const *, ggml_tensor * const *, int, ggml_backend_buffer_t *);
+    auto copy_batch = (copy_batch_fn) ggml_backend_reg_get_proc_address(reg, "ggml_backend_hip_copy_input_batch");
+    if (!copy_batch) {
+        return false;
+    }
+
+    const ggml_tensor * src[max_inputs];
+    ggml_tensor * dst[max_inputs];
+    int count = 0;
+    for (int i = 0; i < split->n_inputs; ++i) {
+        ggml_tensor * input = split->inputs[i];
+        if (ggml_backend_sched_is_host_weight(input)) {
+            continue;
+        }
+        ggml_backend_t producer = ggml_backend_sched_get_tensor_backend(sched, input);
+        if (!producer || !input->buffer || !ggml_backend_buffer_is_host(input->buffer) ||
+            ggml_backend_buffer_get_usage(input->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS ||
+            strcmp(ggml_backend_reg_name(ggml_backend_dev_backend_reg(ggml_backend_get_device(producer))), "CPU") != 0) {
+            return false;
+        }
+        src[count] = input;
+        dst[count] = tensor_copy(input, split->backend_id, sched->cur_copy);
+        ++count;
+    }
+    if (count == 0) {
+        return false;
+    }
+    for (int i = 0; i < sched->n_backends; ++i) {
+        if (i != split->backend_id) {
+            ggml_backend_synchronize(sched->backends[i]);
+        }
+    }
+    return copy_batch(backend, src, dst, count, &sched->input_batch_buffer);
+}
+
+static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched, bool input_batch) {
     GGML_ASSERT(sched);
     struct ggml_backend_sched_split * splits = sched->splits;
 
+    int input_batch_split = -1;
+    if (input_batch && sched->n_copies == 1 && !sched->callback_eval) {
+        int n_gpu = 0;
+        bool supported = true;
+        for (int i = 0; i < sched->n_backends; ++i) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(sched->backends[i]);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                ++n_gpu;
+            }
+        }
+        for (int i = 0; i < sched->n_splits; ++i) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(sched->backends[splits[i].backend_id]);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                if (input_batch_split >= 0 || i != sched->n_splits - 1) {
+                    supported = false;
+                }
+                input_batch_split = i;
+            } else if (strcmp(ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev)), "CPU") != 0) {
+                supported = false;
+            }
+        }
+        if (!supported || n_gpu != 1) {
+            input_batch_split = -1;
+        }
+    }
+
     int prev_backend_id = -1;
+    int stream_backend_id = -1;
+    if (sched->callback_copy_async != NULL && sched->n_copies == 1) {
+        for (int i = 0; i < sched->n_splits; ++i) {
+            const int id = splits[i].backend_id;
+            if (ggml_backend_dev_type(ggml_backend_get_device(sched->backends[id])) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                continue;
+            }
+            if (stream_backend_id >= 0 && stream_backend_id != id) {
+                stream_backend_id = -2;
+                break;
+            }
+            stream_backend_id = id;
+        }
+    }
 
     for (int split_id = 0; split_id < sched->n_splits; split_id++) {
         struct ggml_backend_sched_split * split = &splits[split_id];
@@ -1885,14 +1977,17 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
 
         // copy the input tensors to the split backend
         // the weights in host memory are copied last, so that the copy callback can read the other inputs of the split
-        for (int input_id = 0; input_id < split->n_inputs; input_id++) {
-            if (!ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
-                ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
+        const bool inputs_copied = split_id == input_batch_split && ggml_backend_sched_copy_input_batch(sched, split);
+        if (!inputs_copied) {
+            for (int input_id = 0; input_id < split->n_inputs; input_id++) {
+                if (!ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
+                    ggml_backend_sched_copy_input(sched, split, split->inputs[input_id], stream_backend_id == split_backend_id && prev_backend_id == split_backend_id);
+                }
             }
         }
         for (int input_id = 0; input_id < split->n_inputs; input_id++) {
             if (ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
-                ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
+                ggml_backend_sched_copy_input(sched, split, split->inputs[input_id], stream_backend_id == split_backend_id && prev_backend_id == split_backend_id);
             }
         }
 
@@ -2027,6 +2122,7 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
             ggml_backend_event_free(sched->events[b][c]);
         }
     }
+    ggml_backend_buffer_free(sched->input_batch_buffer);
     ggml_gallocr_free(sched->galloc);
     ggml_free(sched->ctx);
     ggml_hash_set_free(&sched->hash_set);
@@ -2049,6 +2145,7 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
 
 void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     GGML_ASSERT(sched);
+    sched->input_batch = false;
     // reset state for the next run
     if (!sched->is_reset) {
         ggml_hash_set_reset(&sched->hash_set);
@@ -2117,6 +2214,8 @@ enum ggml_status ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, st
 
 enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
     GGML_ASSERT(sched);
+    const bool input_batch = sched->input_batch && sched->is_alloc;
+    sched->input_batch = false;
     if (!sched->is_reset && !sched->is_alloc) {
         ggml_backend_sched_reset(sched);
     }
@@ -2127,7 +2226,7 @@ enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sch
         }
     }
 
-    return ggml_backend_sched_compute_splits(sched);
+    return ggml_backend_sched_compute_splits(sched, input_batch);
 }
 
 void ggml_backend_sched_synchronize(ggml_backend_sched_t sched) {
@@ -2143,6 +2242,11 @@ void ggml_backend_sched_synchronize(ggml_backend_sched_t sched) {
     }
 }
 
+void ggml_backend_sched_set_input_batch(ggml_backend_sched_t sched, bool enabled) {
+    GGML_ASSERT(sched);
+    sched->input_batch = enabled;
+}
+
 void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data) {
     GGML_ASSERT(sched);
     sched->callback_eval = callback;
@@ -2153,6 +2257,12 @@ void ggml_backend_sched_set_copy_callback(ggml_backend_sched_t sched, ggml_backe
     GGML_ASSERT(sched);
     sched->callback_copy = callback;
     sched->callback_copy_user_data = user_data;
+}
+
+void ggml_backend_sched_set_copy_async_callback(ggml_backend_sched_t sched, ggml_backend_sched_copy_callback callback, void * user_data) {
+    GGML_ASSERT(sched);
+    sched->callback_copy_async = callback;
+    sched->callback_copy_async_user_data = user_data;
 }
 
 void ggml_backend_sched_set_realloc_callback(ggml_backend_sched_t sched, ggml_backend_sched_realloc_callback callback, void * user_data) {

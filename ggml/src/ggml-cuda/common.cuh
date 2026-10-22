@@ -4,6 +4,8 @@
 #include "ggml-impl.h"
 #include "ggml-cuda.h"
 
+#include <atomic>
+#include <cstring>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -1261,9 +1263,36 @@ struct ggml_tensor_extra_gpu {
 #define USE_CUDA_GRAPH
 #endif
 
+inline bool ggml_cuda_captured_exec_reuse_enabled() {
+#if defined(GGML_USE_HIP)
+    static const bool enabled = [] {
+        const char * value = std::getenv("GGML_CUDA_CAPTURED_EXEC_REUSE");
+        return value && std::strcmp(value, "1") == 0;
+    }();
+    return enabled;
+#else
+    return false;
+#endif
+}
+
+inline std::atomic<uint64_t> & ggml_cuda_storage_epoch() {
+    static std::atomic<uint64_t> epoch{1};
+    return epoch;
+}
+
+inline void ggml_cuda_storage_changed() {
+    if (!ggml_cuda_captured_exec_reuse_enabled()) return;
+    auto & epoch = ggml_cuda_storage_epoch();
+    uint64_t value = epoch.load(std::memory_order_acquire);
+    while (value != UINT64_MAX && !epoch.compare_exchange_weak(value, value + 1, std::memory_order_acq_rel)) {}
+}
+
 struct ggml_cuda_graph {
 #ifdef USE_CUDA_GRAPH
     ~ggml_cuda_graph() {
+#if defined(GGML_USE_HIP)
+        captured_exec.reset();
+#endif
         if (instance != nullptr) {
             CUDA_CHECK(cudaGraphExecDestroy(instance));
         }
@@ -1286,6 +1315,28 @@ struct ggml_cuda_graph {
         size_t   node_src_nb[GGML_MAX_SRC][GGML_MAX_DIMS];
     };
     std::vector<node_properties> node_props;
+#if defined(GGML_USE_HIP)
+    struct captured_exec_state {
+        std::vector<node_properties> props;
+        std::vector<const ggml_tensor *> nodes;
+        std::vector<std::array<ggml_tensor, GGML_MAX_SRC>> sources;
+        std::vector<std::array<int, GGML_MAX_SRC>> source_usage;
+        std::vector<int> node_usage;
+        std::vector<std::array<uint64_t, 20>> layers;
+        cudaGraphExec_t instance = nullptr;
+        const ggml_cuda_pool * pool = nullptr;
+        uint64_t generation = 0;
+        uint64_t epoch = 0;
+    };
+    std::unique_ptr<captured_exec_state> captured_exec;
+    uint64_t exec_generation = 0;
+
+    void invalidate_captured_exec() {
+        if (!ggml_cuda_captured_exec_reuse_enabled()) return;
+        captured_exec.reset();
+        if (exec_generation != UINT64_MAX) ++exec_generation;
+    }
+#endif
 
     bool is_enabled() const {
         static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
@@ -1471,7 +1522,7 @@ struct ggml_backend_cuda_context {
         if (time_now - last_graph_eviction_sweep >= 5'000'000) {
             last_graph_eviction_sweep = time_now;
             for (auto it = cuda_graphs.begin(); it != cuda_graphs.end(); ) {
-                if (time_now - it->second->last_used_time >= 10'000'000) {
+                if (it->first != first_node_ptr && time_now - it->second->last_used_time >= 10'000'000) {
                     it = cuda_graphs.erase(it);
                 } else {
                     ++it;
@@ -1566,6 +1617,7 @@ struct ggml_backend_cuda_context {
 };
 
 struct ggml_cuda_mm_fusion_args_host {
+    ggml_prec prec = GGML_PREC_DEFAULT;
     const ggml_tensor * x_bias = nullptr;
     const ggml_tensor * gate = nullptr;
     const ggml_tensor * gate_bias = nullptr;
@@ -1573,6 +1625,9 @@ struct ggml_cuda_mm_fusion_args_host {
     const ggml_tensor * gate_scale = nullptr;
     ggml_glu_op glu_op;
     float glu_limit = 0.0f;
+    ggml_unary_op unary_op = GGML_UNARY_OP_COUNT;
+    float unary_scale = 1.0f;
+    float unary_scale_out = 1.0f;
     const ggml_tensor * shared_up = nullptr;
     const ggml_tensor * shared_gate = nullptr;
     ggml_tensor * shared_dst = nullptr;
@@ -1585,6 +1640,9 @@ struct ggml_cuda_mm_fusion_args_device {
     const void * gate_scale = nullptr;
     ggml_glu_op glu_op;
     float glu_limit = 0.0f;
+    ggml_unary_op unary_op = GGML_UNARY_OP_COUNT;
+    float unary_scale = 1.0f;
+    float unary_scale_out = 1.0f;
     const void * shared_up = nullptr;
     const void * shared_gate = nullptr;
     float * shared_dst = nullptr;

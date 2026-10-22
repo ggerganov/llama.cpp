@@ -230,6 +230,157 @@ int32_t common_cpu_get_num_math() {
     return common_cpu_get_num_physical_cores();
 }
 
+common_cpu_roles common_cpu_plan_moe(std::vector<common_cpu_core> cores, int32_t budget,
+        const std::vector<int32_t> & explicit_experts, const std::vector<int32_t> & control_cpus) {
+    common_cpu_roles result;
+    if (budget < 2) return result;
+    bool seen[GGML_MAX_N_THREADS] = {};
+    for (auto & core : cores) {
+        if (core.cpus.empty()) return result;
+        std::sort(core.cpus.begin(), core.cpus.end());
+        for (int32_t cpu : core.cpus) {
+            if (cpu < 0 || cpu >= GGML_MAX_N_THREADS || seen[cpu]) return result;
+            seen[cpu] = true;
+        }
+    }
+    std::sort(cores.begin(), cores.end(), [](const common_cpu_core & a, const common_cpu_core & b) {
+        if (a.capacity != b.capacity) return a.capacity > b.capacity;
+        if (a.frequency != b.frequency) return a.frequency > b.frequency;
+        return a.cpus.front() < b.cpus.front();
+    });
+    for (const auto & core : cores) {
+        bool shared = false;
+        for (int32_t cpu : core.cpus) {
+            if (std::find(explicit_experts.begin(), explicit_experts.end(), cpu) != explicit_experts.end()) shared = true;
+        }
+        if (shared) continue;
+        for (int32_t cpu : core.cpus) {
+            if (control_cpus.empty() || std::find(control_cpus.begin(), control_cpus.end(), cpu) != control_cpus.end()) {
+                result.control = cpu;
+                break;
+            }
+        }
+        if (result.control >= 0) break;
+    }
+    if (result.control < 0) return result;
+    if (!explicit_experts.empty()) {
+        for (size_t i = 0; i < explicit_experts.size(); ++i) {
+            const int32_t cpu = explicit_experts[i];
+            bool found = false;
+            for (const auto & core : cores) if (std::find(core.cpus.begin(), core.cpus.end(), cpu) != core.cpus.end()) found = true;
+            if (!found || std::find(explicit_experts.begin(), explicit_experts.begin() + i, cpu) != explicit_experts.begin() + i) return {};
+            if (int32_t(result.experts.size()) < budget - 1) result.experts.push_back(cpu);
+        }
+    } else {
+        for (const auto & core : cores) {
+            if (std::find(core.cpus.begin(), core.cpus.end(), result.control) != core.cpus.end()) continue;
+            if (int32_t(result.experts.size()) == budget - 1) break;
+            result.experts.push_back(core.cpus.front());
+        }
+    }
+    if (result.experts.empty()) return {};
+    return result;
+}
+
+static llama_moe_cpu_params common_moe_cpu_params(const common_params & params) {
+    llama_moe_cpu_params result;
+    result.enabled = false;
+#if defined(__linux__)
+    if (params.numa != GGML_NUMA_STRATEGY_DISABLED) {
+        COM_WRN("%s", "Automatic MoE CPU assignment is unavailable with NUMA policy; using the ordinary cache\n");
+        return result;
+    }
+    llama_cpu_affinity_guard allowed(true);
+    auto * device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    auto * reg = device ? ggml_backend_dev_backend_reg(device) : nullptr;
+    if (!reg || !ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_get_main_cpu_mask")) {
+        COM_WRN("%s", "CPU backend lacks caller-mask inspection; using the ordinary cache\n");
+        return result;
+    }
+    std::vector<int32_t> explicit_experts, control_cpus;
+    if (const char * mask = std::getenv("LLAMA_MOE_CPU_MASK")) {
+        std::string text(mask);
+        if (text.size() >= 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) text.erase(0, 2);
+        if (text.empty() || text.size() > GGML_MAX_N_THREADS/4 || text.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos) {
+            COM_WRN("%s", "Invalid MoE CPU mask; using the ordinary cache\n");
+            return result;
+        }
+        bool bits[GGML_MAX_N_THREADS] = {};
+        if (!parse_cpu_mask(text, bits)) return result;
+        for (int32_t cpu = 0; cpu < GGML_MAX_N_THREADS; ++cpu) {
+            if (!bits[cpu]) continue;
+            if (!allowed.allows(cpu)) {
+                COM_WRN("MoE CPU mask includes unavailable CPU %d; using the ordinary cache\n", cpu);
+                return result;
+            }
+            explicit_experts.push_back(cpu);
+        }
+        if (explicit_experts.empty()) {
+            COM_WRN("%s", "Empty MoE CPU mask; using the ordinary cache\n");
+            return result;
+        }
+    }
+    std::map<std::string, common_cpu_core> groups;
+    for (int32_t cpu = 0; cpu < GGML_MAX_N_THREADS; ++cpu) {
+        if (!allowed.allows(cpu)) continue;
+        if (params.cpuparams.mask_valid && params.cpuparams.cpumask[cpu]) control_cpus.push_back(cpu);
+        if (explicit_experts.empty() && params.cpuparams.mask_valid && !params.cpuparams.cpumask[cpu]) continue;
+        const auto prefix = "/sys/devices/system/cpu/cpu" + std::to_string(cpu) + "/";
+        std::ifstream siblings(prefix + "topology/thread_siblings_list");
+        std::string key;
+        if (!std::getline(siblings, key) || key.empty()) {
+            COM_WRN("%s", "CPU topology is unavailable; using the ordinary cache\n");
+            return result;
+        }
+        auto & core = groups[key];
+        core.cpus.push_back(cpu);
+        std::ifstream(prefix + "cpu_capacity") >> core.capacity;
+        std::ifstream(prefix + "cpufreq/cpuinfo_max_freq") >> core.frequency;
+    }
+    if (params.cpuparams.mask_valid && control_cpus.empty()) {
+        COM_WRN("%s", "Decode CPU mask has no available controller; using the ordinary cache\n");
+        return result;
+    }
+    std::vector<common_cpu_core> cores;
+    for (auto & item : groups) cores.push_back(std::move(item.second));
+    int32_t experts = std::min(32, std::max(0, params.cpuparams.n_threads - 1));
+    bool explicit_count = false;
+    if (const char * count = std::getenv("LLAMA_MOE_CPU_THREADS")) {
+        char * end = nullptr;
+        const long value = std::strtol(count, &end, 10);
+        if (!count[0] || !end || *end || value < 1 || value > 32) {
+            COM_WRN("%s", "Invalid MoE CPU thread count; using the ordinary cache\n");
+            return result;
+        }
+        experts = int32_t(value);
+        explicit_count = true;
+    } else if (!explicit_experts.empty()) {
+        experts = std::min(experts, int32_t(explicit_experts.size()));
+    }
+    const auto roles = common_cpu_plan_moe(std::move(cores), experts + 1, explicit_experts, control_cpus);
+    if (roles.control < 0 || (explicit_count && roles.experts.size() != size_t(experts))) {
+        COM_WRN("%s", "No disjoint MoE CPU assignment fits the allowed CPUs; using the ordinary cache\n");
+        return result;
+    }
+    result.enabled = true;
+    result.control_cpu = roles.control;
+    result.expert_cpus = roles.experts;
+    result.priority = params.cpuparams.priority;
+    std::string worker_cpus;
+    for (int32_t cpu : roles.experts) worker_cpus += (worker_cpus.empty() ? "" : ",") + std::to_string(cpu);
+    COM_INF("MoE CPU placement: controller %d, expert participants %zu on %s; ordinary decode %d, batch %d threads\n",
+            roles.control, roles.experts.size(), worker_cpus.c_str(), params.cpuparams.n_threads, params.cpuparams_batch.n_threads);
+#else
+    COM_WRN("%s", "Automatic MoE CPU placement requires Linux; using the ordinary cache\n");
+#endif
+    return result;
+}
+
+static bool common_moe_cpu_requested(const common_params & params) {
+    return params.moe_cache_size > 0 && std::getenv("LLAMA_MOE_STATIC_CACHE") &&
+        std::getenv("LLAMA_MOE_HYBRID") && std::getenv("LLAMA_MOE_SINGLE_GRAPH");
+}
+
 // Helper for setting process priority
 
 #if defined(_WIN32)
@@ -1373,7 +1524,9 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
         cparams.n_samplers = pimpl->samplers_seq_config.size();
     }
 
-    llama_context * lctx = llama_init_from_model(model, cparams);
+    const bool cpu_roles_requested = common_moe_cpu_requested(params);
+    const auto cpu_roles = cpu_roles_requested ? common_moe_cpu_params(params) : llama_moe_cpu_params{};
+    llama_context * lctx = cpu_roles_requested ? llama_init_from_model_cpu(model, cparams, cpu_roles) : llama_init_from_model(model, cparams);
     if (lctx == NULL) {
         COM_ERR("failed to create context with model '%s'\n", params.model.path.c_str());
         return;
@@ -1420,6 +1573,7 @@ static void common_batch_set_zero_state(common_batch & batch, const llama_model 
 }
 
 common_init_result_ptr common_init_from_params(common_params & params, bool model_only) {
+    llama_cpu_affinity_guard startup_affinity(common_moe_cpu_requested(params));
     common_init_result_ptr res(new common_init_result(params, model_only));
 
     llama_model * model = res->model();
@@ -1495,6 +1649,11 @@ common_init_result_ptr common_init_from_params(common_params & params, bool mode
     }
 
     if (params.warmup) {
+        struct learning_guard {
+            llama_context * ctx;
+            explicit learning_guard(llama_context * ctx) : ctx(ctx) { llama_moe_set_learning(ctx, false); }
+            ~learning_guard() { llama_moe_set_learning(ctx, true); }
+        } learning(lctx);
         COM_TRC("%s", "warming up the model with an empty run - please wait ... (--no-warmup to disable)\n");
 
         std::vector<llama_token> tmp;
@@ -1779,6 +1938,7 @@ common_threadpools::~common_threadpools() {
     }
     free_fn(threadpool);
     free_fn(threadpool_batch);
+    free_fn(threadpool_control);
 }
 
 void common_threadpools::init(llama_context * ctx, const common_params & params) {
@@ -1823,6 +1983,17 @@ void common_threadpools::init(llama_context * ctx, const common_params & params)
     }
 
     llama_attach_threadpool(ctx, threadpool, threadpool_batch);
+    const int32_t control_cpu = llama_moe_control_cpu(ctx);
+    if (control_cpu >= 0 && control_cpu < GGML_MAX_N_THREADS) {
+        auto control = ggml_threadpool_params_default(1);
+        control.cpumask[control_cpu] = true;
+        control.strict_cpu = true;
+        control.paused = true;
+        control.prio = params.cpuparams.priority;
+        threadpool_control = ggml_threadpool_new_fn(&control);
+        if (threadpool_control) llama_attach_threadpool_control(ctx, threadpool_control);
+        else COM_WRN("%s", "MoE controller pool allocation failed; using the ordinary CPU pools\n");
+    }
 }
 
 //

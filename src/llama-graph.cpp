@@ -2355,7 +2355,17 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     ggml_build_forward_expand(gf, weights);
 
     // the experts of host-resident layers may be read from the MoE cache
-    ggml_tensor * slots = build_moe_cache_slots(selected_experts, up_exps, gate_exps, down_exps, gate_up_exps, il);
+    const bool cpu_allowed = !post_exp_norm && n_tokens == 1 && type_op == LLM_FFN_SILU && !weight_before_ffn && !gate_up_exps && up_exps && gate_exps && !up_exps_b && !gate_exps_b && !down_exps_b && !up_exps_s && !gate_exps_s && !down_exps_s && loras->empty() && (!hdmd || hdmd->rot.empty()) && il >= 0 && hparams.swiglu_clamp_exp[il] <= 1e-6f;
+    ggml_tensor * slots = moe_cache ? moe_cache->build_single_slots(ctx0, selected_experts, cur, il, cpu_allowed) : nullptr;
+    const bool single_graph = slots != nullptr;
+    if (single_graph) {
+        ggml_backend_sched_set_tensor_backend(sched, slots, moe_cache->backend(il));
+        cb(slots, "ffn_moe_publish", il);
+        ggml_build_forward_expand(gf, slots);
+    } else {
+        slots = build_moe_cache_slots(selected_experts, up_exps, gate_exps, down_exps, gate_up_exps, il);
+    }
+    ggml_tensor * cpu_experts = moe_cache && !single_graph ? moe_cache->get_cpu_result(il, slots, cpu_allowed) : nullptr;
 
     cur = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
 
@@ -2531,6 +2541,16 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     if (down_exps_b) {
         experts = ggml_add_id(ctx0, experts, down_exps_b, selected_experts);
         cb(experts, "ffn_moe_down_biased", il);
+    }
+
+    if (single_graph) {
+        experts = moe_cache->build_single_merge(ctx0, experts, slots, il);
+        ggml_backend_sched_set_tensor_backend(sched, experts, moe_cache->backend(il));
+        cb(experts, "ffn_moe_mapped_merge", il);
+    } else if (cpu_experts) {
+        experts = ggml_add(ctx0, experts, cpu_experts);
+        ggml_backend_sched_set_tensor_backend(sched, experts, moe_cache->backend(il));
+        cb(experts, "ffn_moe_cpu_merge", il);
     }
 
     // an expert output can be scaled by a norm weight, then normalized, before the router weights apply

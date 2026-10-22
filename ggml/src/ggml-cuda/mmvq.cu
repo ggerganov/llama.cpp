@@ -618,7 +618,42 @@ static constexpr __host__ __device__ int calc_rows_per_block(ggml_type type, int
     return 1;
 }
 
-template <ggml_type type, int ncols_dst, bool has_fusion, bool small_k = false, bool halve_iters = false>
+#if defined(GGML_USE_HIP)
+
+static __global__ void moe_iq4_nl_short_f32(
+        const void * __restrict__ weights, const block_q8_1 * __restrict__ activation,
+        const int32_t * __restrict__ ids, float * __restrict__ dst, uint32_t ncols,
+        uint32_t stride_row, uint32_t stride_expert, uint32_t stride_activation, uint32_t stride_dst) {
+    constexpr int warp_size = 32;
+    constexpr int virtual_waves = 8;
+    constexpr int vdr = VDR_IQ4_NL_Q8_1_MMVQ;
+    constexpr int blocks_per_iter = vdr * virtual_waves * warp_size / QI4_NL;
+    const int row = 8 * blockIdx.x + threadIdx.y;
+    const int channel = blockIdx.y;
+    const int weight_offset = uint32_t(ids[channel]) * stride_expert + row * stride_row;
+    const block_q8_1 * y = activation + channel * stride_activation;
+    float partial[virtual_waves] = {};
+#pragma unroll
+    for (int wave = 0; wave < virtual_waves; ++wave) {
+        const int tid = wave * warp_size + threadIdx.x;
+        const int kqs = vdr * (tid % (QI4_NL / vdr));
+        for (int kbx = tid / (QI4_NL / vdr); kbx < int(ncols / QK4_NL); kbx += blocks_per_iter) {
+            partial[wave] += vec_dot_iq4_nl_q8_1(weights, y + kbx, weight_offset + kbx, kqs);
+        }
+    }
+    float value = partial[0];
+#pragma unroll
+    for (int wave = 1; wave < virtual_waves; ++wave) {
+        value += partial[wave];
+    }
+    value = warp_reduce_sum<warp_size>(value);
+    if (threadIdx.x == 0) {
+        dst[channel * stride_dst + row] = value;
+    }
+}
+#endif
+
+template <ggml_type type, int ncols_dst, bool has_fusion, bool small_k = false, bool halve_iters = false, int rows_override = 0>
 __launch_bounds__(calc_nwarps(type, ncols_dst, get_device_table_id(), small_k, halve_iters)*ggml_cuda_get_physical_warp_size(), 1)
 static __global__ void mul_mat_vec_q(
         const void * vx_ptr, const void * vy_ptr, const int32_t * ids_ptr, const ggml_cuda_mm_fusion_args_device fusion, float * dst_ptr,
@@ -637,7 +672,8 @@ static __global__ void mul_mat_vec_q(
     constexpr int vdr = get_vdr_mmvq(type);
     constexpr mmvq_parameter_table_id table_id = get_device_table_id();
     constexpr int nwarps = calc_nwarps(type, ncols_dst, table_id, small_k, halve_iters);
-    constexpr int rows_per_cuda_block = calc_rows_per_block(type, ncols_dst, table_id, small_k, nwarps);
+    static_assert(rows_override == 0 || ((type == GGML_TYPE_Q6_K || type == GGML_TYPE_IQ4_XS) && ncols_dst == 1 && !has_fusion && !small_k && !halve_iters));
+    constexpr int rows_per_cuda_block = rows_override ? rows_override : calc_rows_per_block(type, ncols_dst, table_id, small_k, nwarps);
     constexpr int warp_size = ggml_cuda_get_physical_warp_size();
 
     constexpr vec_dot_q_cuda_t vec_dot_q_cuda = get_vec_dot_q_cuda(type);
@@ -828,7 +864,7 @@ static __global__ void mul_mat_vec_q(
                 }
             }
 
-            if (threadIdx.x == i && (rows_per_cuda_block == 1 || uint32_t(row0 + i) < stride_col_dst)) {
+            if (threadIdx.x == (rows_override ? 0 : i) && (rows_per_cuda_block == 1 || uint32_t(row0 + i) < stride_col_dst)) {
                 float result = tmp[j][i];
                 if constexpr (has_fusion) {
                     if constexpr (type == GGML_TYPE_NVFP4) {
@@ -1237,6 +1273,27 @@ static void mul_mat_vec_q_switch_ncols_dst(
             } else if (should_halve_iters()) {
                 launch(std::false_type{}, std::true_type{});
             } else {
+#if defined(GGML_USE_HIP)
+                if constexpr (type == GGML_TYPE_Q6_K || type == GGML_TYPE_IQ4_XS) {
+                    static const bool enabled = getenv("GGML_CUDA_GDN_MMVQ_ROWS2") != nullptr && strcmp(getenv("GGML_CUDA_GDN_MMVQ_ROWS2"), "1") == 0;
+                    static const bool disabled = getenv("GGML_CUDA_DISABLE_FUSION") != nullptr && atoi(getenv("GGML_CUDA_DISABLE_FUSION")) != 0;
+                    static const bool concurrent = getenv("GGML_CUDA_GRAPH_OPT") != nullptr && atoi(getenv("GGML_CUDA_GRAPH_OPT")) == 1;
+                    if (enabled && !disabled && !concurrent && table_id == MMVQ_PARAMETERS_RDNA4 && warp_size == 32 &&
+                        calc_nwarps(type, 1, table_id, false, false) == 8 && calc_rows_per_block(type, 1, table_id, false, 8) == 1 &&
+                        ncols_x == 2560 && (nrows_x == 6144 || nrows_x == 10240) && !ids &&
+                        nchannels_x == 1 && nchannels_y == 1 && nchannels_dst == 1 && nsamples_x == 1 && nsamples_dst == 1 &&
+                        stride_row_x == 2560 / ggml_blck_size(type) && stride_col_y == GGML_PAD(2560, MATRIX_ROW_PADDING) / QK8_1 && stride_col_dst == nrows_x &&
+                        !fusion.x_bias && !fusion.gate && !fusion.gate_bias && !fusion.x_scale && !fusion.gate_scale &&
+                        !fusion.shared_up && !fusion.shared_gate && !fusion.shared_dst) {
+                        const ggml_cuda_kernel_launch_params params(dim3(nrows_x / 2, 1, 1), dim3(warp_size, 8, 1), 0, stream);
+                        ggml_cuda_kernel_launch((mul_mat_vec_q<type, 1, false, false, false, 2>), params,
+                            vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+                            channel_ratio_fd, stride_channel_x, stride_channel_y, stride_channel_dst, sample_ratio_fd,
+                            stride_sample_x, stride_sample_y, stride_sample_dst, ids_stride);
+                        return;
+                    }
+                }
+#endif
                 launch(std::false_type{}, std::false_type{});
             }
         } break;
@@ -1452,6 +1509,91 @@ static void mul_mat_vec_q_switch_type(
     }
 }
 
+#if defined(GGML_USE_HIP)
+static bool ggml_cuda_moe_iq4_nl_short(ggml_backend_cuda_context & ctx, const ggml_tensor * src0,
+        const ggml_tensor * src1, const ggml_tensor * ids, const ggml_tensor * dst,
+        const ggml_cuda_mm_fusion_args_host * fusion) {
+    static const bool enabled = getenv("GGML_CUDA_MOE_IQ4_NL_SHORT") != nullptr && strcmp(getenv("GGML_CUDA_MOE_IQ4_NL_SHORT"), "1") == 0;
+    static const bool disabled = getenv("GGML_CUDA_DISABLE_FUSION") != nullptr && atoi(getenv("GGML_CUDA_DISABLE_FUSION")) != 0;
+    static const bool concurrent = getenv("GGML_CUDA_GRAPH_OPT") != nullptr && atoi(getenv("GGML_CUDA_GRAPH_OPT")) == 1;
+    if (!enabled || disabled || concurrent || fusion || !ids || ctx.curr_stream_no != 0 ||
+        !ctx.stream_context().concurrent_events.empty() || dst->op != GGML_OP_MUL_MAT_ID ||
+        dst->src[0] != src0 || dst->src[1] != src1 || dst->src[2] != ids ||
+        src0->type != GGML_TYPE_IQ4_NL || src1->type != GGML_TYPE_F32 || ids->type != GGML_TYPE_I32 || dst->type != GGML_TYPE_F32 ||
+        src0->ne[0] != 640 || src0->ne[1] != 2560 || src0->ne[2] < 1 || src0->ne[2] > INT_MAX / (20 * 2560) || src0->ne[3] != 1 ||
+        src1->ne[0] != 640 || src1->ne[1] != 10 || src1->ne[2] != 1 || src1->ne[3] != 1 ||
+        ids->ne[0] != 10 || ids->ne[1] != 1 || ids->ne[2] != 1 || ids->ne[3] != 1 ||
+        dst->ne[0] != 2560 || dst->ne[1] != 10 || dst->ne[2] != 1 || dst->ne[3] != 1) {
+        return false;
+    }
+    int32_t params[2];
+    memcpy(params, dst->op_params, sizeof(params));
+    if (params[0] != GGML_PREC_DEFAULT || params[1] != 0) {
+        return false;
+    }
+    for (int i = 3; i < GGML_MAX_SRC; ++i) {
+        if (dst->src[i]) {
+            return false;
+        }
+    }
+    const ggml_tensor * bank = src0->view_src ? src0->view_src : src0;
+    if ((src0->op != GGML_OP_NONE && src0->op != GGML_OP_VIEW) ||
+        (src0->op == GGML_OP_VIEW && (!src0->view_src || src0->src[0] != bank)) ||
+        bank->op != GGML_OP_NONE || bank->view_src || (src0->op == GGML_OP_NONE && src0->view_src) ||
+        bank->type != GGML_TYPE_IQ4_NL || !ggml_is_contiguous(bank) || bank->ne[0] != 640 || bank->ne[1] != 2560 ||
+        bank->ne[2] < src0->ne[2] || bank->ne[2] > INT_MAX / (20 * 2560) || bank->ne[3] != 1 ||
+        (bank->flags & GGML_TENSOR_FLAG_PARAM) || bank->buffer != src0->buffer) {
+        return false;
+    }
+    if (!bank->buffer || !bank->data) {
+        return false;
+    }
+    const uintptr_t bank_base = reinterpret_cast<uintptr_t>(ggml_backend_buffer_get_base(bank->buffer));
+    const uintptr_t bank_data = reinterpret_cast<uintptr_t>(bank->data);
+    const size_t bank_capacity = ggml_backend_buffer_get_size(bank->buffer), bank_bytes = ggml_nbytes(bank);
+    if (!bank_base || (bank_data & 3) || bank_data < bank_base || bank_data - bank_base > bank_capacity ||
+        bank_bytes > bank_capacity - (bank_data - bank_base) || src0->view_offs > bank_bytes ||
+        ggml_nbytes(src0) > bank_bytes - src0->view_offs || src0->view_offs > UINTPTR_MAX - bank_data ||
+        reinterpret_cast<uintptr_t>(src0->data) != bank_data + src0->view_offs) {
+        return false;
+    }
+    for (int i = 0; i < GGML_MAX_SRC; ++i) {
+        if (bank->src[i] || (i > 0 && src0->src[i])) {
+            return false;
+        }
+    }
+    const auto & device = ggml_cuda_info().devices[ctx.device];
+    if (!GGML_CUDA_CC_IS_RDNA4(device.cc) || device.warp_size != 32) {
+        return false;
+    }
+    const auto buft = ggml_backend_cuda_buffer_type(ctx.device);
+    const ggml_tensor * tensors[] = {src0, src1, ids, dst};
+    for (int i = 0; i < 4; ++i) {
+        const auto * t = tensors[i];
+        if (!t->buffer || !t->data || (t->flags & GGML_TENSOR_FLAG_PARAM) || !ggml_is_contiguous(t) ||
+            (i > 0 && t->view_src) || ggml_backend_buffer_get_type(t->buffer) != buft ||
+            (i == 0 && ggml_backend_buffer_get_usage(t->buffer) != GGML_BACKEND_BUFFER_USAGE_WEIGHTS) ||
+            (i == 3 && ggml_backend_buffer_get_usage(t->buffer) == GGML_BACKEND_BUFFER_USAGE_WEIGHTS)) {
+            return false;
+        }
+        const uintptr_t base = reinterpret_cast<uintptr_t>(ggml_backend_buffer_get_base(t->buffer));
+        const uintptr_t data = reinterpret_cast<uintptr_t>(t->data);
+        const size_t capacity = ggml_backend_buffer_get_size(t->buffer), bytes = ggml_nbytes(t);
+        if (!base || (data & 3) || data < base || data - base > capacity || bytes > capacity - (data - base) || bytes > UINTPTR_MAX - data) {
+            return false;
+        }
+        for (int j = 0; j < i; ++j) {
+            const uintptr_t other = reinterpret_cast<uintptr_t>(tensors[j]->data);
+            if (data < other + ggml_nbytes(tensors[j]) && other < data + bytes) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+#endif
+
 void ggml_cuda_mul_mat_vec_q(
         ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst,
         const ggml_cuda_mm_fusion_args_host * fusion) {
@@ -1578,6 +1720,16 @@ void ggml_cuda_mul_mat_vec_q(
     const int64_t stride_channel_y   = ids ? s11  : s12;
 
     const int64_t ids_stride = ids ? ids->nb[1] / ggml_type_size(ids->type) : 0;
+
+#if defined(GGML_USE_HIP)
+    if (ggml_cuda_moe_iq4_nl_short(ctx, src0, src1, ids, dst, fusion)) {
+        const auto launch_params = ggml_cuda_kernel_launch_params(dim3(ne01 / 8, ne1, 1), dim3(32, 8, 1), 0, stream);
+        ggml_cuda_kernel_launch(moe_iq4_nl_short_f32, launch_params, src0->data, reinterpret_cast<const block_q8_1 *>(src1_q8_1.get()), ids_d, dst_d,
+            uint32_t(ne00), uint32_t(s01), uint32_t(s02), uint32_t(stride_channel_y), uint32_t(stride_channel_dst));
+        return;
+    }
+
+#endif
 
     mul_mat_vec_q_switch_type(
         src0->data, src0->type, src1_q8_1.get(), ids_d, fusion_local, dst_d, ne00,
