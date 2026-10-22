@@ -408,7 +408,7 @@
 							onCollapsedChange={(key, collapsed) =>
 								modelsStore.setGroupCollapsed(group.key, key, collapsed)}
 							sectionWindow={MODEL_ROW_WINDOW}
-							stickyClass="bg-muted/25 backdrop-blur-lg"
+							stickyClass="rounded-lg bg-muted/25 backdrop-blur-lg"
 							stickyStyle={MODELS_TABLE_GROUP_STICKY_OFFSET}
 							weightOf={(entry) => entry.quants.length}
 						/>
