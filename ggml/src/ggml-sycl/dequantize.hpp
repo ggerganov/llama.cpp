@@ -1182,10 +1182,14 @@ inline void dequantize_q4_K_common(dst_t * __restrict__ y, const uint8_t * __res
     const float m2 = dmin * m;
 
     sycl::vec<uint8_t, n> q_vec = vec_aligned_load<uint8_t, n>(qs_ptr + 32 * il + n * ir);
+
+    sycl::vec<dst_t, n> lo, hi;
     for (int l = 0; l < n; ++l) {
-        y[l + 0]  = d1 * (q_vec[l] & 0xF) - m1;
-        y[l + 32] = d2 * (q_vec[l] >> 4) - m2;
+        lo[l] = d1 * (q_vec[l] & 0xF) - m1;
+        hi[l] = d2 * (q_vec[l] >> 4) - m2;
     }
+    *reinterpret_cast<sycl::vec<dst_t, n> *>(y +  0) = lo;
+    *reinterpret_cast<sycl::vec<dst_t, n> *>(y + 32) = hi;
 }
 
 template <typename dst_t>
