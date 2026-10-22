@@ -405,8 +405,12 @@ static bool cpu_has_feature(const char * feature) {
 }
 
 // whether CPU_REPACK must provide a kernel for this weight, mirroring the selection in repack.cpp;
-// on such builds a missing repack is a failure, not a skip
+// on such builds a missing repack is a failure, not a skip. Builds with GGML_CPU_REPACK=OFF do not
+// report the REPACK feature and are not expected to repack
 static bool repack_expected(ggml_type type, int64_t ne1) {
+    if (!cpu_has_feature("REPACK")) {
+        return false;
+    }
     if (type == GGML_TYPE_TQ2_0) {
         return cpu_has_feature("NEON") && cpu_has_feature("MATMUL_INT8") && ne1 % 8 == 0;
     }
@@ -839,8 +843,8 @@ int main(int argc, char ** argv) {
     // repack kernel had default correctness coverage. M is the activation row count: 1 takes the
     // GEMV path, a multiple of the row tile takes the clean GEMM path, and anything else exercises
     // the GEMM tail. N spans more than one QK_K block where the type is K-quantized.
-    // TQ2_0 (8x8, i8mm): requires NEON + matmul_int8 and ne1 % 8 == 0. Where those hold, a
-    // missing repack is a FAIL; elsewhere it SKIPs.
+    // TQ2_0 (8x8, i8mm): requires CPU repack enabled, NEON + matmul_int8 and ne1 % 8 == 0.
+    // Where those hold, a missing repack is a FAIL; elsewhere it SKIPs.
     test_matmul_repack(backend,   1, 512, 256, GGML_TYPE_TQ2_0);  // GEMV, 2 QK_K blocks
     test_matmul_repack(backend,   8, 512, 256, GGML_TYPE_TQ2_0);  // exactly one row tile
     test_matmul_repack(backend,  17, 512, 256, GGML_TYPE_TQ2_0);  // GEMM tail: 2 tiles + 1 row
