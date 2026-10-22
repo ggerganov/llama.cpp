@@ -1549,11 +1549,14 @@ static void dequantize_block_iq3_xxs_reorder(const void * __restrict__ vx, dst_t
     const float dl = (float) d[i] * (0.5f + (aux32 >> 28)) * 0.5f;
     const uint8_t signs = ksigns_iq2xs[(aux32 >> (7 * il)) & 127];
     dst_t * y = yy + 32 * ib + 8 * il;
+    sycl::vec<dst_t, 4> lo, hi;
 #pragma unroll
     for (int j = 0; j < 4; ++j) {
-        y[j+0] = dl * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
-        y[j+4] = dl * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
+        lo[j] = dl * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
+        hi[j] = dl * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
     }
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + 0) = lo;
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + 4) = hi;
 #else
     GGML_UNUSED(vx);
     GGML_UNUSED(yy);
@@ -1622,11 +1625,14 @@ dequantize_block_iq3_s_reorder(const void * __restrict__ vx, dst_t * __restrict_
     const float dl = (float) d * (1 + 2 * ((scales[ib/2] >> (4 * (ib%2))) & 0xf));
     const uint8_t signs = signs_base[4 * ib + il];
     dst_t * y = yy + 32 * ib + 8 * il;
+    sycl::vec<dst_t, 4> lo, hi;
 #pragma unroll
     for (int j = 0; j < 4; ++j) {
-        y[j+0] = dl * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
-        y[j+4] = dl * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
+        lo[j] = dl * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
+        hi[j] = dl * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
     }
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + 0) = lo;
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + 4) = hi;
 #else
     GGML_UNUSED(vx);
     GGML_UNUSED(yy);
