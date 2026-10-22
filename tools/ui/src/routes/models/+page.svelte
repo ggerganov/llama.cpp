@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ModelsManager from '$lib/components/app/models/ModelsManager/ModelsManager.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { APP_NAME, DISCOVER_ICON, MODEL_ICON, SETTINGS_KEYS } from '$lib/constants';
+	import { APP_NAME, DISCOVER_ICON, SETTINGS_KEYS } from '$lib/constants';
 	import { modelsStore, settingsStore, uiStore } from '$lib/stores';
 	import { onMount } from 'svelte';
 
@@ -9,10 +9,13 @@
 		Boolean(settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS))
 	);
 
-	// sync point: the table opens on cached state and corrects itself when the list
-	// fetch lands; a no-op outside router mode
+	// a direct load lands here before any chat has listed the models; the router
+	// fetch is the sync point for an already loaded list and a no-op outside router mode
 	onMount(() => {
-		void modelsStore.fetchRouterModels();
+		modelsStore
+			.fetch()
+			.then(() => modelsStore.fetchRouterModels())
+			.catch((error) => console.error('Unable to load models:', error));
 	});
 </script>
 
@@ -20,27 +23,29 @@
 	<title>Models - {APP_NAME}</title>
 </svelte:head>
 
-<div class="flex h-[100dvh] flex-col p-4 pb-0 max-md:pt-16">
-	<h1 class="flex min-h-7 items-center gap-2 p-2 text-lg font-semibold leading-none">
-		<MODEL_ICON class="h-5 w-5" />
+<div class="mx-auto flex h-[100dvh] w-full max-w-7xl flex-col gap-6 px-4 pt-12 md:px-8 md:pt-6">
+	<div class="flex items-start gap-4">
+		<div class="flex min-w-0 flex-col gap-1">
+			<h1 class="text-2xl font-semibold tracking-tight">Models</h1>
 
-		<span>Models</span>
-	</h1>
+			<p class="text-sm text-muted-foreground">
+				Load, configure and remove the models this server can run.
+			</p>
+		</div>
 
-	<ModelsManager class="min-h-0">
-		{#snippet toolbarEnd()}
-			{#if discoverEnabled}
-				<Button
-					class="gap-1.5"
-					onclick={() => uiStore.openModelsDiscover()}
-					size="sm"
-					variant="tertiary"
-				>
-					<DISCOVER_ICON class="h-3.5 w-3.5" />
+		{#if discoverEnabled}
+			<Button
+				class="ml-auto shrink-0 gap-1.5"
+				onclick={() => uiStore.openModelsDiscover()}
+				size="sm"
+				variant="tertiary"
+			>
+				<DISCOVER_ICON class="h-3.5 w-3.5" />
 
-					Discover Models
-				</Button>
-			{/if}
-		{/snippet}
-	</ModelsManager>
+				Discover Models
+			</Button>
+		{/if}
+	</div>
+
+	<ModelsManager class="min-h-0" />
 </div>

@@ -308,14 +308,15 @@
 	</div>
 
 	<!-- on a phone the pane covers the whole page: the manager header would only
-	     repeat what the pane's own header says -->
+	     repeat what the pane's own header says. Below xl the table has no room to give
+	     up, so the pane slides over its end instead of pushing it -->
 	<div
-		class="pane-drawer max-md:fixed max-md:inset-0 max-md:z-[60] shrink-0"
+		class="pane-drawer max-md:fixed max-md:inset-0 max-md:z-[60] md:max-xl:absolute md:max-xl:inset-y-0 md:max-xl:right-0 md:max-xl:z-20 shrink-0"
 		data-open={selected !== null}
 	>
 		<!-- the content box keeps the open width, so it never reflows with the drawer -->
 		<div
-			class="pane-content flex h-full min-h-0 w-[30rem] max-w-[30rem] flex-col border-l border-border/40 max-md:w-full max-md:max-w-none max-md:border-l-0 max-md:bg-background"
+			class="pane-content flex h-full min-h-0 w-[30rem] max-w-[30rem] flex-col border-l border-border/40 max-md:w-full max-md:max-w-none max-md:border-l-0 max-md:bg-background md:max-xl:bg-background md:max-xl:shadow-2xl"
 			data-fade={fade}
 			data-visible={selected !== null && !isSwapping}
 		>
