@@ -1094,9 +1094,12 @@ static void dequantize_block_q3_K_reorder(const void * __restrict__ vx, dst_t * 
     const uint8_t * q  = qs + 32 * n;
     const uint8_t * hm = hmask;
 
-    for (int l = l0; l < l0 + 4; ++l) {
-        y[l] = dl * ((int8_t) ((q[l] >> shift) & 3) - ((hm[l] & m) ? 0 : 4));
+    sycl::vec<dst_t, 4> v;
+#pragma unroll
+    for (int jj = 0; jj < 4; ++jj) {
+        v[jj] = dl * ((int8_t) ((q[l0 + jj] >> shift) & 3) - ((hm[l0 + jj] & m) ? 0 : 4));
     }
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + l0) = v;
 #else
     GGML_UNUSED(vx);
     GGML_UNUSED(yy);
