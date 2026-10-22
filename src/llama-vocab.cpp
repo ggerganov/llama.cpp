@@ -642,9 +642,10 @@ struct llm_tokenizer_bpe_session {
 
         std::vector<std::string> word_collection;
         if (tok_pre == LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBD) {
+            static const std::string zwnj = "\xe2\x80\x8c";
             std::string normalized_text = text;
-            replace_all(normalized_text, "[\xe2\x80\x8c", "[");
-            replace_all(normalized_text, "<\xe2\x80\x8c", "<");
+            replace_all(normalized_text, "[" + zwnj, "[");
+            replace_all(normalized_text, "<" + zwnj, "<");
             word_collection = unicode_regex_split(normalized_text, tokenizer.regex_exprs, tokenizer.byte_encode);
         } else {
             word_collection = unicode_regex_split(text, tokenizer.regex_exprs, tokenizer.byte_encode);
