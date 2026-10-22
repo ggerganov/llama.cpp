@@ -335,6 +335,7 @@ MTMD_API int32_t mtmd_encode_chunk(mtmd_context * ctx,
 MTMD_API float * mtmd_get_output_embd(mtmd_context * ctx);
 
 
+
 // batch encoding API
 // chunks are not owned by the batch, they will not be freed by mtmd_batch_free()
 // batch is valid for a given context, cannot be shared across contexts
@@ -420,6 +421,7 @@ enum mtmd_gen_audio_type {
     MTMD_GEN_AUDIO_TYPE_NONE, // not supported
     MTMD_GEN_AUDIO_TYPE_QWEN3TTS,
     MTMD_GEN_AUDIO_TYPE_POCKETTTS,
+    MTMD_GEN_AUDIO_TYPE_CHATTERBOX,
 };
 
 struct mtmd_gen_audio_info {
@@ -429,6 +431,10 @@ struct mtmd_gen_audio_info {
 };
 
 MTMD_API struct mtmd_gen_audio_info mtmd_gen_audio_get_info(const mtmd_context * ctx);
+
+// read a named conditioning tensor from the gen audio model, converted to F32.
+// returns the element count, 0 if not found. out may be null to query the size.
+MTMD_API size_t mtmd_gen_audio_read_tensor(mtmd_context * ctx, const char * name, float * out, size_t n_max);
 
 
 enum mtmd_gen_process_type {
@@ -485,6 +491,10 @@ MTMD_API void             mtmd_gen_state_free(mtmd_gen_state * state);
 
 // clear the decoder state (cold start), keep the RNG stream
 MTMD_API void             mtmd_gen_state_reset(mtmd_gen_state * state);
+
+// copy the gen-side reference data of the last mtmd_encode_chunk() call into the state (voice cloning)
+// returns non-zero if the last encode produced no such data
+MTMD_API int32_t          mtmd_gen_state_set_ref(mtmd_context * ctx, mtmd_gen_state * state);
 
 // defaults tuned for the loaded pipeline, callers override only what they care about
 MTMD_API struct mtmd_gen_inp mtmd_gen_inp_default(const mtmd_context * ctx);

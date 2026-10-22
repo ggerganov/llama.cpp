@@ -162,6 +162,29 @@ struct mtmd_audio_preprocessor_pockettts : mtmd_audio_preprocessor {
     bool preprocess(const float * samples, size_t n_samples, std::vector<mtmd_audio_mel> & output) const override;
 };
 
+// full reference chain front-end of the chatterbox speaker encoder: one
+// preprocess call emits the host DSP products of a reference clip as five
+// entries, consumed positionally by the encoder orchestration in mtmd.cpp
+//   0: CAMPPlus kaldi fbank            [80 x n_frames]  (mel major)
+//   1: s3 tokenizer log-mel, flow cap  [n_mel x n_frames] (mel major)
+//   2: s3 tokenizer log-mel, t3 cap    [n_mel x n_frames] (mel major)
+//   3: s3gen prompt features           [n_frames x 80]  (frame major, 24 kHz mel rate)
+//   4: voice encoder power mel         [n_frames x 40]  (frame major, trimmed, partial grid)
+// the turbo variant loudness-normalizes the clip to -27 LUFS first and caps
+// the t3 clip at 15 s instead of 6 s
+struct mtmd_audio_preprocessor_chatterbox_ref : mtmd_audio_preprocessor {
+    mtmd_audio_preprocessor_chatterbox_ref(const clip_ctx * ctx, bool is_mtl, std::vector<float> s3tok_filters)
+        : mtmd_audio_preprocessor(ctx), is_mtl(is_mtl), s3tok_filters(std::move(s3tok_filters)) {}
+    void initialize() override;
+    bool preprocess(const float * samples, size_t n_samples, std::vector<mtmd_audio_mel> & output) const override;
+
+  private:
+    bool               is_mtl;
+    std::vector<float> s3tok_filters; // s3 tokenizer filterbank [n_mel x (400 / 2 + 1)], from the mmproj
+    std::vector<float> window;        // povey window of the fbank front-end, frame_length points
+    std::vector<float> filters;       // kaldi mel filterbank of the fbank front-end, n_mel x (n_fft / 2) dense
+};
+
 struct mtmd_audio_preprocessor_parakeet : mtmd_audio_preprocessor {
     mtmd_audio_preprocessor_parakeet(clip_ctx * ctx) : mtmd_audio_preprocessor(ctx) { }
     void initialize() override;

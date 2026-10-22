@@ -1,0 +1,612 @@
+# Chatterbox (ResembleAI) conversion: turbo and multilingual v3 variants.
+#
+# Checkpoint layout is the official repo layout (raw safetensors, no HF weights):
+# - turbo (ResembleAI/chatterbox-turbo): t3_turbo_v1.safetensors (GPT-2 medium talker),
+#   s3gen_meanflow.safetensors, ve.safetensors, conds.pt, GPT-2 BPE tokenizer files
+# - multilingual v3 (ResembleAI/chatterbox): t3_mtl23ls_v3.safetensors (Llama 520M talker),
+#   s3gen_v3.safetensors, ve.safetensors, conds.pt, mtl_tokenizer.json
+# The variant is detected by which talker file is present. The checkpoints ship no
+# config.json, the hparams below come from the reference code (llama_configs.py, t3_config.py).
+#
+# Talker: the transformer input embeddings (wte / embed_tokens) are dead in the
+# reference (inputs_embeds everywhere); the live tables are text_emb and speech_emb,
+# fused here into one [text | speech] vocab. Text tokens keep their ids, speech token i
+# becomes <|speech_i|> at text_vocab + i. The speech start/stop tokens map to bos/eos.
+#
+# Mmproj: the whole s3gen sidecar (flow encoder, CFM estimator, HiFT vocoder, CAMPPlus
+# speaker encoder, S3 tokenizer), the voice encoder, the talker conditioning encoder,
+# the learned position tables, precomputed default-voice conditioning from conds.pt,
+# and the talker speech embedding table so that reference speech tokens can be turned
+# into talker-space embeddings without a lookup on the text model side.
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
+import torch
+import torch.nn.functional as F
+
+if TYPE_CHECKING:
+    from torch import Tensor
+
+from .base import ModelBase, TextModel, MmprojModel, LazyTorchTensor, gguf
+
+logger = logging.getLogger("hf-to-gguf")
+
+TURBO_TALKER = "t3_turbo_v1.safetensors"
+MTL_TALKER   = "t3_mtl23ls_v3.safetensors"
+TURBO_S3GEN  = "s3gen_meanflow.safetensors"
+MTL_S3GEN    = "s3gen_v3.safetensors"
+
+# relative speech ids shared by both variants (start/stop_speech_token in the reference)
+SPEECH_BOS = 6561
+SPEECH_EOS = 6562
+
+# reference sampling defaults (tts_turbo.py generate / mtl tts.py); samplers
+# absent from the reference carry their explicit disable value, so that the
+# common defaults never leak in when tools apply these as model defaults
+TURBO_SAMPLING = {"top_k": 1000, "min_p": 0.0,  "top_p": 0.95, "temp": 0.8, "penalty_repeat": 1.2}
+MTL_SAMPLING   = {"top_k": 0,    "min_p": 0.05, "top_p": 1.0,  "temp": 0.8, "penalty_repeat": 1.2}
+# the reference repetition penalty covers the whole generated history
+PENALTY_LAST_N = -1
+
+
+def _s3tok_mel_filters() -> Tensor:
+    # slaney-normalized mel filterbank of the s3 tokenizer front end (librosa
+    # defaults: sr 16000, n_fft 400, 128 bands); not every checkpoint ships
+    # it, so it is synthesized here for both variants
+    sr, n_fft, n_mels = 16000, 400, 128
+
+    def hz_to_mel(f: Tensor) -> Tensor:
+        lin = f / (200.0 / 3.0)
+        logstep = math.log(6.4) / 27.0
+        return torch.where(f >= 1000.0, 15.0 + torch.log(f.clamp(min=1000.0) / 1000.0) / logstep, lin)
+
+    def mel_to_hz(m: Tensor) -> Tensor:
+        logstep = math.log(6.4) / 27.0
+        return torch.where(m >= 15.0, 1000.0 * torch.exp(logstep * (m - 15.0)), m * (200.0 / 3.0))
+
+    fftfreqs = torch.arange(n_fft // 2 + 1, dtype=torch.float64) * (sr / n_fft)
+    bounds = hz_to_mel(torch.tensor([0.0, sr / 2.0], dtype=torch.float64))
+    mel_f = mel_to_hz(torch.linspace(bounds[0], bounds[1], n_mels + 2, dtype=torch.float64))
+    fdiff = mel_f.diff()
+    ramps = mel_f[:, None] - fftfreqs[None, :]
+    lower = -ramps[:n_mels] / fdiff[:n_mels, None]
+    upper = ramps[2:] / fdiff[1:, None]
+    weights = torch.minimum(lower, upper).clamp(min=0.0)
+    weights *= (2.0 / (mel_f[2:] - mel_f[:n_mels]))[:, None]
+    return weights.float()
+
+
+def _is_turbo(dir_model: Path) -> bool:
+    if (dir_model / TURBO_TALKER).is_file():
+        return True
+    if (dir_model / MTL_TALKER).is_file():
+        return False
+    raise FileNotFoundError(f"no chatterbox talker checkpoint in {dir_model}")
+
+
+# talker hparams of the reference (GPT2_MEDIUM_CONFIG / LLAMA_520M_CONFIG_DICT, T3Config)
+TURBO_TEXT_CONFIG = {
+    "n_layer": 24, "n_embd": 1024, "n_head": 16, "n_ctx": 8196, "layer_norm_epsilon": 1e-05,
+    "vocab_size": 50276, "speech_vocab_size": 6563,
+}
+MTL_TEXT_CONFIG = {
+    "num_hidden_layers": 30, "hidden_size": 1024, "intermediate_size": 4096, "num_attention_heads": 16,
+    "num_key_value_heads": 16, "head_dim": 64, "max_position_embeddings": 131072, "rms_norm_eps": 1e-05,
+    "rope_theta": 500000.0,
+    "rope_scaling": {"factor": 8.0, "high_freq_factor": 4.0, "low_freq_factor": 1.0, "original_max_position_embeddings": 8192},
+    "vocab_size": 2454, "speech_vocab_size": 8194,
+}
+
+
+def _is_chatterbox_checkpoint(dir_model: Path) -> bool:
+    return (dir_model / "ve.safetensors").is_file() and \
+        ((dir_model / TURBO_TALKER).is_file() or (dir_model / MTL_TALKER).is_file())
+
+
+@ModelBase.register_hparams_loader(_is_chatterbox_checkpoint)
+def _load_chatterbox_hparams(dir_model: Path) -> dict[str, Any]:
+    turbo = _is_turbo(dir_model)
+    logger.info(f"gguf: detected Chatterbox {'turbo' if turbo else 'multilingual v3'} checkpoint")
+    text_config = dict(TURBO_TEXT_CONFIG if turbo else MTL_TEXT_CONFIG)
+    # the mmproj tensors are named explicitly, they do not go through the block tensor map
+    return {"architectures": ["ChatterboxModel"], "text_config": text_config, "audio_config": {"num_hidden_layers": 0}}
+
+
+def _index_safetensors(path: Path, lazy: bool, rename: Callable[[str], str | None]) -> dict[str, Callable[[], Tensor]]:
+    tensors: dict[str, Callable[[], Tensor]] = {}
+    with gguf.utility.SafetensorsLocal(path) as model_part:
+        for name in model_part.keys():
+            new_name = rename(name)
+            if new_name is None:
+                continue
+            data: gguf.utility.LocalTensor = model_part[name]
+            if lazy:
+                data_gen = lambda data=data: LazyTorchTensor.from_local_tensor(data)  # noqa: E731
+            else:
+                dtype = LazyTorchTensor._dtype_str_map[data.dtype]
+                data_gen = lambda data=data, dtype=dtype: torch.from_numpy(data.mmap_bytes()).view(dtype).reshape(data.shape)  # noqa: E731
+            tensors[new_name] = data_gen
+    return tensors
+
+
+@ModelBase.register("ChatterboxModel")
+class ChatterboxTalkerModel(TextModel):
+    model_arch = gguf.MODEL_ARCH.LLAMA  # multilingual; the turbo constructor switches to GPT2
+
+    def __init__(self, dir_model: Path, *args, **kwargs):
+        self.is_turbo = _is_turbo(dir_model)
+        if self.is_turbo:
+            self.model_arch = gguf.MODEL_ARCH.GPT2
+        super().__init__(dir_model, *args, **kwargs)
+        self._text_embd: Tensor | None = None
+        self._speech_embd: Tensor | None = None
+        self._text_head: Tensor | None = None
+        self._speech_head: Tensor | None = None
+
+    def index_tensors(self, remote_hf_model_id: str | None = None) -> dict[str, Callable[[], Tensor]]:
+        talker = TURBO_TALKER if self.is_turbo else MTL_TALKER
+
+        def rename(name: str) -> str | None:
+            # transformer input embeddings are dead in the reference (inputs_embeds
+            # everywhere); the conditioning encoder and position tables go to the mmproj
+            if name in ("tfmr.wte.weight", "tfmr.embed_tokens.weight"):
+                return None
+            if name.startswith(("cond_enc.", "text_pos_emb.", "speech_pos_emb.")):
+                return None
+            return name
+
+        return _index_safetensors(self.dir_model / talker, self.lazy, rename)
+
+    def set_vocab(self):
+        if self.is_turbo:
+            self._set_vocab_turbo()
+        else:
+            self._set_vocab_mtl()
+
+    def _speech_token_names(self, n_speech: int) -> list[str]:
+        return [f"<|speech_{i}|>" for i in range(n_speech)]
+
+    def _set_vocab_turbo(self):
+        # stock GPT-2 BPE from the checkpoint dir, extended with the speech tokens
+        tokens, toktypes, tokpre = self.get_vocab_base()
+        n_text = len(tokens)
+        n_speech = self.hparams["speech_vocab_size"]
+        speech = self._speech_token_names(n_speech)
+        tokens += speech
+        toktypes += [gguf.TokenType.CONTROL] * n_speech
+
+        with open(self.dir_model / "merges.txt", "r", encoding="utf-8") as f:
+            merges = [line.rstrip("\n") for line in f if line.strip() and not line.startswith("#version")]
+
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_token_merges(merges)
+
+        self.gguf_writer.add_bos_token_id(n_text + SPEECH_BOS)
+        self.gguf_writer.add_eos_token_id(n_text + SPEECH_EOS)
+        self.gguf_writer.add_add_bos_token(False)
+        self.gguf_writer.add_add_eos_token(False)
+
+        # the reference samples the speech head only: suppress the text zone
+        # so the sampling chain can never pick a text token
+        self.gguf_writer.add_suppress_tokens(list(range(n_text)))
+
+    def _set_vocab_mtl(self):
+        # custom multilingual BPE (mtl_tokenizer.json), extended with the speech
+        # tokens. the reference tokenizer is char-level (raw unicode chars in
+        # the vocab), while the gpt2 tokenizer of llama.cpp is byte-level: the
+        # vocab and merges are re-encoded through the gpt2 byte-to-unicode map,
+        # and synthetic merges rebuild each multi-byte char from its bytes so
+        # that the byte-level closure reproduces the char-level tokenization.
+        # the reference also lowercases and NFKD-normalizes its input; this
+        # port keeps composed characters (they live in the vocab with merges)
+        # and folds case in the embedding table instead, so the raw prompt
+        # needs no runtime text preprocessing at all
+        with open(self.dir_model / "mtl_tokenizer.json", "r", encoding="utf-8") as f:
+            tok = json.load(f)
+
+        byte_map = gguf.vocab.bytes_to_unicode()
+
+        def enc(s: str) -> str:
+            return "".join(byte_map[b] for b in s.encode("utf-8"))
+
+        n_text = self.hparams["vocab_size"]
+        tokens: list[str] = [f"[unused_{i}]" for i in range(n_text)]
+        toktypes = [int(gguf.TokenType.UNUSED)] * n_text
+        char_merges: list[str] = []
+        for t, i in tok["model"]["vocab"].items():
+            if t == " ":
+                # the raw space char is a dead token (the reference substitutes
+                # [SPACE] before encoding), its slot stays unused
+                continue
+            tokens[i] = enc(t)
+            toktypes[i] = int(gguf.TokenType.NORMAL)
+            if len(t) == 1 and len(t.encode("utf-8")) > 1:
+                parts = [byte_map[b] for b in t.encode("utf-8")]
+                for k in range(1, len(parts)):
+                    char_merges.append("".join(parts[:k]) + " " + parts[k])
+        for entry in tok.get("added_tokens", []):
+            tokens[entry["id"]] = entry["content"]
+            toktypes[entry["id"]] = int(gguf.TokenType.CONTROL)
+
+        # the reference replaces ' ' with the [SPACE] token before encoding:
+        # that substitution is baked into the vocab by giving the [SPACE] slot
+        # the byte-level space as content, so raw spaces tokenize to it directly
+        space_id = tok["model"]["vocab"]["[SPACE]"]
+        tokens[space_id] = enc(" ")
+        toktypes[space_id] = int(gguf.TokenType.NORMAL)
+
+        n_speech = self.hparams["speech_vocab_size"]
+        tokens += self._speech_token_names(n_speech)
+        toktypes += [int(gguf.TokenType.CONTROL)] * n_speech
+
+        # char-building merges rank first: chars are atomic in the reference,
+        # they must form before any of its merges apply
+        merges = char_merges
+        for m in tok["model"].get("merges", []):
+            a, b = m if isinstance(m, list) else m.split(" ")
+            merges.append(enc(a) + " " + enc(b))
+
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_token_merges(merges)
+
+        self.gguf_writer.add_bos_token_id(n_text + SPEECH_BOS)
+        self.gguf_writer.add_eos_token_id(n_text + SPEECH_EOS)
+        self.gguf_writer.add_add_bos_token(False)
+        self.gguf_writer.add_add_eos_token(False)
+
+        # the reference samples the speech head only: suppress the text zone
+        # so the sampling chain can never pick a text token
+        self.gguf_writer.add_suppress_tokens(list(range(n_text)))
+
+    def _mtl_case_fold_pairs(self) -> list[tuple[int, int]]:
+        # single-char uppercase vocab entries whose lowercase form is also a
+        # single-char vocab entry, as (upper_id, lower_id) pairs. covers every
+        # script in the vocab (latin, latin-1 accented, cyrillic, greek, ...)
+        with open(self.dir_model / "mtl_tokenizer.json", "r", encoding="utf-8") as f:
+            vocab = json.load(f)["model"]["vocab"]
+        pairs: list[tuple[int, int]] = []
+        for t, i in vocab.items():
+            if len(t) != 1:
+                continue
+            low = t.lower()
+            if low != t and len(low) == 1 and low in vocab:
+                pairs.append((i, vocab[low]))
+        return pairs
+
+    def set_gguf_parameters(self):
+        if self.is_turbo:
+            self.gguf_writer.add_block_count(self.hparams["n_layer"])
+            self.gguf_writer.add_context_length(self.hparams["n_ctx"])
+            self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+            self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+            self.gguf_writer.add_head_count(self.hparams["n_head"])
+            self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        else:
+            self.gguf_writer.add_block_count(self.hparams["num_hidden_layers"])
+            self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+            self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+            self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+            self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+            self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
+            self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
+            self.gguf_writer.add_rope_dimension_count(self.hparams["head_dim"])
+            self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+        sampling = TURBO_SAMPLING if self.is_turbo else MTL_SAMPLING
+        self.gguf_writer.add_sampling_top_k(sampling["top_k"])
+        self.gguf_writer.add_sampling_min_p(sampling["min_p"])
+        self.gguf_writer.add_sampling_top_p(sampling["top_p"])
+        self.gguf_writer.add_sampling_temp(sampling["temp"])
+        self.gguf_writer.add_sampling_penalty_repeat(sampling["penalty_repeat"])
+        self.gguf_writer.add_sampling_penalty_last_n(PENALTY_LAST_N)
+
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+        if self.is_turbo:
+            return
+        # llama3 rope scaling baked into the rope_freqs factors tensor
+        rp = self.hparams["rope_scaling"]
+        dim = self.hparams["head_dim"]
+        base = self.hparams["rope_theta"]
+        freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+        factor = rp["factor"]
+        low_freq_wavelen = rp["original_max_position_embeddings"] / rp["low_freq_factor"]
+        high_freq_wavelen = rp["original_max_position_embeddings"] / rp["high_freq_factor"]
+        rope_factors = []
+        for freq in freqs:
+            wavelen = 2 * math.pi / freq
+            if wavelen < high_freq_wavelen:
+                rope_factors.append(1)
+            elif wavelen > low_freq_wavelen:
+                rope_factors.append(factor)
+            else:
+                smooth = (rp["original_max_position_embeddings"] / wavelen - rp["low_freq_factor"]) / (rp["high_freq_factor"] - rp["low_freq_factor"])
+                rope_factors.append(1 / ((1 - smooth) / factor + smooth))
+        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
+
+    @staticmethod
+    def permute(weights: Tensor, n_head: int) -> Tensor:
+        # HF half-split rope layout to the interleaved layout of the llama arch
+        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
+
+    def _maybe_emit_fused(self) -> Iterable[tuple[str, Tensor]]:
+        if self._text_embd is not None and self._speech_embd is not None:
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD),
+                   torch.cat([self._text_embd, self._speech_embd], dim=0))
+            self._text_embd = None
+            self._speech_embd = None
+        if self._text_head is not None and self._speech_head is not None:
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT),
+                   torch.cat([self._text_head, self._speech_head], dim=0))
+            self._text_head = None
+            self._speech_head = None
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # generate_extra_tensors output comes back through here with its final name
+        if name.startswith("rope_freqs"):
+            yield (name, data_torch)
+            return
+        # fused [text | speech] vocab: embeddings and output head
+        if name == "text_emb.weight":
+            if not self.is_turbo:
+                # case folding baked into the embedding table: uppercase rows
+                # are replaced by their lowercase rows (the reference lowercases
+                # before encoding, so the uppercase rows are never trained)
+                fold = list(range(data_torch.shape[0]))
+                for upper, lower in self._mtl_case_fold_pairs():
+                    fold[upper] = lower
+                data_torch = data_torch[torch.tensor(fold)]
+            self._text_embd = data_torch
+            yield from self._maybe_emit_fused()
+            return
+        if name == "speech_emb.weight":
+            self._speech_embd = data_torch
+            yield from self._maybe_emit_fused()
+            return
+        if name == "text_head.weight":
+            self._text_head = data_torch
+            yield from self._maybe_emit_fused()
+            return
+        if name == "speech_head.weight":
+            self._speech_head = data_torch
+            yield from self._maybe_emit_fused()
+            return
+        if name == "speech_head.bias":
+            # the gpt2 arch has no output bias tensor; the constant speech logit
+            # bias is dropped, matching the validated behavior of this port
+            return
+
+        assert name.startswith("tfmr.")
+        name = name[len("tfmr."):]
+
+        if self.is_turbo:
+            # HF GPT-2 layout: Conv1D style weights are stored transposed
+            if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight")):
+                data_torch = data_torch.transpose(1, 0)
+            yield (self.map_tensor_name(name), data_torch)
+            return
+
+        if name.endswith("q_proj.weight"):
+            data_torch = self.permute(data_torch, self.hparams["num_attention_heads"])
+        if name.endswith("k_proj.weight"):
+            data_torch = self.permute(data_torch, self.hparams["num_key_value_heads"])
+        yield (self.map_tensor_name("model." + name), data_torch)
+
+
+@ModelBase.register("ChatterboxModel")
+class ChatterboxMmprojModel(MmprojModel):
+    has_vision_encoder = False
+    has_audio_encoder = True
+
+    def __init__(self, dir_model: Path, *args, **kwargs):
+        self.is_turbo = _is_turbo(dir_model)
+        super().__init__(dir_model, *args, **kwargs)
+        self._wnorm_g: dict[str, Tensor] = {}
+        self._wnorm_v: dict[str, Tensor] = {}
+
+    def get_audio_config(self) -> dict[str, Any] | None:
+        return self.global_config.get("audio_config")
+
+    def index_tensors(self, remote_hf_model_id: str | None = None) -> dict[str, Callable[[], Tensor]]:
+        talker = TURBO_TALKER if self.is_turbo else MTL_TALKER
+        s3gen = TURBO_S3GEN if self.is_turbo else MTL_S3GEN
+
+        def rename_s3gen(name: str) -> str | None:
+            # batchnorm bookkeeping, unused in inference (and over the gguf name length cap)
+            if name.endswith("num_batches_tracked"):
+                return None
+            # dsp buffers; the mel filterbank is synthesized in
+            # generate_extra_tensors, the window is rebuilt at runtime
+            if name in ("tokenizer.window", "tokenizer._mel_filters"):
+                return None
+            for src, dst in (
+                ("flow.encoder.",           "a.gen.fenc."),
+                ("flow.decoder.estimator.", "a.gen.est."),
+                ("mel2wav.",                "a.gen.hift."),
+                ("speaker_encoder.",        "a.spk."),
+                ("tokenizer.",              "a.s3tok."),
+            ):
+                if name.startswith(src):
+                    return dst + name[len(src):]
+            if name.startswith("flow."):
+                # input_embedding, encoder_proj, spk_embed_affine_layer
+                return "a.gen." + name
+            return None
+
+        def rename_ve(name: str) -> str | None:
+            if name.startswith("similarity_"):
+                return None
+            return "a.ve." + name
+
+        def rename_talker(name: str) -> str | None:
+            # conditioning encoder, learned position tables and the speech
+            # embedding table live on the mmproj side
+            if name.startswith("cond_enc."):
+                return "a.cenc." + name[len("cond_enc."):]
+            if name == "text_pos_emb.emb.weight":
+                return "a.gen.t3.text_pos_emb"
+            if name == "speech_pos_emb.emb.weight":
+                return "a.gen.t3.speech_pos_emb"
+            if name == "speech_emb.weight":
+                return self.format_tensor_name(gguf.MODEL_TENSOR.A_GEN_CODE_OUT_EMBD)
+            return None
+
+        tensors = _index_safetensors(self.dir_model / s3gen, self.lazy, rename_s3gen)
+        tensors.update(_index_safetensors(self.dir_model / "ve.safetensors", self.lazy, rename_ve))
+        tensors.update(_index_safetensors(self.dir_model / talker, self.lazy, rename_talker))
+        return tensors
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_file_type(self.ftype)
+
+        # speaker encoder (CAMPPlus, chatterbox_spkenc projector); the DSP front-end
+        # hparams are fixed by the projector type on the C++ side
+        self.gguf_writer.add_clip_has_audio_encoder(True)
+        self.gguf_writer.add_clip_audio_projector_type(gguf.VisionProjectorType.CHATTERBOX_SPKENC)
+        self.gguf_writer.add_audio_projection_dim(80)
+        self.gguf_writer.add_audio_num_mel_bins(80)
+        self.gguf_writer.add_audio_block_count(0)
+        self.gguf_writer.add_audio_embedding_length(192)
+        self.gguf_writer.add_audio_head_count(1)
+        self.gguf_writer.add_audio_feed_forward_length(192)
+        self.gguf_writer.add_audio_attention_layernorm_eps(1e-5)
+
+        # audio generator (s3gen, chatterbox projector); the flow encoder shape
+        self.gguf_writer.add_clip_has_gen_audio_encoder(True)
+        self.gguf_writer.add_clip_gen_audio_projector_type(gguf.VisionProjectorType.CHATTERBOX)
+        self.gguf_writer.add_gen_audio_projection_dim(80)
+        self.gguf_writer.add_gen_audio_embedding_length(512)
+        self.gguf_writer.add_gen_audio_feed_forward_length(2048)
+        self.gguf_writer.add_gen_audio_block_count(6)
+        self.gguf_writer.add_gen_audio_head_count(8)
+        self.gguf_writer.add_gen_audio_attention_layernorm_eps(1e-5)
+
+        self.gguf_writer.add_uint32("chatterbox.n_mels", 80)
+        self.gguf_writer.add_uint32("chatterbox.sample_rate", 24000)
+        self.gguf_writer.add_uint32("chatterbox.speech_vocab", self.global_config["text_config"]["speech_vocab_size"])
+        self.gguf_writer.add_uint32("chatterbox.meanflow", 1 if self.is_turbo else 0)
+
+    def _fuse_weight_norm(self, name: str, data_torch: Tensor) -> tuple[str, Tensor] | None:
+        # torch weight_norm parametrization: weight = g * v / |v| over dims 1..n
+        base = name.split(".parametrizations.weight.original")[0]
+        if name.endswith("original0"):
+            self._wnorm_g[base] = data_torch
+        else:
+            self._wnorm_v[base] = data_torch
+        if base in self._wnorm_g and base in self._wnorm_v:
+            g = self._wnorm_g.pop(base)
+            v = self._wnorm_v.pop(base)
+            norm = v.float().norm(dim=tuple(range(1, v.dim())), keepdim=True)
+            return (base + ".weight", g.float() * v.float() / norm)
+        return None
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        if ".parametrizations.weight.original" in name:
+            fused = self._fuse_weight_norm(name, data_torch)
+            if fused is not None:
+                yield fused
+            return
+        yield (name, data_torch)
+
+    def tensor_force_quant(self, name, new_name, bid, n_dims):
+        del name, bid
+        # tensors read raw on the host (voice encoder, conditioning encoder,
+        # precomputed conditioning, position tables, mel filterbank, source
+        # module) must stay F32: the reader handles F32/F16/I32 only
+        if new_name.startswith(("a.ve.", "a.cenc.", "a.gen.cond.", "a.gen.t3.", "a.gen.hift.m_source.")) or new_name == "a.s3tok.mel_filters":
+            return gguf.GGMLQuantizationType.F32
+        # conv kernels of the graphs (ggml_conv_1d/_2d/_dw and the transposed
+        # convs of the vocoder) have no BF16 kernels; F16 is the graph-side
+        # storage type for everything large, F32 for the rest
+        if n_dims >= 2 and new_name.endswith((".weight", ".weight_v")):
+            return gguf.GGMLQuantizationType.F16
+        return gguf.GGMLQuantizationType.F32
+
+    def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
+        talker = TURBO_TALKER if self.is_turbo else MTL_TALKER
+        conds = torch.load(self.dir_model / "conds.pt", map_location="cpu", weights_only=True)
+        t3c = conds["t3"] if isinstance(conds, dict) else conds.t3
+        genc = conds["gen"] if isinstance(conds, dict) else conds.gen
+        t3c = vars(t3c) if not isinstance(t3c, dict) else t3c
+        genc = vars(genc) if not isinstance(genc, dict) else genc
+
+        def talker_tensor(name: str) -> Tensor:
+            with gguf.utility.SafetensorsLocal(self.dir_model / talker) as parts:
+                data = parts[name]
+                dtype = LazyTorchTensor._dtype_str_map[data.dtype]
+                return torch.from_numpy(data.mmap_bytes()).view(dtype).reshape(data.shape).clone()
+
+        yield ("a.s3tok.mel_filters", _s3tok_mel_filters())
+
+        # default voice: precomputed s3gen conditioning from conds.pt
+        yield ("a.gen.cond.gen_prompt_token", genc["prompt_token"][0].to(torch.int32))
+        yield ("a.gen.cond.gen_prompt_feat", genc["prompt_feat"][0].float())
+        # raw 192-dim campplus x-vector of the default voice: normalization
+        # and the flow speaker affine run inside the code2wav graph
+        yield ("a.gen.cond.gen_embedding", genc["embedding"][0].float())
+
+        spkr_w = talker_tensor("cond_enc.spkr_enc.weight").float()
+        spkr_b = talker_tensor("cond_enc.spkr_enc.bias").float()
+        spkr_row = spkr_w @ t3c["speaker_emb"][0].float() + spkr_b
+
+        if self.is_turbo:
+            # default talker conditioning: projected speaker row + speech token ids,
+            # resolved through the speech embedding table at inference time
+            yield ("a.gen.cond.spkr_default", spkr_row)
+            yield ("a.gen.cond.prompt_speech_tokens", t3c["cond_prompt_speech_tokens"][0].to(torch.int32))
+            return
+
+        # multilingual default talker conditioning: [spkr, perceiver x32, emotion]
+        # block precomputed by running the reference perceiver over the embedded
+        # default cond speech tokens (flash attention path of AttentionBlock2)
+        with torch.no_grad():
+            speech_emb = talker_tensor("speech_emb.weight").float()
+            speech_pos = talker_tensor("speech_pos_emb.emb.weight").float()
+            cond_tokens = t3c["cond_prompt_speech_tokens"][0]
+            pse = speech_emb[cond_tokens] + speech_pos[: cond_tokens.shape[0]]
+
+            ln_w = talker_tensor("cond_enc.perceiver.attn.norm.weight").float()
+            ln_b = talker_tensor("cond_enc.perceiver.attn.norm.bias").float()
+            wq = talker_tensor("cond_enc.perceiver.attn.to_q.weight").float()
+            bq = talker_tensor("cond_enc.perceiver.attn.to_q.bias").float()
+            wk = talker_tensor("cond_enc.perceiver.attn.to_k.weight").float()
+            bk = talker_tensor("cond_enc.perceiver.attn.to_k.bias").float()
+            wv = talker_tensor("cond_enc.perceiver.attn.to_v.weight").float()
+            bv = talker_tensor("cond_enc.perceiver.attn.to_v.bias").float()
+            wo = talker_tensor("cond_enc.perceiver.attn.proj_out.weight").float()
+            bo = talker_tensor("cond_enc.perceiver.attn.proj_out.bias").float()
+            query = talker_tensor("cond_enc.perceiver.pre_attention_query")[0].float()
+
+            n_head = 4
+            n_e = query.shape[1]
+
+            def attn_block(x1: Tensor, x2: Tensor) -> Tensor:
+                nx1 = F.layer_norm(x1, (n_e,), ln_w, ln_b)
+                nx2 = F.layer_norm(x2, (n_e,), ln_w, ln_b)
+                q = (nx1 @ wq.T + bq).view(-1, n_head, n_e // n_head).transpose(0, 1)
+                k = (nx2 @ wk.T + bk).view(-1, n_head, n_e // n_head).transpose(0, 1)
+                v = (nx2 @ wv.T + bv).view(-1, n_head, n_e // n_head).transpose(0, 1)
+                ctx = F.scaled_dot_product_attention(q, k, v)
+                ctx = ctx.transpose(0, 1).reshape(-1, n_e)
+                return ctx @ wo.T + bo + x1
+
+            pre = attn_block(query, pse)
+            p32 = attn_block(pre, pre)
+
+            emo = talker_tensor("cond_enc.emotion_adv_fc.weight").float()
+            emo_row = emo[:, 0] * t3c["emotion_adv"].reshape(-1)[0]
+            yield ("a.gen.cond.t3_cond", torch.cat([spkr_row[None], p32, emo_row[None]], dim=0))

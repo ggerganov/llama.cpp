@@ -1,6 +1,7 @@
 #include "mtmd-audio.h"
 
 #define _USE_MATH_DEFINES // for M_PI
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -967,6 +968,550 @@ bool mtmd_audio_preprocessor_qwen3tts_spk::preprocess(const float *             
     }
 
     output.push_back(std::move(out));
+    return true;
+}
+
+// whisper style log-mel of the chatterbox s3 tokenizer (s3tokenizer.py)
+static bool mtmd_audio_s3tok_log_mel(const float * samples, size_t n_samples,
+                              const float * filters, int n_mel,
+                              std::vector<float> & out, int & n_frames) {
+    const int n_fft  = 400;
+    const int hop    = 160;
+    const int n_bins = n_fft / 2 + 1;
+    const int half   = n_fft / 2;
+    const int n      = (int) n_samples;
+
+    n_frames = n / hop;
+    if (n_frames <= 0) {
+        return false;
+    }
+
+    std::vector<double> window(n_fft);
+    for (int i = 0; i < n_fft; i++) {
+        window[(size_t) i] = 0.5 * (1.0 - cos(2.0 * M_PI * i / n_fft));
+    }
+
+    std::vector<double> mel((size_t) n_mel * n_frames, 0.0);
+    std::vector<double> frame(n_fft);
+    std::vector<double> power(n_bins);
+    for (int fr = 0; fr < n_frames; fr++) {
+        for (int i = 0; i < n_fft; i++) {
+            int idx = fr * hop - half + i;
+            if (idx < 0) {
+                idx = -idx;
+            }
+            if (idx >= n) {
+                idx = 2 * n - 2 - idx;
+            }
+            frame[(size_t) i] = samples[idx] * window[(size_t) i];
+        }
+
+        for (int k = 0; k < n_bins; k++) {
+            double re = 0.0, im = 0.0;
+            for (int i = 0; i < n_fft; i++) {
+                const double a = 2.0 * M_PI * k * i / n_fft;
+                re += frame[(size_t) i] * cos(a);
+                im -= frame[(size_t) i] * sin(a);
+            }
+            power[(size_t) k] = re * re + im * im;
+        }
+
+        for (int m = 0; m < n_mel; m++) {
+            double e = 0.0;
+            const float * w = filters + (size_t) m * n_bins;
+            for (int k = 0; k < n_bins; k++) {
+                e += w[k] * power[(size_t) k];
+            }
+            mel[(size_t) m * n_frames + fr] = log10(std::max(e, 1e-10));
+        }
+    }
+
+    double mx = mel[0];
+    for (const double v : mel) {
+        mx = std::max(mx, v);
+    }
+    out.resize(mel.size());
+    for (size_t i = 0; i < mel.size(); i++) {
+        out[i] = (float) ((std::max(mel[i], mx - 8.0) + 4.0) / 4.0);
+    }
+    return true;
+}
+
+// rational 3/2 upsampler: every output sample sits at source position
+// 2 n / 3, interpolated by a hann windowed sinc cut just under the source
+// nyquist. edges are zero extended.
+static void mtmd_audio_upsample_3_2(const float * samples, size_t n_samples, std::vector<float> & out) {
+    const int    W  = 16;    // sinc half width in source samples
+    const double fc = 0.495; // cutoff, normalized to the source rate
+
+    const size_t n_out = n_samples * 3 / 2;
+    out.assign(n_out, 0.0f);
+    for (size_t n = 0; n < n_out; n++) {
+        const double t  = (double) (2 * n) / 3.0;
+        const int    k0 = (int) floor(t) - W + 1;
+        double acc = 0.0;
+        for (int k = k0; k < k0 + 2 * W; k++) {
+            if (k < 0 || k >= (int) n_samples) {
+                continue;
+            }
+            const double x = t - k;
+            const double s = x == 0.0 ? 1.0 : sin(2.0 * M_PI * fc * x) / (M_PI * x);
+            acc += samples[k] * s * 0.5 * (1.0 + cos(M_PI * x / (W + 1)));
+        }
+        out[n] = (float) acc;
+    }
+}
+
+// matcha style log-mel of the s3gen prompt features (s3gen/utils/mel.py)
+static bool mtmd_audio_matcha_log_mel(const float * samples, size_t n_samples,
+                               std::vector<float> & out, int & n_frames) {
+    const int n_fft  = 1920;
+    const int hop    = 480;
+    const int n_bins = n_fft / 2 + 1;
+    const int pad    = (n_fft - hop) / 2;
+    const int n_mel  = 80;
+    const int n      = (int) n_samples;
+
+    n_frames = 1 + (n + 2 * pad - n_fft) / hop;
+    if (n <= pad || n_frames <= 0) {
+        return false;
+    }
+
+    mtmd_audio_cache cache;
+    cache.fill_sin_cos_table(n_fft);
+    cache.fill_hann_window(n_fft, true);
+    cache.fill_mel_filterbank_matrix(n_mel, n_fft, 24000, 0.0f, 8000.0f);
+
+    std::vector<float> fft_in((size_t) n_fft * 2, 0.0f);
+    std::vector<float> fft_out((size_t) n_fft * 8);
+    std::vector<float> mag(n_bins);
+    out.resize((size_t) n_mel * n_frames);
+    for (int fr = 0; fr < n_frames; fr++) {
+        for (int i = 0; i < n_fft; i++) {
+            int idx = fr * hop - pad + i;
+            if (idx < 0) {
+                idx = -idx;
+            }
+            if (idx >= n) {
+                idx = 2 * n - 2 - idx;
+            }
+            fft_in[(size_t) i] = samples[idx] * cache.hann_window[(size_t) i];
+        }
+        fft(cache, fft_in.data(), n_fft, fft_out.data());
+
+        for (int k = 0; k < n_bins; k++) {
+            const float re = fft_out[2 * k + 0];
+            const float im = fft_out[2 * k + 1];
+            mag[(size_t) k] = sqrtf(re * re + im * im + 1e-9f);
+        }
+        for (int m = 0; m < n_mel; m++) {
+            float e = 0.0f;
+            const float * w = cache.filters.data.data() + (size_t) m * n_bins;
+            for (int k = 0; k < n_bins; k++) {
+                e += w[k] * mag[(size_t) k];
+            }
+            out[(size_t) fr * n_mel + m] = logf(std::max(e, 1e-5f));
+        }
+    }
+    return true;
+}
+
+// librosa.effects.trim replica, rms windows 2048/512 centered with zero
+// padding, non-silent where the window sits less than top_db under the peak
+static void mtmd_audio_trim_silence(const float * samples, size_t n_samples, float top_db,
+                             size_t & start, size_t & end) {
+    const int win = 2048;
+    const int hop = 512;
+    const int n   = (int) n_samples;
+
+    const int n_fr = 1 + n / hop;
+    std::vector<double> rms((size_t) n_fr);
+    double mx = 0.0;
+    for (int fr = 0; fr < n_fr; fr++) {
+        double acc = 0.0;
+        for (int i = 0; i < win; i++) {
+            const int idx = fr * hop - win / 2 + i;
+            if (idx >= 0 && idx < n) {
+                acc += (double) samples[idx] * samples[idx];
+            }
+        }
+        rms[(size_t) fr] = sqrt(acc / win);
+        mx = std::max(mx, rms[(size_t) fr]);
+    }
+
+    const double thr = mx * pow(10.0, -top_db / 20.0);
+    int first = -1, last = -1;
+    for (int fr = 0; fr < n_fr; fr++) {
+        if (rms[(size_t) fr] > thr) {
+            if (first < 0) {
+                first = fr;
+            }
+            last = fr;
+        }
+    }
+    if (first < 0) {
+        start = end = 0;
+        return;
+    }
+    start = (size_t) first * hop;
+    end   = std::min((size_t) (last + 1) * hop, n_samples);
+}
+
+// power mel of the voice encoder front-end: centered reflect padded frames,
+// hann 400 periodic, hop 160, squared magnitude, slaney mel 40 bins, no log
+static bool mtmd_audio_ve_mel(const float * samples, size_t n_samples,
+                       std::vector<float> & out, int & n_frames) {
+    const int n_fft  = 400;
+    const int hop    = 160;
+    const int n_bins = n_fft / 2 + 1;
+    const int half   = n_fft / 2;
+    const int n_mel  = 40;
+    const int n      = (int) n_samples;
+
+    n_frames = 1 + n / hop;
+    if (n < 2) {
+        return false;
+    }
+
+    mtmd_audio_cache cache;
+    cache.fill_mel_filterbank_matrix(n_mel, n_fft, 16000, 0.0f, 8000.0f);
+
+    std::vector<double> window(n_fft);
+    for (int i = 0; i < n_fft; i++) {
+        window[(size_t) i] = 0.5 * (1.0 - cos(2.0 * M_PI * i / n_fft));
+    }
+
+    std::vector<double> frame(n_fft);
+    std::vector<double> power(n_bins);
+    out.resize((size_t) n_mel * n_frames);
+    for (int fr = 0; fr < n_frames; fr++) {
+        for (int i = 0; i < n_fft; i++) {
+            int idx = fr * hop - half + i;
+            if (idx < 0) {
+                idx = -idx;
+            }
+            if (idx >= n) {
+                idx = 2 * n - 2 - idx;
+            }
+            frame[(size_t) i] = samples[idx] * window[(size_t) i];
+        }
+        for (int k = 0; k < n_bins; k++) {
+            double re = 0.0, im = 0.0;
+            for (int i = 0; i < n_fft; i++) {
+                const double a = 2.0 * M_PI * k * i / n_fft;
+                re += frame[(size_t) i] * cos(a);
+                im -= frame[(size_t) i] * sin(a);
+            }
+            power[(size_t) k] = re * re + im * im;
+        }
+        for (int m = 0; m < n_mel; m++) {
+            double e = 0.0;
+            const float * w = cache.filters.data.data() + (size_t) m * n_bins;
+            for (int k = 0; k < n_bins; k++) {
+                e += w[k] * power[(size_t) k];
+            }
+            out[(size_t) fr * n_mel + m] = (float) e;
+        }
+    }
+    return true;
+}
+
+// ITU-R BS.1770 integrated loudness of a mono signal, matching pyloudnorm
+static float mtmd_audio_lufs(const float * samples, size_t n_samples, int sample_rate) {
+    std::vector<double> y(samples, samples + n_samples);
+
+    auto biquad = [&](double b0, double b1, double b2, double a1, double a2) {
+        double x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+        for (double & v : y) {
+            const double x0 = v;
+            v = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1; x1 = x0;
+            y2 = y1; y1 = v;
+        }
+    };
+
+    // stage 1: high shelf, f0 1681.9744509555319 Hz, +3.99984385397 dB, Q 0.7071752369554196
+    {
+        const double A     = pow(10.0, 3.99984385397 / 40.0);
+        const double w0    = 2.0 * M_PI * 1681.9744509555319 / sample_rate;
+        const double alpha = sin(w0) / (2.0 * 0.7071752369554196);
+        const double c     = cos(w0);
+        const double sq    = 2.0 * sqrt(A) * alpha;
+        const double b0 =      A * ((A + 1.0) + (A - 1.0) * c + sq);
+        const double b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * c);
+        const double b2 =      A * ((A + 1.0) + (A - 1.0) * c - sq);
+        const double a0 =           (A + 1.0) - (A - 1.0) * c + sq;
+        const double a1 =  2.0 *    ((A - 1.0) - (A + 1.0) * c);
+        const double a2 =           (A + 1.0) - (A - 1.0) * c - sq;
+        biquad(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
+    }
+    // stage 2: high pass, f0 38.13547087602444 Hz, Q 0.5003270373238773
+    {
+        const double w0    = 2.0 * M_PI * 38.13547087602444 / sample_rate;
+        const double alpha = sin(w0) / (2.0 * 0.5003270373238773);
+        const double c     = cos(w0);
+        const double b0 =  (1.0 + c) / 2.0;
+        const double b1 = -(1.0 + c);
+        const double b2 =  (1.0 + c) / 2.0;
+        const double a0 =   1.0 + alpha;
+        const double a1 =  -2.0 * c;
+        const double a2 =   1.0 - alpha;
+        biquad(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
+    }
+
+    const int win = (int) (0.4 * sample_rate);
+    const int hop = win / 4;
+    if ((int) n_samples < win) {
+        return -HUGE_VALF;
+    }
+    const int n_blocks = 1 + ((int) n_samples - win) / hop;
+    std::vector<double> z((size_t) n_blocks);
+    for (int b = 0; b < n_blocks; b++) {
+        double acc = 0.0;
+        for (int i = 0; i < win; i++) {
+            acc += y[(size_t) b * hop + i] * y[(size_t) b * hop + i];
+        }
+        z[(size_t) b] = acc / win;
+    }
+
+    auto gated_mean = [&](double thr_lufs) {
+        double acc = 0.0;
+        int    n   = 0;
+        for (const double v : z) {
+            if (-0.691 + 10.0 * log10(std::max(v, 1e-30)) > thr_lufs) {
+                acc += v;
+                n++;
+            }
+        }
+        return n > 0 ? acc / n : 0.0;
+    };
+
+    const double z_abs = gated_mean(-70.0);
+    if (z_abs <= 0.0) {
+        return -HUGE_VALF;
+    }
+    const double thr_rel = -0.691 + 10.0 * log10(z_abs) - 10.0;
+    const double z_rel   = gated_mean(thr_rel);
+    if (z_rel <= 0.0) {
+        return -HUGE_VALF;
+    }
+    return (float) (-0.691 + 10.0 * log10(z_rel));
+}
+
+//
+// mtmd_audio_preprocessor_chatterbox_ref
+//
+// Mirrors torchaudio.compliance.kaldi.fbank(wav, num_mel_bins=80) at 16 kHz as
+// used by the CAMPPlus x-vector front-end (s3gen/xvector.py extract_feature):
+//   snip_edges framing 400/160, per-frame dc removal, preemphasis 0.97, povey
+//   window, 512-point power spectrum, kaldi mel banks (low 20 Hz, high
+//   nyquist, nyquist fft bin excluded), log with float-eps floor, then the
+//   reference's own cepstral mean subtraction over time.
+//
+
+void mtmd_audio_preprocessor_chatterbox_ref::initialize() {
+    const int frame_len = 400;
+    const int n_fft     = 512;
+    const int n_bins    = n_fft / 2;
+    const int n_mel     = hparams.n_mel_bins;
+    const double sr     = (double) hparams.audio_sample_rate;
+
+    window.resize(frame_len);
+    for (int i = 0; i < frame_len; i++) {
+        window[(size_t) i] = (float) pow(0.5 - 0.5 * cos(2.0 * M_PI * i / (frame_len - 1)), 0.85);
+    }
+
+    auto mel = [](double f) { return 1127.0 * log(1.0 + f / 700.0); };
+    const double mel_lo = mel(20.0);
+    const double mel_hi = mel(sr / 2.0);
+    const double delta  = (mel_hi - mel_lo) / (n_mel + 1);
+    const double bin_hz = sr / n_fft;
+
+    filters.assign((size_t) n_mel * n_bins, 0.0f);
+    for (int m = 0; m < n_mel; m++) {
+        const double left   = mel_lo + m * delta;
+        const double center = left + delta;
+        const double right  = center + delta;
+        for (int i = 0; i < n_bins; i++) {
+            const double f = mel(bin_hz * i);
+            if (f > left && f < right) {
+                const double w = f <= center ? (f - left) / (center - left)
+                                             : (right - f) / (right - center);
+                filters[(size_t) m * n_bins + i] = (float) w;
+            }
+        }
+    }
+}
+
+bool mtmd_audio_preprocessor_chatterbox_ref::preprocess(const float *                 samples,
+                                                        size_t                        n_samples,
+                                                        std::vector<mtmd_audio_mel> & output) const {
+    output.clear();
+    const int sr = (int) hparams.audio_sample_rate;
+
+    // the turbo variant loudness-normalizes the whole clip before any feature
+    std::vector<float> pcm(samples, samples + n_samples);
+    if (!is_mtl) {
+        const float lufs = mtmd_audio_lufs(pcm.data(), pcm.size(), sr);
+        if (lufs != -HUGE_VALF) {
+            const float gain = powf(10.0f, (-27.0f - lufs) / 20.0f);
+            if (std::isfinite(gain) && gain > 0.0f) {
+                for (float & v : pcm) {
+                    v *= gain;
+                }
+            }
+        }
+    }
+
+    // entry 0: CAMPPlus kaldi fbank, per-channel mean subtracted over time
+    {
+        const int frame_len = 400;
+        const int hop       = 160;
+        const int n_fft     = 512;
+        const int n_bins    = n_fft / 2;
+        const int n_mel     = hparams.n_mel_bins;
+
+        if ((int) pcm.size() < frame_len) {
+            return false;
+        }
+        const int n_frames = 1 + ((int) pcm.size() - frame_len) / hop;
+
+        GGML_ASSERT(!window.empty());
+        GGML_ASSERT(!filters.empty());
+
+        mtmd_audio_mel out;
+        out.n_len     = n_frames;
+        out.n_len_org = n_frames;
+        out.n_mel     = n_mel;
+        out.data.assign((size_t) n_mel * n_frames, 0.0f);
+
+        std::vector<double> frame(n_fft);
+        std::vector<double> power(n_bins);
+        for (int fr = 0; fr < n_frames; fr++) {
+            const float * x = pcm.data() + (size_t) fr * hop;
+
+            double mean = 0.0;
+            for (int i = 0; i < frame_len; i++) {
+                mean += x[i];
+            }
+            mean /= frame_len;
+
+            frame[0] = (x[0] - mean) * (1.0 - 0.97) * window[0];
+            for (int i = 1; i < frame_len; i++) {
+                frame[(size_t) i] = ((x[i] - mean) - 0.97 * (x[i - 1] - mean)) * window[(size_t) i];
+            }
+            std::fill(frame.begin() + frame_len, frame.end(), 0.0);
+
+            for (int k = 0; k < n_bins; k++) {
+                double re = 0.0, im = 0.0;
+                for (int i = 0; i < frame_len; i++) {
+                    const double a = 2.0 * M_PI * k * i / n_fft;
+                    re += frame[(size_t) i] * cos(a);
+                    im -= frame[(size_t) i] * sin(a);
+                }
+                power[(size_t) k] = re * re + im * im;
+            }
+
+            for (int m = 0; m < n_mel; m++) {
+                double e = 0.0;
+                const float * w = filters.data() + (size_t) m * n_bins;
+                for (int k = 0; k < n_bins; k++) {
+                    e += w[k] * power[(size_t) k];
+                }
+                out.data[(size_t) m * n_frames + fr] = (float) log(std::max(e, (double) FLT_EPSILON));
+            }
+        }
+
+        for (int m = 0; m < n_mel; m++) {
+            float * row = out.data.data() + (size_t) m * n_frames;
+            double mean = 0.0;
+            for (int fr = 0; fr < n_frames; fr++) {
+                mean += row[fr];
+            }
+            mean /= n_frames;
+            for (int fr = 0; fr < n_frames; fr++) {
+                row[fr] -= (float) mean;
+            }
+        }
+
+        output.push_back(std::move(out));
+    }
+
+    // entries 1 and 2: s3 tokenizer log-mels at the flow and t3 caps, each
+    // clip padded to whole 40 ms tokens so the mel stays twice the token grid
+    const int n_mel_s3 = (int) (s3tok_filters.size() / (400 / 2 + 1));
+    auto s3tok_entry = [&](size_t cap) -> bool {
+        std::vector<float> clip(pcm.begin(), pcm.begin() + std::min(pcm.size(), cap));
+        clip.resize((clip.size() + 639) / 640 * 640, 0.0f);
+        std::vector<float> mel;
+        int n_frames = 0;
+        if (!mtmd_audio_s3tok_log_mel(clip.data(), clip.size(), s3tok_filters.data(), n_mel_s3, mel, n_frames)) {
+            return false;
+        }
+        mtmd_audio_mel out;
+        out.n_len     = n_frames;
+        out.n_len_org = n_frames;
+        out.n_mel     = n_mel_s3;
+        out.data      = std::move(mel);
+        output.push_back(std::move(out));
+        return true;
+    };
+    const size_t gen_cap = (size_t) 10 * sr;
+    const size_t t3_cap  = (size_t) (is_mtl ? 6 : 15) * sr;
+    if (n_mel_s3 == 0 || !s3tok_entry(gen_cap) || !s3tok_entry(t3_cap)) {
+        return false;
+    }
+
+    // entry 3: s3gen prompt features, the flow-capped clip upsampled to the
+    // 24 kHz decoder rate then through the matcha log-mel
+    {
+        std::vector<float> clip(pcm.begin(), pcm.begin() + std::min(pcm.size(), gen_cap));
+        clip.resize((clip.size() + 639) / 640 * 640, 0.0f);
+        std::vector<float> pcm24;
+        mtmd_audio_upsample_3_2(clip.data(), clip.size(), pcm24);
+        std::vector<float> feat;
+        int n_frames = 0;
+        if (!mtmd_audio_matcha_log_mel(pcm24.data(), pcm24.size(), feat, n_frames)) {
+            return false;
+        }
+        mtmd_audio_mel out;
+        out.n_len     = n_frames;
+        out.n_len_org = n_frames;
+        out.n_mel     = 80;
+        out.data      = std::move(feat);
+        output.push_back(std::move(out));
+    }
+
+    // entry 4: voice encoder power mel of the silence-trimmed clip, padded
+    // (or trimmed) to the 160-frame partial grid at the reference 1.3 rate
+    {
+        size_t t0 = 0, t1 = 0;
+        mtmd_audio_trim_silence(pcm.data(), pcm.size(), 20.0f, t0, t1);
+        if (t1 <= t0) {
+            return false;
+        }
+        std::vector<float> mel;
+        int n_frames = 0;
+        if (!mtmd_audio_ve_mel(pcm.data() + t0, t1 - t0, mel, n_frames)) {
+            return false;
+        }
+        const int n_mel     = 40;
+        const int n_partial = 160;
+        const int step      = (int) lround((16000.0 / 1.3) / n_partial);
+        int n_wins = std::max(n_frames - n_partial + step, 0) / step;
+        const int rem = std::max(n_frames - n_partial + step, 0) % step;
+        if (n_wins == 0 || (double) (rem + n_partial - step) / n_partial >= 0.8) {
+            n_wins++;
+        }
+        const int target = n_partial + step * (n_wins - 1);
+        mel.resize((size_t) target * n_mel, 0.0f);
+        mtmd_audio_mel out;
+        out.n_len     = target;
+        out.n_len_org = target;
+        out.n_mel     = n_mel;
+        out.data      = std::move(mel);
+        output.push_back(std::move(out));
+    }
     return true;
 }
 
