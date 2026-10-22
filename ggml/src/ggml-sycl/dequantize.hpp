@@ -1777,24 +1777,28 @@ static void dequantize_block_mxfp4(const void * __restrict__ vx, dst_t * __restr
     }
 }
 
-// Reordered MXFP4 ([qs...][e...], see ggml_sycl_reordered::block_q_t<MXFP4>): one work-item per block.
-template <typename dst_t>
-static void dequantize_block_mxfp4_reorder(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
-                                           const sycl::nd_item<3> & item_ct1) {
-    const int64_t ib = (int64_t) item_ct1.get_group(2) * WARP_SIZE + item_ct1.get_local_id(2);
-    if (ib >= k / QK_MXFP4) {
-        return;
-    }
+// Reordered MXFP4 ([qs...][e...], see ggml_sycl_reordered::block_q_t<MXFP4>).
+// four qs bytes per item, all inside one 32-element block: two vec<dst_t,4> stores.
+// same LUT lookups and per-block scale; bit-identical output.
+template<typename dst_t>
+static void dequantize_block_mxfp4_reorder_wide(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t k,
+                                                const sycl::id<1> idx) {
+    const int64_t i  = (int64_t) idx[0];
+    const int64_t ib = i / 4;
+    const int64_t iq = 4 * (i % 4);   // first of four qs bytes in the block
 
     const uint8_t * qs = (const uint8_t *) vx + ib * (QK_MXFP4 / 2);
     const float     d  = ggml_sycl_e8m0_to_fp32(((const uint8_t *) vx)[k / 2 + ib]) * 0.5f;
-    dst_t *         y  = yy + ib * QK_MXFP4;
+    dst_t *         y  = yy + ib * QK_MXFP4 + iq;
 
+    sycl::vec<dst_t, 4> lo, hi;
 #pragma unroll
-    for (int j = 0; j < QK_MXFP4 / 2; ++j) {
-        y[j]                = d * kvalues_mxfp4[qs[j] & 0xf];
-        y[j + QK_MXFP4 / 2] = d * kvalues_mxfp4[qs[j] >> 4];
+    for (int j = 0; j < 4; ++j) {
+        lo[j] = d * kvalues_mxfp4[qs[iq + j] & 0xf];
+        hi[j] = d * kvalues_mxfp4[qs[iq + j] >> 4];
     }
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y)                = lo;
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + QK_MXFP4 / 2) = hi;
 }
 
 
