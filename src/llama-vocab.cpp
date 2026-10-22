@@ -2190,19 +2190,22 @@ struct llama_vocab::impl {
     void print_info() const;
 
 private:
-    void load_bpe_ranks(const gguf_context * ctx, int32_t merges_keyidx, const std::string & merges_key);
+    bool load_bpe_ranks(const gguf_context * ctx, const LLM_KV & kv);
 
     const llama_vocab & vocab;
 };
 
-void llama_vocab::impl::load_bpe_ranks(
-          const gguf_context * ctx,
-                     int32_t   merges_keyidx,
-           const std::string & merges_key) {
+bool llama_vocab::impl::load_bpe_ranks(const gguf_context * ctx, const LLM_KV & kv) {
+    const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
+    if (merges_keyidx == -1) {
+        return false;
+    }
+
     if (gguf_get_kv_type(ctx, merges_keyidx) != GGUF_TYPE_ARRAY ||
         gguf_get_arr_type(ctx, merges_keyidx) != GGUF_TYPE_STRING) {
-        throw std::runtime_error(format("invalid gguf type for %s", merges_key.c_str()));
+        throw std::runtime_error(format("invalid gguf type for %s", kv(LLM_KV_TOKENIZER_MERGES).c_str()));
     }
+
     const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
     bpe_ranks.reserve(n_merges);
     for (int i = 0; i < n_merges; i++) {
@@ -2219,6 +2222,7 @@ void llama_vocab::impl::load_bpe_ranks(
 
         bpe_ranks.emplace(std::make_pair(std::move(first), std::move(second)), i);
     }
+    return true;
 }
 
 void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
@@ -2278,19 +2282,16 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
         } else if (tokenizer_model == "gpt2" || tokenizer_model == "hybriddna" || tokenizer_model == "whitespace") {
             type = LLAMA_VOCAB_TYPE_BPE;
 
-            // read bpe merges and populate bpe ranks
-            const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
             // Kimi-K2 uses custom tokenization without traditional BPE merges
             const bool is_kimi_k2 = (tokenizer_pre == "kimi-k2");
 
-            if (merges_keyidx == -1) {
+            // read bpe merges and populate bpe ranks
+            if (!load_bpe_ranks(ctx, kv)) {
                 if (!is_kimi_k2) {
                     throw std::runtime_error("cannot find tokenizer merges in model file\n");
                 }
                 // Kimi-K2 doesn't need merges, skip
                 LLAMA_LOG_INFO("%s: Kimi-K2 tokenizer detected, skipping BPE merges\n", __func__);
-            } else {
-                load_bpe_ranks(ctx, merges_keyidx, kv(LLM_KV_TOKENIZER_MERGES));
             }
 
             // default special tokens
@@ -2376,11 +2377,9 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             type = LLAMA_VOCAB_TYPE_BPE;
 
             // read bpe merges and populate bpe ranks
-            const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
-            if (merges_keyidx == -1) {
+            if (!load_bpe_ranks(ctx, kv)) {
                 throw std::runtime_error("cannot find tokenizer merges in model file\n");
             }
-            load_bpe_ranks(ctx, merges_keyidx, kv(LLM_KV_TOKENIZER_MERGES));
 
             // default special tokens (to be read from GGUF)
             special_bos_id  = LLAMA_TOKEN_NULL;
