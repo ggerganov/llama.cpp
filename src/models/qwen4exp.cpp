@@ -920,8 +920,8 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
         ggml_build_forward_expand(gf, mctx_cur->cpy_v(ctx0, v_cur, v_idxs, il));
     }
 
-    // the selection is causal on its own and takes the kq_mask layout, so a graph without dense attention
-    // leaves the mask unallocated
+    // the selection replaces the kq_mask and has the same shape
+    // it is not allocated without dense layers reading the kq_mask
     const ggml_tensor * kq_mask = inp->get_kq_mask();
     GGML_ASSERT(ggml_are_same_shape(sel, kq_mask));
     cb(sel, "kq_mask_qsa", il);
