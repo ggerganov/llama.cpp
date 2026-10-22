@@ -334,7 +334,7 @@ llama_model_minimax_m3::graph::graph(const llama_model & model, const llm_graph_
             const bool is_sparse = msa_enabled && il >= (int) hparams.n_layer_dense_lead;
 
             if (!is_sparse) {
-                cur = build_attn(inp_attn, model.layers[il].wo, NULL, model.layers[il].wo_s,
+                cur = build_attn(inp_attn, model.layers[il].wo, NULL,
                         Qcur, Kcur, Vcur, nullptr, nullptr, nullptr,
                         1.0f/sqrtf(float(n_embd_head)), il);
             } else {
@@ -531,7 +531,7 @@ llama_model_minimax_m3::graph::graph(const llama_model & model, const llm_graph_
                 }
                 cb(cur, "kqv_out", il);
                 if (model.layers[il].wo) {
-                    cur = build_lora_mm(model.layers[il].wo, cur, model.layers[il].wo_s);
+                    cur = build_lora_mm(model.layers[il].wo, cur);
                 }
             }
         }
@@ -550,9 +550,9 @@ llama_model_minimax_m3::graph::graph(const llama_model & model, const llm_graph_
         if ((uint32_t) il < hparams.n_layer_dense_lead) {
             // leading dense FFN (swigluoai)
             cur = build_ffn(cur,
-                    model.layers[il].ffn_up,   NULL, NULL,
-                    model.layers[il].ffn_gate, NULL, NULL,
-                    model.layers[il].ffn_down, NULL, NULL,
+                    model.layers[il].ffn_up,   NULL,
+                    model.layers[il].ffn_gate, NULL,
+                    model.layers[il].ffn_down, NULL,
                     NULL,
                     LLM_FFN_SWIGLU_OAI_MOE, LLM_FFN_PAR, il);
             cb(cur, "ffn_out", il);
@@ -573,9 +573,9 @@ llama_model_minimax_m3::graph::graph(const llama_model & model, const llm_graph_
 
             // shared expert (swigluoai)
             ggml_tensor * ffn_shexp = build_ffn(cur,
-                    model.layers[il].ffn_up_shexp,   NULL, NULL,
-                    model.layers[il].ffn_gate_shexp, NULL, NULL,
-                    model.layers[il].ffn_down_shexp, NULL, NULL,
+                    model.layers[il].ffn_up_shexp,   NULL,
+                    model.layers[il].ffn_gate_shexp, NULL,
+                    model.layers[il].ffn_down_shexp, NULL,
                     NULL,
                     LLM_FFN_SWIGLU_OAI_MOE, LLM_FFN_PAR, il);
             cb(ffn_shexp, "ffn_shexp", il);
@@ -600,7 +600,7 @@ llama_model_minimax_m3::graph::graph(const llama_model & model, const llm_graph_
     res->t_embd = cur;
 
     // lm_head
-    cur = build_lora_mm(model.output, cur, model.output_s);
+    cur = build_lora_mm(model.output, cur);
     cb(cur, "result_output", -1);
     res->t_logits = cur;
 }
