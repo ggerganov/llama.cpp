@@ -821,6 +821,7 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
         ggml_tensor * keep = ggml_fill(ctx0, ggml_new_tensor_1d(ctx0, kq_mask->type, inp_kpool->n_kv), 0.0f);
         ggml_tensor * sel  = ggml_top_k_mask(ctx0, keep, top_k, score, inp_kpool->pool_idxs, inp_kpool->tail_idxs);
         res->add_fused_node({LLM_FUSED_OP_TOP_K_MASK, sel, il});
+        sel = ggml_reshape_4d(ctx0, sel, inp_kpool->n_kv, kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3]);
         cb(sel, "indexer_sel", il);
 
         return sel;
