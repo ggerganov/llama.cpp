@@ -280,7 +280,7 @@ private:
     static bool sched_copy_experts(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph, void * user_data);
 
     // ggml_backend_sched realloc callback, counts and traces the graph reallocations of this context
-    static void sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph * graph, bool backend_ids_changed, bool graph_size_changed, void * user_data);
+    static void sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph * gf, bool backend_ids_changed, bool graph_size_changed, void * user_data);
 
     void vsub_init(uint32_t n_dynamic, uint32_t n_rank);
     void vsub_init_head(ggml_tensor * w, const llama_vocab_subset::head & head);
@@ -370,6 +370,10 @@ private:
     ggml_backend_sched_ptr sched;
 
     bool sched_need_reserve = true;
+
+    // whether the reserve graph has a logits tensor, set in sched_reserve()
+    // true until then, because the first output_reserve() runs before any graph is reserved
+    bool graph_has_logits = true;
 
     // state of sched_copy_experts, reset before each graph compute
     struct copy_experts_info {
