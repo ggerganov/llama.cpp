@@ -39,6 +39,29 @@
 // Must be multiple of 32
 #define FLASH_ATTN_BLOCK_SIZE (32 * 2)
 
+// Large scratch lives in ctx->ddr_spad to keep stack usage low.
+// Ops can run on the dspqueue callback thread, which has a small stack.
+struct hvx_fa_ddr_spad {
+    __fp16   slopes[512];
+    uint16_t active_blocks[FA_MAX_KV_BLOCKS];
+    struct {
+        uint16_t     active_blocks[FA_MAX_KV_BLOCKS];
+        dma_cache_dm m_cache;
+    } __attribute__((aligned(128))) thread[HTP_MAX_NTHREADS];
+};
+
+struct hmx_fa_ddr_spad {
+    dma_cache_fa m_cache;
+    uint16_t     active_blocks[FA_MAX_KV_BLOCKS];
+};
+
+static inline void * fa_get_ddr_spad(const struct htp_ops_context * octx, size_t size) {
+    if (!octx->ctx->ddr_spad_base || octx->ctx->ddr_spad_size < size) {
+        return NULL;
+    }
+    return octx->ctx->ddr_spad_base;
+}
+
 struct htp_fa_context {
     const struct htp_ops_context * octx;
 
@@ -61,7 +84,6 @@ struct htp_fa_context {
     uint32_t n_head_log2;
     float m0;
     float m1;
-    __fp16 slopes[512];
 
     uint32_t n_blocks;
     uint32_t n_active_blocks;
@@ -90,7 +112,8 @@ struct htp_fa_context {
     uint8_t *  spad_m;
     uint8_t *  spad_a;
     float *    spad_sinks;
-    uint16_t   active_blocks[FA_MAX_KV_BLOCKS];
+
+    struct hvx_fa_ddr_spad * ddr;
 
     const struct htp_tensor * k;
     const struct htp_tensor * v;
@@ -164,7 +187,7 @@ struct hmx_fa_context {
     size_t       col_vec_bytes;
     size_t       d_tile_bytes;
     bool         mask_broadcast;       // true when mask->ne[2] == 1 (head-independent, single 2D DMA)
-    dma_cache_fa m_cache;
+    dma_cache_fa * m_cache;
 };
 
 // Scan mask rows [q_start, q_start + n_rows_q) and build compact list of KV blocks with any entry != -inf.
@@ -308,11 +331,11 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
     uint8_t * spad_m = factx->spad_m + (mask ? factx->size_m_block * HVX_FA_DMA_CACHE_SIZE : 0) * ith;
     uint8_t * spad_a = factx->spad_a + factx->size_vkq_acc * ith;
 
-    dma_cache_dm m_cache;
-    dma_cache_dm_init(&m_cache, spad_m, factx->size_m_block, HVX_FA_DMA_CACHE_SIZE);
+    dma_cache_dm * m_cache = &factx->ddr->thread[ith].m_cache;
+    dma_cache_dm_init(m_cache, spad_m, factx->size_m_block, HVX_FA_DMA_CACHE_SIZE);
 
-    uint16_t thread_active_blocks[FA_MAX_KV_BLOCKS];
-    const uint16_t * active_blocks = factx->shared_active_blocks ? factx->active_blocks : thread_active_blocks;
+    uint16_t * thread_active_blocks = factx->ddr->thread[ith].active_blocks;
+    const uint16_t * active_blocks = factx->shared_active_blocks ? factx->ddr->active_blocks : thread_active_blocks;
     uint32_t n_active_blocks       = factx->n_active_blocks;
     dma_addr_t prev_mp_base        = 0;
 
@@ -385,7 +408,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
             const uint32_t r_iq1 = (r - r_iq3*neq2*neq1 - r_iq2 * neq1);
 
             heads[g] = r_iq2;
-            const __fp16 slope = factx->slopes[r_iq2];
+            const __fp16 slope = factx->ddr->slopes[r_iq2];
             slope_vecs[g] = hvx_vec_splat_f16(slope);
 
             S_vec[g] = hvx_vec_splat_f32(0.0f);
@@ -422,7 +445,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
             // Mask
             if (mask) {
                 const dma_addr_t m_src = mp_base + ic_start * sizeof(__fp16);
-                dma_cache_dm_push(dma_q, &m_cache, ib, m_src, current_block_size * 2, current_block_size * 2, current_block_size * 2, 1);
+                dma_cache_dm_push(dma_q, m_cache, ib, m_src, current_block_size * 2, current_block_size * 2, current_block_size * 2, 1);
             }
         }
 
@@ -682,7 +705,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
                     // Mask
                     if (mask) {
                         const dma_addr_t m_src = mp_base + next_ic_start * sizeof(__fp16);
-                        dma_cache_dm_push(dma_q, &m_cache, next_ib, m_src, next_block_size * 2, next_block_size * 2, next_block_size * 2, 1);
+                        dma_cache_dm_push(dma_q, m_cache, next_ib, m_src, next_block_size * 2, next_block_size * 2, next_block_size * 2, 1);
                     }
                 }
             } // end for g
@@ -1958,7 +1981,7 @@ static inline void fa_prefetch_block(dma_queue * dma_q, const struct htp_tensor 
     if (mask) {
         if (__builtin_expect(factx->mask_broadcast, true)) {
             const dma_addr_t ms_src = mask->data + q_start * mask->nb[1] + im3 * mask->nb[3] + prefetch_start * sizeof(__fp16);
-            dma_cache_fa_push(dma_q, &factx->m_cache, ms_src, m_line_bytes, mask->nb[1], prefetch_rows * sizeof(__fp16), n_rows_q);
+            dma_cache_fa_push(dma_q, factx->m_cache, ms_src, m_line_bytes, mask->nb[1], prefetch_rows * sizeof(__fp16), n_rows_q);
         } else {
             fa_push_mask_dma_gqa(dma_q, mask, q_start, im3, prefetch_start, kv_head, G, m_line_bytes, prefetch_rows, n_rows_q, factx);
         }
@@ -2151,7 +2174,13 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
     const size_t m_line_bytes = L.m_line_bytes;  // used by the mask DMAs in the KV loop
 
-    dma_cache_fa_init(&factx.m_cache, (uint8_t *) factx.vtcm_mask_buf, L.m_buf_slot_bytes, HMX_FA_DMA_CACHE_SIZE);
+    struct hmx_fa_ddr_spad * ddr = (struct hmx_fa_ddr_spad *) fa_get_ddr_spad(octx, sizeof(struct hmx_fa_ddr_spad));
+    if (!ddr) {
+        return HTP_STATUS_INTERNAL_ERR;
+    }
+
+    factx.m_cache = &ddr->m_cache;
+    dma_cache_fa_init(factx.m_cache, (uint8_t *) factx.vtcm_mask_buf, L.m_buf_slot_bytes, HMX_FA_DMA_CACHE_SIZE);
 
     // Head-dim padding: the K/V DMA staging buffers and the flat-Q buffer are laid out
     // with padded row strides (size_{k,v,q}_row_padded, covering D_pad columns) but the
@@ -2210,7 +2239,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
             const size_t   g_br_actual = hex_align_up(n_rows_g, HMX_FP16_TILE_N_ROWS);
             const size_t   n_row_tiles = g_br_actual / HMX_FP16_TILE_N_ROWS;
 
-            uint16_t active_blocks[FA_MAX_KV_BLOCKS];
+            uint16_t * active_blocks = ddr->active_blocks;
             uint32_t n_active_blocks = factx.n_kv_blocks;
             if (mask && factx.mask_broadcast && factx.n_kv_blocks > 1) {
                 const size_t scratch_bytes = factx.k_tile_bytes * (factx.pipeline ? 2 : 1);
@@ -2252,7 +2281,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
                         if (factx.pipeline && mask) {
                             if (__builtin_expect(factx.mask_broadcast, true)) {
                                 const dma_addr_t ms_src = mask->data + q_start * mask->nb[1] + im3 * mask->nb[3] + b0_start * sizeof(__fp16);
-                                dma_cache_fa_push(dma_q, &factx.m_cache, ms_src, m_line_bytes, mask->nb[1], b0_rows * sizeof(__fp16), n_rows_q);
+                                dma_cache_fa_push(dma_q, factx.m_cache, ms_src, m_line_bytes, mask->nb[1], b0_rows * sizeof(__fp16), n_rows_q);
                             } else {
                                 fa_push_mask_dma_gqa(dma_q, mask, q_start, im3, b0_start, kv_head, G, m_line_bytes, b0_rows, n_rows_q, &factx);
                             }
@@ -2453,7 +2482,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
                         if (mask) {
                             if (__builtin_expect(factx.mask_broadcast, true)) {
                                 const dma_addr_t ms_src = mask->data + q_start * mask->nb[1] + im3 * mask->nb[3] + kv_start * sizeof(__fp16);
-                                dma_cache_fa_push(dma_q, &factx.m_cache, ms_src, m_line_bytes, mask->nb[1], kv_rows * sizeof(__fp16), n_rows_q);
+                                dma_cache_fa_push(dma_q, factx.m_cache, ms_src, m_line_bytes, mask->nb[1], kv_rows * sizeof(__fp16), n_rows_q);
                             } else {
                                 fa_push_mask_dma_gqa(dma_q, mask, q_start, im3, kv_start, kv_head, G, m_line_bytes, kv_rows, n_rows_q, &factx);
                             }
@@ -2577,7 +2606,7 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
                         if (factx.pipeline && mask) {
                             if (__builtin_expect(factx.mask_broadcast, true)) {
                                 const dma_addr_t ms_src = mask->data + q_start * mask->nb[1] + im3 * mask->nb[3] + b0_start * sizeof(__fp16);
-                                dma_cache_fa_push(dma_q, &factx.m_cache, ms_src, m_line_bytes, mask->nb[1], b0_rows * sizeof(__fp16), n_rows_q);
+                                dma_cache_fa_push(dma_q, factx.m_cache, ms_src, m_line_bytes, mask->nb[1], b0_rows * sizeof(__fp16), n_rows_q);
                             } else {
                                 fa_push_mask_dma_gqa(dma_q, mask, q_start, im3, b0_start, next_kv_head, G, m_line_bytes, b0_rows, n_rows_q, &factx);
                             }
@@ -2680,8 +2709,14 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
     if (n_head > 512) {
         return HTP_STATUS_NO_SUPPORT;
     }
+
+    factx.ddr = (struct hvx_fa_ddr_spad *) fa_get_ddr_spad(octx, sizeof(struct hvx_fa_ddr_spad));
+    if (!factx.ddr) {
+        return HTP_STATUS_INTERNAL_ERR;
+    }
+
     for (uint32_t h = 0; h < n_head; ++h) {
-        factx.slopes[h] = (__fp16) ((kparams->max_bias > 0.0f) ? alibi_slope(h, factx.n_head_log2, factx.m0, factx.m1) : 1.0f);
+        factx.ddr->slopes[h] = (__fp16) ((kparams->max_bias > 0.0f) ? alibi_slope(h, factx.n_head_log2, factx.m0, factx.m1) : 1.0f);
     }
 
     // total rows in q
@@ -2754,7 +2789,7 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
     if (has_mask && neq1 == 1 && neq3 == 1 && mask->ne[2] == 1 && factx.n_blocks > 1 && factx.n_blocks <= FA_MAX_KV_BLOCKS) {
         factx.n_active_blocks = fa_scan_active_blocks(
             octx->ctx->dma[0], mask, 0, 1, 0, 0, k->ne[1], FLASH_ATTN_BLOCK_SIZE,
-            factx.n_blocks, factx.spad_k, factx.size_k_block * 2, factx.active_blocks);
+            factx.n_blocks, factx.spad_k, factx.size_k_block * 2, factx.ddr->active_blocks);
         factx.shared_active_blocks = true;
     }
 
