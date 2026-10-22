@@ -1434,6 +1434,7 @@ static bool htp_kparams_solve_unary_impl(
                 case HTP_OP_UNARY_LOG:
                 case HTP_OP_UNARY_ABS:
                 case HTP_OP_UNARY_STEP:
+                case HTP_OP_UNARY_CEIL:
                     break;
                 default:
                     return false;

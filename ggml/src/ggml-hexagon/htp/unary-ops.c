@@ -426,6 +426,20 @@ static void step_f16(const void * restrict src,
     }
 }
 
+static void ceil_f16(const void * restrict src,
+                     void * restrict dst,
+                     const uint32_t num_rows,
+                     const struct htp_unary_context * uctx) {
+    htp_unary_op_preamble;
+
+    for (uint32_t ir = 0; ir < num_rows; ir++) {
+        const uint8_t * restrict src_local = (const uint8_t *)src + (ir * src0_row_size_aligned);
+        uint8_t * restrict dst_local       = (uint8_t *)dst + (ir * dst_row_size_aligned);
+
+        hvx_ceil_f16_aa((uint8_t *) dst_local, (const uint8_t *) src_local, ne0);
+    }
+}
+
 static void l2_norm_f16(const void * restrict src,
                         void * restrict dst,
                         const uint32_t num_rows,
@@ -1723,7 +1737,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         case HTP_OP_UNARY_LOG:       op_type = is_f16 ? "log-f16"      : "log-f32";          break;
         case HTP_OP_UNARY_RELU:      op_type = "relu-f32";                                   break;
         case HTP_OP_UNARY_STEP:      op_type = is_f16 ? "step-f16"     : "step-f32";         break;
-        case HTP_OP_UNARY_CEIL:      op_type = "ceil-f32";                                   break;
+        case HTP_OP_UNARY_CEIL:      op_type = is_f16 ? "ceil-f16"     : "ceil-f32";         break;
         case HTP_OP_L2_NORM:         op_type = is_f16 ? "l2norm-f16"   : "l2norm-f32";       break;
         case HTP_OP_TRI:             op_type = "tri-f32";                                    break;
         case HTP_OP_HADAMARD:        op_type = is_f16 ? "hadamard-f16" : "hadamard-f32";     break;
@@ -1877,6 +1891,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_ABS:       compute_func = (void *) abs_f16;                 break;
             case HTP_OP_UNARY_LOG:       compute_func = (void *) log_f16;                 break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) step_f16;                break;
+            case HTP_OP_UNARY_CEIL:      compute_func = (void *) ceil_f16;                break;
             case HTP_OP_HADAMARD:        compute_func = (void *) hadamard_f16;            break;
             default:                     break;
         }
