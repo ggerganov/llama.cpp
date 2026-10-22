@@ -116,7 +116,7 @@ export function useModelsSelector(opts: UseModelsSelectorOptions): UseModelsSele
 
 	// the manager takes the focus, so the selector closes instead of sitting behind it
 	$effect(() => {
-		if (!uiStore.manageModelsOpen) return;
+		if (!uiStore.isModelsPageOpen) return;
 
 		opts.onOpenChange?.(false);
 	});

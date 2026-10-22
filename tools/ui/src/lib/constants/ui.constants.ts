@@ -7,9 +7,6 @@ import type { DesktopIconStripItem } from '$lib/types';
 /** Delay before a copied affordance resets from its check to the copy icon. */
 export const COPY_FEEDBACK_RESET_MS = 1500;
 
-/** How long a models dialog view fades out before the next one fades in. */
-export const MODELS_DIALOG_VIEW_FADE_MS = 150;
-
 export const FORK_TREE_DEPTH_PADDING = 8;
 export const SYSTEM_MESSAGE_PLACEHOLDER = 'System message';
 
@@ -83,6 +80,7 @@ export const SIDEBAR_ACTIONS_ITEMS: DesktopIconStripItem[] = [
 	{ icon: Search, keys: ['cmd', 'k'], tooltip: 'Search' },
 	{
 		action: SidebarAction.MANAGE_MODELS,
+		activeRouteId: '/models',
 		icon: MODEL_ICON,
 		tooltip: 'Models'
 	},

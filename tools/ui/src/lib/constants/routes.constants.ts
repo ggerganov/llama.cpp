@@ -13,6 +13,8 @@ export const ROUTES = {
 	CHAT: '#/chat',
 	/** MCP servers. */
 	MCP_SERVERS: '#/mcp-servers',
+	/** Models manager. */
+	MODELS: '#/models',
 	/** Search — mobile-only full-page conversation search. */
 	SEARCH: '#/search',
 	/** Root — start of the app. */

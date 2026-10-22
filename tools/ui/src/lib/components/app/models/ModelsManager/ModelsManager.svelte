@@ -254,10 +254,10 @@
 		await modelsStore.status.load(option.model);
 	}
 
-	/** The chat sits behind the dialog, so the dialog closes and the composer takes focus. */
+	/** Leave the models page for the chat it was opened from, with the composer focused. */
 	function returnToChat(): void {
-		uiStore.manageModelsOpen = false;
 		uiStore.requestComposerFocus();
+		void uiStore.closeModelsManager();
 	}
 
 	/** Load the model when the server can take load requests, without waiting for it. */
@@ -307,7 +307,7 @@
 		/>
 	</div>
 
-	<!-- on a phone the pane covers the whole dialog: the manager header would only
+	<!-- on a phone the pane covers the whole page: the manager header would only
 	     repeat what the pane's own header says -->
 	<div
 		class="pane-drawer max-md:fixed max-md:inset-0 max-md:z-[60] shrink-0"

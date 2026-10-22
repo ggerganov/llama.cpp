@@ -32,11 +32,11 @@
 	let hasFilters = $derived(hasActiveFilters(contextLimit, modalities, capabilities));
 	let filterInput = $state<HTMLInputElement | null>(null);
 
-	// The search takes the focus the dialog would give its first control: the input
-	// mounts a frame or two after the dialog opens (the toolbar renders below the
-	// table in the DOM), so the poll retries until the ref lands or gives up.
+	// The search takes the focus when the models page opens: the input mounts a frame
+	// or two after the page (the toolbar renders below the table in the DOM), so the
+	// poll retries until the ref lands or gives up.
 	$effect(() => {
-		if (!uiStore.manageModelsOpen) return;
+		if (!uiStore.isModelsPageOpen) return;
 
 		let frames = 0;
 		let handle = requestAnimationFrame(function focusFilter() {
