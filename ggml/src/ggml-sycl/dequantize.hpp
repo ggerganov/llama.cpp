@@ -972,19 +972,25 @@ static void dequantize_block_q2_K_reorder(const void * __restrict__ vx, dst_t * 
     const ggml_half2 * dm     = reinterpret_cast<const ggml_half2 *>(base + dm_offset);
 
     const int64_t tid = item_ct1.get_local_id(2);
-    const int64_t n    = tid / 32;
-    const int64_t l    = tid - 32 * n;
-    const int64_t is   = 8 * n + l / 16;
+    const int64_t n   = tid / 32;             // 128-element chunk: 0 or 1
+    const int64_t eh0 = 4 * (tid - 32 * n);   // base element within the chunk
 
-    const uint8_t q = qs[32 * n + l];
-    dst_t * y = yy + 128 * n;
+    const int      shift = 2 * (eh0 / 32);    // 2-bit lane: 0/2/4/6
+    const uint8_t * q4   = qs + 32 * n + (eh0 & 31);
+    const uint8_t   sc0  = scales[8 * n + eh0 / 16];
 
     const float dall = (*dm)[0];
     const float dmin = (*dm)[1];
-    y[l+ 0] = dall * (scales[is+0] & 0xF) * ((q >> 0) & 3) - dmin * (scales[is+0] >> 4);
-    y[l+32] = dall * (scales[is+2] & 0xF) * ((q >> 2) & 3) - dmin * (scales[is+2] >> 4);
-    y[l+64] = dall * (scales[is+4] & 0xF) * ((q >> 4) & 3) - dmin * (scales[is+4] >> 4);
-    y[l+96] = dall * (scales[is+6] & 0xF) * ((q >> 6) & 3) - dmin * (scales[is+6] >> 4);
+
+    // remapped decomposition: one aligned vec<dst_t,4> per thread instead of four
+    // scalars strided 32 apart; a 4-run shares one scale byte and one 2-bit lane,
+    // so the per-element math and output are identical to the scalar kernel.
+    sycl::vec<dst_t, 4> v;
+#pragma unroll
+    for (int j = 0; j < 4; ++j) {
+        v[j] = dall * (sc0 & 0xF) * ((q4[j] >> shift) & 3) - dmin * (sc0 >> 4);
+    }
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(yy + 128 * n + eh0) = v;
 #else
     GGML_UNUSED(vx);
     GGML_UNUSED(yy);
