@@ -505,7 +505,7 @@ static bool parse_target_size(const char * data, int64_t & target_size) {
         return false;
     }
 
-    target_size = (int64_t)val * mul;
+    target_size = (int64_t)(val * mul);
     return true;
 }
 
