@@ -1,21 +1,21 @@
 <script lang="ts">
 	import ModelsManager from '$lib/components/app/models/ModelsManager/ModelsManager.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { APP_NAME, DISCOVER_ICON, SETTINGS_KEYS } from '$lib/constants';
-	import { modelsStore, settingsStore, uiStore } from '$lib/stores';
+	import { APP_NAME, DISCOVER_ICON } from '$lib/constants';
+	import { modelsStore, uiStore } from '$lib/stores';
 	import { onMount } from 'svelte';
 
-	let discoverEnabled = $derived(
-		Boolean(settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS))
-	);
-
-	// a direct load lands here before any chat has listed the models; the router
-	// fetch is the sync point for an already loaded list and a no-op outside router mode
+	// a direct load lands here before any chat has listed the models, and the root
+	// layout fetches the router details once that list arrives. An already loaded
+	// list only needs the router fetch as a sync point (a no-op outside router mode)
 	onMount(() => {
-		modelsStore
-			.fetch()
-			.then(() => modelsStore.fetchRouterModels())
-			.catch((error) => console.error('Unable to load models:', error));
+		if (modelsStore.models.length > 0) {
+			void modelsStore.fetchRouterModels();
+
+			return;
+		}
+
+		modelsStore.fetch().catch((error) => console.error('Unable to load models:', error));
 	});
 </script>
 
@@ -33,7 +33,7 @@
 			</p>
 		</div>
 
-		{#if discoverEnabled}
+		{#if uiStore.isDiscoverEnabled}
 			<Button
 				class="ml-auto shrink-0 gap-1.5"
 				onclick={() => uiStore.openModelsDiscover()}

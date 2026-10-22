@@ -8,7 +8,8 @@
 
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { ROUTES } from '$lib/constants';
+import { MODELS_ROUTE_ID, ROUTES, SETTINGS_KEYS } from '$lib/constants';
+import { settingsStore } from '$lib/stores/settings/index.svelte';
 import type { ModelOption } from '$lib/types/models';
 
 class UiStore {
@@ -26,12 +27,17 @@ class UiStore {
 	manageModelFocus = $state<string | null>(null);
 	/** Model the information dialog shows; a phone opens it instead of the manager. */
 	modelInformation = $state<ModelOption | null>(null);
-	/** Route the models page returns to, the one it was opened from. */
+	/** Route the models page returns to: the last page visited before it. */
 	modelsReturnRoute: string = ROUTES.START;
+
+	/** Whether Discover is turned on; every Discover entry point hides without it. */
+	get isDiscoverEnabled(): boolean {
+		return Boolean(settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS));
+	}
 
 	/** Whether the models manager route is the current page. */
 	get isModelsPageOpen(): boolean {
-		return page.route.id === '/models';
+		return page.route.id === MODELS_ROUTE_ID;
 	}
 
 	/** Leave the models page for the route it was opened from. */
@@ -46,8 +52,10 @@ class UiStore {
 		this.modelInformation = option;
 	}
 
-	/** Open the Discover dialog, focused on one repo. */
+	/** Open the Discover dialog, focused on one repo; a no-op while Discover is off. */
 	openModelsDiscover(focus?: string): void {
+		if (!this.isDiscoverEnabled) return;
+
 		this.discoverModelFocus = focus ?? null;
 		this.discoverModelsOpen = true;
 	}
@@ -58,8 +66,14 @@ class UiStore {
 
 		if (this.isModelsPageOpen) return;
 
-		this.modelsReturnRoute = page.url.hash || ROUTES.START;
 		void goto(ROUTES.MODELS);
+	}
+
+	/** Remember the current route as the models page's way back, unless it is that page. */
+	rememberModelsReturnRoute(): void {
+		if (this.isModelsPageOpen) return;
+
+		this.modelsReturnRoute = page.url.hash || ROUTES.START;
 	}
 
 	/** Ask the composer to take focus, e.g. after a dialog closes onto the chat. */

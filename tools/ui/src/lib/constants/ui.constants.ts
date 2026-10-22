@@ -1,4 +1,5 @@
 import { MODEL_ICON } from './icons.constants';
+import { MODELS_ROUTE_ID } from './routes.constants';
 import { Search, Settings, SquarePen } from '@lucide/svelte';
 import McpLogo from '$lib/components/app/mcp/McpLogo.svelte';
 import { SidebarAction, ToolSource } from '$lib/enums';
@@ -80,7 +81,7 @@ export const SIDEBAR_ACTIONS_ITEMS: DesktopIconStripItem[] = [
 	{ icon: Search, keys: ['cmd', 'k'], tooltip: 'Search' },
 	{
 		action: SidebarAction.MANAGE_MODELS,
-		activeRouteId: '/models',
+		activeRouteId: MODELS_ROUTE_ID,
 		icon: MODEL_ICON,
 		tooltip: 'Models'
 	},

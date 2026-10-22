@@ -20,3 +20,6 @@ export const ROUTES = {
 	/** Root — start of the app. */
 	START: '#/'
 } as const;
+
+/** SvelteKit route id of the models manager, as `page.route.id` reports it. */
+export const MODELS_ROUTE_ID = '/models';

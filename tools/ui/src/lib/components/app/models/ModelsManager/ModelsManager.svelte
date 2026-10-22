@@ -260,6 +260,32 @@
 		void uiStore.closeModelsManager();
 	}
 
+	/** Overlays that handle their own Escape, so the page leaves them alone. */
+	const OPEN_OVERLAY_SELECTOR = [
+		'[role="dialog"][data-state="open"]',
+		'[role="alertdialog"][data-state="open"]',
+		'[role="menu"][data-state="open"]',
+		'[role="listbox"][data-state="open"]'
+	].join(', ');
+
+	// Escape steps back the way the dialog's did: it closes the pane, then the page
+	function handleKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape' || event.defaultPrevented) return;
+
+		if (document.querySelector(OPEN_OVERLAY_SELECTOR)) return;
+
+		// a typed filter is not thrown away by a stray Escape
+		if (event.target instanceof HTMLInputElement && event.target.value) return;
+
+		if (selectedId !== null) {
+			selectedId = null;
+
+			return;
+		}
+
+		returnToChat();
+	}
+
 	/** Load the model when the server can take load requests, without waiting for it. */
 	function loadInBackground(option: ModelOption): void {
 		// only the built-in server loads on request, and only in router mode
@@ -291,6 +317,8 @@
 		returnToChat();
 	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class={['relative flex min-h-0 flex-1', className]}>
 	<div class="min-h-0 min-w-0 flex-1">

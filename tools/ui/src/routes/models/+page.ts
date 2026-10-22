@@ -1,8 +1,4 @@
 import type { PageLoad } from './$types';
-import { initStores } from '$lib/stores/init';
-import { validateApiKey } from '$lib/utils';
+import { loadAppRoute } from '$lib/stores/init';
 
-export const load: PageLoad = async ({ fetch }) => {
-	await initStores();
-	await validateApiKey(fetch);
-};
+export const load: PageLoad = ({ fetch }) => loadAppRoute(fetch);

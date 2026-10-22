@@ -1,8 +1,8 @@
 <script lang="ts">
 	import ModelsDiscover from '$lib/components/app/models/discover/ModelsDiscover.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { DISCOVER_ICON, SETTINGS_KEYS } from '$lib/constants';
-	import { settingsStore } from '$lib/stores';
+	import { DISCOVER_ICON } from '$lib/constants';
+	import { uiStore } from '$lib/stores';
 	import { untrack } from 'svelte';
 
 	interface Props {
@@ -12,14 +12,14 @@
 
 	let { onOpenChange, open = $bindable(false) }: Props = $props();
 
-	// the dialog exists only while its setting is on
-	let discoverEnabled = $derived(
-		Boolean(settingsStore.getConfig(SETTINGS_KEYS.ENABLE_DISCOVER_MODELS))
-	);
-
+	// the setting can be turned off while the dialog is open: it closes and drops the
+	// repo it was asked to show
 	$effect(() => {
-		if (open && !discoverEnabled) {
-			untrack(() => handleOpenChange(false));
+		if (open && !uiStore.isDiscoverEnabled) {
+			untrack(() => {
+				uiStore.discoverModelFocus = null;
+				handleOpenChange(false);
+			});
 		}
 	});
 
