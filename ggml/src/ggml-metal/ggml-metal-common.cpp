@@ -36,9 +36,13 @@ bool ggml_metal_op_mul_mat_use_mm(const struct ggml_tensor * op, bool has_simdgr
     const int64_t ne00 = op->src[0]->ne[0];
     const int64_t ne11 = op->src[1]->ne[1];
 
+    // mul_mm steps K by 32 and zero-pads a partial step, so it also covers 32 <= K < 64 (e.g. the B
+    // matrix of a rank 32 or 48 LoRA), where the mul_mv fallback is much slower at batch > 8
+    // there is no mul_mm kernel for a BF16 src1, so that range keeps it on mul_mv
     return !ggml_is_transposed(op->src[0]) &&
            !ggml_is_transposed(op->src[1]) &&
-           has_simdgroup_mm && ne00 >= 64 && ne11 > 8;
+           has_simdgroup_mm && ne11 > 8 &&
+           (ne00 >= 64 || (ne00 >= 32 && op->src[1]->type != GGML_TYPE_BF16));
 }
 
 bool ggml_metal_op_mul_mat_id_use_mm(const struct ggml_tensor * op, bool has_simdgroup_mm) {
