@@ -44,15 +44,12 @@
 struct hvx_fa_ddr_spad {
     __fp16   slopes[512];
     uint16_t active_blocks[FA_MAX_KV_BLOCKS];
-    struct {
-        uint16_t     active_blocks[FA_MAX_KV_BLOCKS];
-        dma_cache_dm m_cache;
-    } __attribute__((aligned(128))) thread[HTP_MAX_NTHREADS];
+    uint16_t thread_active_blocks[HTP_MAX_NTHREADS][FA_MAX_KV_BLOCKS] __attribute__((aligned(128)));
 };
 
 struct hmx_fa_ddr_spad {
-    dma_cache_fa m_cache;
-    uint16_t     active_blocks[FA_MAX_KV_BLOCKS];
+    uint16_t active_blocks[FA_MAX_KV_BLOCKS];
+    __fp16   slopes[] __attribute__((aligned(128))); // [g_br]
 };
 
 static inline void * fa_get_ddr_spad(const struct htp_ops_context * octx, size_t size) {
@@ -114,6 +111,7 @@ struct htp_fa_context {
     float *    spad_sinks;
 
     struct hvx_fa_ddr_spad * ddr;
+    dma_cache_dm *           m_cache; // [n_threads]
 
     const struct htp_tensor * k;
     const struct htp_tensor * v;
@@ -179,6 +177,7 @@ struct hmx_fa_context {
     __fp16 *     vtcm_mask_buf;        // VTCM mask buffer [Br * m_line], DMA'd per KV block
     __fp16 *     vtcm_slopes;          // ALiBi slopes [g_br]
     float *      vtcm_sinks;           // Attention sinks
+    __fp16 *     ddr_slopes;           // ALiBi slopes staging buffer in DDR [g_br]
     size_t       row_buf_stride;       // HVX vectors per row buffer (Bc/64)
     size_t       mask_buf_row_stride;  // elements (__fp16) per row in mask buffer
     size_t       q_tile_bytes;
@@ -331,10 +330,10 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
     uint8_t * spad_m = factx->spad_m + (mask ? factx->size_m_block * HVX_FA_DMA_CACHE_SIZE : 0) * ith;
     uint8_t * spad_a = factx->spad_a + factx->size_vkq_acc * ith;
 
-    dma_cache_dm * m_cache = &factx->ddr->thread[ith].m_cache;
+    dma_cache_dm * m_cache = &factx->m_cache[ith];
     dma_cache_dm_init(m_cache, spad_m, factx->size_m_block, HVX_FA_DMA_CACHE_SIZE);
 
-    uint16_t * thread_active_blocks = factx->ddr->thread[ith].active_blocks;
+    uint16_t * thread_active_blocks = factx->ddr->thread_active_blocks[ith];
     const uint16_t * active_blocks = factx->shared_active_blocks ? factx->ddr->active_blocks : thread_active_blocks;
     uint32_t n_active_blocks       = factx->n_active_blocks;
     dma_addr_t prev_mp_base        = 0;
@@ -1910,7 +1909,7 @@ static __attribute__((noinline)) void fa_compute_slopes(
     const float    m0          = factx->m0;
     const float    m1          = factx->m1;
 
-    __fp16 temp_slopes[512] __attribute__((aligned(128)));
+    __fp16 * temp_slopes = factx->ddr_slopes;
     if (G <= 32) {
         // Fast path: Compute G unique slope values in vector registers
         HVX_Vector v_val = hvx_alibi_slopes(kv_head, G, n_head_log2, m0, m1);
@@ -1928,14 +1927,13 @@ static __attribute__((noinline)) void fa_compute_slopes(
         }
     }
 
-    // Allocate stack buffer to avoid scalar writes to VTCM (which generates L2 misses)
-    __fp16 local_slopes[n_rows_g] __attribute__((aligned(128)));
-    for (size_t r = 0; r < n_rows_g; ++r) {
-        local_slopes[r] = temp_slopes[fastmodulo(r, G, &factx->div_G)];
+    // Replicate the G values in DDR to avoid scalar writes to VTCM (which generates L2 misses)
+    for (size_t r = G; r < n_rows_g; ++r) {
+        temp_slopes[r] = temp_slopes[r - G];
     }
 
     // Copy to VTCM slopes using HVX block copy (both are aligned to 128 bytes)
-    hvx_copy_f16_aa((uint8_t *)slopes, (const uint8_t *)local_slopes, n_rows_g);
+    hvx_copy_f16_aa((uint8_t *)slopes, (const uint8_t *)temp_slopes, n_rows_g);
 }
 
 static void fa_push_mask_dma_gqa(
@@ -2174,12 +2172,13 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
     const size_t m_line_bytes = L.m_line_bytes;  // used by the mask DMAs in the KV loop
 
-    struct hmx_fa_ddr_spad * ddr = (struct hmx_fa_ddr_spad *) fa_get_ddr_spad(octx, sizeof(struct hmx_fa_ddr_spad));
+    struct hmx_fa_ddr_spad * ddr = (struct hmx_fa_ddr_spad *) fa_get_ddr_spad(octx, sizeof(struct hmx_fa_ddr_spad) + factx.g_br * sizeof(__fp16));
     if (!ddr) {
         return HTP_STATUS_INTERNAL_ERR;
     }
 
-    factx.m_cache = &ddr->m_cache;
+    factx.ddr_slopes = ddr->slopes;
+    factx.m_cache    = &octx->dma_cache_fa[0];
     dma_cache_fa_init(factx.m_cache, (uint8_t *) factx.vtcm_mask_buf, L.m_buf_slot_bytes, HMX_FA_DMA_CACHE_SIZE);
 
     // Head-dim padding: the K/V DMA staging buffers and the flat-Q buffer are laid out
@@ -2714,6 +2713,7 @@ int op_flash_attn_ext(struct htp_ops_context * octx) {
     if (!factx.ddr) {
         return HTP_STATUS_INTERNAL_ERR;
     }
+    factx.m_cache = octx->dma_cache_dm;
 
     for (uint32_t h = 0; h < n_head; ++h) {
         factx.ddr->slopes[h] = (__fp16) ((kparams->max_bias > 0.0f) ? alibi_slope(h, factx.n_head_log2, factx.m0, factx.m1) : 1.0f);
