@@ -19,10 +19,14 @@ struct server_context_meta {
     std::set<std::string> model_aliases;
     std::set<std::string> model_tags;
     std::string model_path;
+    std::vector<std::string> model_output_modalities; // output modalities for GET /models
     bool has_mtmd;
     bool has_inp_image;
     bool has_inp_audio;
     bool has_inp_video;
+    bool has_cap_chat;
+    bool has_cap_tts;
+    bool has_audio_stream; // realtime transcription, see mtmd_support_audio_stream()
     json json_ui_settings;
     int slot_n_ctx;
     enum llama_pooling_type pooling_type;
@@ -143,6 +147,7 @@ struct server_routes {
     server_http_context::handler_t post_responses_oai;
     server_http_context::handler_t post_responses_tok_oai;
     server_http_context::handler_t post_transcriptions_oai;
+    server_http_context::ws_handler_t ws_realtime;
     server_http_context::handler_t post_anthropic_messages;
     server_http_context::handler_t post_anthropic_count_tokens;
     server_http_context::handler_t post_apply_template;
@@ -152,6 +157,8 @@ struct server_routes {
     server_http_context::handler_t post_embeddings;
     server_http_context::handler_t post_embeddings_oai;
     server_http_context::handler_t post_rerank;
+    server_http_context::handler_t post_tts;
+    server_http_context::handler_t post_systemone;
     server_http_context::handler_t get_lora_adapters;
     server_http_context::handler_t post_lora_adapters;
 
@@ -164,7 +171,8 @@ private:
             server_task_type type,
             const json & data,
             const std::vector<raw_buffer> & files,
-            task_response_type res_type);
+            task_response_type res_type,
+            const common_chat_session & chat_session = {});
     std::unique_ptr<server_res_generator> handle_slots_save(const server_http_req & req, int id_slot);
     std::unique_ptr<server_res_generator> handle_slots_restore(const server_http_req & req, int id_slot);
     std::unique_ptr<server_res_generator> handle_slots_erase(const server_http_req &, int id_slot);

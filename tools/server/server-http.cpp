@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <mutex>
 
 //
 // HTTP implementation using cpp-httplib
@@ -470,6 +471,23 @@ bool server_http_context::init_listener(const common_params & params) {
 #endif
         }
     }
+
+    // a browser that used the built-in UI keeps its service worker, so it shows the old UI even after the UI is replaced or disabled
+    // answer the worker's update check with a worker that removes itself; a sw.js in public_path is served first
+    if (!params.ui || !params.public_path.empty()) {
+        srv->Get(params.api_prefix + "/sw.js", [](const httplib::Request &, httplib::Response & res) {
+            static constexpr const char * sw_remove_js = R"(
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil((async () => {
+    await self.registration.unregister();
+    for (const key of await caches.keys()) await caches.delete(key);
+    for (const c of await self.clients.matchAll({ type: 'window' })) c.navigate(c.url);
+})()));
+)";
+            res.set_header("Cache-Control", "no-cache");
+            res.set_content(sw_remove_js, "application/javascript");
+        });
+    }
     return true;
 }
 
@@ -724,6 +742,56 @@ void server_http_context::post(const std::string & path, const server_http_conte
     const std::string full_path = path_prefix + path;
     for (const auto & srv : pimpl->servers) {
         srv->Post(full_path, callback);
+    }
+}
+
+void server_http_context::ws(const std::string & path, const server_http_context::ws_handler_t & handler) const {
+    const std::string full_path = path_prefix + path;
+
+    auto callback = [handler](const httplib::Request & req, httplib::ws::WebSocket & sock) {
+        struct conn_impl : server_http_context::ws_conn {
+            httplib::ws::WebSocket & sock;
+            std::mutex mutex_send;
+            conn_impl(httplib::ws::WebSocket & sock) : sock(sock) {}
+            int read(std::string & msg) override {
+                switch (sock.read(msg)) {
+                    case httplib::ws::Text:   return 1;
+                    case httplib::ws::Binary: return 2;
+                    default:                  return 0;
+                }
+            }
+            bool send(const std::string & msg) override {
+                std::lock_guard<std::mutex> lock(mutex_send);
+                return sock.send(msg);
+            }
+            bool send_binary(const std::string & msg) override {
+                std::lock_guard<std::mutex> lock(mutex_send);
+                return sock.send(msg.data(), msg.size());
+            }
+            bool is_open() const override {
+                return sock.is_open();
+            }
+            void close() override {
+                sock.close();
+            }
+        };
+        conn_impl conn(sock);
+        const std::function<bool()> should_stop = [&sock]() {
+            return !sock.is_open();
+        };
+        server_http_req request{
+            get_params(req),
+            get_headers(req),
+            req.path,
+            build_query_string(req),
+            req.body,
+            {},
+            should_stop
+        };
+        handler(request, conn);
+    };
+    for (const auto & srv : pimpl->servers) {
+        srv->WebSocket(full_path, callback);
     }
 }
 

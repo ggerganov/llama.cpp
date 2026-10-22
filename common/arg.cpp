@@ -351,7 +351,7 @@ static bool parse_bool_value(const std::string & value) {
 static std::string get_default_local_path(const std::string & url) {
     auto f = string_split<std::string>(url, '#').front();
     f = string_split<std::string>(f, '?').front();
-    return fs_get_cache_file(string_split<std::string>(f, '/').back());
+    return fs_path_to_utf8(fs_get_cache_file(string_split<std::string>(f, '/').back()));
 }
 
 static bool spec_types_is_default(const common_params & params) {
@@ -386,6 +386,9 @@ common_models_handler common_models_handler_init(const common_params & params, l
             use_mmproj = true;
             break;
         }
+    }
+    if (curr_ex == LLAMA_EXAMPLE_DOWNLOAD) {
+        use_mmproj = true;
     }
 
     opts.bearer_token    = params.hf_token;
@@ -679,7 +682,10 @@ void common_models_handler_apply(common_models_handler & handler, common_params 
             // if HF repo is a preset repo, we simply run server in router mode with the preset.ini file
             params.models_preset_hf = params.model.hf_repo; // only for showing a warning
             params.models_preset    = hf_cache::finalize_file(plan.preset);
-            params.model = common_params_model{}; // make sure to clear model, so server starts in router mode
+            // clear the model so the server starts in router mode
+            params.model.path.clear();
+            params.model.hf_repo.clear();
+            params.model.docker_repo.clear();
         });
     }
 
@@ -717,24 +723,24 @@ void common_models_handler_apply(common_models_handler & handler, common_params 
 // 1. system-wide: /etc/llama.cpp/config.ini (%PROGRAMDATA%\llama.cpp\config.ini on windows)
 // 2. user-level: ${XDG_CONFIG_HOME:-~/.config}/llama.cpp/config.ini (%APPDATA%\llama.cpp\config.ini on windows)
 static void common_params_apply_system_config(common_params & params, llama_example ex) {
-    std::vector<std::string> paths;
+    std::vector<std::filesystem::path> paths;
 
 #if defined(_WIN32)
-    const std::string program_data = common_get_env("PROGRAMDATA");
+    const std::filesystem::path program_data = common_get_path_from_env("PROGRAMDATA");
     if (!program_data.empty()) {
-        paths.push_back(program_data + "\\llama.cpp\\config.ini");
+        paths.push_back(program_data / "llama.cpp" / "config.ini");
     }
 #else
     paths.push_back("/etc/llama.cpp/config.ini");
 #endif
 
     try {
-        paths.push_back(fs_get_config_directory() + "config.ini");
+        paths.push_back(fs_get_config_directory() / "config.ini");
     } catch (const std::exception & e) {
         LOG_DBG("cannot read user-level config file, skipping: %s\n", e.what());
     }
 
-    std::vector<std::string> found;
+    std::vector<std::filesystem::path> found;
     for (const auto & path : paths) {
         std::error_code ec;
         if (std::filesystem::exists(path, ec)) {
@@ -748,7 +754,7 @@ static void common_params_apply_system_config(common_params & params, llama_exam
     common_preset_context ctx(ex);
     ctx.ignore_unknown_keys = true; // the same config file is shared by all programs
     for (const auto & path : found) {
-        LOG_INF("using config file: %s\n", path.c_str());
+        LOG_INF("using config file: %s\n", fs_path_to_utf8(path).c_str());
         common_preset global;
         common_presets presets = ctx.load_from_ini(path, global);
         global.apply_to_params(params);
@@ -1473,7 +1479,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ));
     add_opt(common_arg(
         {"--server-base"}, "URL",
-        string_format("connect to this server instead of starting a new one, example: 'http://localhost:8080' (default: none)"),
+        string_format("connect to this server instead of starting a new one, example: 'http://localhost:9931' (default: none)"),
         [](common_params & params, const std::string & value) {
             params.server_base = value;
         }
@@ -1711,10 +1717,11 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_env("LLAMA_ARG_CHECKPOINT_MIN_SPACING_NT").set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(common_arg(
         {"-cram", "--cache-ram"}, "N",
-        string_format("set the maximum cache size in MiB (default: %d, -1 - no limit, 0 - disable)"
+        string_format("set the maximum cache size in MiB (default: %d, 0 for decision models, -1 - no limit, 0 - disable)"
             "[(more info)](https://github.com/ggml-org/llama.cpp/pull/16391)", params.cache_ram_mib),
         [](common_params & params, int value) {
             params.cache_ram_mib = value;
+            params.cache_ram_explicit = true;
         }
     ).set_env("LLAMA_ARG_CACHE_RAM").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
     add_opt(common_arg(
@@ -1724,7 +1731,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, bool value) {
             params.kv_unified = value;
         }
-    ).set_env("LLAMA_ARG_KV_UNIFIED").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_PERPLEXITY, LLAMA_EXAMPLE_BATCHED, LLAMA_EXAMPLE_BENCH, LLAMA_EXAMPLE_PARALLEL}));
+    ).set_env("LLAMA_ARG_KV_UNIFIED").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_PERPLEXITY, LLAMA_EXAMPLE_BATCHED, LLAMA_EXAMPLE_BENCH, LLAMA_EXAMPLE_PARALLEL, LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(common_arg(
         {"--cache-idle-slots"},
         {"--no-cache-idle-slots"},
@@ -2673,16 +2680,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.video_ffmpeg_bin_dir = value;
         }
     ).set_examples(mmproj_examples).set_env("LLAMA_ARG_VIDEO_FFMPEG_DIR"));
-    if (params.is_gen_docs || llama_supports_rpc()) {
-        add_opt(common_arg(
-            {"--rpc"}, "SERVERS",
-            "comma-separated list of RPC servers (host:port)",
-            [](common_params & params, const std::string & value) {
-                add_rpc_devices(value);
-                GGML_UNUSED(params);
+    add_opt(common_arg(
+        {"--rpc"}, "SERVERS",
+        "comma-separated list of RPC servers (host:port)",
+        [](common_params & params, const std::string & value) {
+            if (!llama_supports_rpc()) {
+                throw std::invalid_argument("RPC not supported in this build");
             }
-        ).set_env("LLAMA_ARG_RPC"));
-    }
+            add_rpc_devices(value);
+            GGML_UNUSED(params);
+        }
+    ).set_env("LLAMA_ARG_RPC"));
     add_opt(common_arg(
         {"-lm", "--load-mode"}, "MODE",
         "model loading mode (default: auto)\n"
@@ -2769,6 +2777,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             llm_add_n_cpu_ffn_overrides(value, LLM_FFN_EXPS_REGEX, params.tensor_buft_overrides);
         }
     ).set_env("LLAMA_ARG_N_CPU_MOE"));
+    add_opt(common_arg(
+        {"--moe-cache-mib"}, "N",
+        "GPU cache size in MiB for the MoE experts kept in the CPU. with multiple GPUs, it is split among them like the layers (--tensor-split) (default: 0, disabled)",
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_cache_size = (size_t) value*1024*1024;
+        }
+    ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
     add_opt(common_arg(
         {"-ncffn", "--n-cpu-ffn"}, "N",
         "keep the dense FFN weights of the first N layers in the CPU\n"
@@ -3177,6 +3195,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(common_arg(
+        {"--nextn"},
+        string_format("collect data for MTP/NextN layers (default: %s)", params.load_mtp ? "true" : "false"),
+        [](common_params & params) {
+            params.load_mtp = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
+    add_opt(common_arg(
         {"--ppl"},
         {"--no-ppl"},
         string_format("whether to compute perplexity (default: %s)", params.compute_ppl ? "true" : "false"),
@@ -3470,6 +3495,26 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_UI"));
     add_opt(common_arg(
+        {"--connect"},
+        string_format("(experimental) open a peer-to-peer tunnel for server using llama-connect (default: %s)", params.server_connect ? "enabled" : "disabled"),
+        [](common_params & params) {
+            params.server_connect = true;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CONNECT"));
+    add_opt(common_arg(
+        {"--connect-code"}, "CODE",
+        "manually specify a 40-character code for --connect (default: generate a new one for each run)",
+        [](common_params & params, const std::string & value) {
+            std::string val = value;
+            string_replace_all(val, "-", "");
+            string_replace_all(val, " ", "");
+            if (val.size() != 40) {
+                throw std::invalid_argument(string_format("error: invalid connect code '%s', must be 40 characters\n", value.c_str()));
+            }
+            params.server_connect_code = val;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CONNECT_CODE"));
+    add_opt(common_arg(
         {"--embedding", "--embeddings"},
         string_format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
         [](common_params & params) {
@@ -3619,7 +3664,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                 params.slot_save_path += DIRECTORY_SEPARATOR;
             }
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_SLOT_SAVE_PATH"));
     add_opt(common_arg(
         {"--media-path"}, "PATH",
         "directory for loading local media files; files can be accessed via file:// URLs using relative paths (default: disabled)",
@@ -4150,6 +4195,16 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_N_MIN"));
     add_opt(common_arg(
+        {"--spec-draft-n-ubatch"}, "N",
+        string_format("physical maximum batch size of the draft context, use a smaller value to spare VRAM (default: %d - same as --n-ubatch)", params.speculative.draft.n_ubatch),
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.speculative.draft.n_ubatch = value;
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_N_UBATCH"));
+    add_opt(common_arg(
         {"--spec-synth-len"}, "L",
         "target mean synthetic acceptance length, including the target token (benchmarking only)",
         [](common_params & params, const std::string & value) {
@@ -4206,6 +4261,21 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_BACKEND_SAMPLING"));
     add_opt(common_arg(
+        {"--spec-draft-sampling"}, "{greedy,probabilistic}",
+        string_format("how the draft is sampled: greedy takes its argmax, probabilistic samples it and has "
+                      "the target verify by rejection sampling (default: %s)",
+                      params.speculative.draft.probabilistic ? "probabilistic" : "greedy"),
+        [](common_params & params, const std::string & value) {
+            if (value == "greedy") {
+                params.speculative.draft.probabilistic = false;
+            } else if (value == "probabilistic") {
+                params.speculative.draft.probabilistic = true;
+            } else {
+                throw std::invalid_argument("invalid value, must be one of: greedy, probabilistic");
+            }
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_SAMPLING"));
+    add_opt(common_arg(
         {"--spec-draft-device", "-devd", "--device-draft"}, "<dev1,dev2,..>",
         "comma-separated list of devices to use for offloading the draft model (none = don't offload, default: follows --device)\n"
         "use --list-devices to see a list of available devices",
@@ -4240,7 +4310,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.speculative.draft.mparams.path = value;
             params.speculative.draft.mparams.hf_file = value; // will be used if --spec-draft-hf is set
         }
-    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_MODEL"));
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_IMATRIX}).set_env("LLAMA_ARG_SPEC_DRAFT_MODEL"));
     add_opt(common_arg(
         {"--spec-type"}, common_speculative_all_types_str(),
         string_format("comma-separated list of types of speculative decoding to use (default: %s)\n",

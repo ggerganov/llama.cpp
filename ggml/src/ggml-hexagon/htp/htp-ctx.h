@@ -3,6 +3,7 @@
 
 #include "dma-queue.h"
 #include "hmx-queue.h"
+#include "htp-dcache.h"
 #include "htp-ops.h"
 #include "hex-profile.h"
 #include "work-queue.h"
@@ -18,8 +19,7 @@
 #define HTP_MAX_NTHREADS 10
 #endif
 
-#define HTP_MAX_MMAPS        64
-#define HTP_MAX_DIRTY_RANGES 64
+#define HTP_MAX_MMAPS 64
 
 // Memory mapping
 struct htp_mmap {
@@ -27,11 +27,6 @@ struct htp_mmap {
     uint64_t base;
     uint32_t fd;
     uint32_t flags;
-};
-
-struct htp_dirty_range {
-    uint32_t start;
-    uint32_t end;
 };
 
 // Scratchpad state
@@ -150,7 +145,9 @@ int op_matmul_nx(struct htp_ops_context * octx);
 int op_matmul_id_nx(struct htp_ops_context * octx);
 int op_binary(struct htp_ops_context * octx);
 int op_unary(struct htp_ops_context * octx);
+int op_sum(struct htp_ops_context * octx);
 int op_sum_rows(struct htp_ops_context * octx);
+int op_argmax(struct htp_ops_context * octx);
 int op_activations(struct htp_ops_context * octx);
 int op_softmax(struct htp_ops_context * octx);
 int op_add_id(struct htp_ops_context * octx);
@@ -171,6 +168,9 @@ int op_solve_tri(struct htp_ops_context * octx);
 int op_gated_delta_net(struct htp_ops_context * octx);
 int op_pad(struct htp_ops_context * octx);
 int op_im2col(struct htp_ops_context * octx);
+int op_im2col_3d(struct htp_ops_context * octx);
+int op_pool_2d(struct htp_ops_context * octx);
+int op_pool_1d(struct htp_ops_context * octx);
 int op_allreduce(struct htp_ops_context * octx);
 int op_roll(struct htp_ops_context * octx);
 
