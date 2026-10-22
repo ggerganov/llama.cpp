@@ -6030,7 +6030,7 @@ static bool ggml_vk_prec_allows_f16acc(ggml_prec prec) {
         case GGML_PREC_Q4:
             return true;
     }
-    return true;
+    return false;
 }
 
 static bool ggml_vk_get_mul_mat_mat_f16acc(ggml_backend_vk_context * ctx, ggml_type src0_type, ggml_type src1_type, ggml_prec prec) {
