@@ -819,8 +819,9 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
                 VK_LOG_DEBUG(pipeline->name << " " << s.name << ": " << s.value.u64 << " registers");
                 pipeline->register_count = (uint32_t)s.value.u64;
             }
-            // "LDS size" is reported by RADV, "ldsUsageSizeInBytes" by AMDVLK.
-            if (strcmp(s.name, "LDS size") == 0 || strcmp(s.name, "ldsUsageSizeInBytes") == 0) {
+            // "LDS size" is reported by RADV, "ldsUsageSizeInBytes" by AMDVLK, "Shared Memory Size" by NVIDIA.
+            if (strcmp(s.name, "LDS size") == 0 || strcmp(s.name, "ldsUsageSizeInBytes") == 0 ||
+                strcmp(s.name, "Shared Memory Size") == 0) {
                 pipeline->shmem_size = (uint32_t)s.value.u64;
             }
         }
@@ -5918,7 +5919,8 @@ static uint32_t ggml_vk_guess_split_k_large_tile(const vk_device& device, uint64
         return 3;
     }
 
-    // Cost in K steps: waves * K per split, plus an empirical charge per extra split for the reduction.
+    // Pick the split with the fewest K elements on the busiest CU, assuming one workgroup per CU at a time:
+    // waves * k_chunk, plus split_k_reduce_cost per wave for each extra split.
     constexpr uint64_t split_k_reduce_cost = 64;
     const uint64_t base_waves = CEIL_DIV(workgroups, cores);
     uint64_t best_cost = base_waves * k;
