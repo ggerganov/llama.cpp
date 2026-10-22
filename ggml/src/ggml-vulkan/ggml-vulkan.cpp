@@ -16312,6 +16312,7 @@ struct ggml_backend_vk_comm_context {
     std::vector<vk_command_pool>            cmd_pool_xfer;
     std::vector<uint64_t>                   xfer_pool_max_val;
     uint64_t                                ring_round = 0;
+    bool                                    ring_last  = false;
     std::vector<ggml_tensor*>               ring_view;
     std::vector<ggml_backend_buffer_t>      up16_buffer;
     std::vector<ggml_backend_buffer_t>      dn16_buffer;
@@ -16653,6 +16654,13 @@ static bool ggml_backend_vk_comm_allreduce_ring(ggml_backend_vk_comm_context * c
 
     const uint64_t round    = comm->ring_round++;
     const size_t   slot_off = (size_t) (round & 1) * 2 * comm->cap;
+    // Each step's host region is written by its own transfer copy. When consecutive regions share a 32-byte sector
+    // of the imported host memory, the later copy's leading bytes can end up stale, even with the copies ordered
+    // (seen on NVIDIA at n = 3, where cels * xsz is not a multiple of 32), so start each region on its own block.
+    const size_t   hstride  = GGML_PAD((size_t) cels * xsz, 256);
+    // A single-shot all-reduce leaves host_buf[i] read by every peer, not only by nextd.
+    const bool     after_ss = !comm->ring_last;
+    comm->ring_last = true;
 
     std::vector<uint64_t> compute_val(n), reduce_val(n), prev_reduce(n), up_base(n);
     for (size_t i = 0; i < n; i++) {
@@ -16719,12 +16727,18 @@ static bool ggml_backend_vk_comm_allreduce_ring(ggml_backend_vk_comm_context * c
                 const size_t  c_recv = rs ? (i + n - s - 1) % n : (i + n - s) % n;
                 const int64_t scels = chunk_cels(c_send), rcels = chunk_cels(c_recv);
                 const size_t  uoff = (size_t) t * (size_t) cels * xsz;
-                const size_t  hoff = slot_off + uoff;
+                const size_t  hoff = slot_off + (size_t) t * hstride;
 
                 ggml_vk_ctx_begin(comm->device[i], tctx);
                 if (t == 0) {
                     tctx->s->wait_semaphores.push_back({ comm->prog[i], compute_val[i] + 1 });
-                    if (round >= 2) {
+                    if (after_ss) {
+                        for (size_t k = 0; k < n; k++) {
+                            if (k != i) {
+                                tctx->s->wait_semaphores.push_back({ comm->peer_prog[i][k], prev_reduce[k] });
+                            }
+                        }
+                    } else if (round >= 2) {
                         tctx->s->wait_semaphores.push_back({ comm->peer_prog[i][nextd], prev_reduce[nextd] });
                     }
                 } else {
@@ -16794,6 +16808,7 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
         }
     }
 
+    comm->ring_last = false;
     std::vector<uint64_t> compute_val(n), gather_val(n), reduce_val(n), prev_reduce(n);
     for (size_t i = 0; i < n; i++) {
         prev_reduce[i] = comm->last_reduce[i];
