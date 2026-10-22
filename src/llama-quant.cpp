@@ -2413,35 +2413,62 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
     }
 
     size_t total_budget_bytes = 0;
-    size_t budget_bytes = 0;
+    size_t total_fixed_bytes = nq_bytes + pinned_bytes;
     if (qs.params->target_size != -1) {
-        const auto metadata_size = gguf_get_meta_size(ml.metadata);
-        const size_t total_fixed_bytes = metadata_size + nq_bytes + pinned_bytes;
+        total_fixed_bytes += gguf_get_meta_size(ml.metadata);
         total_budget_bytes = (size_t)qs.params->target_size;
-        if (total_budget_bytes < total_fixed_bytes + min_total_bytes) {
-            LLAMA_LOG_WARN("\t%s: requested file size %zu is smaller than minimum possible model size (~%zu bytes); clamping to minimum\n",
-            func, (size_t)qs.params->target_size, total_fixed_bytes + min_total_bytes);
-            budget_bytes = min_total_bytes;
-        } else {
-            budget_bytes = total_budget_bytes - total_fixed_bytes;
-        }
     } else {
         total_budget_bytes = std::llround(qs.params->target_bpw * (double)n_elements / 8.0);
-        const size_t total_fixed_bytes = nq_bytes + pinned_bytes;
-        if (total_budget_bytes < total_fixed_bytes + min_total_bytes) {
-            LLAMA_LOG_WARN("\t%s: requested BPW %.4f is smaller than minimum possible model size (~%.4f BPW); clamping to minimum\n",
-                func, qs.params->target_bpw, (double)(total_fixed_bytes + min_total_bytes) * 8.0 / n_elements);
-            budget_bytes = min_total_bytes;
-        } else {
-            budget_bytes = total_budget_bytes - total_fixed_bytes;
-        }
     }
 
-    if (locked_tensors && pinned_bytes >= total_budget_bytes) {
-        LLAMA_LOG_WARN("%s: pinned tensors alone exceed the target budget; ignoring budget and using pinned tensors\n", func);
+    size_t pinned_min_bytes = 0;
+    for (const auto & tc : pinned_tensors) { pinned_min_bytes += tc.candidates.front().bytes; }
+
+    const size_t min_bytes = total_fixed_bytes + min_total_bytes;
+    const size_t unpinned_min_bytes = min_bytes - pinned_bytes + pinned_min_bytes;
+    const bool clamped = total_budget_bytes < min_bytes;
+
+    auto size_str = [&](const size_t bytes) {
+        return qs.params->target_size != -1 ? format("%zu bytes", bytes) : format("%.4f bpw", (double)bytes * 8.0 / n_elements);
+    };
+
+    const std::string requested = qs.params->target_size != -1 ? format("file size %zu", total_budget_bytes) : format("bpw %.4f", qs.params->target_bpw);
+    size_t budget_bytes = 0;
+    if (!clamped) {
+        budget_bytes = total_budget_bytes - total_fixed_bytes;
+        if (!pinned_tensors.empty() && budget_bytes > max_total_bytes) {
+            LLAMA_LOG_WARN("\t%s: target %s is not reachable with current --tensor-type selection (maximum ~%s); clamping to maximum\n",
+                func, requested.c_str(), size_str(total_fixed_bytes + max_total_bytes).c_str());
+        }
+    } else {
+        if (total_budget_bytes >= unpinned_min_bytes) {
+            throw std::runtime_error(format("%s: target %s is not reachable with current --tensor-type selection (minimum ~%s)",
+                func, requested.c_str(), size_str(min_bytes).c_str()));
+        }
+
+        const std::string pinned_min = pinned_tensors.empty() ? "" : format(" (~%s with the pinned tensors)", size_str(min_bytes).c_str());
+        LLAMA_LOG_WARN("\t%s: requested %s is smaller than minimum possible model size (~%s); clamping to minimum%s\n",
+            func, requested.c_str(), size_str(unpinned_min_bytes).c_str(), pinned_min.c_str());
+
         budget_bytes = min_total_bytes;
-    } else if (locked_tensors && pinned_bytes >= total_budget_bytes * 0.33) {
-        LLAMA_LOG_WARN("%s: pinned tensors will consume over 1/3 of the target budget; optimization potential may be limited\n", func);
+    }
+
+    // pins starve the selection process when remaining bpw is below boost_taper
+    if (!pinned_tensors.empty() && !all_tensors.empty()) {
+        size_t pinned_elements = 0;
+        for (const auto & tc : pinned_tensors) { pinned_elements += tc.n_elements; }
+        size_t rest_elements = 0;
+        for (const auto & tn : all_tensors) { rest_elements += tn.n_elements; }
+
+        const size_t other_fixed_bytes = total_fixed_bytes - pinned_bytes;
+        const double shared_bpw = std::max(0.0, 8.0 * ((double)total_budget_bytes - (double)other_fixed_bytes) / (double)(pinned_elements + rest_elements));
+        const double rest_bpw = 8.0 * (double)std::min(budget_bytes, max_total_bytes) / (double)rest_elements; // the rest cannot use more than their largest candidates
+        LLAMA_LOG_INFO("\t%s: pinning %zu tensors (%.2f%% of weights) leaves %.4f bpw available for the rest\n",
+            func, pinned_tensors.size(), 100.0 * pinned_elements / (pinned_elements + rest_elements), rest_bpw);
+
+        if (!clamped && rest_bpw < boost_taper && shared_bpw >= boost_taper) {
+            LLAMA_LOG_WARN("\t%s: remaining bpw is below the %.1f safety limit; model's quality may be severely compromised\n", func, boost_taper);
+        }
     }
 
     // Get the types' override
@@ -3253,11 +3280,6 @@ static void llama_model_quantize_impl(const std::string & fname_inp, const std::
                 if (metadata[i].allows_quantization && unused_kv_tensors.count(metadata[i].name)) {
                     locked_tensors[metadata[i].name] = metadata[i].target_type;
                 }
-            }
-
-            if (!locked_tensors.empty()) {
-                LLAMA_LOG_INFO("%s: locking %zu tensors to user-specified types, allocating remaining budget to the rest\n",
-                    __func__, locked_tensors.size());
             }
 
             // get quantization type overrides targeting a given bits per weight budget
