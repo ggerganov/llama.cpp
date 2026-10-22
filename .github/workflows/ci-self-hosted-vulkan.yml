@@ -50,7 +50,7 @@ env:
 jobs:
   gpu-vulkan-nvidia-cm:
     # runs-on: "hf-jobs-t4-small:ubuntu26_04"
-    runs-on: [self-hosted, Linux, NVIDIA]
+    runs-on: [self-hosted, Linux, gb10]
 
     steps:
       - name: Clone
