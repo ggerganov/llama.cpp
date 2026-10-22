@@ -67,6 +67,7 @@ set(GGML_OPENCL_KERNELS
     argmax
     argsort
     top_k
+    lightning_indexer
     tri
     fill
     clamp
