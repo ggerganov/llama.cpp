@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cinttypes>
+#include <deque>
 #include <exception>
 #include <memory>
 #include <filesystem>
@@ -399,7 +400,7 @@ struct server_slot {
     // realtime transcription, see SERVER_TASK_TYPE_TRANSCRIBE_RT
     mtmd::audio_stream_ptr audio_stream;
     bool audio_wait = false; // the stream needs more audio before it can produce rows
-    bool audio_commit_pending = false; // a non-final commit's tail is still draining
+    std::deque<int64_t> audio_commit_rows; // end row of each non-final commit not yet completed
 
     server_slot_stats stats;
 
@@ -457,7 +458,7 @@ struct server_slot {
 
         audio_stream.reset();
         audio_wait = false;
-        audio_commit_pending = false;
+        audio_commit_rows.clear();
         inp_embd.clear();
     }
 
@@ -3073,9 +3074,11 @@ private:
                             if (task.params.control_action == SERVER_CONTROL_ACTION_AUDIO_APPEND) {
                                 mtmd_audio_stream_push(stream, task.params.control_audio.data(), task.params.control_audio.size());
                             } else {
-                                mtmd_audio_stream_flush(stream, task.params.control_action == SERVER_CONTROL_ACTION_AUDIO_END);
-                                // a non-final commit completes its item only once the flushed tail drains
-                                slot->audio_commit_pending = task.params.control_action == SERVER_CONTROL_ACTION_AUDIO_COMMIT;
+                                const int32_t ret = mtmd_audio_stream_flush(stream, task.params.control_action == SERVER_CONTROL_ACTION_AUDIO_END);
+                                // a non-final commit completes its item once the rows of its audio are decoded
+                                if (ret == 0 && task.params.control_action == SERVER_CONTROL_ACTION_AUDIO_COMMIT) {
+                                    slot->audio_commit_rows.push_back(mtmd_audio_stream_get_n_rows_flushed(stream));
+                                }
                             }
                             slot->audio_wait = false;
                             res->success = true;
@@ -3406,6 +3409,22 @@ private:
             return true; // rows from a previous step, not decoded yet
         }
 
+        // every produced row is decoded and its delta queued, the commits ending there are complete
+        const int64_t n_rows = mtmd_audio_stream_get_n_rows(slot.audio_stream.get());
+        while (!slot.audio_commit_rows.empty() && slot.audio_commit_rows.front() <= n_rows) {
+            slot.audio_commit_rows.pop_front();
+            auto res = std::make_unique<server_task_result_cmpl_partial>();
+            res->id                   = slot.task->id;
+            res->index                = slot.task->index;
+            res->n_decoded            = slot.stats.n_gen;
+            res->n_prompt_tokens      = slot.task->n_tokens();
+            res->res_type             = slot.task->params.res_type;
+            res->oaicompat_model      = slot.task->params.oaicompat_model;
+            res->oaicompat_cmpl_id    = slot.task->params.oaicompat_cmpl_id;
+            res->audio_commit_drained = true;
+            queue_results.send(std::move(res));
+        }
+
         const int32_t n = mtmd_audio_stream_step(slot.audio_stream.get(), slot.sampled);
         if (n > 0) {
             const float * rows = mtmd_audio_stream_get_output_embd(slot.audio_stream.get());
@@ -3415,20 +3434,6 @@ private:
         }
         if (n == 0) {
             slot.audio_wait = true;
-            if (slot.audio_commit_pending) {
-                // committed audio fully decoded; its deltas are already queued ahead of this marker
-                slot.audio_commit_pending = false;
-                auto res = std::make_unique<server_task_result_cmpl_partial>();
-                res->id                    = slot.task->id;
-                res->index                 = slot.task->index;
-                res->n_decoded             = slot.stats.n_gen;
-                res->n_prompt_tokens       = slot.task->n_tokens();
-                res->res_type              = slot.task->params.res_type;
-                res->oaicompat_model       = slot.task->params.oaicompat_model;
-                res->oaicompat_cmpl_id     = slot.task->params.oaicompat_cmpl_id;
-                res->audio_commit_drained  = true;
-                queue_results.send(std::move(res));
-            }
             return false;
         }
         if (n == -2) {
@@ -6129,7 +6134,7 @@ void server_routes::init_routes() {
                     if (!post_control(SERVER_CONTROL_ACTION_AUDIO_COMMIT, {})) {
                         break;
                     }
-                    // completed is deferred until the flushed tail drains (audio_commit_drained below)
+                    // completed is sent once the rows of the committed audio are decoded (audio_commit_drained below)
                     std::lock_guard<std::mutex> lock(mutex_item);
                     send_event(json {
                         {"type",             "input_audio_buffer.committed"},
