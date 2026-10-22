@@ -755,6 +755,7 @@ struct ggml_backend_opencl_context {
     // prealloc buffers for src0 and src1
     ggml_cl_buffer prealloc_src0;
     ggml_cl_buffer prealloc_src1;
+    ggml_cl_buffer prealloc_top_k;
 
 #ifdef GGML_OPENCL_USE_ADRENO_KERNELS
     ggml_cl_buffer prealloc_adreno_xmem_const;
@@ -30364,8 +30365,22 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
     cl_kernel kernel = backend_ctx->kernel_top_k_f32;
     const int max_wg = backend_ctx->get_kernel_workgroup_size(kernel);
     int nth = 1;
-    while (2*nth <= MIN(128, max_wg)) {
+    const int target = MIN(512, MAX(32, ne00/4));
+    while (2*nth <= MIN(target, max_wg)) {
         nth *= 2;
+    }
+
+    const size_t n_rows = ggml_nrows(src0);
+    const bool tiled = ne00 > 32768 && k > 0 && k <= 256 && n_rows <= 4;
+    const int tile_width = tiled ? 4096 : ne00;
+    const int n_tiles = tiled ? 1 + (ne00 - 1)/tile_width : 1;
+    const int n_candidates = (n_tiles - 1)*k + MIN(k, ne00 - (n_tiles - 1)*tile_width);
+    cl_mem candidates = nullptr;
+    int indexed = 0;
+    if (tiled) {
+        GGML_ASSERT(n_rows <= SIZE_MAX/sizeof(cl_uint2)/(size_t) n_candidates);
+        backend_ctx->prealloc_top_k.allocate(backend_ctx->context, n_rows*(size_t) n_candidates*sizeof(cl_uint2));
+        candidates = backend_ctx->prealloc_top_k.buffer;
     }
 
     CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem),   &extra0->data_device));
@@ -30380,11 +30395,44 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
     CL_CHECK(clSetKernelArg(kernel,  9, sizeof(cl_ulong), &nb02));
     CL_CHECK(clSetKernelArg(kernel, 10, sizeof(cl_ulong), &nb03));
     CL_CHECK(clSetKernelArg(kernel, 11, sizeof(int),      &k));
-    CL_CHECK(clSetKernelArg(kernel, 12, 2*nth*sizeof(int), nullptr));
+    CL_CHECK(clSetKernelArg(kernel, 12, MAX(259, 2*nth)*sizeof(cl_uint), nullptr));
+    CL_CHECK(clSetKernelArg(kernel, 13, sizeof(cl_mem),   &candidates));
+    CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int),      &indexed));
+    CL_CHECK(clSetKernelArg(kernel, 15, sizeof(int),      &tile_width));
 
-    size_t global_work_size[] = {(size_t) nth, (size_t) ggml_nrows(src0), 1};
+    size_t global_work_size[] = {(size_t) nth*n_tiles, n_rows, 1};
     size_t local_work_size[]  = {(size_t) nth, 1, 1};
     backend_ctx->enqueue_ndrange_kernel(kernel, 2, global_work_size, local_work_size, dst);
+
+    if (tiled) {
+        // The global top-k is contained in the top-k of each tile.
+        const cl_ulong offset_candidates = 0;
+        const cl_ulong nb_candidate0 = sizeof(cl_uint2);
+        const cl_ulong nb_candidate1 = n_candidates*nb_candidate0;
+        const cl_ulong nb_candidate2 = ne01*nb_candidate1;
+        const cl_ulong nb_candidate3 = ne02*nb_candidate2;
+        indexed = 1;
+        CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem), &candidates));
+        CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_ulong), &offset_candidates));
+        CL_CHECK(clSetKernelArg(kernel,  4, sizeof(int), &n_candidates));
+        CL_CHECK(clSetKernelArg(kernel,  7, sizeof(cl_ulong), &nb_candidate0));
+        CL_CHECK(clSetKernelArg(kernel,  8, sizeof(cl_ulong), &nb_candidate1));
+        CL_CHECK(clSetKernelArg(kernel,  9, sizeof(cl_ulong), &nb_candidate2));
+        CL_CHECK(clSetKernelArg(kernel, 10, sizeof(cl_ulong), &nb_candidate3));
+        candidates = nullptr;
+        CL_CHECK(clSetKernelArg(kernel, 13, sizeof(cl_mem), &candidates));
+        CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int), &indexed));
+        CL_CHECK(clSetKernelArg(kernel, 15, sizeof(int), &n_candidates));
+        int nth_merge = 1;
+        const int target_merge = MIN(512, MAX(32, n_candidates/4));
+        while (2*nth_merge <= MIN(target_merge, max_wg)) {
+            nth_merge *= 2;
+        }
+        CL_CHECK(clSetKernelArg(kernel, 12, MAX(259, 2*nth_merge)*sizeof(cl_uint), nullptr));
+        global_work_size[0] = nth_merge;
+        local_work_size[0] = nth_merge;
+        backend_ctx->enqueue_ndrange_kernel(kernel, 2, global_work_size, local_work_size, dst);
+    }
 }
 
 static void ggml_cl_argsort(ggml_backend_t backend, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
