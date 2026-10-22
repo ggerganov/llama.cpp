@@ -4855,7 +4855,13 @@ template <typename BLOC_TYPE, int64_t INTER_SIZE, int64_t NB_COLS, ggml_type PAR
                     const int32_t i02 =
                         *(const int32_t *) ((const char *) ids->data + iid1 * ids->nb[1] + id * ids->nb[0]);
 
-                    GGML_ASSERT(i02 >= 0 && i02 < n_as);
+                    // a negative id skips the row, its result is zero
+                    if (i02 < 0) {
+                        memset((char *) dst->data + id * dst->nb[1] + iid1 * dst->nb[2], 0, dst->ne[0] * sizeof(float));
+                        continue;
+                    }
+
+                    GGML_ASSERT(i02 < n_as);
 
                     MMID_MATRIX_ROW(i02, matrix_row_counts[i02]) = { id, iid1 };
                     matrix_row_counts[i02] += 1;
