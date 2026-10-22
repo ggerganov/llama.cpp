@@ -9,6 +9,7 @@
 #include "ngram-map.h"
 #include "ngram-mod.h"
 #include "sampling.h"
+#include "speculative-tree.h"
 
 #include "../src/llama-ext.h" // staging API: llama_set_embeddings_nextn / llama_get_embeddings_nextn_ith (used by MTP)
 
@@ -290,8 +291,9 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
             throw std::runtime_error("draft model vocab type must match target model to use speculation");
         }
 
-        if (n_seq != llama_n_seq_max(ctx_dft)) {
-            SPC_ERR("n_seq mismatch: %d != %d\n", n_seq, llama_n_seq_max(ctx_dft));
+        // tree drafting decodes each branch in its own sequence
+        if (n_seq*this->params.n_branches != llama_n_seq_max(ctx_dft)) {
+            SPC_ERR("n_seq mismatch: %d * %d != %d\n", n_seq, this->params.n_branches, llama_n_seq_max(ctx_dft));
 
             throw std::runtime_error("the draft model number of sequences is incompatible with the speculative n_seq");
         }
@@ -331,6 +333,11 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
                 const llama_embd embd = same_width ? t.embd : llama_embd{ zeros.data(), 1, zeros.size() };
                 batch.add_embd(embd, t.pos.data(), t.seq_id, output);
             }
+
+            // the entries of a draft tree are shared by the branches through them
+            for (const llama_seq_id seq_id : t.seq_ids_extra) {
+                batch.add_seq(batch.size() - 1, seq_id);
+            }
         }
 
         if (batch.size() == 0) {
@@ -348,7 +355,140 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
         return true;
     }
 
+    // leaves grow by their top candidate, the next ones with p > p_split start new branches, up to n_max nodes
+    void draft_tree(common_speculative_draft_params_vec & dparams) {
+        auto * ctx_dft = params.ctx_dft;
+        auto * mem     = llama_get_memory(ctx_dft);
+
+        const int32_t n_branches = params.n_branches;
+
+        struct leaf {
+            int32_t      node;    // -1 for the root
+            llama_seq_id seq_id;  // draft sequence of the branch
+            llama_pos    pos;
+            int32_t      i_batch; // output of the last decode
+        };
+
+        std::vector<std::vector<leaf>> leaves(n_seq);
+
+        std::vector<int32_t> n_used     (n_seq, 1); // branches started per sequence
+        std::vector<int32_t> n_nodes_max(n_seq, 0);
+
+        batch.clear();
+
+        for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+            auto & dp = dparams[seq_id];
+
+            if (!dp.drafting) {
+                continue;
+            }
+
+            GGML_ASSERT(dp.result_tree && "tree drafting requires result_tree");
+
+            common_sampler_reset(smpls[seq_id].get());
+
+            n_nodes_max[seq_id] = dp.n_max > 0 ? std::min(params.n_max, dp.n_max) : params.n_max;
+
+            leaves[seq_id].push_back({ -1, seq_id, dp.pos0, batch.add(dp.id_last, dp.pos0, seq_id, true) });
+        }
+
+        std::vector<leaf> next;
+
+        while (batch.size() > 0) {
+            const int ret = llama_process(ctx_dft, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+            if (ret != 0) {
+                SPC_ERR("llama_process returned %d\n", ret);
+                break;
+            }
+
+            batch.clear();
+
+            for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+                if (leaves[seq_id].empty()) {
+                    continue;
+                }
+
+                auto & dp   = dparams[seq_id];
+                auto & tree = *dp.result_tree;
+                auto * smpl = smpls[seq_id].get();
+
+                next.clear();
+
+                for (const auto & lf : leaves[seq_id]) {
+                    common_sampler_sample(smpl, ctx_dft, lf.i_batch, true);
+
+                    const auto * cur_p = common_sampler_get_candidates(smpl, true);
+
+                    // only collect very high-confidence draft tokens
+                    if (cur_p->data[0].p < params.p_min) {
+                        continue;
+                    }
+
+                    for (size_t f = 0; f < cur_p->size && tree.size() < n_nodes_max[seq_id]; ++f) {
+                        llama_seq_id seq_id_dst = lf.seq_id;
+
+                        if (f > 0) {
+                            if (n_used[seq_id] >= n_branches || cur_p->data[f].p <= params.p_split) {
+                                break;
+                            }
+
+                            seq_id_dst = common_speculative_branch_seq(n_seq, n_branches, seq_id, n_used[seq_id]++);
+
+                            // a new branch copies its parent's memory, from the root on if it is still a copy of the slot
+                            const bool is_copy =
+                                llama_memory_seq_pos_min(mem, seq_id_dst) == llama_memory_seq_pos_min(mem, seq_id) &&
+                                llama_memory_seq_pos_max(mem, seq_id_dst) == dp.pos0 - 1;
+
+                            llama_memory_seq_rm(mem, seq_id_dst, is_copy ? dp.pos0 : -1, -1);
+                            llama_memory_seq_cp(mem, lf.seq_id, seq_id_dst, is_copy ? dp.pos0 : -1, -1);
+                        }
+
+                        dp.result->push_back(cur_p->data[f].id);
+
+                        next.push_back({ tree.add(cur_p->data[f].id, lf.node), seq_id_dst, lf.pos + 1, -1 });
+                    }
+                }
+
+                // a full tree is not extended, so its last nodes are not decoded
+                if (tree.size() >= n_nodes_max[seq_id]) {
+                    next.clear();
+                }
+
+                for (auto & lf : next) {
+                    lf.i_batch = batch.add(tree.tokens[lf.node], lf.pos, lf.seq_id, true);
+                }
+
+                leaves[seq_id] = next;
+            }
+        }
+
+        for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+            auto & dp = dparams[seq_id];
+
+            if (!dp.drafting) {
+                continue;
+            }
+
+            // the branches drop their drafts and stay copies of the slot for the next round
+            for (int32_t b = 1; b < n_used[seq_id]; ++b) {
+                llama_memory_seq_rm(mem, common_speculative_branch_seq(n_seq, n_branches, seq_id, b), dp.pos0, -1);
+            }
+
+            if (dp.result->size() < (size_t) params.n_min) {
+                dp.result->clear();
+                dp.result_tree->clear();
+            } else {
+                dp.result_tree->finalize();
+            }
+        }
+    }
+
     void draft(common_speculative_draft_params_vec & dparams) override {
+        if (params.n_branches > 1) {
+            draft_tree(dparams);
+            return;
+        }
+
         auto & ctx_dft = params.ctx_dft;
 
         batch.clear();
@@ -2605,7 +2745,8 @@ common_params common_base_params_to_speculative(const common_params & params) {
 
     result.cache_type_k  = params_spec.cache_type_k;
     result.cache_type_v  = params_spec.cache_type_v;
-    result.n_outputs_max = params.n_parallel;
+    // tree drafting outputs one token per branch
+    result.n_outputs_max = params.n_parallel * params_spec.n_branches;
     result.n_outputs_max_per_seq = 1;
 
     if (params_spec.n_ubatch > 0) {
@@ -2927,6 +3068,7 @@ void common_speculative_draft(common_speculative * spec) {
 
         for (auto & dp : dparams) {
             GGML_ASSERT(!dp.drafting || dp.result->empty());
+            GGML_ASSERT(!dp.drafting || !dp.result_tree || dp.result_tree->empty());
 
             if (dp.drafting) {
                 n_drafting++;
@@ -2969,7 +3111,17 @@ void common_speculative_draft(common_speculative * spec) {
                         if (dp.result_q && !dp.result_q->empty()) {
                             dp.result_q->resize(dp.n_max);
                         }
+
+                        // the nodes are in breadth-first order, so the first n_max of them are a tree
+                        if (dp.result_tree) {
+                            dp.result_tree->truncate(dp.n_max);
+                        }
                     }
+                }
+
+                // drafters that cannot branch give a chain
+                if (dp.result_tree && dp.result_tree->empty()) {
+                    dp.result_tree->from_chain(result);
                 }
 
                 if (!result.empty()) {

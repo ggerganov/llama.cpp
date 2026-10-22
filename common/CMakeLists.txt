@@ -107,6 +107,8 @@ add_library(${TARGET}
     sampling.h
     speculative.cpp
     speculative.h
+    speculative-tree.cpp
+    speculative-tree.h
     subproc.cpp
     subproc.h
     trie.cpp

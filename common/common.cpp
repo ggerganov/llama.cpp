@@ -1716,7 +1716,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     auto cparams = llama_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;
-    cparams.n_seq_max         = params.n_parallel;
+    cparams.n_seq_max         = params.n_parallel * params.speculative.draft.n_branches; // one seq per tree branch
     cparams.n_rs_seq          = params.speculative.need_n_rs_seq();
     cparams.n_outputs_max     = std::max(params.n_outputs_max, 0);
     cparams.n_outputs_max_per_seq = std::max(params.n_outputs_max_per_seq, 0);
@@ -1743,7 +1743,8 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.no_perf           = params.no_perf;
     cparams.op_offload        = !params.no_op_offload;
     cparams.swa_full          = params.swa_full;
-    cparams.kv_unified        = params.kv_unified;
+    // tree branches share their prefix cells, so they need one KV stream
+    cparams.kv_unified        = params.kv_unified || params.speculative.draft.n_branches > 1;
 
     cparams.type_k = params.cache_type_k;
     cparams.type_v = params.cache_type_v;
