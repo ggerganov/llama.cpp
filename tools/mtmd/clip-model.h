@@ -65,6 +65,8 @@ struct clip_hparams {
     int32_t image_max_pixels = -1;
     resize_algo image_resize_algo = RESIZE_ALGO_BICUBIC;
     pad_style image_resize_pad = PAD_CEIL; // padding style when resizing
+    bool image_round_half_even = false;    // smart_resize rounds .5 to even, like Python round() in the HF processor
+    bool image_floor_before_align = false;
     std::array<uint8_t, 3> image_pad_color = {0, 0, 0};
 
     // (preprocessor) for llava-uhd style models
@@ -72,7 +74,8 @@ struct clip_hparams {
     int32_t preproc_min_tiles = 0;
     int32_t preproc_max_tiles = 0;
     int32_t max_slice_nums = 9; // llava-uhd slice cap; per-model, carried in the GGUF
-    int32_t preproc_tile_size = 0; // local tile size (deepseek-ocr)
+    int32_t preproc_tile_size = 0; // local tile size (deepseek-ocr, lfm2)
+    float preproc_max_pixels_tolerance = 1.0f;
     resize_algo image_resize_algo_rf = RESIZE_ALGO_BICUBIC;
     resize_algo image_resize_algo_ov = RESIZE_ALGO_BICUBIC;
     pad_style image_pad_rf = PAD_CEIL;  // padding style for the refined image (e.g. llava-1.6)

@@ -32,6 +32,8 @@ enum htp_data_type {
     HTP_TYPE_I64    = 27,
     HTP_TYPE_BF16   = 30,
     HTP_TYPE_MXFP4  = 39,
+    HTP_TYPE_Q1_0   = 41,
+    HTP_TYPE_Q2_0   = 42,
 
     HTP_TYPE_INVALID
 };
@@ -112,6 +114,7 @@ enum htp_op_code {
     HTP_OP_POOL_1D,
     HTP_OP_UNARY_GELU_QUICK,
     HTP_OP_IM2COL_3D,
+    HTP_OP_HADAMARD,
 
     HTP_OP_INVALID
 };

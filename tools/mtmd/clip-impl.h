@@ -16,6 +16,7 @@
 #include <vector>
 #include <memory>
 #include <fstream>
+#include <random>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -56,6 +57,8 @@
 #define KEY_PREPROC_MIN_TILES       "clip.vision.preproc_min_tiles"
 #define KEY_PREPROC_MAX_TILES       "clip.vision.preproc_max_tiles"
 #define KEY_PREPROC_IMAGE_SIZE      "clip.vision.preproc_image_size"
+#define KEY_PREPROC_TILE_SIZE       "clip.vision.preproc_tile_size"
+#define KEY_PREPROC_MAX_PIXELS_TOLERANCE "clip.vision.preproc_max_pixels_tolerance"
 #define KEY_PATCH_SIZE              "clip.vision.patch_size"
 #define KEY_IMAGE_MEAN              "clip.vision.image_mean"
 #define KEY_IMAGE_STD               "clip.vision.image_std"
@@ -461,6 +464,15 @@ struct clip_enc_state {
     std::vector<ggml_tensor *> v;
 };
 
+// per-sequence state of audio generation, see clip_gen_state_init()
+struct clip_gen_state {
+    std::mt19937 rng;
+
+    ggml_context_ptr        ctx_data;
+    ggml_backend_buffer_ptr buf;
+    std::vector<ggml_tensor *> slots; // same order as list_gen_state_slots(), F32 [ne0, ne1]
+};
+
 // forward declaration
 // TODO: improve this later
 struct clip_ctx;
@@ -535,6 +547,7 @@ enum projector_type {
     PROJECTOR_TYPE_POCKETTTS_SPKENC,
     PROJECTOR_TYPE_POCKETTTS_GEN,
     PROJECTOR_TYPE_MUSE_GLIMMER,
+    PROJECTOR_TYPE_SENSENOVA_U1,
     PROJECTOR_TYPE_COHERE2V,
     PROJECTOR_TYPE_MUSE_SPARK_AUDIO,
     PROJECTOR_TYPE_UNKNOWN,
@@ -609,6 +622,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_POCKETTTS_SPKENC,  "pockettts_spkenc"},
     { PROJECTOR_TYPE_POCKETTTS_GEN,     "pockettts_gen"},
     { PROJECTOR_TYPE_MUSE_GLIMMER,      "muse-glimmer"},
+    { PROJECTOR_TYPE_SENSENOVA_U1,      "sensenova_u1"},
     { PROJECTOR_TYPE_COHERE2V,          "cohere2v"},
     { PROJECTOR_TYPE_MUSE_SPARK_AUDIO,  "muse-spark-audio"},
 };

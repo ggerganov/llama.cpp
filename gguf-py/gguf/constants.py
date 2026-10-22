@@ -263,6 +263,7 @@ class Keys:
         DIMENSION_SECTIONS        = "{arch}.rope.dimension_sections"
         SECTION_ORDER             = "{arch}.rope.section_order"
         FREQ_BASE                 = "{arch}.rope.freq_base"
+        FREQ_BASE_SPATIAL         = "{arch}.rope.freq_base_spatial"
         FREQ_BASE_SWA             = "{arch}.rope.freq_base_swa"
         SCALING_TYPE              = "{arch}.rope.scaling.type"
         SCALING_FACTOR            = "{arch}.rope.scaling.factor"
@@ -344,6 +345,7 @@ class Keys:
         ROUTING_BLOCK_COUNT = "{arch}.decision.routing_block_count"
         HEAD_COUNT         = "{arch}.decision.head_count"
         MAX_HEAD_TOKENS    = "{arch}.decision.max_head_tokens"
+        LABELS             = "{arch}.decision.labels"  # the text of the token read for each option, in order
         TEMPERATURE        = "{arch}.decision.temperature.{name}"  # name: "<type>" or "<type>.<n_opt bucket>"
         SCORE_BIAS         = "{arch}.decision.score_bias.{n}.{i}"  # added to the logit of level i of a score question with n levels
 
@@ -366,8 +368,10 @@ class Keys:
         ADD_BOS              = "tokenizer.ggml.add_bos_token"
         ADD_EOS              = "tokenizer.ggml.add_eos_token"
         ADD_SEP              = "tokenizer.ggml.add_sep_token"
+        DNA_AUTO_TAGS        = "tokenizer.ggml.dna_auto_tags"
         ADD_PREFIX           = "tokenizer.ggml.add_space_prefix"
         REMOVE_EXTRA_WS      = "tokenizer.ggml.remove_extra_whitespaces"
+        CLEAN_SPACES         = "tokenizer.ggml.clean_spaces"
         PRECOMPILED_CHARSMAP = "tokenizer.ggml.precompiled_charsmap"
         SUPPRESS_TOKENS      = "tokenizer.ggml.suppress_tokens"
         HF_JSON              = "tokenizer.huggingface.json"
@@ -418,6 +422,8 @@ class Keys:
         PREPROC_MIN_TILES     = "clip.vision.preproc_min_tiles"
         PREPROC_MAX_TILES     = "clip.vision.preproc_max_tiles"
         PREPROC_IMAGE_SIZE    = "clip.vision.preproc_image_size"
+        PREPROC_TILE_SIZE     = "clip.vision.preproc_tile_size"
+        PREPROC_MAX_PIXELS_TOLERANCE = "clip.vision.preproc_max_pixels_tolerance"
         PATCH_SIZE            = "clip.vision.patch_size"
         EMBEDDING_LENGTH      = "clip.vision.embedding_length"
         FEED_FORWARD_LENGTH   = "clip.vision.feed_forward_length"
@@ -569,10 +575,13 @@ class MODEL_ARCH(IntEnum):
     QWEN2            = auto()
     QWEN2MOE         = auto()
     QWEN2VL          = auto()
+    SENSENOVA_U1     = auto()
     QWEN3            = auto()
     QWEN3MOE         = auto()
+    FLINT            = auto()
     QWEN3NEXT        = auto()
     HRM_TEXT         = auto()
+    BEAM             = auto()
     QWEN3VL          = auto()
     QWEN3VLMOE       = auto()
     QWEN35           = auto()
@@ -700,6 +709,7 @@ class MODEL_ARCH(IntEnum):
     QWEN3TTS         = auto()
     POCKETTTS        = auto()
     K2HORIZON        = auto()
+    KOLIBRI1         = auto()
 
 
 class VISION_PROJECTOR_TYPE(IntEnum):
@@ -1384,10 +1394,13 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN2:            "qwen2",
     MODEL_ARCH.QWEN2MOE:         "qwen2moe",
     MODEL_ARCH.QWEN2VL:          "qwen2vl",
+    MODEL_ARCH.SENSENOVA_U1:     "sensenova_u1",
     MODEL_ARCH.QWEN3:            "qwen3",
+    MODEL_ARCH.FLINT:            "flint",
     MODEL_ARCH.QWEN3MOE:         "qwen3moe",
     MODEL_ARCH.QWEN3NEXT:        "qwen3next",
     MODEL_ARCH.HRM_TEXT:         "hrm_text",
+    MODEL_ARCH.BEAM:             "beam",
     MODEL_ARCH.QWEN3VL:          "qwen3vl",
     MODEL_ARCH.QWEN3VLMOE:       "qwen3vlmoe",
     MODEL_ARCH.QWEN35:           "qwen35",
@@ -1516,6 +1529,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN3TTS:         "qwen3tts",
     MODEL_ARCH.POCKETTTS:        "pockettts",
     MODEL_ARCH.K2HORIZON:        "k2-horizon",
+    MODEL_ARCH.KOLIBRI1:         "kolibri1",
 }
 
 VISION_PROJECTOR_TYPE_NAMES: dict[VISION_PROJECTOR_TYPE, str] = {
@@ -2908,6 +2922,24 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
     ],
+    MODEL_ARCH.SENSENOVA_U1: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.QWEN3: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -2925,6 +2957,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.DENSE_2_OUT, # voyage-4-nano
     ],
     MODEL_ARCH.QWEN3MOE: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -2943,6 +2976,33 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
+    ],
+
+    MODEL_ARCH.FLINT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.ATTN_SINKS,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
     ],
     MODEL_ARCH.QWEN3NEXT: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -2980,6 +3040,30 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.NEXTN_HNORM,
         MODEL_TENSOR.NEXTN_SHARED_HEAD_HEAD,
         MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
+    ],
+    MODEL_ARCH.BEAM: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_GATE,
+        MODEL_TENSOR.FFN_PRE_NORM,
+        MODEL_TENSOR.FFN_POST_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
     ],
     MODEL_ARCH.HRM_TEXT: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -5950,6 +6034,11 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
+        # NextN/MTP tensors
+        MODEL_TENSOR.NEXTN_EH_PROJ,
+        MODEL_TENSOR.NEXTN_ENORM,
+        MODEL_TENSOR.NEXTN_HNORM,
+        MODEL_TENSOR.NEXTN_SHARED_HEAD_NORM,
     ],
     MODEL_ARCH.NANBEIGE: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -6013,6 +6102,29 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_UP,
         MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_EXP_PROBS_B,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+    ],
+    MODEL_ARCH.KOLIBRI1: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_POST_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_POST_NORM,
         MODEL_TENSOR.FFN_GATE_INP,
         MODEL_TENSOR.FFN_EXP_PROBS_B,
         MODEL_TENSOR.FFN_GATE_EXP,
@@ -6278,6 +6390,8 @@ class DecisionType:
     VLLM_D3 = "vllm-d3"  # same as pplx-decider, non-causal attention
     LFM2_D1 = "lfm2-d1"  # same as openjev, the labels depend on the question type
     LFM2_D1_OMNI = "lfm2-d1-omni"  # same head as laya on a bidirectional LFM2 trunk, other prompt layout
+    GRANITE_SWITCH = "granite-switch"  # same as openjev, run by the decision aLoRA of granite switch
+    H2O_LIGHTNING = "h2o-lightning"  # same as openjev, labels read after an answer prefill
 
 
 class VisionProjectorType:
@@ -6422,6 +6536,7 @@ KEY_ATTENTION_LAYERNORM_RMS_EPS = Keys.Attention.LAYERNORM_RMS_EPS
 # RoPE
 KEY_ROPE_DIMENSION_COUNT           = Keys.Rope.DIMENSION_COUNT
 KEY_ROPE_FREQ_BASE                 = Keys.Rope.FREQ_BASE
+KEY_ROPE_FREQ_BASE_SPATIAL         = Keys.Rope.FREQ_BASE_SPATIAL
 KEY_ROPE_SCALING_TYPE              = Keys.Rope.SCALING_TYPE
 KEY_ROPE_SCALING_FACTOR            = Keys.Rope.SCALING_FACTOR
 KEY_ROPE_SCALING_ORIG_CTX_LEN      = Keys.Rope.SCALING_ORIG_CTX_LEN
