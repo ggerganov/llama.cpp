@@ -1533,7 +1533,7 @@ void gemm_kernel_i8i3k_m1(size_t          blk_len,
             "vpack.vv     v26, v20, v22, 2        \n\t"
             "vpack.vv     v16, v24, v26, 3        \n\t"  // N0-N31 in v16
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v18, v2, x0             \n\t"  // int8 -> int16
 
@@ -1590,7 +1590,7 @@ void gemm_kernel_i8i3k_m1(size_t          blk_len,
             "vpack.vv     v26, v20, v22, 2        \n\t"
             "vpack.vv     v16, v24, v26, 3        \n\t"  // N0-N31 in v16
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v18, v2, x0              \n\t"  // int8 -> int16
 
@@ -1647,7 +1647,7 @@ void gemm_kernel_i8i3k_m1(size_t          blk_len,
             "vpack.vv     v26, v20, v22, 2        \n\t"
             "vpack.vv     v16, v24, v26, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v18, v2, x0              \n\t"  // int8 -> int16
 
@@ -1698,7 +1698,7 @@ void gemm_kernel_i8i3k_m1(size_t          blk_len,
             "vpack.vv     v26, v20, v22, 2        \n\t"
             "vpack.vv     v16, v24, v26, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v18, v2, x0             \n\t"  // int8 -> int16
 
@@ -2158,7 +2158,7 @@ void gemm_kernel_i8i3k_m4(size_t          blk_len,
             "vpack.vv     v16, v12, v14, 3        \n\t"  // Inter-row results (INT16)
             "vpack.vv     v18, v13, v15, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v21, v8, x0             \n\t"  // INT8 → INT16
 
@@ -2219,7 +2219,7 @@ void gemm_kernel_i8i3k_m4(size_t          blk_len,
             "vpack.vv     v16, v12, v14, 3        \n\t"  // N0-N31 in v16
             "vpack.vv     v18, v13, v15, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v21, v8, x0             \n\t"  // int8 -> int16
 
@@ -2278,7 +2278,7 @@ void gemm_kernel_i8i3k_m4(size_t          blk_len,
             "vpack.vv     v16, v12, v14, 3        \n\t"  // N0-N31 in v16
             "vpack.vv     v18, v13, v15, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v21, v8, x0             \n\t"  // int8 -> int16
 
@@ -2333,7 +2333,7 @@ void gemm_kernel_i8i3k_m4(size_t          blk_len,
             "vpack.vv     v16, v12, v14, 3        \n\t"  // N0-N31 in v16
             "vpack.vv     v18, v13, v15, 3        \n\t"
 
-            // apply B int8 scales (-32 bias has been applyed)
+            // apply B int8 scales (-32 bias has been applied)
             "vsetvli      t0, x0, e8, mf4         \n\t"
             "vwadd.vx     v21, v8, x0             \n\t"  // int8 -> int16
 

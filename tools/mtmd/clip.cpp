@@ -5394,7 +5394,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                             const int win_h = std::min(grid_window, ph - y);
                             const int win_w = std::min(grid_window, pw - x);
                             const int dst_0 = dst;
-                            // group all tokens belong to the same window togather (to a continue range)
+                            // group all tokens belong to the same window together (to a continue range)
                             for (int dy = 0; dy < win_h; dy++) {
                                 for (int dx = 0; dx < win_w; dx++) {
                                     const int src = (y + dy) * pw + (x + dx);

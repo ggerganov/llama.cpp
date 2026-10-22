@@ -775,7 +775,7 @@ struct mtmd_context {
                 {
                     img_beg = "<image>";
                     img_end = "</image>";
-                    // Currently only supprots single-tile preprocessing: any input is downscaled
+                    // Currently only supports single-tile preprocessing: any input is downscaled
                     // to one image_size x image_size tile (64 output tokens via 8x8 adaptive avg
                     // pool).
                     // However, the model itself supports llava-uhd multi-tile tiling for high-res

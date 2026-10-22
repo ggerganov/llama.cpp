@@ -1807,7 +1807,7 @@ bool is_model_splitted(ggml_cgraph * cgraph) {
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
         int use_count = cgraph->use_counts[ggml_hash_find(&cgraph->visited_hash_set, node)];
-        // TODO: this is a workround for the tests case from llama.cpp, fix should from the root cause in the future.
+        // TODO: this is a workaround for the tests case from llama.cpp, fix should from the root cause in the future.
         if ((cgraph->n_nodes <= 1 && use_count == 0) ||
             (cgraph->n_nodes <= 1 && node->op == GGML_OP_VIEW && use_count == 1 && node->src[0] != nullptr &&
              node->src[0]->op == GGML_OP_NONE)) {

@@ -17,7 +17,7 @@ namespace ov {
  * the values of original size of the constant in bytes and the binary offset of the
  * constant's data in the weights file used by the weightless caching mechanism. It's
  * not copyable in case the data was changed (the original node was replaced by a new
- * one produced during the tranformation pipeline) - in that case weightless caching
+ * one produced during the transformation pipeline) - in that case weightless caching
  * can't be used for that constant.
  */
 class OPENVINO_API WeightlessCacheAttribute : public RuntimeAttribute {

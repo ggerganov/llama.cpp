@@ -640,7 +640,7 @@ static void geglu_f16(const _Float16 * restrict src0,
         for (uint32_t ir = src0_start_row, spad_idx = 0; ir < src0_end_row && spad_idx < 2; ir += BLOCK, spad_idx++) { \
             const uint32_t block_size = MIN(BLOCK, src0_end_row - ir);                                                 \
                                                                                                                        \
-            /* Dummy DMA transation for sequencing (interleaving dst,src,dst,...) */                                   \
+            /* Dummy DMA transaction for sequencing (interleaving dst,src,dst,...) */                                   \
             dma_queue_push(dma_q,                                                                                      \
                            dma_make_data(data_dst, dst_spad_data + (spad_idx * dst_spad_half_size)),                   \
                            dst_row_size, dst_row_size_aligned, dst_row_size, 0);                                       \

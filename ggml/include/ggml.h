@@ -1450,7 +1450,7 @@ extern "C" {
     //  - GGML_PREC_Q8   - not allowed
     //  - GGML_PREC_Q4   - not allowed
     //
-    // return false on faliure
+    // return false on failure
     GGML_API bool ggml_prec_set_acc(
             struct ggml_tensor * a,
             enum ggml_prec       prec);
@@ -1471,7 +1471,7 @@ extern "C" {
     //   - ggml_prec_set_src(a, GGML_PREC_Q4, 1):
     //     - allows the implementation to quantize F32, BF16, F16 data of src[1] down to 4-bit datatypes such as GGML_TYPE_Q4_K, GGML_TYPE_NVFP4 etc.
     //
-    // return false on faliure
+    // return false on failure
     GGML_API bool ggml_prec_set_src(
             struct ggml_tensor * a,
             enum ggml_prec       prec,

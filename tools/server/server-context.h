@@ -101,7 +101,7 @@ struct server_context {
     // terminate main loop (will unblock start_loop)
     void terminate();
 
-    // get the underlaying llama_context, can return nullptr if sleeping
+    // get the underlying llama_context, can return nullptr if sleeping
     // not thread-safe, should only be used from the main thread
     llama_context * get_llama_context() const;
 

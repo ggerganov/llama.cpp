@@ -78,7 +78,7 @@ struct ComputeParams {
 
     int cache_rs_reset_idx = -1;
     int cache_rs_reset_len = -1;
-    // SSM/DeltaNet models otionally clear cache_r and cache_s of certain slots in the cgraph
+    // SSM/DeltaNet models optionally clear cache_r and cache_s of certain slots in the cgraph
     // 3: [ 18432,     4,     1,     1] RESHAPE              cache_r_l0 (reshaped)
     //    [ 18432,     4,     1,     1]            0: NONE        cache_r_l0
     // 4: [ 18432,     1,     1,     1] VIEW                 cache_r_l0 (reshaped) (view)
@@ -87,7 +87,7 @@ struct ComputeParams {
     //    [ 18432,     1,     1,     1]            0: VIEW        cache_r_l0 (reshaped) (view)
 
     int s_copy_active_slot_len = -1;
-    // SSM/DeltaNet models otionally reorder slots of state cache, to make the active slots contiguous
+    // SSM/DeltaNet models optionally reorder slots of state cache, to make the active slots contiguous
     // leaf_5 is the inp->s_copy in llama-graph.cpp, eg if there are 8 slots in total and slot 3 and 7
     // are active in the current batch, leaf_5 will be [3, 7, 5, 6, 4]
     //  6: [     2,     1,     1,     1] VIEW                  (view)
