@@ -2884,7 +2884,7 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
     const int64_t n_base = n_rows - head.scorer->ne[1];
 
     const int     n_iter  = 12;
-    const int64_t n_chunk = 4096; // head rows per graph
+    const int64_t n_chunk = 1024; // head rows per graph
 
     // run on the backend of the head
     ggml_backend_buffer_type_t buft = ggml_backend_buffer_get_type(head.basis->buffer);
@@ -2909,7 +2909,7 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
                 __func__, w->name, ggml_type_name(w->type));
     }
 
-    // identity, Gram matrix G = W^T W and the iterated block q
+    // the iterated block q, the product W^T W q and the ids of all head rows
     ggml_init_params ip = {
         /*.mem_size   =*/ 3*ggml_tensor_overhead(),
         /*.mem_buffer =*/ nullptr,
@@ -2917,21 +2917,20 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
     };
     ggml_context_ptr ctx_work { ggml_init(ip) };
 
-    ggml_tensor * eye = ggml_new_tensor_2d(ctx_work.get(), GGML_TYPE_F32, n_embd, n_embd);
-    ggml_tensor * g   = ggml_new_tensor_2d(ctx_work.get(), GGML_TYPE_F32, n_embd, n_embd);
     ggml_tensor * q   = ggml_new_tensor_2d(ctx_work.get(), GGML_TYPE_F32, n_embd, n_rank);
+    ggml_tensor * wq  = ggml_new_tensor_2d(ctx_work.get(), GGML_TYPE_F32, n_embd, n_rank);
+    ggml_tensor * ids = ggml_new_tensor_1d(ctx_work.get(), GGML_TYPE_I32, n_rows);
 
     ggml_backend_buffer_ptr buf_work { ggml_backend_alloc_ctx_tensors_from_buft(ctx_work.get(), buft) };
     if (!buf_work) {
         throw std::runtime_error("vocab_subset: failed to allocate the work buffer");
     }
-    ggml_backend_buffer_clear(buf_work.get(), 0);
 
-    std::vector<float> host(n_embd*n_embd, 0.0f);
-    for (int64_t i = 0; i < n_embd; ++i) {
-        host[i*n_embd + i] = 1.0f;
+    std::vector<int32_t> host_ids(n_rows);
+    for (int64_t i = 0; i < n_rows; ++i) {
+        host_ids[i] = (int32_t) i;
     }
-    ggml_backend_tensor_set(eye, host.data(), 0, ggml_nbytes(eye));
+    ggml_backend_tensor_set(ids, host_ids.data(), 0, ggml_nbytes(ids));
 
     ggml_gallocr_ptr galloc { ggml_gallocr_new(buft) };
 
@@ -2949,6 +2948,15 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
         ggml_set_output(out);
         ggml_build_forward_expand(gf, out);
 
+        // a backend without one of these ops falls back to the full head
+        for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
+            ggml_tensor * node = ggml_graph_node(gf, i);
+            if (!ggml_backend_supports_op(backend, node)) {
+                throw std::runtime_error(format("vocab_subset: %s does not support %s for %s", ggml_backend_name(backend), ggml_op_desc(node),
+                        ggml_type_name(node->src[0] ? node->src[0]->type : node->type)));
+            }
+        }
+
         if (!ggml_gallocr_alloc_graph(galloc.get(), gf) || ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
             throw std::runtime_error("vocab_subset: failed to compute the basis graph");
         }
@@ -2956,16 +2964,7 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
         return std::make_pair(std::move(ctx_graph), out);
     };
 
-    // multiplying by the identity dequantizes a chunk of rows whatever the head type
-    for (int64_t r0 = 0; r0 < n_rows; r0 += n_chunk) {
-        const int64_t n = std::min(n_chunk, n_rows - r0);
-        compute([&](ggml_context * ctx) {
-            ggml_tensor * xt = ggml_mul_mat(ctx, ggml_view_2d(ctx, w, n_embd, n, w->nb[1], r0*w->nb[1]), eye); // [n, n_embd]
-            return ggml_add_inplace(ctx, g, ggml_mul_mat(ctx, xt, xt));
-        });
-    }
-
-    // subspace iteration q = orth(G q) from a fixed-seed random block (splitmix64)
+    // subspace iteration q = orth(W^T W q) from a fixed-seed random block (splitmix64), W is read in chunks of rows
     std::vector<double> qd(n_embd*n_rank);
     uint64_t state = 0x853c49e6748fea9bULL;
     for (double & v : qd) {
@@ -2977,6 +2976,7 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
     }
 
     std::vector<float> qf(qd.size());
+    const std::vector<float> zero(qd.size(), 0.0f);
     for (int it = 0; it <= n_iter; ++it) {
         vsub_orth(qd, n_embd, n_rank);
         for (size_t i = 0; i < qd.size(); ++i) {
@@ -2985,9 +2985,19 @@ void llama_context::vsub_init_head(ggml_tensor * w, const llama_vocab_subset::he
         if (it == n_iter) {
             break;
         }
-        ggml_backend_tensor_set(q, qf.data(), 0, ggml_nbytes(q));
-        auto res = compute([&](ggml_context * ctx) { return ggml_mul_mat(ctx, g, q); });
-        ggml_backend_tensor_get(res.second, qf.data(), 0, ggml_nbytes(q));
+        ggml_backend_tensor_set(q,  qf.data(),   0, ggml_nbytes(q));
+        ggml_backend_tensor_set(wq, zero.data(), 0, ggml_nbytes(wq));
+        for (int64_t r0 = 0; r0 < n_rows; r0 += n_chunk) {
+            const int64_t n = std::min(n_chunk, n_rows - r0);
+            compute([&](ggml_context * ctx) {
+                // get_rows dequantizes the rows whatever the head type
+                ggml_tensor * x  = ggml_get_rows(ctx, w, ggml_view_1d(ctx, ids, n, r0*ids->nb[0])); // [n_embd, n]
+                ggml_tensor * p  = ggml_mul_mat(ctx, x, q);                                         // [n, n_rank]
+                ggml_tensor * xt = ggml_cont(ctx, ggml_transpose(ctx, x));                          // [n, n_embd]
+                return ggml_add_inplace(ctx, wq, ggml_mul_mat(ctx, xt, p));
+            });
+        }
+        ggml_backend_tensor_get(wq, qf.data(), 0, ggml_nbytes(wq));
         qd.assign(qf.begin(), qf.end());
     }
     ggml_backend_tensor_set(head.basis, qf.data(), 0, ggml_nbytes(head.basis));
