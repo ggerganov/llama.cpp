@@ -1664,15 +1664,21 @@ ggml_tensor * llm_graph_context::build_lora_mm(
             set_prec(logits);
             logits = ggml_concat(ctx0, logits, ggml_fill(ctx0, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab - n_base, n_outputs), -INFINITY), 0);
 
-            if (n_outputs > 0) {
-                // score the other ids in vocab order so top_k returns token ids, end-of-generation ids always win
-                ggml_tensor * scores = ggml_mul_mat(ctx0, head.scorer, ggml_mul_mat(ctx0, head.basis, cur_mm));
-                scores = ggml_concat(ctx0, ggml_fill(ctx0, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_base, n_outputs), -INFINITY), scores, 0);
-                if (vsub->eog != nullptr) {
-                    const int64_t n_eog = vsub->eog->ne[0];
-                    scores = ggml_set_rows(ctx0, ggml_reshape_3d(ctx0, scores, 1, n_vocab, n_outputs),
-                            ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_eog, n_outputs), INFINITY),
-                            ggml_reshape_3d(ctx0, vsub->eog, n_eog, 1, 1));
+            // the picked ids: the n_dyn best-scoring others, or with no dynamic rows only the end-of-generation ids
+            const int64_t n_pick = n_dyn > 0 ? n_dyn : (vsub->eog != nullptr ? vsub->eog->ne[0] : 0);
+
+            if (n_outputs > 0 && n_pick > 0) {
+                ggml_tensor * scores = nullptr;
+                if (n_dyn > 0) {
+                    // score the other ids in vocab order so top_k returns token ids, end-of-generation ids always win
+                    scores = ggml_mul_mat(ctx0, head.scorer, ggml_mul_mat(ctx0, head.basis, cur_mm));
+                    scores = ggml_concat(ctx0, ggml_fill(ctx0, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_base, n_outputs), -INFINITY), scores, 0);
+                    if (vsub->eog != nullptr) {
+                        const int64_t n_eog = vsub->eog->ne[0];
+                        scores = ggml_set_rows(ctx0, ggml_reshape_3d(ctx0, scores, 1, n_vocab, n_outputs),
+                                ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_eog, n_outputs), INFINITY),
+                                ggml_reshape_3d(ctx0, vsub->eog, n_eog, 1, 1));
+                    }
                 }
 
                 // one output per op: CUDA's multi-row top_k is slow and its multi-column MUL_MAT_ID reads 2 rows per expert
@@ -1680,15 +1686,15 @@ ggml_tensor * llm_graph_context::build_lora_mm(
                 ggml_tensor * ids    = nullptr;
                 ggml_tensor * picked = nullptr;
                 for (int64_t i = 0; i < n_outputs; ++i) {
-                    ggml_tensor * ids_i = ggml_top_k(ctx0, ggml_view_1d(ctx0, scores, n_vocab, i*n_vocab*ggml_element_size(scores)), n_dyn);
+                    ggml_tensor * ids_i = n_dyn > 0 ? ggml_top_k(ctx0, ggml_view_1d(ctx0, scores, n_vocab, i*n_vocab*ggml_element_size(scores)), n_dyn) : vsub->eog;
                     ggml_tensor * cur_i = ggml_view_3d(ctx0, cur_mm, n_embd, 1, 1, cur_mm->nb[1], cur_mm->nb[1], i*cur_mm->nb[1]);
-                    ggml_tensor * p_i   = ggml_mul_mat_id(ctx0, as, cur_i, ggml_reshape_2d(ctx0, ids_i, n_dyn, 1));
+                    ggml_tensor * p_i   = ggml_mul_mat_id(ctx0, as, cur_i, ggml_reshape_2d(ctx0, ids_i, n_pick, 1));
                     set_prec(p_i);
                     ids    = ids    == nullptr ? ids_i : ggml_concat(ctx0, ids,    ids_i, 1);
                     picked = picked == nullptr ? p_i   : ggml_concat(ctx0, picked, p_i,   2);
                 }
 
-                logits = ggml_set_rows(ctx0, ggml_reshape_3d(ctx0, logits, 1, n_vocab, n_outputs), picked, ggml_reshape_2d(ctx0, ids, n_dyn, n_outputs));
+                logits = ggml_set_rows(ctx0, ggml_reshape_3d(ctx0, logits, 1, n_vocab, n_outputs), picked, ggml_reshape_2d(ctx0, ids, n_pick, n_outputs));
             }
 
             logits = ggml_reshape_2d(ctx0, logits, n_vocab, n_outputs);

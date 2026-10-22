@@ -1,4 +1,4 @@
-// tests the reduced draft LM head (llama_context_params::n_vocab_dynamic_rows) against the full head on a small random model
+// tests the reduced draft LM head (llama_context_params::vocab_subset) against the full head on a small random model
 
 #include "ggml-backend.h"
 #include "gguf.h"
@@ -67,6 +67,7 @@ static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect, uint32
     cparams.n_threads_batch = 4;
 
     llama_context * ctx_full = llama_init_from_model(model, cparams);
+    cparams.vocab_subset         = true;
     cparams.n_vocab_dynamic_rows = n_dynamic;
     cparams.vocab_dynamic_rank   = rank;
     llama_context * ctx_dyn  = llama_init_from_model(model, cparams);
@@ -131,8 +132,8 @@ static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect, uint32
                 fprintf(stderr, "%s: K = %u: %d logits computed, expected %d\n", __func__, n_dynamic, n_finite, n_expect);
                 n_fail++;
             }
-            // a lower rank only changes which tokens get picked, and those are still exact
-            if (rank != 0 && rank < (uint32_t) n_embd) {
+            // a lower rank only changes which tokens get picked, and those are still exact; with no dynamic rows nothing is picked
+            if (n_dynamic == 0 || (rank != 0 && rank < (uint32_t) n_embd)) {
                 continue;
             }
             // the rank is at least this small head's width, so the best tokens of each output are always picked
@@ -173,9 +174,11 @@ int main(void) {
     }
 
     int n_fail = 0;
+    n_fail += run(model, 0,                   n_base + 1);      // only the lowest ids and the eos above them
     n_fail += run(model, 1024,                n_base + 1024);
-    n_fail += run(model, n_vocab - n_base,    n_vocab);
-    n_fail += run(model, n_vocab - n_base + 1, n_vocab); // too many dynamic rows, falls back to the full head
+    n_fail += run(model, n_vocab - n_base - 1, n_vocab - 1); // all but one of the ids above the base
+    n_fail += run(model, n_vocab - n_base,     n_vocab);     // every id above the base, falls back to the full head
+    n_fail += run(model, n_vocab - n_base + 1, n_vocab);     // too many dynamic rows, falls back to the full head
     n_fail += run(model, 1024,                n_base + 1024, 16);   // low rank, F16 scorer
     n_fail += run(model, 1024,                n_base + 1024, 1000); // capped at the head's width
 

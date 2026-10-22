@@ -495,7 +495,7 @@ llama_context::llama_context(
     }
 
     // reduced LM head, must exist before the graph is reserved
-    if (!hparams.vocab_only && params.n_vocab_dynamic_rows > 0) {
+    if (!hparams.vocab_only && params.vocab_subset) {
         try {
             vsub_init(params.n_vocab_dynamic_rows, params.vocab_dynamic_rank);
         } catch (const std::exception & e) {
@@ -506,8 +506,8 @@ llama_context::llama_context(
             vsub_ctxs.clear();
         }
     }
-    if (params.n_vocab_dynamic_rows == 0 && params.vocab_dynamic_rank > 0) {
-        LLAMA_LOG_WARN("%s: vocab_subset: vocab_dynamic_rank has no effect without n_vocab_dynamic_rows\n", __func__);
+    if ((!params.vocab_subset || params.n_vocab_dynamic_rows == 0) && params.vocab_dynamic_rank > 0) {
+        LLAMA_LOG_WARN("%s: vocab_subset: vocab_dynamic_rank has no effect without vocab_subset and n_vocab_dynamic_rows > 0\n", __func__);
     }
 
     // init backends
@@ -2802,10 +2802,16 @@ void llama_context::vsub_init(uint32_t n_dynamic, uint32_t n_rank) {
     const int64_t n_vocab = model.vocab.n_tokens();
     const int64_t n_base  = std::min(vsub_n_base, n_vocab);
 
+    // picking every id above the base gives the logits of the full head, which computes them for less
+    if (n_dynamic >= n_vocab - n_base) {
+        LLAMA_LOG_WARN("%s: vocab_subset: %u dynamic rows would pick all %" PRId64 " ids above the lowest %" PRId64 ", using the full LM head\n",
+                __func__, n_dynamic, n_vocab - n_base, n_base);
+        return;
+    }
+
     // 65535 is the CUDA grid limit for the picked rows
-    if (n_dynamic > n_vocab - n_base || n_dynamic > 65535) {
-        LLAMA_LOG_WARN("%s: vocab_subset: %u dynamic rows do not fit a vocabulary of %" PRId64 " tokens, using the full LM head\n",
-                __func__, n_dynamic, n_vocab);
+    if (n_dynamic > 65535) {
+        LLAMA_LOG_WARN("%s: vocab_subset: %u dynamic rows are above the limit of 65535, using the full LM head\n", __func__, n_dynamic);
         return;
     }
 
@@ -2846,14 +2852,14 @@ void llama_context::vsub_init(uint32_t n_dynamic, uint32_t n_rank) {
             continue;
         }
 
-        // the scorer only ranks ids, Q8_0 is precise enough
-        const int64_t   rank = std::min(n_rank_use, w->ne[0]);
-        const ggml_type type = rank % ggml_blck_size(GGML_TYPE_Q8_0) == 0 ? GGML_TYPE_Q8_0 : GGML_TYPE_F16;
-        if (n_rank == 0) {
-            LLAMA_LOG_INFO("%s: vocab_subset: rank 0 (default), using %" PRId64 " for %s%s\n",
-                    __func__, rank, w->name, rank < vsub_rank ? ", capped at its width" : "");
-        } else if (n_rank > rank) {
-            LLAMA_LOG_WARN("%s: vocab_subset: rank %u is above the width of %s, using %" PRId64 "\n", __func__, n_rank, w->name, rank);
+        llama_vocab_subset::head & head = vsub->heads[w];
+
+        // the eog ids are stored next to the first head
+        const bool with_eog = vsub->eog == nullptr && !eog.empty();
+
+        // only the lowest ids: the head is read in place, there is no scorer to build
+        if (n_dynamic == 0 && !with_eog) {
+            continue;
         }
 
         ggml_init_params ip = {
@@ -2864,12 +2870,21 @@ void llama_context::vsub_init(uint32_t n_dynamic, uint32_t n_rank) {
         ggml_context * ctx = ggml_init(ip);
         vsub_ctxs.emplace_back(ctx);
 
-        llama_vocab_subset::head & head = vsub->heads[w];
-        head.basis  = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, w->ne[0], rank);
-        head.scorer = ggml_new_tensor_2d(ctx, type,          rank,     n_vocab - n_base);
+        if (n_dynamic > 0) {
+            // the scorer only ranks ids, Q8_0 is precise enough
+            const int64_t   rank = std::min(n_rank_use, w->ne[0]);
+            const ggml_type type = rank % ggml_blck_size(GGML_TYPE_Q8_0) == 0 ? GGML_TYPE_Q8_0 : GGML_TYPE_F16;
+            if (n_rank == 0) {
+                LLAMA_LOG_INFO("%s: vocab_subset: rank 0 (default), using %" PRId64 " for %s%s\n",
+                        __func__, rank, w->name, rank < vsub_rank ? ", capped at its width" : "");
+            } else if (n_rank > rank) {
+                LLAMA_LOG_WARN("%s: vocab_subset: rank %u is above the width of %s, using %" PRId64 "\n", __func__, n_rank, w->name, rank);
+            }
 
-        // the eog ids are stored next to the first head
-        const bool with_eog = vsub->eog == nullptr && !eog.empty();
+            head.basis  = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, w->ne[0], rank);
+            head.scorer = ggml_new_tensor_2d(ctx, type,          rank,     n_vocab - n_base);
+        }
+
         if (with_eog) {
             vsub->eog = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, eog.size());
         }
@@ -2885,7 +2900,9 @@ void llama_context::vsub_init(uint32_t n_dynamic, uint32_t n_rank) {
             ggml_backend_tensor_set(vsub->eog, eog.data(), 0, eog.size()*sizeof(int32_t));
         }
 
-        vsub_init_head(w, head);
+        if (n_dynamic > 0) {
+            vsub_init_head(w, head);
+        }
     }
 
     if (vsub->heads.empty()) {
@@ -4331,10 +4348,11 @@ llama_context_params llama_context_default_params() {
         /*.op_offload                  =*/ true,
         /*.swa_full                    =*/ true,
         /*.kv_unified                  =*/ false,
+        /*.vocab_subset                =*/ false,
         /*.sampler                     =*/ nullptr,
         /*.n_sampler                   =*/ 0,
         /*.ctx_other                   =*/ nullptr,
-        /*.n_vocab_dynamic_rows        =*/ 0,
+        /*.n_vocab_dynamic_rows        =*/ 16384,
         /*.vocab_dynamic_rank          =*/ 0,
     };
 

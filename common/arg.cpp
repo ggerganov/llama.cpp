@@ -899,6 +899,10 @@ static bool common_params_parse_ex(int argc, char ** argv, common_params_context
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
+    if (params.speculative.draft.vocab_dynamic_set && !params.speculative.draft.vocab_subset) {
+        throw std::invalid_argument("error: --spec-draft-vocab-dynamic-rows and --spec-draft-vocab-dynamic-rank require --spec-draft-vocab\n");
+    }
+
     const bool skip_model_download =
         // server will call common_params_handle_models() later, so we skip it here
         ctx_arg.ex == LLAMA_EXAMPLE_SERVER ||
@@ -4238,23 +4242,33 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_spec().set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_SYNTH_RATES"));
 
     add_opt(common_arg(
+        {"--spec-draft-vocab"},
+        {"--no-spec-draft-vocab"},
+        string_format("smaller draft LM head: compute only the lowest 32768 token ids and the end-of-generation ids, plus the rows of --spec-draft-vocab-dynamic-rows (default: %s)", params.speculative.draft.vocab_subset ? "enabled" : "disabled"),
+        [](common_params & params, bool value) {
+            params.speculative.draft.vocab_subset = value;
+        }
+    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_VOCAB"));
+    add_opt(common_arg(
         {"--spec-draft-vocab-dynamic-rows"}, "N",
-        string_format("smaller draft LM head: score only the lowest token ids plus the N others that a low-rank projection ranks best for each draft token (default: %d, 0 = off, full LM head, there is no mode with only the lowest ids; suggested: 16384)", params.speculative.draft.vocab_dynamic_rows),
+        string_format("requires --spec-draft-vocab: also compute the N other token ids that a low-rank projection ranks best for each draft token (default: %d, 0 = only the lowest ids)", params.speculative.draft.vocab_dynamic_rows),
         [](common_params & params, int value) {
             if (value < 0) {
                 throw std::invalid_argument("invalid value");
             }
             params.speculative.draft.vocab_dynamic_rows = value;
+            params.speculative.draft.vocab_dynamic_set  = true;
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_VOCAB_DYNAMIC_ROWS"));
     add_opt(common_arg(
         {"--spec-draft-vocab-dynamic-rank"}, "N",
-        string_format("rank of the low-rank projection that --spec-draft-vocab-dynamic-rows ranks tokens with, only used with it; capped at the model's hidden size, larger ranks take longer to load (default: %d, 0 = 512)", params.speculative.draft.vocab_dynamic_rank),
+        string_format("rank of the low-rank projection that --spec-draft-vocab-dynamic-rows ranks tokens with, requires --spec-draft-vocab, only used when N > 0; capped at the model's hidden size, larger ranks take longer to load (default: %d, 0 = 512)", params.speculative.draft.vocab_dynamic_rank),
         [](common_params & params, int value) {
             if (value < 0) {
                 throw std::invalid_argument("invalid value");
             }
             params.speculative.draft.vocab_dynamic_rank = value;
+            params.speculative.draft.vocab_dynamic_set  = true;
         }
     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_VOCAB_DYNAMIC_RANK"));
     add_opt(common_arg(

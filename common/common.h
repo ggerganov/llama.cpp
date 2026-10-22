@@ -332,8 +332,10 @@ struct common_params_speculative_draft {
     float p_split = 0.1f; // speculative decoding split probability
     float p_min   = 0.0f; // minimum speculative decoding probability (greedy)
 
-    int32_t vocab_dynamic_rows = 0; // reduced draft LM head, see --spec-draft-vocab-dynamic-rows (0 = off, full LM head, no lowest-ids-only mode)
-    int32_t vocab_dynamic_rank = 0; // rank of its scorer, see --spec-draft-vocab-dynamic-rank (0 = default 512)
+    bool    vocab_subset       = false; // reduced draft LM head, see --spec-draft-vocab
+    int32_t vocab_dynamic_rows = 16384; // its context-aware rows, see --spec-draft-vocab-dynamic-rows (0 = only the lowest ids)
+    int32_t vocab_dynamic_rank = 0;     // rank of their scorer, see --spec-draft-vocab-dynamic-rank (0 = default 512)
+    bool    vocab_dynamic_set  = false; // -rows or -rank was given, they require --spec-draft-vocab
 
     bool backend_sampling = true; // offload draft sampling to the backend (default: on)
 
