@@ -871,6 +871,7 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
     constexpr float tied_embd_boost = 2.5f;
     constexpr float attn_v_boost = 1.25f;
     constexpr float boost_taper = 2.2f; // boost starves other tensors below 2.2 bpw
+    constexpr double downward_threshold = 0.08; // potential gains smaller than 8% are not trusted
     const char * func = __func__;
 
     // --target-exclude must leave at least one quant type in the pool
@@ -2462,7 +2463,7 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
 
         const size_t other_fixed_bytes = total_fixed_bytes - pinned_bytes;
         const double shared_bpw = std::max(0.0, 8.0 * ((double)total_budget_bytes - (double)other_fixed_bytes) / (double)(pinned_elements + rest_elements));
-        const double rest_bpw = 8.0 * (double)std::min(budget_bytes, max_total_bytes) / (double)rest_elements; // the rest cannot use more than their largest candidates
+        const double rest_bpw = 8.0 * (double)std::min(budget_bytes, max_total_bytes) / (double)rest_elements;
         LLAMA_LOG_INFO("\t%s: pinning %zu tensors (%.2f%% of weights) leaves %.4f bpw available for the rest\n",
             func, pinned_tensors.size(), 100.0 * pinned_elements / (pinned_elements + rest_elements), rest_bpw);
 
@@ -2567,7 +2568,7 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
         }
     };
 
-    // Binary search for mu then a single-pass greedy upgrade of any leftover budget
+    // Binary search for mu then greedy upgrade upwards followed by greedy upgrade downwards of any leftover budget
     auto run_auction = [&](const size_t budget) {
         size_t min_bytes = 0;
         size_t max_bytes = 0;
@@ -2645,13 +2646,11 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
             for(auto& tn : all_tensors) { tn.choice = 0; }
         }
 
-        // Single pass greedy upgrade in case there is budget left
         auto current_bytes = [&] {
             size_t cb = 0;
             for(const auto & tn : all_tensors) { cb += tn.candidates[tn.choice].bytes; }
             return cb;
         };
-        size_t cb = current_bytes();
 
         struct tensor_upgrade {
             int index;
@@ -2662,38 +2661,87 @@ static std::unordered_map<std::string, ggml_type> target_bpw_type(
             }
         };
 
-        std::priority_queue<tensor_upgrade> queue;
+        // greedy upwards/downwards upgrades in case there is budget left
+        auto allocate_remaining = [&] {
+            size_t cb = current_bytes();
+            std::priority_queue<tensor_upgrade> queue;
 
-        auto push_next = [&](const int i) {
-            const auto & tn = all_tensors[i];
-            int next = tn.choice + 1;
-            if (next < (int)tn.candidates.size()) {
-                const double err = std::max(0.0, tn.candidates[tn.choice].error - tn.candidates[next].error);
-                auto bytes = (double)(tn.candidates[next].bytes - tn.candidates[tn.choice].bytes);
-                if (bytes > EPSILON) {
-                    double ratio = err / bytes;
-                    ratio *= tn.boost; // boosted tensors get a higher priority
-                    queue.push({i, next, ratio});
+            auto push_next = [&](const int i) {
+                const auto & tn = all_tensors[i];
+                int next = tn.choice + 1;
+                if (next < (int)tn.candidates.size()) {
+                    const double err = std::max(0.0, tn.candidates[tn.choice].error - tn.candidates[next].error);
+                    auto bytes = (double)(tn.candidates[next].bytes - tn.candidates[tn.choice].bytes);
+                    if (bytes > EPSILON) {
+                        double ratio = err / bytes;
+                        ratio *= tn.boost; // boosted tensors get a higher priority
+                        queue.push({i, next, ratio});
+                    }
+                }
+            };
+
+            for (size_t i = 0; i < all_tensors.size(); ++i) { push_next((int)i); }
+
+            while (!queue.empty()) {
+                auto top = queue.top();
+                queue.pop();
+
+                int i = top.index;
+                int next = top.next_choice;
+                if (all_tensors[i].choice >= next) { continue; }
+
+                size_t delta_bt = all_tensors[i].candidates[next].bytes - all_tensors[i].candidates[all_tensors[i].choice].bytes;
+                if (cb + delta_bt <= budget) {
+                    cb += delta_bt;
+                    all_tensors[i].choice = next;
+                    push_next(i);
                 }
             }
         };
 
-        for (size_t i = 0; i < all_tensors.size(); ++i) { push_next((int)i); }
+        // upwards upgrade
+        allocate_remaining();
 
-        while (!queue.empty()) {
-            auto top = queue.top();
-            queue.pop();
+        // upgrade cannot swap one large for several small so we try downwards too
+        auto total_cost = [&] {
+            double cost = 0.0;
+            for (const auto & tn : all_tensors) { cost += tn.boost * tn.candidates[tn.choice].error; }
+            return cost;
+        };
 
-            int i = top.index;
-            int next = top.next_choice;
-            if (all_tensors[i].choice >= next) { continue; }
+        std::vector<int> under_choices(all_tensors.size());
+        for (size_t i = 0; i < all_tensors.size(); ++i) { under_choices[i] = all_tensors[i].choice; }
+        const double under_cost = total_cost();
 
-            size_t delta_bt = all_tensors[i].candidates[next].bytes - all_tensors[i].candidates[all_tensors[i].choice].bytes;
-            if (cb + delta_bt <= budget) {
-                cb += delta_bt;
-                all_tensors[i].choice = next;
-                push_next(i);
+        const std::vector<int> & over = ch_over.empty() ? ch_lo : ch_over;
+        for (size_t i = 0; i < all_tensors.size(); ++i) { all_tensors[i].choice = over[i]; }
+
+        // drop the step with the least boosted error per byte, counting no more bytes than are still over budget
+        size_t cb = current_bytes();
+        while (cb > budget) {
+            int best = -1;
+            double best_score = INFINITE;
+            for (size_t i = 0; i < all_tensors.size(); ++i) {
+                const auto & tn = all_tensors[i];
+                if (tn.choice == 0) { continue; }
+                const double err = tn.boost * std::max(0.0, tn.candidates[tn.choice - 1].error - tn.candidates[tn.choice].error);
+                const size_t freed = tn.candidates[tn.choice].bytes - tn.candidates[tn.choice - 1].bytes;
+                const double score = err / (double)std::min(freed, cb - budget);
+                if (score < best_score) {
+                    best_score = score;
+                    best = (int)i;
+                }
             }
+
+            if (best < 0) { break; }
+            auto & tn = all_tensors[best];
+            cb -= tn.candidates[tn.choice].bytes - tn.candidates[tn.choice - 1].bytes;
+            --tn.choice;
+        }
+
+        allocate_remaining();
+        if (current_bytes() > budget || total_cost() >= under_cost * (1.0 - downward_threshold)) {
+            for (size_t i = 0; i < all_tensors.size(); ++i) { all_tensors[i].choice = under_choices[i]; }
         }
     };
 
