@@ -422,7 +422,7 @@ struct llm_tokenizer_bpe : llm_tokenizer {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_TEKKEN:
-            case LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBED:
+            case LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBD:
                 // original regex from tokenizer.json
                 // "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                 regex_exprs = {
@@ -641,7 +641,7 @@ struct llm_tokenizer_bpe_session {
         auto tok_pre = vocab.get_pre_type();
 
         std::vector<std::string> word_collection;
-        if (tok_pre == LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBED) {
+        if (tok_pre == LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBD) {
             std::string normalized_text = text;
             replace_all(normalized_text, "[\xe2\x80\x8c", "[");
             replace_all(normalized_text, "<\xe2\x80\x8c", "<");
@@ -2726,7 +2726,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                 clean_spaces = false;
             } else if (
                 tokenizer_pre == "nemotron-3.5-embed") {
-                pre_type = LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBED;
+                pre_type = LLAMA_VOCAB_PRE_TYPE_NEMOTRON_3_5_EMBD;
                 ignore_merges = true;
                 add_bos = true;
             } else {
