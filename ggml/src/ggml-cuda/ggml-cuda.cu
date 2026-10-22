@@ -267,10 +267,8 @@ static int ggml_cuda_parse_id(char devName[]) {
 }
 #endif // defined(GGML_USE_HIP)
 
-static bool ggml_cuda_prefer_bf16[GGML_CUDA_MAX_DEVICES] = {};
-
 #if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
-static bool ggml_cuda_should_use_bf16(const cudaDeviceProp & prop, const int cc) {
+static bool ggml_cuda_should_use_fp32_acc(const cudaDeviceProp & prop, const int cc) {
     if (cc == GGML_CUDA_CC_GB10) {
         return true;
     }
@@ -322,14 +320,14 @@ static bool ggml_cuda_should_use_bf16(const cudaDeviceProp & prop, const int cc)
              (unsigned int) prop.pciDomainID, (unsigned int) prop.pciBusID, (unsigned int) prop.pciDeviceID);
     nvmlDevice_t device = nullptr;
     nvmlBrandType_t brand = NVML_BRAND_UNKNOWN;
-    bool prefer_bf16 = false;
+    bool prefer_fp32_acc = false;
     if (get_device(pci_bus_id, &device) == NVML_SUCCESS && get_brand(device, &brand) == NVML_SUCCESS) {
-        prefer_bf16 = brand == NVML_BRAND_QUADRO ||
-                      brand == NVML_BRAND_QUADRO_RTX ||
-                      brand == NVML_BRAND_NVIDIA_RTX;
+        prefer_fp32_acc = brand == NVML_BRAND_QUADRO ||
+                          brand == NVML_BRAND_QUADRO_RTX ||
+                          brand == NVML_BRAND_NVIDIA_RTX;
     }
     (void) shutdown();
-    return prefer_bf16;
+    return prefer_fp32_acc;
 }
 #endif
 
@@ -458,7 +456,9 @@ static ggml_cuda_device_info ggml_cuda_init() {
         info.devices[id].smpbo = prop.sharedMemPerBlockOptin;
         info.devices[id].cc = 100*prop.major + 10*prop.minor;
         if (info.devices[id].virtual_index == 0) {
-            ggml_cuda_prefer_bf16[physical_id] = ggml_cuda_should_use_bf16(prop, info.devices[id].cc);
+            info.devices[id].prefer_fp32_acc = ggml_cuda_should_use_fp32_acc(prop, info.devices[id].cc);
+        } else {
+            info.devices[id].prefer_fp32_acc = info.devices[physical_id].prefer_fp32_acc;
         }
         GGML_LOG_INFO("  Device %d: %s, compute capability %d.%d, VMM: %s, VRAM: %zu MiB\n",
                       id, prop.name, prop.major, prop.minor, device_vmm ? "yes" : "no",
@@ -1749,7 +1749,7 @@ static void ggml_cuda_mul_mat_cublas(ggml_backend_cuda_context & ctx, const ggml
     ggml_type compute_type = src0->type;
     if (ggml_is_quantized(compute_type)) {
         compute_type = fast_fp16_hardware_available(cc) ? GGML_TYPE_F16 : GGML_TYPE_F32;
-        if (ggml_cuda_prefer_bf16[ggml_cuda_get_physical_device(ctx.device)]) {
+        if (ggml_cuda_info().devices[ctx.device].prefer_fp32_acc) {
             compute_type = GGML_TYPE_BF16;
         }
     } else if (compute_type == GGML_TYPE_F16 && !fast_fp16_hardware_available(cc)) {
