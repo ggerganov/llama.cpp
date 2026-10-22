@@ -72,6 +72,7 @@ htp_op_code htp_op_remap(const struct ggml_tensor * t) {
                 case GGML_UNARY_OP_ABS:        return HTP_OP_UNARY_ABS;
                 case GGML_UNARY_OP_RELU:       return HTP_OP_UNARY_RELU;
                 case GGML_UNARY_OP_STEP:       return HTP_OP_UNARY_STEP;
+                case GGML_UNARY_OP_CEIL:       return HTP_OP_UNARY_CEIL;
                 default:                       break;
             }
             break;
