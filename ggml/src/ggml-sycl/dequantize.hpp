@@ -1273,13 +1273,15 @@ static void dequantize_block_q5_K_reorder(const void * __restrict__ vx, dst_t * 
                                           uint8_t * scales_local, const sycl::nd_item<3> & item_ct1, int64_t n_blocks) {
 
 #if QK_K == 256
-    // assume 64 threads
+    // remapped decomposition: 32 threads, each emitting two aligned vec<dst_t,4>
+    // from four consecutive ql/qh bytes; a 4-element run shares one scale pair,
+    // so the per-element math and output are identical to the 64-thread kernel.
     const int64_t tid = item_ct1.get_local_id(2);
-    const int64_t il  = tid / 16;   // 0...3
-    const int64_t ir  = tid % 16;   // 0...15
+    const int64_t il  = tid / 8;   // 0...3
+    const int64_t ir  = tid % 8;   // 0...7
     const int64_t is  = 2 * il;
 
-    dst_t * y = yy + 64 * il + 2 * ir;
+    dst_t * y = yy + 64 * il + 4 * ir;
 
     const uint8_t * base = static_cast<const uint8_t *>(vx);
 
@@ -1297,8 +1299,8 @@ static void dequantize_block_q5_K_reorder(const void * __restrict__ vx, dst_t * 
     const float dall = dm_values.x();
     const float dmin = dm_values.y();
 
-    const uint8_t * ql = qs_ptr + 32 * il + 2 * ir;
-    const uint8_t * qh = qh_ptr + 2 * ir;
+    const uint8_t * ql = qs_ptr + 32 * il + 4 * ir;   // four consecutive bytes
+    const uint8_t * qh = qh_ptr + 4 * ir;             // four consecutive bytes
 
     if (tid < K_SCALE_SIZE) {
         scales_local[tid] = scales_ptr[tid];
@@ -1312,12 +1314,18 @@ static void dequantize_block_q5_K_reorder(const void * __restrict__ vx, dst_t * 
     get_scale_min_k4(is + 1, scales_local, sc, m);
     const float d2 = dall * sc; const float m2 = dmin * m;
 
-    uint8_t hm  = 1 << (2 * il);
-    y[ 0] = d1 * ((ql[ 0] & 0xF) + (qh[ 0] & hm ? 16 : 0)) - m1;
-    y[ 1] = d1 * ((ql[ 1] & 0xF) + (qh[ 1] & hm ? 16 : 0)) - m1;
-    hm <<= 1;
-    y[32] = d2 * ((ql[ 0] >>  4) + (qh[ 0] & hm ? 16 : 0)) - m2;
-    y[33] = d2 * ((ql[ 1] >>  4) + (qh[ 1] & hm ? 16 : 0)) - m2;
+    const uint8_t hm_lo = 1 << (2 * il);
+    const uint8_t hm_hi = 1 << (2 * il + 1);
+
+    sycl::vec<dst_t, 4> lo, hi;
+#pragma unroll
+    for (int j = 0; j < 4; ++j) {
+        lo[j] = d1 * ((ql[j] & 0xF) + (qh[j] & hm_lo ? 16 : 0)) - m1;
+        hi[j] = d2 * ((ql[j] >>  4) + (qh[j] & hm_hi ? 16 : 0)) - m2;
+    }
+
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y +  0) = lo;
+    *reinterpret_cast<sycl::vec<dst_t, 4> *>(y + 32) = hi;
 #else
     GGML_UNUSED(ib); GGML_UNUSED(tid); GGML_UNUSED(yy); GGML_UNUSED(scales_local); GGML_UNUSED(n_blocks);
     GGML_ABORT("Q5_K reorder dequantize not supported for QK_K != 256");
