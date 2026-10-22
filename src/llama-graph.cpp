@@ -1630,8 +1630,9 @@ ggml_tensor * llm_graph_context::build_lora_mm(
           ggml_tensor * w,
           ggml_tensor * cur,
           ggml_tensor * w_s) const {
-    cur = build_hadamard_input(w, cur);
-    ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
+    // a Hadamard-folded weight reads the transformed input; a LoRA delta lives in the primal basis and reads `cur`
+    ggml_tensor * cur_mm = build_hadamard_input(w, cur);
+    ggml_tensor * res = ggml_mul_mat(ctx0, w, cur_mm);
 
     if (prec_policy) {
         prec_policy->apply(res);
@@ -1684,7 +1685,10 @@ llm_graph_amax_src1 llm_graph_context::build_amax_src1_f16(
     constexpr float k_ln_2   = 0.6931471805599453f;
 
     ggml_tensor * e;
-    e = ggml_scale(ctx0, amax, 1.0f/32768.0f);
+    // note: this can technically be:
+    // e = ggml_scale(ctx0, amax, 1.0f/32768.0f);
+    // but we leave x32 headroom for the F16 sums of 32 values in Q8 activation blocks
+    e = ggml_scale(ctx0, amax, 1.0f/1024.0f);
     e = ggml_log  (ctx0, e);
     e = ggml_scale(ctx0, e, k_log2_e);
     e = ggml_ceil (ctx0, e);
@@ -1707,19 +1711,20 @@ ggml_tensor * llm_graph_context::build_lora_mm_id(
           ggml_tensor * w_s,
           ggml_tensor * slots,
           bool      host_ids) const {
-    cur = build_hadamard_input(w, cur);
+    // as in build_lora_mm: the folded weight reads the transformed input, the LoRA delta reads `cur`
+    ggml_tensor * cur_mm = build_hadamard_input(w, cur);
     // the experts in the MoE cache are selected by their slots
     ggml_tensor * res = nullptr;
     if (slots == nullptr) {
-        res = ggml_mul_mat_id(ctx0, w, cur, ids);
+        res = ggml_mul_mat_id(ctx0, w, cur_mm, ids);
     } else if (host_ids) {
         // ids into the host experts with -1 rows, which only the CPU's mul_mat_id skips: never offload it
-        res = ggml_mul_mat_id(ctx0, w, cur, slots);
+        res = ggml_mul_mat_id(ctx0, w, cur_mm, slots);
         if (backend_cpu != nullptr) {
             ggml_backend_sched_set_tensor_backend(sched, res, backend_cpu);
         }
     } else {
-        res = ggml_mul_mat_id(ctx0, moe_cache->get_experts(w), cur, slots);
+        res = ggml_mul_mat_id(ctx0, moe_cache->get_experts(w), cur_mm, slots);
     }
 
     if (prec_policy) {
@@ -2521,7 +2526,7 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
         //       ref: https://github.com/ggml-org/llama.cpp/pull/30656#issuecomment-6269597922
         llm_graph_amax_src1 amax_src1 = { nullptr, nullptr };
 
-        if (arch == LLM_ARCH_MISTRAL4 || arch == LLM_ARCH_MELLUM) {
+        if (arch == LLM_ARCH_MISTRAL4 || arch == LLM_ARCH_MELLUM || arch == LLM_ARCH_FLINT) {
             amax_src1 = build_amax_src1_f16(cur);
             cur = amax_src1.res;
         }
