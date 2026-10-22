@@ -1,4 +1,4 @@
-// tests the reduced draft LM head (llama_context_params::n_vocab_dynamic) against the full head on a small random model
+// tests the reduced draft LM head (llama_context_params::n_vocab_dynamic_rows) against the full head on a small random model
 
 #include "ggml-backend.h"
 #include "gguf.h"
@@ -67,8 +67,8 @@ static int run(llama_model * model, uint32_t n_dynamic, int32_t n_expect, uint32
     cparams.n_threads_batch = 4;
 
     llama_context * ctx_full = llama_init_from_model(model, cparams);
-    cparams.n_vocab_dynamic    = n_dynamic;
-    cparams.vocab_dynamic_rank = rank;
+    cparams.n_vocab_dynamic_rows = n_dynamic;
+    cparams.vocab_dynamic_rank   = rank;
     llama_context * ctx_dyn  = llama_init_from_model(model, cparams);
     if (ctx_full == nullptr || ctx_dyn == nullptr) {
         fprintf(stderr, "%s: failed to create the contexts\n", __func__);

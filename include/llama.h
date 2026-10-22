@@ -427,9 +427,9 @@ extern "C" {
         struct llama_context * ctx_other;
 
         // [EXPERIMENTAL] draft contexts: compute only the lowest token ids plus this many best-scoring others per output (0 = off, full LM head, no mode with only the lowest ids)
-        uint32_t n_vocab_dynamic;
+        uint32_t n_vocab_dynamic_rows;
 
-        // [EXPERIMENTAL] rank of the projection that scores those others (0 = default 512, at most the head width), only used when n_vocab_dynamic > 0
+        // [EXPERIMENTAL] rank of the projection that scores those others (0 = default 512, at most the head width), only used when n_vocab_dynamic_rows > 0
         uint32_t vocab_dynamic_rank;
     };
 

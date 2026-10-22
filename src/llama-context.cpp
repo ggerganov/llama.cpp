@@ -495,9 +495,9 @@ llama_context::llama_context(
     }
 
     // reduced LM head, must exist before the graph is reserved
-    if (!hparams.vocab_only && params.n_vocab_dynamic > 0) {
+    if (!hparams.vocab_only && params.n_vocab_dynamic_rows > 0) {
         try {
-            vsub_init(params.n_vocab_dynamic, params.vocab_dynamic_rank);
+            vsub_init(params.n_vocab_dynamic_rows, params.vocab_dynamic_rank);
         } catch (const std::exception & e) {
             // e.g. out of memory, the draft still works with the full head
             LLAMA_LOG_WARN("%s: vocab_subset: %s, using the full LM head\n", __func__, e.what());
@@ -506,8 +506,8 @@ llama_context::llama_context(
             vsub_ctxs.clear();
         }
     }
-    if (params.n_vocab_dynamic == 0 && params.vocab_dynamic_rank > 0) {
-        LLAMA_LOG_WARN("%s: vocab_subset: vocab_dynamic_rank has no effect without n_vocab_dynamic\n", __func__);
+    if (params.n_vocab_dynamic_rows == 0 && params.vocab_dynamic_rank > 0) {
+        LLAMA_LOG_WARN("%s: vocab_subset: vocab_dynamic_rank has no effect without n_vocab_dynamic_rows\n", __func__);
     }
 
     // init backends
@@ -4334,7 +4334,7 @@ llama_context_params llama_context_default_params() {
         /*.sampler                     =*/ nullptr,
         /*.n_sampler                   =*/ 0,
         /*.ctx_other                   =*/ nullptr,
-        /*.n_vocab_dynamic             =*/ 0,
+        /*.n_vocab_dynamic_rows        =*/ 0,
         /*.vocab_dynamic_rank          =*/ 0,
     };
 

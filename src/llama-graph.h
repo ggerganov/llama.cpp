@@ -788,7 +788,7 @@ using llm_graph_cb = std::function<void(const llama_ubatch & ubatch, ggml_tensor
 
 class llm_graph_result;
 
-// reduced draft LM head, see llama_context_params::n_vocab_dynamic (tensors owned by llama_context)
+// reduced draft LM head, see llama_context_params::n_vocab_dynamic_rows (tensors owned by llama_context)
 struct llama_vocab_subset {
     int64_t n_base    = 0; // the lowest n_base ids always get exact logits
     int64_t n_dynamic = 0; // best-scoring other ids picked per output
