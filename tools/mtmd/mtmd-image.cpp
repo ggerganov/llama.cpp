@@ -1023,16 +1023,28 @@ mtmd_image_preproc_out mtmd_image_preprocessor_glm5v::preprocess(const clip_imag
 
 clip_image_size mtmd_image_preprocessor_longest_edge::get_target_size(const clip_hparams & hparams, const clip_image_size & original_size) {
     GGML_ASSERT(hparams.image_longest_edge > 0);
+    clip_image_size size = original_size;
+    if (hparams.image_floor_before_align) {
+        const double ratio = double(std::max(size.width, size.height)) / hparams.image_longest_edge;
+        if (ratio > 1.0) {
+            size.width  = static_cast<int>(std::floor(size.width / ratio));
+            size.height = static_cast<int>(std::floor(size.height / ratio));
+            if (size.width <= 0 || size.height <= 0) {
+                throw std::runtime_error("image dimensions must be positive after resizing");
+            }
+        }
+    }
+
     // the original pixtral model doesn't have n_merge
     const int cur_merge = hparams.n_merge == 0 ? 1 : hparams.n_merge;
     return img_tool::calc_size_preserved_ratio(
-        original_size,
+        size,
         {
             /* align_size   */ hparams.patch_size * cur_merge,
             /* min_pixels   */ std::max(0, hparams.image_min_pixels),
             /* max_pixels   */ std::max(0, hparams.image_max_pixels),
             /* longest_edge */ std::min(hparams.image_longest_edge,
-                                        std::max(original_size.width, original_size.height)),
+                                        std::max(size.width, size.height)),
         });
 }
 
@@ -1102,12 +1114,33 @@ bool mtmd_image_preprocessor_lfm2::should_tile(
            static_cast<double>(hparams.image_max_pixels) * hparams.preproc_max_pixels_tolerance;
 }
 
+// same as Lfm2VlImageProcessor.smart_resize: Python's round half to even, double precision
+clip_image_size mtmd_image_preprocessor_lfm2::smart_resize(
+        const clip_hparams & hparams,
+        const clip_image_size & original_size) {
+    const int    align_size = hparams.patch_size * hparams.n_merge;
+    const double height     = original_size.height;
+    const double width      = original_size.width;
+
+    int h_bar = std::max(align_size, static_cast<int>(std::nearbyint(height / align_size)) * align_size);
+    int w_bar = std::max(align_size, static_cast<int>(std::nearbyint(width  / align_size)) * align_size);
+
+    if (static_cast<double>(h_bar) * w_bar > hparams.image_max_pixels) {
+        const double beta = std::sqrt(height * width / hparams.image_max_pixels);
+        h_bar = std::max(align_size, static_cast<int>(std::floor(height / beta / align_size)) * align_size);
+        w_bar = std::max(align_size, static_cast<int>(std::floor(width  / beta / align_size)) * align_size);
+    } else if (static_cast<double>(h_bar) * w_bar < hparams.image_min_pixels) {
+        const double beta = std::sqrt(hparams.image_min_pixels / (height * width));
+        h_bar = static_cast<int>(std::ceil(height * beta / align_size)) * align_size;
+        w_bar = static_cast<int>(std::ceil(width  * beta / align_size)) * align_size;
+    }
+
+    return {w_bar, h_bar};
+}
+
 mtmd_image_preprocessor_llava_uhd::slice_instructions mtmd_image_preprocessor_lfm2::get_slice_instructions(const clip_image_size & original_size) const {
     mtmd_image_preprocessor_llava_uhd::slice_instructions inst;
-    const int align_size = hparams.patch_size * hparams.n_merge;
-    inst.overview_size = img_tool::calc_size_preserved_ratio(
-                            original_size,
-                            { align_size, hparams.image_min_pixels, hparams.image_max_pixels, 0 });
+    inst.overview_size = smart_resize(hparams, original_size);
 
     const bool needs_tiling = should_tile(hparams, original_size);
     const int  tile_size    = hparams.preproc_tile_size;
@@ -1118,7 +1151,7 @@ mtmd_image_preprocessor_llava_uhd::slice_instructions mtmd_image_preprocessor_lf
         return inst;
     }
 
-    const clip_image_size grid = get_grid_layout(original_size.height, original_size.width);
+    const clip_image_size grid = get_grid_layout(hparams, original_size.height, original_size.width);
 
     inst.grid_size    = grid;
     inst.refined_size = clip_image_size{tile_size * grid.width, tile_size * grid.height};
@@ -1146,24 +1179,26 @@ mtmd_image_preprocessor_llava_uhd::slice_instructions mtmd_image_preprocessor_lf
     return inst;
 }
 
+// double precision as in Python, float breaks exact ties such as 720/1600 between 2/4 and 2/5
 clip_image_size mtmd_image_preprocessor_lfm2::find_closest_aspect_ratio(
-        float aspect_ratio,
+        const clip_hparams & hparams,
+        double aspect_ratio,
         const std::vector<clip_image_size> & target_ratios,
-        int width, int height) const {
-    float best_ratio_diff = std::numeric_limits<float>::max();
+        int width, int height) {
+    double best_ratio_diff = std::numeric_limits<double>::max();
     clip_image_size best_ratio = {1, 1};
-    const float area = static_cast<float>(width * height);
+    const double area = static_cast<double>(width) * height;
 
     for (const auto & ratio : target_ratios) {
-        const float target_aspect_ratio = static_cast<float>(ratio.width) / ratio.height;
-        const float ratio_diff = std::abs(aspect_ratio - target_aspect_ratio);
+        const double target_aspect_ratio = static_cast<double>(ratio.width) / ratio.height;
+        const double ratio_diff = std::abs(aspect_ratio - target_aspect_ratio);
         if (ratio_diff < best_ratio_diff) {
             best_ratio_diff = ratio_diff;
             best_ratio = ratio;
         } else if (ratio_diff == best_ratio_diff) {
-            const int   tile_size   = hparams.preproc_tile_size;
-            const float target_area = static_cast<float>(tile_size * tile_size * ratio.width * ratio.height);
-            if (area > 0.5f * target_area) {
+            const int    tile_size   = hparams.preproc_tile_size;
+            const double target_area = static_cast<double>(tile_size * tile_size * ratio.width * ratio.height);
+            if (area > 0.5 * target_area) {
                 best_ratio = ratio;
             }
         }
@@ -1171,7 +1206,7 @@ clip_image_size mtmd_image_preprocessor_lfm2::find_closest_aspect_ratio(
     return best_ratio;
 }
 
-std::vector<clip_image_size> mtmd_image_preprocessor_lfm2::get_target_ratios() const {
+std::vector<clip_image_size> mtmd_image_preprocessor_lfm2::get_target_ratios(const clip_hparams & hparams) {
     const int min_tiles = hparams.preproc_min_tiles;
     const int max_tiles = hparams.preproc_max_tiles;
     std::vector<clip_image_size> ratios;
@@ -1199,10 +1234,10 @@ std::vector<clip_image_size> mtmd_image_preprocessor_lfm2::get_target_ratios() c
     return ratios;
 }
 
-clip_image_size mtmd_image_preprocessor_lfm2::get_grid_layout(int height, int width) const {
-    const float aspect_ratio = static_cast<float>(width) / height;
-    const auto ratios = get_target_ratios();
-    return find_closest_aspect_ratio(aspect_ratio, ratios, width, height);
+clip_image_size mtmd_image_preprocessor_lfm2::get_grid_layout(const clip_hparams & hparams, int height, int width) {
+    const double aspect_ratio = static_cast<double>(width) / height;
+    const auto ratios = get_target_ratios(hparams);
+    return find_closest_aspect_ratio(hparams, aspect_ratio, ratios, width, height);
 }
 
 //

@@ -114,7 +114,10 @@ const char * get_media_marker();
 //
 
 // output modalities for architecture.output_modalities in GET /models
-std::vector<std::string> server_model_output_modalities(common_decision_type decision_type);
+// has_cap_chat: false for a tts-only model, has_cap_tts: the model can generate audio
+std::vector<std::string> server_model_output_modalities(common_decision_type decision_type, bool has_cap_chat, bool has_cap_tts);
+// same, with the decision type read from a loaded model
+std::vector<std::string> server_model_output_modalities(const llama_model * model, bool has_cap_chat, bool has_cap_tts);
 
 // architecture object of GET /models; shared by the direct server and the router
 json server_model_architecture_json(
@@ -300,8 +303,11 @@ server_tokens process_mtmd_prompt(
                                         mtmd_context * mctx,
                                         const std::string & prompt,
                                         const std::vector<raw_buffer> & files,
-                                        const mtmd_helper_init_opt & init_opt,
-                                        bool is_placeholder = false);
+                                         const mtmd_helper_init_opt & init_opt,
+                                          bool is_placeholder = false);
+
+// decode one media url (http/file/data-uri) into out_files; throws on failure
+void handle_media(std::vector<raw_buffer> & out_files, const std::string & url, const std::string & media_path);
 
 /**
  * break the input "prompt" object into multiple prompt if needed, then tokenize them
@@ -587,12 +593,16 @@ llama_tokens format_prompt_infill(
         const llama_tokens & tokens_prompt);
 
 // format rerank task: [BOS]query[EOS][SEP]doc[EOS].
+// query_files/doc_files carry decoded media for multimodal (Qwen) inputs; when non-empty the
+// prompt is built with get_media_marker() sentinels and spliced via process_mtmd_prompt.
 server_tokens format_prompt_rerank(
         const struct llama_model * model,
         const struct llama_vocab * vocab,
         mtmd_context * mctx,
         const std::string & query,
         const std::string & doc,
+        const std::vector<raw_buffer> & query_files,
+        const std::vector<raw_buffer> & doc_files,
         const mtmd_helper_init_opt & init_opt);
 
 // simple implementation of a pipe
