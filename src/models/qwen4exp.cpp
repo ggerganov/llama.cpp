@@ -813,8 +813,8 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
     ggml_tensor * top_k = ggml_top_k(ctx0, score, n_top_pool); // [n_top_pool, n_tokens], unordered
     cb(top_k, "indexer_top_k", il);
 
-    // keep the cells of the live picked pools and the tail, -inf elsewhere: a token sees only the pools that end
-    // at or before it and the tail up to itself, all of its own sequence, so the selection needs no kq_mask
+    // keep the cells of the live picked pools and the tail, -inf elsewhere
+    // all retained cells are in the token's sequence, so the kq_mask is not needed
     if (cparams.fused_top_k_mask) {
         GGML_ASSERT(kpool*n_top_pool + inp_kpool->tail_idxs->ne[0] == inp_kpool->n_sel);
 
