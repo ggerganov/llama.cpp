@@ -2190,8 +2190,36 @@ struct llama_vocab::impl {
     void print_info() const;
 
 private:
+    void load_bpe_ranks(const gguf_context * ctx, int32_t merges_keyidx, const std::string & merges_key);
+
     const llama_vocab & vocab;
 };
+
+void llama_vocab::impl::load_bpe_ranks(
+          const gguf_context * ctx,
+                     int32_t   merges_keyidx,
+           const std::string & merges_key) {
+    if (gguf_get_kv_type(ctx, merges_keyidx) != GGUF_TYPE_ARRAY ||
+        gguf_get_arr_type(ctx, merges_keyidx) != GGUF_TYPE_STRING) {
+        throw std::runtime_error(format("invalid gguf type for %s", merges_key.c_str()));
+    }
+    const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
+    bpe_ranks.reserve(n_merges);
+    for (int i = 0; i < n_merges; i++) {
+        const char * word = gguf_get_arr_str(ctx, merges_keyidx, i);
+        std::string first;
+        std::string second;
+
+        const char * sep = *word ? strchr(word + 1, ' ') : nullptr;
+
+        if (sep) {
+            first.assign(word, sep - word);
+            second.assign(sep + 1);
+        }
+
+        bpe_ranks.emplace(std::make_pair(std::move(first), std::move(second)), i);
+    }
+}
 
 void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
     struct gguf_context * ctx = ml.metadata;
@@ -2262,28 +2290,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
                 // Kimi-K2 doesn't need merges, skip
                 LLAMA_LOG_INFO("%s: Kimi-K2 tokenizer detected, skipping BPE merges\n", __func__);
             } else {
-                if (gguf_get_kv_type(ctx, merges_keyidx) != GGUF_TYPE_ARRAY ||
-                    gguf_get_arr_type(ctx, merges_keyidx) != GGUF_TYPE_STRING) {
-                    throw std::runtime_error(format("invalid gguf type for %s", kv(LLM_KV_TOKENIZER_MERGES).c_str()));
-                }
-                const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
-                bpe_ranks.reserve(n_merges);
-                for (int i = 0; i < n_merges; i++) {
-                    const char * word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                    //GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
-
-                    std::string first;
-                    std::string second;
-
-                    const char * sep = *word ? strchr(word + 1, ' ') : nullptr;
-
-                    if (sep) {
-                        first.assign(word, sep - word);
-                        second.assign(sep + 1);
-                    }
-
-                    bpe_ranks.emplace(std::make_pair(std::move(first), std::move(second)), i);
-                }
+                load_bpe_ranks(ctx, merges_keyidx, kv(LLM_KV_TOKENIZER_MERGES));
             }
 
             // default special tokens
@@ -2373,29 +2380,7 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             if (merges_keyidx == -1) {
                 throw std::runtime_error("cannot find tokenizer merges in model file\n");
             }
-            {
-                if (gguf_get_kv_type(ctx, merges_keyidx) != GGUF_TYPE_ARRAY ||
-                    gguf_get_arr_type(ctx, merges_keyidx) != GGUF_TYPE_STRING) {
-                    throw std::runtime_error(format("invalid gguf type for %s", kv(LLM_KV_TOKENIZER_MERGES).c_str()));
-                }
-                const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
-                bpe_ranks.reserve(n_merges);
-                for (int i = 0; i < n_merges; i++) {
-                    const char * word = gguf_get_arr_str(ctx, merges_keyidx, i);
-
-                    std::string first;
-                    std::string second;
-
-                    const char * sep = *word ? strchr(word + 1, ' ') : nullptr;
-
-                    if (sep) {
-                        first.assign(word, sep - word);
-                        second.assign(sep + 1);
-                    }
-
-                    bpe_ranks.emplace(std::make_pair(std::move(first), std::move(second)), i);
-                }
-            }
+            load_bpe_ranks(ctx, merges_keyidx, kv(LLM_KV_TOKENIZER_MERGES));
 
             // default special tokens (to be read from GGUF)
             special_bos_id  = LLAMA_TOKEN_NULL;
