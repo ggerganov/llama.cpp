@@ -698,7 +698,7 @@ void ggml_vec_dot_q1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const voi
 #endif
 }
 
-#if defined(__AVX2__)
+#if defined(__AVX2__) || defined(__AVX512F__)
 // four consecutive Q2_0 weights per byte: byte b becomes b & 3, (b >> 2) & 3, (b >> 4) & 3, (b >> 6) & 3 (OR, never add: the overlapping copies only touch masked-off bits)
 static inline __m256i q2_0_unpack_32_avx2(const uint8_t * qs) {
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
