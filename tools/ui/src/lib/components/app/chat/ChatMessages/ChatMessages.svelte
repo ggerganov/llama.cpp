@@ -13,11 +13,10 @@
 
 	interface Props {
 		messages?: DatabaseMessage[];
-		onUserAction?: () => void;
 		onMessagesReady?: (messageCount: number) => void;
 	}
 
-	let { messages = [], onMessagesReady, onUserAction }: Props = $props();
+	let { messages = [], onMessagesReady }: Props = $props();
 
 	let allConversationMessages = $state<DatabaseMessage[]>([]);
 
@@ -25,7 +24,6 @@
 
 	const chatActions: ChatMessageActions = {
 		continueAssistantMessage: async (message: DatabaseMessage) => {
-			onUserAction?.();
 			await chatStore.continueAssistantMessage(message.id);
 			refreshAllMessages();
 		},
@@ -51,7 +49,6 @@
 			newContent: string,
 			newExtras?: DatabaseMessageExtra[]
 		) => {
-			onUserAction?.();
 			// in-place edit: the store already updated activeMessages and no
 			// branch is created, so sibling info stays valid without a refetch
 			await chatStore.editUserMessagePreserveResponses(message.id, newContent, newExtras);
@@ -62,7 +59,6 @@
 			newContent: string,
 			newExtras?: DatabaseMessageExtra[]
 		) => {
-			onUserAction?.();
 			await chatStore.editMessageWithBranching(message.id, newContent, newExtras);
 			refreshAllMessages();
 		},
@@ -72,7 +68,6 @@
 			newContent: string,
 			shouldBranch: boolean
 		) => {
-			onUserAction?.();
 			await chatStore.editAssistantMessage(message.id, newContent, shouldBranch);
 
 			// only a branch changes sibling info; an in-place edit already
@@ -91,8 +86,12 @@
 			await conversationsStore.navigateToSibling(siblingId);
 		},
 
+		regenerateCompaction: async (message: DatabaseMessage) => {
+			await chatStore.regenerateCompaction(message.id);
+			refreshAllMessages();
+		},
+
 		regenerateWithBranching: async (message: DatabaseMessage, modelOverride?: string) => {
-			onUserAction?.();
 			await chatStore.regenerateMessageWithBranching(message.id, modelOverride);
 			refreshAllMessages();
 		}
