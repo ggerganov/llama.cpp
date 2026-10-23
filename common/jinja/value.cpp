@@ -300,14 +300,16 @@ static value & get_attribute(const value & val, const value & attr, value & defa
 }
 
 template<bool is_reject, bool lookup_attr>
-static value selectattr(const func_args & args) {
+static value select_or_reject(const func_args & args) {
     // example: array | select("odd") -> test_is_odd(item)
     // example: array | selectattr("status", "equalto", "active") -> test_is_equalto(item.status, "active")
     constexpr size_t test_pos = lookup_attr ? 2 : 1;
     args.ensure_count(test_pos);
     args.ensure_val<value_array>(args.get_pos(0));
+    value attr;
     if constexpr (lookup_attr) {
-        args.ensure_val<value_string>(args.get_pos(1));
+        attr = args.get_pos(1);
+        args.ensure_val<value_string>(attr);
     }
 
     auto & builtins = global_builtins();
@@ -328,7 +330,7 @@ static value selectattr(const func_args & args) {
     for (const auto & item : arr) {
         value val = item;
         if constexpr (lookup_attr) {
-            val = get_attribute(item, args.get_pos(1), val_default);
+            val = get_attribute(item, attr, val_default);
         }
         bool is_selected;
         if (test_it == builtins.end()) {
@@ -1072,10 +1074,10 @@ const func_builtins & value_array_t::get_builtins() const {
             auto arr = slice(val->as_array(), start, stop, step);
             return is_val<value_tuple>(val) ? mk_val<value_tuple>(std::move(arr)) : mk_val<value_array>(std::move(arr));
         }},
-        {"selectattr", selectattr<false, true>},
-        {"select", selectattr<false, false>},
-        {"rejectattr", selectattr<true, true>},
-        {"reject", selectattr<true, false>},
+        {"selectattr", select_or_reject<false, true>},
+        {"select", select_or_reject<false, false>},
+        {"rejectattr", select_or_reject<true, true>},
+        {"reject", select_or_reject<true, false>},
         {"join", [](const func_args & args) -> value {
             args.ensure_count(1, 3);
             if (!is_val<value_array>(args.get_pos(0))) {
