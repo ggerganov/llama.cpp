@@ -1615,6 +1615,17 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
     // assign the output layer
     pimpl->dev_output = get_layer_buft_list(n_layer_all);
 
+    // lossless BF16X: when the token embedding ships a sparse overflow table,
+    // keep it on the output device so the embedding correction runs on the GPU
+    // (a CPU-side correction breaks the CUDA graph and costs ~2.5 ms/token on
+    // small models)
+    {
+        const bool embd_has_ovf = ml.get_tensor_meta("token_embd.weight.ovf") != nullptr;
+        if (embd_has_ovf) {
+            pimpl->dev_input = pimpl->dev_output;
+        }
+    }
+
     const auto TENSOR_NOT_REQUIRED = llama_model_loader::TENSOR_NOT_REQUIRED;
 
     // create tensors for the weights
@@ -2333,11 +2344,38 @@ const ggml_tensor * llama_model::get_tensor(const char * name) const {
 }
 
 const ggml_tensor * llama_model::get_ovf(const ggml_tensor * w) const {
-    // debug: GGML_BF16X_NO_OVF=1 runs a lossless GGUF without the corrections
+    // debug / tuning:
+    //   GGML_BF16X_NO_OVF=1            -> disable every correction
+    //   GGML_BF16X_OVF_SKIP=a,b,c      -> disable corrections for tensors whose
+    //                                     name contains one of the substrings
     static const bool ovf_disabled = getenv("GGML_BF16X_NO_OVF") != nullptr;
     if (ovf_disabled || w == nullptr) {
         return nullptr;
     }
+
+    static const char * skip_env = getenv("GGML_BF16X_OVF_SKIP");
+    if (skip_env && w->name[0] != '\0') {
+        static std::vector<std::string> skip;
+        static bool skip_init = false;
+        if (!skip_init) {
+            std::string s(skip_env);
+            size_t pos = 0;
+            while (pos < s.size()) {
+                size_t next = s.find(',', pos);
+                if (next == std::string::npos) next = s.size();
+                if (next > pos) skip.push_back(s.substr(pos, next - pos));
+                pos = next + 1;
+            }
+            skip_init = true;
+        }
+        const std::string name(w->name);
+        for (const auto & pat : skip) {
+            if (name.find(pat) != std::string::npos) {
+                return nullptr;
+            }
+        }
+    }
+
     auto it = ovf_by_weight.find(w);
     return it == ovf_by_weight.end() ? nullptr : it->second;
 }

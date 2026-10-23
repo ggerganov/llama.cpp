@@ -92,7 +92,8 @@ llama_model_spark2_5::graph::graph(const llama_model & model, const llm_graph_pa
     ggml_tensor * inpL = build_inp_embd(model.tok_embd);
 
     // lossless BF16X: exact token-embedding correction
-    if (const ggml_tensor * ovf = model.get_ovf(model.tok_embd)) {
+    static const bool no_embd_ovf = getenv("GGML_BF16X_NO_OVF_EMBD") != nullptr;
+    if (const ggml_tensor * ovf = no_embd_ovf ? nullptr : model.get_ovf(model.tok_embd)) {
         if (ubatch.token != nullptr) {
             inpL = ggml_add(ctx0, inpL,
                             ggml_sparse_rows(ctx0, const_cast<ggml_tensor *>(ovf), res->t_inp_tokens, hparams.n_embd));
