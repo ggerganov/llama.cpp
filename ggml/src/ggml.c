@@ -558,14 +558,12 @@ void ggml_time_init(void) {
 int64_t ggml_time_ms(void) {
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
-    const int64_t ticks = t.QuadPart - timer_start;
-    return (ticks / timer_freq) * 1000 + ((ticks % timer_freq) * 1000) / timer_freq;
+    return (int64_t) (((double) (t.QuadPart - timer_start) / timer_freq) * 1000);
 }
 int64_t ggml_time_us(void) {
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
-    const int64_t ticks = t.QuadPart - timer_start;
-    return (ticks / timer_freq) * 1000000 + ((ticks % timer_freq) * 1000000) / timer_freq;
+    return (int64_t) (((double) (t.QuadPart - timer_start) / timer_freq) * 1000000);
 }
 #else
 void ggml_time_init(void) {}
