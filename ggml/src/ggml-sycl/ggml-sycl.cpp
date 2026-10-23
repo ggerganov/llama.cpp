@@ -7531,9 +7531,9 @@ static void ggml_sycl_comm_exchange(ggml_backend_sycl_comm_context * comm, queue
     sycl::event e_d2h_0 = q0->memcpy(comm->host_out[0], src0, nbytes);
     sycl::event e_d2h_1 = q1->memcpy(comm->host_out[1], src1, nbytes);
 
-    // Step 2: Sync point. Wait until the host buffers are fully populated by the GPUs
-    e_d2h_0.wait();
-    e_d2h_1.wait();
+    // Step 2: Asynchronous Barrier Interlocking (NO HOST BLOCKING, wait() causes MTP degredation)
+    q0->ext_oneapi_submit_barrier({e_d2h_1}); // q0 waits for q1's device-to-host copy
+    q1->ext_oneapi_submit_barrier({e_d2h_0}); // q1 waits for q0's device-to-host copy
 
     // Step 3: Cross-upload directly from the opposing host buffer.
     // CPU std::memcpy is eliminated. Both queues pull from host memory in parallel.
