@@ -2416,6 +2416,15 @@ ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd) const {
 
         cur = ggml_get_rows(ctx0, tok_embd, inp->tokens);
 
+        // lossless BF16X: exact token-embedding correction
+        static const bool no_embd_ovf = getenv("GGML_BF16X_NO_OVF_EMBD") != nullptr;
+        if (model_ptr != nullptr && !no_embd_ovf) {
+            if (const ggml_tensor * ovf = model_ptr->get_ovf(tok_embd)) {
+                cur = ggml_add(ctx0, cur,
+                        ggml_sparse_rows(ctx0, const_cast<ggml_tensor *>(ovf), inp->tokens, n_embd));
+            }
+        }
+
         // apply lora for embedding tokens if needed
         for (const auto & lora : *loras) {
             llama_adapter_lora_weight * lw = lora.first->get_weight(tok_embd);

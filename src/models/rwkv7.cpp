@@ -57,25 +57,6 @@ void llama_model_rwkv7::load_arch_tensors(llama_model_loader &) {
     output_norm_b = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "bias"), {n_embd}, 0);
     output = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, 0);
 
-    // lossless BF16X: each quantized weight may ship a sparse overflow side
-    // table ("<name>.ovf", I8) holding the elements clamped by the 3-bit
-    // exponent delta; <name>.ovf keeps the same name prefix so the TN helper
-    // resolves it with the base tensor's enum and device placement.
-    auto add_ovf = [&](ggml_tensor * w, llm_tensor tensor, int bid, const char * suffix) {
-        if (w == nullptr) {
-            return;
-        }
-        const std::string suffix_ovf = std::string(suffix) + ".ovf";
-        const LLM_TN_IMPL tnn = tn(tensor, suffix_ovf.c_str(), bid);
-        const ggml_tensor * meta = ml->get_tensor_meta(tnn.str().c_str());
-        if (meta == nullptr) {
-            return;
-        }
-        ovf_by_weight[w] = create_tensor(tnn, { meta->ne[0] }, 0);
-    };
-
-    add_ovf(tok_embd, LLM_TENSOR_TOKEN_EMBD, -1, "weight");
-    add_ovf(output,   LLM_TENSOR_OUTPUT,     -1, "weight");
 
     const int n_lora_decay = hparams.n_lora_decay;
     const int n_lora_iclr = hparams.n_lora_iclr;
@@ -134,20 +115,7 @@ void llama_model_rwkv7::load_arch_tensors(llama_model_loader &) {
         layer.channel_mix_key = create_tensor(tn(LLM_TENSOR_CHANNEL_MIX_KEY, "weight", i), {n_embd, ffn_size}, 0);
         layer.channel_mix_value = create_tensor(tn(LLM_TENSOR_CHANNEL_MIX_VALUE, "weight", i), {ffn_size, n_embd}, 0);
 
-        add_ovf(layer.time_mix_w1,          LLM_TENSOR_TIME_MIX_W1,          i, "weight");
-        add_ovf(layer.time_mix_w2,          LLM_TENSOR_TIME_MIX_W2,          i, "weight");
-        add_ovf(layer.time_mix_a1,          LLM_TENSOR_TIME_MIX_A1,          i, "weight");
-        add_ovf(layer.time_mix_a2,          LLM_TENSOR_TIME_MIX_A2,          i, "weight");
-        add_ovf(layer.time_mix_v1,          LLM_TENSOR_TIME_MIX_V1,          i, "weight");
-        add_ovf(layer.time_mix_v2,          LLM_TENSOR_TIME_MIX_V2,          i, "weight");
-        add_ovf(layer.time_mix_g1,          LLM_TENSOR_TIME_MIX_G1,          i, "weight");
-        add_ovf(layer.time_mix_g2,          LLM_TENSOR_TIME_MIX_G2,          i, "weight");
-        add_ovf(layer.time_mix_key,         LLM_TENSOR_TIME_MIX_KEY,         i, "weight");
-        add_ovf(layer.time_mix_value,       LLM_TENSOR_TIME_MIX_VALUE,       i, "weight");
-        add_ovf(layer.time_mix_receptance,  LLM_TENSOR_TIME_MIX_RECEPTANCE,  i, "weight");
-        add_ovf(layer.time_mix_output,      LLM_TENSOR_TIME_MIX_OUTPUT,      i, "weight");
-        add_ovf(layer.channel_mix_key,      LLM_TENSOR_CHANNEL_MIX_KEY,      i, "weight");
-        add_ovf(layer.channel_mix_value,    LLM_TENSOR_CHANNEL_MIX_VALUE,    i, "weight");
+
     }
 
 }
@@ -165,15 +133,6 @@ llama_model_rwkv7::graph::graph(const llama_model & model, const llm_graph_param
     ggml_tensor * v_first = nullptr;
 
     inpL = build_inp_embd(model.tok_embd);
-
-    // lossless BF16X: exact token-embedding correction (the 3-bit exponent
-    // delta clamps ~2% of the embedding rows too)
-    if (const ggml_tensor * ovf = model.get_ovf(model.tok_embd)) {
-        if (ubatch.token != nullptr) {
-            inpL = ggml_add(ctx0, inpL,
-                            ggml_sparse_rows(ctx0, const_cast<ggml_tensor *>(ovf), res->t_inp_tokens, hparams.n_embd));
-        }
-    }
 
     inpL = build_norm(inpL, model.tok_norm, model.tok_norm_b, LLM_NORM, 0);
 

@@ -23,7 +23,7 @@ print('arch:', arch, '| tensors:', len(rt.tensors))
 
 w = gguf.GGUFWriter(out, arch)
 for name, f in rt.fields.items():
-    if name == 'general.architecture':
+    if name == 'general.architecture' or name.startswith('GGUF.'):
         continue
     vtype = f.types[0]
     sub = f.types[1] if len(f.types) > 1 else None

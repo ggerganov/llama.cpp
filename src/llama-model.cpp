@@ -1979,9 +1979,27 @@ ggml_tensor * llama_model_base::create_tensor(llama_model_loader & ml, const LLM
         // blocks that are not model layers (e.g. the blocks of a head) go with the output
         buft_list_layer = (size_t) tn.bid < pimpl->dev_layer.size() ? pimpl->dev_layer.at(tn.bid).buft_list : pimpl->dev_output.buft_list;
     }
-    return ml.create_tensor(
+    ggml_tensor * t = ml.create_tensor(
         hparams, &pimpl->cpu_buft_list, pimpl->dev_input.buft_list, pimpl->dev_output.buft_list, buft_list_layer,
         tn, ne, flags);
+
+    // lossless BF16X: pair every quantized weight with its optional sparse
+    // overflow side table ("<name>.ovf", I8) when the checkpoint has one
+    if (t != nullptr && t->type == GGML_TYPE_BF16X && !(flags & TENSOR_SKIP) && ovf_by_weight.find(t) == ovf_by_weight.end()) {
+        const std::string suffix = (tn.suffix != nullptr ? std::string(tn.suffix) : std::string()) + ".ovf";
+        const LLM_TN_IMPL tn_ovf(tn.arch, tn.tensor, suffix.c_str(), tn.bid, tn.xid);
+        const ggml_tensor * meta = ml.get_tensor_meta(tn_ovf.str().c_str());
+        if (meta != nullptr) {
+            ggml_tensor * o = ml.create_tensor(
+                hparams, &pimpl->cpu_buft_list, pimpl->dev_input.buft_list, pimpl->dev_output.buft_list, buft_list_layer,
+                tn_ovf, { meta->ne[0] }, 0);
+            if (o != nullptr) {
+                ovf_by_weight[t] = o;
+            }
+        }
+    }
+
+    return t;
 }
 
 std::string llama_model::arch_name() const {
