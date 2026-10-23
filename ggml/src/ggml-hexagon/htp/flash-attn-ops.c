@@ -2096,17 +2096,15 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
 
         if ((kparams->flags & HTP_FA_FLAG_TEAM_SPLIT) && can_split) {
             // KV heads split across teams, Q-blocks split within a team
-            uint32_t n_teams, team_size;
-            htp_fa_mdev_teams(n_kv_heads, mdev_count, kparams->head_split != 0, &n_teams, &team_size);
-
-            const uint32_t team        = mdev_idx / team_size;
+            const uint32_t team_size   = kparams->u.hmx.team_size;
+            const uint32_t team        = fastdiv(mdev_idx, &kparams->u.hmx.div_team_size);
             const uint32_t member      = mdev_idx - team * team_size;
-            const uint32_t kv_per_team = n_kv_heads / n_teams;
+            const uint32_t kv_per_team = kparams->u.hmx.kv_per_team;
             kv_head_min = team * kv_per_team;
             kv_head_max = kv_head_min + kv_per_team;
 
-            const uint32_t base  = n_q_blocks / team_size;
-            const uint32_t rem   = n_q_blocks - base * team_size;
+            const uint32_t base  = kparams->u.hmx.q_base;
+            const uint32_t rem   = kparams->u.hmx.q_rem;
             const uint32_t b0    = member * base + MIN(member, rem);
             const uint32_t nblk  = base + (member < rem ? 1 : 0);
 

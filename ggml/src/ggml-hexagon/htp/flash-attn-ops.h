@@ -35,13 +35,6 @@ enum htp_fa_kernel_type {
 // Multicore: gcd(n_kv_heads, N) teams own the KV heads, team members share the Q-blocks
 #define HTP_FA_FLAG_TEAM_SPLIT 0x01
 
-static inline void htp_fa_mdev_teams(uint32_t n_kv_heads, uint32_t mdev_count, bool head_split,
-                                     uint32_t * n_teams, uint32_t * team_size) {
-    const uint32_t t = (head_split && n_kv_heads > 0 && mdev_count > 1) ? hex_gcd_u32(n_kv_heads, mdev_count) : 1;
-    *n_teams   = t;
-    *team_size = mdev_count > 1 ? mdev_count / t : 1;
-}
-
 struct htp_fa_kernel_params {
     uint8_t  kernel_type;        // enum htp_fa_kernel_type
     uint8_t  head_split;         // 1 = partition by KV heads in multicore, 0 = token partition
@@ -77,6 +70,11 @@ struct htp_fa_kernel_params {
             int32_t  mask_broadcast;
             int32_t  pipeline;
             struct fastdiv_values div_G;
+            struct fastdiv_values div_team_size;
+            uint16_t team_size;
+            uint16_t kv_per_team;
+            uint16_t q_base;     // Q-blocks per team member
+            uint16_t q_rem;      // first q_rem members get one extra Q-block
         } hmx;
         struct {
             uint32_t size_q_row_padded;
@@ -373,7 +371,7 @@ static inline int hmx_fa_find_chunk_size(size_t * Br_out,
                 const size_t vecs_per_t     = n_use > 0 ? (n_row_vec_cnt + n_use - 1) / n_use : 1;
 
                 const size_t c_iter_actual  = c_iter_base + c_softmax * vecs_per_t;
-                const size_t q_blocks_nsp   = (q_blocks + q_split - 1) / (q_split ? q_split : 1);
+                const size_t q_blocks_nsp   = hmx_ceil_div(q_blocks, q_split);
                 const size_t cost           = q_blocks_nsp * (c_q_fixed + kv_blocks * c_iter_actual);
                 const size_t mn             = Br * Bc;
 
