@@ -1394,7 +1394,7 @@ static bool htp_kparams_solve_binary(
 }
 
 // collapse contiguous dims of elementwise ops so that rows fill at least one HVX vector
-static void htp_unary_collapse_dims(struct ggml_tensor * src, struct ggml_tensor * dst, size_t elem_size) {
+static void htp_unary_collapse_dims(struct ggml_tensor * src, struct ggml_tensor * dst, size_t elem_size, uint32_t n_threads) {
     if (src->nb[0] != elem_size || dst->nb[0] != elem_size) {
         return;
     }
@@ -1435,6 +1435,28 @@ static void htp_unary_collapse_dims(struct ggml_tensor * src, struct ggml_tensor
             dst->ne[0] *= k;
             dst->ne[1] /= k;
             dst->nb[1] *= k;
+        }
+    }
+
+    // nrows too small to saturate threads: split ne0 into k rows (k divides ne0)
+    const size_t   row_size_curr = (size_t) src->ne[0] * elem_size;
+    const uint32_t nrows         = (uint32_t) (src->ne[1] * src->ne[2] * src->ne[3]);
+    const bool     rows_contig   = (src->ne[1] == 1 && dst->ne[1] == 1) ||
+                                   (src->nb[1] == row_size_curr && dst->nb[1] == row_size_curr);
+    if (nrows < n_threads && rows_contig && row_size_curr >= 4096) {
+        const size_t vec_elems = 128 / elem_size;
+        int64_t k = std::max<int64_t>(row_size_curr / 16384, (n_threads * 4 + nrows - 1) / nrows);
+        k = std::min<int64_t>(k, row_size_curr / 2048);
+        while (k > 1 && src->ne[0] % (k * vec_elems) != 0) {
+            k--;
+        }
+        if (k > 1) {
+            src->ne[0] /= k;
+            src->ne[1] *= k;
+            src->nb[1]  = src->ne[0] * elem_size;
+            dst->ne[0] /= k;
+            dst->ne[1] *= k;
+            dst->nb[1]  = dst->ne[0] * elem_size;
         }
     }
 }
@@ -1499,7 +1521,7 @@ static bool htp_kparams_solve_unary_impl(
     struct ggml_tensor src0_c = *src0;
     struct ggml_tensor dst_c  = *dst;
     if (htp_unary_is_elementwise(op)) {
-        htp_unary_collapse_dims(&src0_c, &dst_c, elem_size);
+        htp_unary_collapse_dims(&src0_c, &dst_c, elem_size, htp_session_n_threads(sess));
         src0 = &src0_c;
         dst  = &dst_c;
         for (int i = 0; i < HTP_OP_MAX_DIMS; i++) {
@@ -1522,9 +1544,14 @@ static bool htp_kparams_solve_unary_impl(
     const bool broadcast_weight = (op == HTP_OP_RMS_NORM_MUL) && (src1->ne[1] * src1->ne[2] * src1->ne[3] == 1);
     kparams->broadcast_weight   = broadcast_weight;
 
-    const bool     src0_contig = ggml_is_contiguous_1(src0);
-    const bool     src1_contig = (op == HTP_OP_RMS_NORM_MUL && !broadcast_weight) ? ggml_is_contiguous_1(src1) : true;
-    const uint32_t max_block   = (src0_contig && src1_contig) ? src0_nrows : (uint32_t) src0->ne[1];
+    const bool     src0_contig           = ggml_is_contiguous_1(src0);
+    const bool     src1_contig           = (op == HTP_OP_RMS_NORM_MUL && !broadcast_weight) ? ggml_is_contiguous_1(src1) : true;
+    const uint32_t src0_nrows_per_thread = (src0_nrows + n_threads - 1) / n_threads;
+    const uint32_t min_block_rows        = (uint32_t) (std::max<size_t>(1, 2048 / dst_data_row_size));
+    uint32_t       max_block             = (src0_contig && src1_contig) ? src0_nrows : (uint32_t) src0->ne[1];
+    if (src0_nrows_per_thread >= 2 * min_block_rows) {
+        max_block = (std::min)(max_block, (std::max)(min_block_rows, src0_nrows_per_thread / 4));
+    }
 
     kparams->src0_contig = src0_contig ? 1 : 0;
     kparams->src1_contig = src1_contig ? 1 : 0;
