@@ -249,9 +249,6 @@ llama_model_rwkv7::graph::graph(const llama_model & model, const llm_graph_param
 
     ggml_tensor * head_in = cur;
     cur = build_lora_mm(model.output, head_in, model.output_s);
-    if (const ggml_tensor * ovf = model.get_ovf(model.output)) {
-        cur = ggml_add(ctx0, cur, ggml_sparse_mm(ctx0, const_cast<ggml_tensor *>(ovf), head_in, model.output->ne[1]));
-    }
 
     cb(cur, "result_output", -1);
     res->t_logits = cur;

@@ -813,6 +813,10 @@ struct llm_graph_params {
 
     llm_graph_result * res;
 
+    // model owning the graph (used for optional per-weight side data, e.g. the
+    // lossless BF16X overflow tables)
+    const llama_model * model = nullptr;
+
     // return true if the "other" params would result in a graph with the same topology as with the current params
     //   having the same topology allows us to reuse the graph in some cases
     bool allow_reuse(const llm_graph_params & other) const {
@@ -1033,6 +1037,9 @@ struct llm_graph_context {
     const llama_prec_policy * prec_policy;
 
     std::map<llama_seq_id, llama_sampler *> samplers;
+
+    // model that owns the graph (optional lossless BF16X side tables)
+    const llama_model * model_ptr = nullptr;
 
     const llm_graph_cb & cb_func;
 

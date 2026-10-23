@@ -1495,6 +1495,7 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
     mctx             (params.mctx),
     cross            (params.cross),
     prec_policy      (params.prec_policy),
+    model_ptr        (params.model),
     samplers         (params.samplers),
     cb_func          (params.cb),
     res              (params.res),
@@ -1522,6 +1523,13 @@ ggml_tensor * llm_graph_context::build_lora_mm(
           ggml_tensor * cur,
           ggml_tensor * w_s) const {
     ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
+
+    // lossless BF16X: add this weight's sparse overflow correction
+    if (model_ptr) {
+        if (const ggml_tensor * ovf = model_ptr->get_ovf(w)) {
+            res = ggml_add(ctx0, res, ggml_sparse_mm(ctx0, const_cast<ggml_tensor *>(ovf), cur, w->ne[1]));
+        }
+    }
 
     if (prec_policy) {
         prec_policy->apply(res);

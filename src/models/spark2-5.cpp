@@ -28,6 +28,23 @@ void llama_model_spark2_5::load_arch_tensors(llama_model_loader &) {
         output = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, TENSOR_DUPLICATED);
     }
 
+    // lossless BF16X: optional sparse overflow side tables ("<name>.ovf", I8)
+    auto add_ovf = [&](ggml_tensor * w, llm_tensor tensor, int bid, const char * suffix) {
+        if (w == nullptr) {
+            return;
+        }
+        const std::string suffix_ovf = std::string(suffix) + ".ovf";
+        const LLM_TN_IMPL tnn = tn(tensor, suffix_ovf.c_str(), bid);
+        const ggml_tensor * meta = ml->get_tensor_meta(tnn.str().c_str());
+        if (meta == nullptr) {
+            return;
+        }
+        ovf_by_weight[w] = create_tensor(tnn, { meta->ne[0] }, 0);
+    };
+
+    add_ovf(tok_embd, LLM_TENSOR_TOKEN_EMBD, -1, "weight");
+    add_ovf(output,   LLM_TENSOR_OUTPUT,     -1, "weight");
+
     for (int i = 0; i < n_layer; ++i) {
         auto & layer = layers[i];
 
@@ -46,6 +63,19 @@ void llama_model_spark2_5::load_arch_tensors(llama_model_loader &) {
         layer.ffn_gate = create_tensor(tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff}, 0);
         layer.ffn_up = create_tensor(tn(LLM_TENSOR_FFN_UP, "weight", i), {n_embd, n_ff}, 0);
         layer.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, 0);
+
+        if (layer.wqkv) {
+            add_ovf(layer.wqkv, LLM_TENSOR_ATTN_QKV, i, "weight");
+        } else {
+            add_ovf(layer.wq, LLM_TENSOR_ATTN_Q, i, "weight");
+            add_ovf(layer.wk, LLM_TENSOR_ATTN_K, i, "weight");
+            add_ovf(layer.wv, LLM_TENSOR_ATTN_V, i, "weight");
+        }
+        add_ovf(layer.wqkv_gate, LLM_TENSOR_ATTN_GATE, i, "weight");
+        add_ovf(layer.wo,         LLM_TENSOR_ATTN_OUT,  i, "weight");
+        add_ovf(layer.ffn_gate,   LLM_TENSOR_FFN_GATE,  i, "weight");
+        add_ovf(layer.ffn_up,     LLM_TENSOR_FFN_UP,    i, "weight");
+        add_ovf(layer.ffn_down,   LLM_TENSOR_FFN_DOWN,  i, "weight");
     }
 }
 
@@ -60,6 +90,14 @@ llama_model_spark2_5::graph::graph(const llama_model & model, const llm_graph_pa
     GGML_ASSERT(hparams.swa_type == LLAMA_SWA_TYPE_STANDARD);
 
     ggml_tensor * inpL = build_inp_embd(model.tok_embd);
+
+    // lossless BF16X: exact token-embedding correction
+    if (const ggml_tensor * ovf = model.get_ovf(model.tok_embd)) {
+        if (ubatch.token != nullptr) {
+            inpL = ggml_add(ctx0, inpL,
+                            ggml_sparse_rows(ctx0, const_cast<ggml_tensor *>(ovf), res->t_inp_tokens, hparams.n_embd));
+        }
+    }
     ggml_tensor * inp_pos = build_inp_pos();
     auto * inp_attn = build_attn_inp_kv_iswa();
     ggml_tensor * inp_out_ids = build_inp_out_ids();
