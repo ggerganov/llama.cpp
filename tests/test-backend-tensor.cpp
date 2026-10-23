@@ -16,8 +16,10 @@ static bool run_tensor_n_case(
     const size_t n = tensors.size();
 
     std::vector<const ggml_tensor *> const_tensors(tensors.begin(), tensors.end());
-    std::vector<uint8_t> data(256, 0);
-    std::vector<uint8_t> out(256, 0);
+    // Batched set/get permits ranges larger than 256 bytes.
+    // Use 1 MiB buffers to cover the large-range API test.
+    std::vector<uint8_t> data(1024*1024, 0);
+    std::vector<uint8_t> out(1024*1024, 0);
 
     for (size_t i = 0; i < n; i++) {
         if (sizes[i] == 0) {
@@ -39,7 +41,7 @@ static bool run_tensor_n_case(
         }
     }
 
-    std::vector<uint8_t> slice(256, 0);
+    std::vector<uint8_t> slice(1024*1024, 0);
     for (size_t i = 0; i < n; i++) {
         if (sizes[i] == 0) {
             continue;
@@ -184,6 +186,7 @@ static bool test_backend_tensor_n(ggml_backend_t backend) {
     ggml_tensor * t2 = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, 4);
     ggml_tensor * t3 = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, 3);
     ggml_tensor * t_big = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, 6);
+    ggml_tensor * t_large = ggml_new_tensor_1d(ctx.get(), GGML_TYPE_F32, 256*1024);
 
     ggml_backend_buffer_ptr buf(ggml_backend_alloc_ctx_tensors(ctx.get(), backend));
     if (!buf) {
@@ -217,6 +220,28 @@ static bool test_backend_tensor_n(ggml_backend_t backend) {
         std::vector<size_t> offsets = { 0, 0 };
         std::vector<size_t> sizes = { 3*4, 3*4 };
         std::vector<size_t> data_offsets = { 0, 3*4 };
+
+        if (!run_tensor_n_case(tensors, offsets, sizes, data_offsets)) {
+            return false;
+        }
+    }
+
+    {
+        std::vector<ggml_tensor *> tensors = { t_big, t2, t1, t0, t0, t0, t3, t3, t3 };
+        std::vector<size_t> offsets = { 0, 0, 0, 1, 3, 5, 1, 3, 5 };
+        std::vector<size_t> sizes = { 17, 7, 3, 1, 1, 1, 1, 1, 1 };
+        std::vector<size_t> data_offsets = { 0, 20, 30, 35, 37, 39, 41, 43, 45 };
+
+        if (!run_tensor_n_case(tensors, offsets, sizes, data_offsets)) {
+            return false;
+        }
+    }
+
+    {
+        std::vector<ggml_tensor *> tensors = { t_large, t_large, t_large, t_large };
+        std::vector<size_t> offsets = { 0, 640*1024 + 4, 768*1024 + 2, 896*1024 + 1 };
+        std::vector<size_t> sizes = { 512*1024 + 17, 64*1024 + 5, 64*1024 + 3, 64*1024 + 1 };
+        std::vector<size_t> data_offsets = offsets;
 
         if (!run_tensor_n_case(tensors, offsets, sizes, data_offsets)) {
             return false;
