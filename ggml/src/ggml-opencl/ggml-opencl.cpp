@@ -30446,16 +30446,22 @@ static void ggml_cl_lightning_indexer(ggml_backend_t backend, const ggml_tensor 
 
 static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_UNUSED(src1);
+
     ggml_backend_opencl_context * backend_ctx = (ggml_backend_opencl_context *) backend->context;
+
     ggml_tensor_extra_cl * extra0 = (ggml_tensor_extra_cl *) src0->extra;
     ggml_tensor_extra_cl * extrad = (ggml_tensor_extra_cl *) dst->extra;
+
     const cl_ulong offset0 = extra0->offset + src0->view_offs;
     const cl_ulong offsetd = extrad->offset + dst->view_offs;
+
     GGML_TENSOR_LOCALS(int,      ne0, src0, ne);
     GGML_TENSOR_LOCALS(cl_ulong, nb0, src0, nb);
+
     const int k = dst->ne[0];
     cl_kernel kernel = backend_ctx->kernel_top_k_f32;
     const int max_wg = backend_ctx->get_kernel_workgroup_size(kernel);
+
     int nth = 1;
     const int target = MIN(512, MAX(32, ne00/4));
     while (2*nth <= MIN(target, max_wg)) {
@@ -30503,7 +30509,16 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
         const cl_ulong nb_candidate1 = n_candidates*nb_candidate0;
         const cl_ulong nb_candidate2 = ne01*nb_candidate1;
         const cl_ulong nb_candidate3 = ne02*nb_candidate2;
+
         indexed = 1;
+        candidates = nullptr;
+
+        int nth_merge = 1;
+        const int target_merge = MIN(512, MAX(32, n_candidates/4));
+        while (2*nth_merge <= MIN(target_merge, max_wg)) {
+            nth_merge *= 2;
+        }
+
         CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem), &candidates));
         CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_ulong), &offset_candidates));
         CL_CHECK(clSetKernelArg(kernel,  4, sizeof(int), &n_candidates));
@@ -30511,18 +30526,14 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
         CL_CHECK(clSetKernelArg(kernel,  8, sizeof(cl_ulong), &nb_candidate1));
         CL_CHECK(clSetKernelArg(kernel,  9, sizeof(cl_ulong), &nb_candidate2));
         CL_CHECK(clSetKernelArg(kernel, 10, sizeof(cl_ulong), &nb_candidate3));
-        candidates = nullptr;
         CL_CHECK(clSetKernelArg(kernel, 13, sizeof(cl_mem), &candidates));
         CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int), &indexed));
         CL_CHECK(clSetKernelArg(kernel, 15, sizeof(int), &n_candidates));
-        int nth_merge = 1;
-        const int target_merge = MIN(512, MAX(32, n_candidates/4));
-        while (2*nth_merge <= MIN(target_merge, max_wg)) {
-            nth_merge *= 2;
-        }
         CL_CHECK(clSetKernelArg(kernel, 12, MAX(259, 2*nth_merge)*sizeof(cl_uint), nullptr));
+
         global_work_size[0] = nth_merge;
         local_work_size[0] = nth_merge;
+
         backend_ctx->enqueue_ndrange_kernel(kernel, 2, global_work_size, local_work_size, dst);
     }
 }
