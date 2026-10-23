@@ -871,7 +871,7 @@ struct ggml_backend_opencl_context {
 #ifdef GGML_OPENCL_USE_ADRENO_KERNELS
     ggml_cl_adreno_xmem_attn_state adreno_xmem_attn;
 #endif
-    cl_kernel kernel_top_k_f32;
+    cl_kernel kernel_top_k_f32, kernel_top_k_merge_f32;
     cl_kernel kernel_lightning_indexer;
     cl_kernel kernel_get_rows_f32, kernel_get_rows_f16, kernel_get_rows_i32, kernel_get_rows_q4_0;
     cl_kernel kernel_set_rows_f32_i64, kernel_set_rows_f32_i32, kernel_set_rows_f16_i64, kernel_set_rows_f16_i32;
@@ -2087,6 +2087,7 @@ static void load_cl_kernels(ggml_backend_opencl_context *backend_ctx) {
 #endif
         cl_program prog = build_program_from_source(backend_ctx, kernel_src.c_str(), compile_opts);
         CL_CHECK((backend_ctx->kernel_top_k_f32 = clCreateKernel(prog, "kernel_top_k_f32", &err), err));
+        CL_CHECK((backend_ctx->kernel_top_k_merge_f32 = clCreateKernel(prog, "kernel_top_k_merge_f32", &err), err));
         CL_CHECK(clReleaseProgram(prog));
         GGML_LOG_CONT(".");
     }
@@ -30474,7 +30475,6 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
     const int n_tiles = tiled ? 1 + (ne00 - 1)/tile_width : 1;
     const int n_candidates = (n_tiles - 1)*k + MIN(k, ne00 - (n_tiles - 1)*tile_width);
     cl_mem candidates = nullptr;
-    int indexed = 0;
     if (tiled) {
         GGML_ASSERT(n_rows <= SIZE_MAX/sizeof(cl_uint2)/(size_t) n_candidates);
         backend_ctx->prealloc_top_k.allocate(backend_ctx->context, n_rows*(size_t) n_candidates*sizeof(cl_uint2));
@@ -30495,8 +30495,7 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
     CL_CHECK(clSetKernelArg(kernel, 11, sizeof(int),      &k));
     CL_CHECK(clSetKernelArg(kernel, 12, MAX(259, 2*nth)*sizeof(cl_uint), nullptr));
     CL_CHECK(clSetKernelArg(kernel, 13, sizeof(cl_mem),   &candidates));
-    CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int),      &indexed));
-    CL_CHECK(clSetKernelArg(kernel, 15, sizeof(int),      &tile_width));
+    CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int),      &tile_width));
 
     size_t global_work_size[] = {(size_t) nth*n_tiles, n_rows, 1};
     size_t local_work_size[]  = {(size_t) nth, 1, 1};
@@ -30504,32 +30503,21 @@ static void ggml_cl_top_k(ggml_backend_t backend, const ggml_tensor * src0, cons
 
     if (tiled) {
         // The global top-k is contained in the top-k of each tile.
-        const cl_ulong offset_candidates = 0;
-        const cl_ulong nb_candidate0 = sizeof(cl_uint2);
-        const cl_ulong nb_candidate1 = n_candidates*nb_candidate0;
-        const cl_ulong nb_candidate2 = ne01*nb_candidate1;
-        const cl_ulong nb_candidate3 = ne02*nb_candidate2;
-
-        indexed = 1;
-        candidates = nullptr;
+        kernel = backend_ctx->kernel_top_k_merge_f32;
+        const int max_wg_merge = backend_ctx->get_kernel_workgroup_size(kernel);
 
         int nth_merge = 1;
         const int target_merge = MIN(512, MAX(32, n_candidates/4));
-        while (2*nth_merge <= MIN(target_merge, max_wg)) {
+        while (2*nth_merge <= MIN(target_merge, max_wg_merge)) {
             nth_merge *= 2;
         }
 
-        CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem), &candidates));
-        CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_ulong), &offset_candidates));
-        CL_CHECK(clSetKernelArg(kernel,  4, sizeof(int), &n_candidates));
-        CL_CHECK(clSetKernelArg(kernel,  7, sizeof(cl_ulong), &nb_candidate0));
-        CL_CHECK(clSetKernelArg(kernel,  8, sizeof(cl_ulong), &nb_candidate1));
-        CL_CHECK(clSetKernelArg(kernel,  9, sizeof(cl_ulong), &nb_candidate2));
-        CL_CHECK(clSetKernelArg(kernel, 10, sizeof(cl_ulong), &nb_candidate3));
-        CL_CHECK(clSetKernelArg(kernel, 13, sizeof(cl_mem), &candidates));
-        CL_CHECK(clSetKernelArg(kernel, 14, sizeof(int), &indexed));
-        CL_CHECK(clSetKernelArg(kernel, 15, sizeof(int), &n_candidates));
-        CL_CHECK(clSetKernelArg(kernel, 12, MAX(259, 2*nth_merge)*sizeof(cl_uint), nullptr));
+        CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem),   &candidates));
+        CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_mem),   &extrad->data_device));
+        CL_CHECK(clSetKernelArg(kernel,  2, sizeof(cl_ulong), &offsetd));
+        CL_CHECK(clSetKernelArg(kernel,  3, sizeof(int),      &n_candidates));
+        CL_CHECK(clSetKernelArg(kernel,  4, sizeof(int),      &k));
+        CL_CHECK(clSetKernelArg(kernel,  5, MAX(259, 2*nth_merge)*sizeof(cl_uint), nullptr));
 
         global_work_size[0] = nth_merge;
         local_work_size[0] = nth_merge;

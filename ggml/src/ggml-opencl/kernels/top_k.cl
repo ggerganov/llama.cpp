@@ -32,39 +32,18 @@ void top_k_store(global int * dst, global uint2 * candidates, global const char 
     }
 }
 
-kernel void kernel_top_k_f32(
+void top_k_select(
         global const char * src,
-        ulong offset0,
         global int * dst,
-        ulong offsetd,
-        int ne00,
-        int ne01,
-        int ne02,
-        ulong nb00,
-        ulong nb01,
-        ulong nb02,
-        ulong nb03,
-        int k_max,
-        local uint * hist,
         global uint2 * candidates,
+        ulong nb00,
+        int ne00,
+        int k,
+        int base,
         int indexed,
-        int tile_width) {
-    const ulong row = get_group_id(1);
+        local uint * hist) {
     const int tid = get_local_id(0);
     const int nth = get_local_size(0);
-    const int part = get_group_id(0);
-    const int parts = get_num_groups(0);
-    const int base = part*tile_width;
-    const int n = min(ne00 - base, tile_width);
-    const int k = min(k_max, n);
-    const int out_width = (parts - 1)*k_max + min(k_max, ne00 - (parts - 1)*tile_width);
-    src += offset0 + (row % ne01)*nb01 + (row / ne01 % ne02)*nb02 + (row / ne01 / ne02)*nb03 + (ulong) base*nb00;
-    if (candidates) {
-        candidates += row*out_width + part*k_max;
-    } else {
-        dst = (global int *) ((global char *) dst + offsetd) + row*out_width + part*k_max;
-    }
-    ne00 = n;
     if (k == ne00) {
         for (int i = tid; i < ne00; i += nth) {
             top_k_store(dst, candidates, src, nb00, indexed, base, i, i);
@@ -177,4 +156,49 @@ kernel void kernel_top_k_f32(
             }
         }
     }
+}
+
+kernel void kernel_top_k_f32(
+        global const char * src,
+        ulong offset0,
+        global int * dst,
+        ulong offsetd,
+        int ne00,
+        int ne01,
+        int ne02,
+        ulong nb00,
+        ulong nb01,
+        ulong nb02,
+        ulong nb03,
+        int k_max,
+        local uint * hist,
+        global uint2 * candidates,
+        int tile_width) {
+    const ulong row = get_group_id(1);
+    const int part = get_group_id(0);
+    const int parts = get_num_groups(0);
+    const int base = part*tile_width;
+    const int n = min(ne00 - base, tile_width);
+    const int k = min(k_max, n);
+    const int out_width = (parts - 1)*k_max + min(k_max, ne00 - (parts - 1)*tile_width);
+    src += offset0 + (row % ne01)*nb01 + (row / ne01 % ne02)*nb02 + (row / ne01 / ne02)*nb03 + (ulong) base*nb00;
+    if (candidates) {
+        candidates += row*out_width + part*k_max;
+    } else {
+        dst = (global int *) ((global char *) dst + offsetd) + row*out_width + part*k_max;
+    }
+    top_k_select(src, dst, candidates, nb00, n, k, base, 0, hist);
+}
+
+kernel void kernel_top_k_merge_f32(
+        global const uint2 * candidates,
+        global int * dst,
+        ulong offsetd,
+        int n_candidates,
+        int k,
+        local uint * hist) {
+    const ulong row = get_group_id(1);
+    candidates += row*n_candidates;
+    dst = (global int *) ((global char *) dst + offsetd) + row*k;
+    top_k_select((global const char *) candidates, dst, 0, sizeof(uint2), n_candidates, k, 0, 1, hist);
 }
