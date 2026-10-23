@@ -17,8 +17,10 @@ __all__ = [
 
 
 TEXT_MODEL_MAP: dict[str, str] = {
+    "NEOChatModel": "sensenova_u1",
     "AfmoeForCausalLM": "afmoe",
     "LagunaForCausalLM": "laguna",
+    "FlintForCausalLM": "flint",
     "ApertusForCausalLM": "llama",
     "ArceeForCausalLM": "llama",
     "ArcticForCausalLM": "arctic",
@@ -194,6 +196,7 @@ TEXT_MODEL_MAP: dict[str, str] = {
     "MiniCPMForCausalLM": "minicpm",
     "MiniCPMV4_6ForConditionalGeneration": "minicpm",
     "MiniCPMV4_7ForConditionalGeneration": "minicpm",
+    "MiniCPMOcrForConditionalGeneration": "minicpm",
     "MiniMaxText01ForCausalLM": "minimax",
     "MiniMaxM1ForCausalLM": "minimax",
     "MiniMaxM2ForCausalLM": "minimax",
@@ -359,6 +362,7 @@ MMPROJ_MODEL_MAP: dict[str, str] = {
     "MiniMaxM3SparseForConditionalGeneration": "minimax",
     "MiniCPMV4_6ForConditionalGeneration": "minicpm",
     "MiniCPMV4_7ForConditionalGeneration": "minicpm",
+    "MiniCPMOcrForConditionalGeneration": "minicpm",
     "Mistral3ForConditionalGeneration": "llava",
     "Mistral3Model": "llava",
     "NemotronH_Omni_Reasoning_V3": "nemotron",
@@ -367,6 +371,7 @@ MMPROJ_MODEL_MAP: dict[str, str] = {
     "MuseSparkForConditionalGeneration": "muse_spark",
     "PaddleOCRVisionModel": "ernie",
     "Phi4ForCausalLMV": "phi",
+    "NEOVisionModel": "sensenova_u1",
     "Qwen2AudioForConditionalGeneration": "ultravox",
     "Qwen2VLForConditionalGeneration": "qwenvl",
     "Qwen2VLModel": "qwenvl",

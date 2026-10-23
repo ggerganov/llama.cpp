@@ -64,6 +64,7 @@ set(GGML_OPENCL_KERNELS
     add
     add_id
     moe_add_id_glu
+    argmax
     argsort
     tri
     fill
@@ -240,6 +241,7 @@ set(GGML_OPENCL_KERNELS
     mul_mm_f16_f32_kq_kqv
     conv2d
     conv2d_f16_f32
+    conv2_dw
     flash_attn_repack
     flash_attn_pre_f16
     flash_attn_f32_f16

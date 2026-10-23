@@ -225,6 +225,7 @@ enum mtmd_pos_type {
     MTMD_POS_TYPE_NORMAL,    // number of positions equals to number of tokens
     MTMD_POS_TYPE_MROPE,     // qwen-vl mrope style, each image takes max(t,h,w) position indexes
     MTMD_POS_TYPE_HUNYUANVL, // HunyuanVL mrope + BOI/EOI/newline layout with XD-RoPE dim-3
+    MTMD_POS_TYPE_SENSENOVA_U1, // U1 uses zero-based H/W and one temporal position per image
     MTMD_POS_TYPE_CANVAS,    // MiniCPM-V 4.7: overview + slices in one chunk, sharing one 2D canvas (see mtmd_image_tokens::canvas_tile_grid)
     MTMD_POS_TYPE_COUNT,     // for validation
 };
@@ -721,6 +722,7 @@ struct mtmd_context {
                 } break;
             case PROJECTOR_TYPE_MINICPMV4_6:
             case PROJECTOR_TYPE_MINICPMV4_7:
+            case PROJECTOR_TYPE_MINICPM_OCR_1_0:
                 {
                     slice_tmpl        = MTMD_SLICE_TMPL_MINICPMV_2_6;
                     tok_ov_img_start  = {lookup_token("<image>")};
@@ -731,7 +733,11 @@ struct mtmd_context {
                     tok_row_end_trail = false; // no trailing end-of-row token
                     ov_img_first      = true;
                     use_image_id      = true;
-                    image_preproc     = std::make_unique<mtmd_image_preprocessor_minicpmv>(ctx_v);
+                    if (clip_get_projector_type(ctx_v) == PROJECTOR_TYPE_MINICPM_OCR_1_0) {
+                        image_preproc = std::make_unique<mtmd_image_preprocessor_minicpm_ocr_1_0>(ctx_v);
+                    } else {
+                        image_preproc = std::make_unique<mtmd_image_preprocessor_minicpmv>(ctx_v);
+                    }
                 } break;
             case PROJECTOR_TYPE_QWEN2VL:
             case PROJECTOR_TYPE_QWEN25VL:
@@ -749,6 +755,12 @@ struct mtmd_context {
                     // ]<]start of image[>[ ... (image embeddings) ... ]<]end of image[>[
                     img_beg = "]<]start of image[>[";
                     img_end = "]<]end of image[>[";
+                    image_preproc = std::make_unique<mtmd_image_preprocessor_dyn_size>(ctx_v);
+                } break;
+            case PROJECTOR_TYPE_SENSENOVA_U1:
+                {
+                    img_beg = "<img>";
+                    img_end = "</img>";
                     image_preproc = std::make_unique<mtmd_image_preprocessor_dyn_size>(ctx_v);
                 } break;
             case PROJECTOR_TYPE_MUSE_GLIMMER:
@@ -1615,10 +1627,15 @@ struct mtmd_tokenizer {
                     image_tokens->ny = 1;
                 }
                 image_tokens->pos = ctx->pos_type;
+                // U1 uses M-RoPE, but unlike Qwen its image H/W coordinates are
+                // zero-based and the whole image occupies one temporal position.
+                if (ctx->proj_type_v() == PROJECTOR_TYPE_SENSENOVA_U1) {
+                    image_tokens->pos = MTMD_POS_TYPE_SENSENOVA_U1;
+                }
                 // HunyuanVL wraps the image grid with BOI/EOI and adds one newline per row,
                 // and uses XD-RoPE (dim-3 = image index). Override the position type so that
                 // n_tokens() and mtmd_image_tokens_get_decoder_pos pick the HunyuanVL layout.
-                if (ctx->proj_type_v() == PROJECTOR_TYPE_HUNYUANVL) {
+                else if (ctx->proj_type_v() == PROJECTOR_TYPE_HUNYUANVL) {
                     image_tokens->pos       = MTMD_POS_TYPE_HUNYUANVL;
                     image_tokens->image_idx = n_images_added;
                     GGML_ASSERT(n_tokens == (size_t)image_tokens->n_tokens());
@@ -2398,6 +2415,7 @@ bool mtmd_decode_use_non_causal(const mtmd_context * ctx, const mtmd_input_chunk
             }
         case PROJECTOR_TYPE_GEMMA4UV:
         case PROJECTOR_TYPE_GEMMA3:
+        case PROJECTOR_TYPE_SENSENOVA_U1:
         case PROJECTOR_TYPE_DEEPSEEK4V:
             return true;
         default:
@@ -2761,6 +2779,13 @@ mtmd_decoder_pos mtmd_image_tokens_get_decoder_pos(const mtmd_image_tokens * ima
                 pos.y = pos_0 + i;
                 pos.z = pos_0 + i;
             } break;
+        case MTMD_POS_TYPE_SENSENOVA_U1:
+            {
+                pos.t = pos_0;
+                pos.x = i % image_tokens->nx;
+                pos.y = i / image_tokens->nx;
+                pos.z = 0;
+            } break;
         case MTMD_POS_TYPE_HUNYUANVL:
             {
                 // HunyuanVL layout: [BOI] [row0 tokens + newline] ... [row(ny-1) tokens + newline] [EOI]
@@ -2813,6 +2838,8 @@ llama_pos mtmd_image_tokens_get_n_pos(const mtmd_image_tokens * image_tokens) {
             return std::max(image_tokens->nx, image_tokens->ny);
         case MTMD_POS_TYPE_NORMAL:
             return image_tokens->n_tokens();
+        case MTMD_POS_TYPE_SENSENOVA_U1:
+            return 1;
         case MTMD_POS_TYPE_HUNYUANVL:
             // HunyuanVL: the sequential (dim-0) position advances by the full token count
             // (includes BOI/EOI and row newline tokens), not by max(nx, ny)
@@ -3069,7 +3096,8 @@ struct mtmd_audio_stream {
     std::vector<float> out;     // rows of the last step
     std::vector<float> tok_embd;
 
-    int64_t n_rows = 0; // rows produced so far
+    int64_t n_rows = 0;         // rows produced so far
+    int64_t n_rows_flushed = 0; // rows produced once the audio up to the last flush is consumed
     bool pending_flush = false;
     bool ended = false;
 
@@ -3182,6 +3210,8 @@ int32_t mtmd_audio_stream_flush(mtmd_audio_stream * s, bool end) {
     // align to a whole row, then add the silence the model expects after the audio
     const int64_t n_align = (s->samples_per_tok - s->n_samples % s->samples_per_tok) % s->samples_per_tok;
     mtmd_audio_stream_add_silence(s, n_align + (int64_t) s->n_right_pad * s->samples_per_tok);
+    // one row per samples_per_tok, the left padding included
+    s->n_rows_flushed = s->n_samples / s->samples_per_tok;
     s->pending_flush = true;
     s->ended = end;
     return 0;
@@ -3330,4 +3360,12 @@ int32_t mtmd_audio_stream_step(mtmd_audio_stream * s, llama_token last_token) {
 
 const float * mtmd_audio_stream_get_output_embd(const mtmd_audio_stream * s) {
     return s->out.data();
+}
+
+int64_t mtmd_audio_stream_get_n_rows(const mtmd_audio_stream * s) {
+    return s->n_rows;
+}
+
+int64_t mtmd_audio_stream_get_n_rows_flushed(const mtmd_audio_stream * s) {
+    return s->n_rows_flushed;
 }

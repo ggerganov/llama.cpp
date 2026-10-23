@@ -997,6 +997,10 @@ static std::unique_ptr<clip_graph> clip_get_graph_builder(clip_ctx * ctx, const 
             {
                 builder = std::make_unique<clip_graph_qwen3vl>(ctx, img);
             } break;
+        case PROJECTOR_TYPE_SENSENOVA_U1:
+            {
+                builder = std::make_unique<clip_graph_sensenova_u1>(ctx, img);
+            } break;
         case PROJECTOR_TYPE_LING3VL:
             {
                 builder = std::make_unique<clip_graph_ling3vl>(ctx, img);
@@ -1027,6 +1031,7 @@ static std::unique_ptr<clip_graph> clip_get_graph_builder(clip_ctx * ctx, const 
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             {
                 builder = std::make_unique<clip_graph_minicpmv4_6>(ctx, img);
             } break;
@@ -1492,6 +1497,7 @@ struct clip_model_loader {
                     } break;
                 case PROJECTOR_TYPE_MINICPMV4_6:
                 case PROJECTOR_TYPE_MINICPMV4_7:
+                case PROJECTOR_TYPE_MINICPM_OCR_1_0:
                     {
                         // MiniCPM-V 4.6/4.7 unified merger projector
                         // ViT merger 2x2 + final merger 2x2 = 4x spatial merge per dimension
@@ -1794,6 +1800,20 @@ struct clip_model_loader {
                             LOG_WRN("%s: if you encounter problems with accuracy, try adding --image-min-tokens 1024\n", __func__);
                             LOG_WRN("%s: more info: https://github.com/ggml-org/llama.cpp/issues/16842\n\n", __func__);
                         }
+                    } break;
+                case PROJECTOR_TYPE_SENSENOVA_U1:
+                    {
+                        hparams.n_merge = 2;
+                        hparams.image_resize_algo = RESIZE_ALGO_BICUBIC;
+                        get_u32(KEY_SPATIAL_MERGE_SIZE, hparams.n_merge, false);
+                        get_u32(KEY_IMAGE_MIN_PIXELS, hparams.image_min_pixels);
+                        get_u32(KEY_IMAGE_MAX_PIXELS, hparams.image_max_pixels);
+                        hparams.rope_theta = 10000.0f;
+                        hparams.set_limit_image_tokens(16, 4096);
+                        if (hparams.n_merge != 2) {
+                            throw std::runtime_error(string_format("%s: SenseNova U1 requires spatial_merge_size=2, got %u", __func__, hparams.n_merge));
+                        }
+                        hparams.set_warmup_n_tokens(16*16);
                     } break;
                 case PROJECTOR_TYPE_MINIMAX_M3:
                     {
@@ -2509,6 +2529,7 @@ struct clip_model_loader {
                     || model.proj_type == PROJECTOR_TYPE_MINICPMV
                     || model.proj_type == PROJECTOR_TYPE_MINICPMV4_6
                     || model.proj_type == PROJECTOR_TYPE_MINICPMV4_7
+                    || model.proj_type == PROJECTOR_TYPE_MINICPM_OCR_1_0
                 ) && layer.ff_up_w && layer.ff_down_w && layer.ff_down_w->ne[0] == hparams.n_embd;
             if (is_ffn_swapped) {
                 // swap up and down weights
@@ -2612,6 +2633,7 @@ struct clip_model_loader {
                 } break;
             case PROJECTOR_TYPE_MINICPMV4_6:
             case PROJECTOR_TYPE_MINICPMV4_7:
+            case PROJECTOR_TYPE_MINICPM_OCR_1_0:
                 {
                     const bool merger_required = hparams.n_merge == 4;
                     auto get_merger_tensor = [&](const std::string & name, bool required = true) {
@@ -3837,6 +3859,11 @@ struct clip_model_loader {
                     }
 
                 } break;
+            case PROJECTOR_TYPE_SENSENOVA_U1:
+                {
+                    model.mm_0_w = get_tensor(string_format(TN_LLAVA_PROJ, 0, "weight"));
+                    model.mm_0_b = get_tensor(string_format(TN_LLAVA_PROJ, 0, "bias"));
+                } break;
             default:
                 GGML_ASSERT(false && "unknown projector type");
         }
@@ -4311,6 +4338,7 @@ int clip_n_output_tokens_x(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_QWEN2VL:
         case PROJECTOR_TYPE_QWEN25VL:
         case PROJECTOR_TYPE_QWEN3VL:
+        case PROJECTOR_TYPE_SENSENOVA_U1:
         case PROJECTOR_TYPE_LING3VL:
         case PROJECTOR_TYPE_EXAONE4_5:
         case PROJECTOR_TYPE_MIMOVL:
@@ -4324,6 +4352,7 @@ int clip_n_output_tokens_x(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_STEP3VL:
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             return img->nx() / (params.patch_size * params.n_merge);
         case PROJECTOR_TYPE_DEEPSEEKOCR:
         case PROJECTOR_TYPE_DEEPSEEKOCR2:
@@ -4341,6 +4370,7 @@ int clip_n_output_tokens_y(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_QWEN2VL:
         case PROJECTOR_TYPE_QWEN25VL:
         case PROJECTOR_TYPE_QWEN3VL:
+        case PROJECTOR_TYPE_SENSENOVA_U1:
         case PROJECTOR_TYPE_LING3VL:
         case PROJECTOR_TYPE_EXAONE4_5:
         case PROJECTOR_TYPE_MIMOVL:
@@ -4354,6 +4384,7 @@ int clip_n_output_tokens_y(const clip_ctx * ctx, const clip_image_f32 * img) {
         case PROJECTOR_TYPE_STEP3VL:
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             return img->ny() / (params.patch_size * params.n_merge);
         default:
             break;
@@ -4420,12 +4451,14 @@ int clip_n_output_tokens(const clip_ctx * ctx, const clip_image_f32 * img) {
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             {
                 n_patches /= params.n_merge * params.n_merge;
             } break;
         case PROJECTOR_TYPE_QWEN2VL:
         case PROJECTOR_TYPE_QWEN25VL:
         case PROJECTOR_TYPE_QWEN3VL:
+        case PROJECTOR_TYPE_SENSENOVA_U1:
         case PROJECTOR_TYPE_LING3VL:
         case PROJECTOR_TYPE_EXAONE4_5:
         case PROJECTOR_TYPE_MIMOVL:
@@ -5143,6 +5176,7 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
             } break;
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             {
                 const bool is_4x = hparams.n_merge == 2;
 
@@ -5524,6 +5558,19 @@ bool clip_encode(struct clip_ctx * ctx, struct clip_encode_params * params) {
                     pos_data[i] = i % n_patches_per_col;
                 }
                 set_input_i32("pos_w", pos_data);
+            } break;
+        case PROJECTOR_TYPE_SENSENOVA_U1:
+            {
+                const int n_patches_per_row = image_size_width / patch_size;
+                std::vector<int> pos_data(n_pos);
+                for (int i = 0; i < n_pos; i++) {
+                    pos_data[i] = i / n_patches_per_row;
+                }
+                set_input_i32("pos_y", pos_data);
+                for (int i = 0; i < n_pos; i++) {
+                    pos_data[i] = i % n_patches_per_row;
+                }
+                set_input_i32("pos_x", pos_data);
             } break;
         case PROJECTOR_TYPE_DEEPSEEK4V:
             {
@@ -6398,6 +6445,7 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return ctx->model.mm_model_proj->ne[0];
         case PROJECTOR_TYPE_MINICPMV4_6:
         case PROJECTOR_TYPE_MINICPMV4_7:
+        case PROJECTOR_TYPE_MINICPM_OCR_1_0:
             return ctx->model.mm_ffn_down_w->ne[1];
         case PROJECTOR_TYPE_GLM_EDGE:
             return ctx->model.mm_model_mlp_3_w->ne[1];
@@ -6411,6 +6459,8 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         case PROJECTOR_TYPE_JANUS_PRO:
         case PROJECTOR_TYPE_YOUTUVL:
             return ctx->model.mm_1_b->ne[0];
+        case PROJECTOR_TYPE_SENSENOVA_U1:
+            return ctx->model.hparams.projection_dim;
         case PROJECTOR_TYPE_QWEN3VL:
             // main path + deepstack paths
             return ctx->model.mm_1_b->ne[0] * (1 + ctx->model.n_deepstack_layers);
