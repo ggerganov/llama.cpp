@@ -440,6 +440,20 @@ static void ceil_f16(const void * restrict src,
     }
 }
 
+static void sgn_f16(const void * restrict src,
+                    void * restrict dst,
+                    const uint32_t num_rows,
+                    const struct htp_unary_context * uctx) {
+    htp_unary_op_preamble;
+
+    for (uint32_t ir = 0; ir < num_rows; ir++) {
+        const uint8_t * restrict src_local = (const uint8_t *)src + (ir * src0_row_size_aligned);
+        uint8_t * restrict dst_local       = (uint8_t *)dst + (ir * dst_row_size_aligned);
+
+        hvx_sgn_f16_aa((uint8_t *) dst_local, (const uint8_t *) src_local, ne0);
+    }
+}
+
 static void l2_norm_f16(const void * restrict src,
                         void * restrict dst,
                         const uint32_t num_rows,
@@ -1757,7 +1771,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         case HTP_OP_UNARY_RELU:      op_type = "relu-f32";                                   break;
         case HTP_OP_UNARY_STEP:      op_type = is_f16 ? "step-f16"     : "step-f32";         break;
         case HTP_OP_UNARY_CEIL:      op_type = is_f16 ? "ceil-f16"     : "ceil-f32";         break;
-        case HTP_OP_UNARY_SGN:       op_type = "sgn-f32";                                    break;
+        case HTP_OP_UNARY_SGN:       op_type = is_f16 ? "sgn-f16"      : "sgn-f32";          break;
         case HTP_OP_L2_NORM:         op_type = is_f16 ? "l2norm-f16"   : "l2norm-f32";       break;
         case HTP_OP_TRI:             op_type = "tri-f32";                                    break;
         case HTP_OP_HADAMARD:        op_type = is_f16 ? "hadamard-f16" : "hadamard-f32";     break;
@@ -1772,16 +1786,16 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         return HTP_STATUS_INVAL_PARAMS;
     }
 
+    const size_t src0_elem_size = is_f16 ? sizeof(_Float16) : sizeof(float);
+    const size_t dst_elem_size  = (dst->type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
     const bool flatten = kparams->flatten;
-    const uint32_t src0_ne0 = flatten ? src0->size / sizeof(float) : src0->ne[0];
-    const uint32_t dst_ne0  = flatten ? dst->size  / sizeof(float) : dst->ne[0];
+    const uint32_t src0_ne0 = flatten ? src0->size / src0_elem_size : src0->ne[0];
+    const uint32_t dst_ne0  = flatten ? dst->size  / dst_elem_size  : dst->ne[0];
     const uint64_t src0_nrows64 = (uint64_t) src0->ne[1] * src0->ne[2] * src0->ne[3];
     if (!flatten && src0_nrows64 > UINT32_MAX) {
         return HTP_STATUS_INVAL_PARAMS;
     }
     const uint32_t src0_nrows = flatten ? 1 : (uint32_t) src0_nrows64;
-    const size_t src0_elem_size = is_f16 ? sizeof(_Float16) : sizeof(float);
-    const size_t dst_elem_size  = (dst->type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
     const size_t src0_data_row_size = src0_ne0 * src0_elem_size;
     const size_t dst_data_row_size  = dst_ne0  * dst_elem_size;
 
@@ -1920,6 +1934,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
             case HTP_OP_UNARY_LOG:       compute_func = (void *) log_f16;                 break;
             case HTP_OP_UNARY_STEP:      compute_func = (void *) step_f16;                break;
             case HTP_OP_UNARY_CEIL:      compute_func = (void *) ceil_f16;                break;
+            case HTP_OP_UNARY_SGN:       compute_func = (void *) sgn_f16;                 break;
             case HTP_OP_HADAMARD:        compute_func = (void *) hadamard_f16;            break;
             default:                     break;
         }
