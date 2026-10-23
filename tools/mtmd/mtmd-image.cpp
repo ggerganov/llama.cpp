@@ -206,7 +206,7 @@ private:
     // 2. Pre-computes normalized filter coefficients for each output pixel
     // 3. Fixed-point integer arithmetic (22 fractional bits) for speed and determinism
     //
-    // The _TORCH algos are the same, except for the int16 weights of torchvision (aten/src/ATen/native/cpu/UpSampleKernel.cpp)
+    // RESIZE_ALGO_FLAG_TORCH is the same, except for the int16 weights of torchvision (aten/src/ATen/native/cpu/UpSampleKernel.cpp)
     static bool resize_pillow(
             const clip_image_u8 & img,
             clip_image_u8 & dst,
@@ -217,19 +217,22 @@ private:
         // This allows encoding fractional weights as integers: weight * 2^22
         const int PRECISION_BITS = 32 - 8 - 2;
 
+        const bool int16_weights = algo & RESIZE_ALGO_FLAG_TORCH;
+        algo = static_cast<resize_algo>(algo & ~RESIZE_ALGO_FLAG_TORCH);
+
+        if (int16_weights && algo == RESIZE_ALGO_LANCZOS) {
+            GGML_ABORT("unsupported resize algo: torchvision has no lanczos");
+        }
+
         // Filter support radius
         double filter_support;
         switch (algo) {
-            case RESIZE_ALGO_BILINEAR:
-            case RESIZE_ALGO_BILINEAR_TORCH: filter_support = 1.0; break;
-            case RESIZE_ALGO_BICUBIC:
-            case RESIZE_ALGO_BICUBIC_TORCH:  filter_support = 2.0; break;
-            case RESIZE_ALGO_LANCZOS:        filter_support = 3.0; break;
+            case RESIZE_ALGO_BILINEAR: filter_support = 1.0; break;
+            case RESIZE_ALGO_BICUBIC:  filter_support = 2.0; break;
+            case RESIZE_ALGO_LANCZOS:  filter_support = 3.0; break;
             default:
-                throw std::runtime_error("Unsupported resize algorithm");
+                GGML_ABORT("unsupported resize algo: %d", (int) algo);
         }
-
-        const bool int16_weights = algo == RESIZE_ALGO_BILINEAR_TORCH || algo == RESIZE_ALGO_BICUBIC_TORCH;
 
         // Returns filter weight for distance x from pixel center
         // Note: for bicubic, Pillow (and PyTorch with antialias) uses a = -0.5 while GGML (and PyTorch without antialias) uses a = -0.75
@@ -252,7 +255,7 @@ private:
                 x = -x;
             }
 
-            if (algo == RESIZE_ALGO_BILINEAR || algo == RESIZE_ALGO_BILINEAR_TORCH) {
+            if (algo == RESIZE_ALGO_BILINEAR) {
                 return x < 1.0 ? 1.0 - x : 0.0;
             }
 

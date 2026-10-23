@@ -96,6 +96,20 @@ static std::string image_size_to_str(const clip_image_size & size) {
     return std::to_string(size.width) + "x" + std::to_string(size.height);
 }
 
+static std::string resize_algo_to_str(resize_algo algo) {
+    std::string str;
+    switch (algo & ~RESIZE_ALGO_FLAG_TORCH) {
+        case RESIZE_ALGO_BILINEAR: str = "bilinear"; break;
+        case RESIZE_ALGO_BICUBIC:  str = "bicubic";  break;
+        case RESIZE_ALGO_LANCZOS:  str = "lanczos";  break;
+        default:                   str = "unknown";  break;
+    }
+    if (algo & RESIZE_ALGO_FLAG_TORCH) {
+        str += "_torch";
+    }
+    return str;
+}
+
 // pseudo-random pixels: s = s * 1103515245 + 12345 from s = 1, one byte (s >> 16) & 255 per channel
 static clip_image_u8 make_test_image(const clip_image_size & size) {
     clip_image_u8 img;
@@ -198,13 +212,14 @@ MAKE_TEST(test_image_preprocessor_lfm2_torch_resize) {
 
     // { resize algo, image size, expected hash of the tiles and the thumbnail from Lfm2VlImageProcessor (torchvision 0.29, native uint8 resize: arm64, or x86 with AVX2/AVX512) }
     const std::vector<std::tuple<resize_algo, clip_image_size, uint32_t>> cases = {
-        { RESIZE_ALGO_BILINEAR_TORCH, {  620,  410 }, 0xf5e9c941 }, // 608x416
-        { RESIZE_ALGO_BILINEAR_TORCH, { 2000, 1500 }, 0x3331f56c }, // 3x2 tiles, 576x416 thumbnail
-        { RESIZE_ALGO_BICUBIC_TORCH,  {  620,  410 }, 0x2b34eac9 },
-        { RESIZE_ALGO_BICUBIC_TORCH,  { 2000, 1500 }, 0xb035d942 },
+        { RESIZE_ALGO_BILINEAR, {  620,  410 }, 0xf5e9c941 }, // 608x416
+        { RESIZE_ALGO_BILINEAR, { 2000, 1500 }, 0x3331f56c }, // 3x2 tiles, 576x416 thumbnail
+        { RESIZE_ALGO_BICUBIC,  {  620,  410 }, 0x2b34eac9 },
+        { RESIZE_ALGO_BICUBIC,  { 2000, 1500 }, 0xb035d942 },
     };
 
-    for (const auto & [algo, size, expected] : cases) {
+    for (const auto & [base_algo, size, expected] : cases) {
+        const resize_algo algo = static_cast<resize_algo>(base_algo | RESIZE_ALGO_FLAG_TORCH);
         hparams.image_resize_algo_rf = algo;
         hparams.image_resize_algo_ov = algo;
         const mtmd_image_preprocessor_lfm2 preproc(hparams);
@@ -215,7 +230,7 @@ MAKE_TEST(test_image_preprocessor_lfm2_torch_resize) {
             hash = hash_pixels(slice, hash);
         }
         hash = hash_pixels(sliced.overview, hash);
-        t.assert_equal("pixels of " + std::to_string(size.width) + "x" + std::to_string(size.height) + " with resize algo " + std::to_string(algo), expected, hash);
+        t.assert_equal("pixels of " + std::to_string(size.width) + "x" + std::to_string(size.height) + " with resize algo " + resize_algo_to_str(algo), expected, hash);
     }
 }
 
