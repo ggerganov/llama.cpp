@@ -5516,13 +5516,17 @@ struct test_mul_mat_hadamard : public test_mul_mat {
 };
 
 
-// Regression for ggml-org/llama.cpp#30950: CUDA MMVQ used fp16 for m*s8 on Q4_1/Q5_1/Q8_1.
-// Large block offsets (m ≈ -512) with large activations overflow fp16 and produce NaN logits.
+// Regression for ggml-org/llama.cpp#30950: CUDA used fp16 for m*s8 in
+// vec_dot_q4_1_q8_1_impl / vec_dot_q5_1_q8_1_impl (MMVQ) and
+// vec_dot_q8_1_q8_1_impl (MMQ-dp4a helper for Q5_1/IQ1_S tiles).
+// Q8_1 is not a CUDA MUL_MAT weight type; the third helper is covered by the
+// Q5_1 MMQ cases below (same (d,m)×(d,s) overflow). Large m with large
+// activations overflow fp16 and produce NaN logits.
 struct test_mul_mat_mmvq_fp16_scale_overflow : public test_mul_mat {
     test_mul_mat_mmvq_fp16_scale_overflow(ggml_type type_a, int64_t n = 1)
         : test_mul_mat(type_a, GGML_TYPE_F32, /*m*/64, n, /*k*/256, {1, 1}, {1, 1}) {
             GGML_ASSERT(type_a == GGML_TYPE_Q4_1 || type_a == GGML_TYPE_Q5_1);
-            GGML_ASSERT(n >= 1 && n <= 8); // MMVQ path
+            GGML_ASSERT(n >= 1 && n <= 32);
         }
 
     void initialize_tensors(ggml_context * ctx) override {
@@ -11077,11 +11081,18 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     }
 
 
-    // #30950: MMVQ Q4_1/Q5_1 scale product must not overflow fp16 (m*s8).
+    // #30950: Q4_1/Q5_1 MMVQ (n<=8) scale product must not overflow fp16 (m*s8).
     for (ggml_type type_a : { GGML_TYPE_Q4_1, GGML_TYPE_Q5_1 }) {
         for (int n = 1; n <= 8; n *= 2) {
             test_cases.emplace_back(new test_mul_mat_mmvq_fp16_scale_overflow(type_a, n));
         }
+    }
+    // #30950: vec_dot_q8_1_q8_1_impl (MMQ-dp4a for Q5_1/IQ1_S tiles) — same magnitude.
+    // type_a=Q8_1 is not a CUDA MUL_MAT weight type (supports_op / MMVQ omit it), so cover
+    // that helper via Q5_1 MMQ (n=16,32). Ampere/Ada MMA already uses fp32 here; Pascal
+    // exercises the fixed dp4a helper directly.
+    for (int n : {16, 32}) {
+        test_cases.emplace_back(new test_mul_mat_mmvq_fp16_scale_overflow(GGML_TYPE_Q5_1, n));
     }
 
     // Multi-column MMVQ coverage for the Q4_K weight-reuse path and a Q5_K control.
