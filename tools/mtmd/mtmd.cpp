@@ -201,6 +201,10 @@ struct mtmd_bitmap {
         return data;
     }
 
+    std::vector<unsigned char> & get_rw_buf() {
+        return data;
+    }
+
     bool is_placeholder() const {
         return data.empty();
     }
@@ -525,6 +529,11 @@ struct mtmd_context {
     // generation context
     struct clip_ctx * ctx_gen_a; // audio
 
+    // gen-side reference data of the last encoded chunk (chatterbox), see mtmd_gen_state_set_ref()
+    std::vector<int32_t> gen_ref_tokens;
+    std::vector<float>   gen_ref_feat;
+    std::vector<float>   gen_ref_spk;
+
     bool print_timings;
     int n_threads;
     std::string media_marker;
@@ -624,7 +633,7 @@ struct mtmd_context {
         ctx_v = res.ctx_v;
         ctx_a = res.ctx_a;
         ctx_gen_a = res.ctx_gen_a;
-        if (!ctx_v && !ctx_a) {
+        if (!ctx_v && !ctx_a && !ctx_gen_a) {
             throw std::runtime_error(string_format("Failed to load CLIP model from %s\n", mmproj_fname));
         }
 
@@ -641,14 +650,17 @@ struct mtmd_context {
 
         // since we already validate n_embd of vision and audio mmproj,
         // we can safely assume that they are the same
-        int n_embd_clip = clip_n_mmproj_embd(ctx_v ? ctx_v : ctx_a);
-        if (n_embd_text > 0 && n_embd_text != n_embd_clip) {
-            throw std::runtime_error(string_format(
-                "mismatch between text model (n_embd = %d) and mmproj (n_embd = %d)\n"
-                "hint: you may be using wrong mmproj\n",
-                n_embd_text, n_embd_clip));
+        if (ctx_v || ctx_a) {
+            int n_embd_clip = clip_n_mmproj_embd(ctx_v ? ctx_v : ctx_a);
+            if (n_embd_text > 0 && n_embd_text != n_embd_clip) {
+                throw std::runtime_error(string_format(
+                    "mismatch between text model (n_embd = %d) and mmproj (n_embd = %d)\n"
+                    "hint: you may be using wrong mmproj\n",
+                    n_embd_text, n_embd_clip));
+            }
         }
-        if (ctx_gen_a) {
+        if (ctx_gen_a && clip_get_projector_type(ctx_gen_a) != PROJECTOR_TYPE_CHATTERBOX) {
+            // the chatterbox gen mmproj emits mel channels, not text embeddings
             int n_embd_gen = clip_n_mmproj_embd(ctx_gen_a);
             if (n_embd_text > 0 && n_embd_text != n_embd_gen) {
                 throw std::runtime_error(string_format(
@@ -1105,6 +1117,25 @@ struct mtmd_context {
             case PROJECTOR_TYPE_POCKETTTS_SPKENC:
                 {
                     audio_preproc = std::make_unique<mtmd_audio_preprocessor_pockettts>(ctx_a);
+                } break;
+            case PROJECTOR_TYPE_CHATTERBOX_SPKENC:
+                {
+                    {
+                        // the ref-chain front-end needs the s3 tokenizer
+                        // filterbank of the generation context and the
+                        // variant to pick its caps and loudness handling
+                        std::vector<float> filt;
+                        bool is_mtl = false;
+                        if (ctx_gen_a) {
+                            const size_t n_filt = clip_cbx_read_tensor(ctx_gen_a, "a.s3tok.mel_filters", nullptr, 0);
+                            if (n_filt > 0) {
+                                filt.resize(n_filt);
+                                clip_cbx_read_tensor(ctx_gen_a, "a.s3tok.mel_filters", filt.data(), n_filt);
+                            }
+                            is_mtl = clip_cbx_read_tensor(ctx_gen_a, "a.gen.t3.speech_pos_emb", nullptr, 0) > 0;
+                        }
+                        audio_preproc = std::make_unique<mtmd_audio_preprocessor_chatterbox_ref>(ctx_a, is_mtl, std::move(filt));
+                    }
                 } break;
             default:
                 throw std::runtime_error(string_format("%s: unexpected audio projector type %d\n", __func__, proj));
@@ -1725,6 +1756,41 @@ struct mtmd_tokenizer {
                 }
             }
 
+            // the chatterbox reference encoder consumes the five DSP entries
+            // of one clip as a single chunk; its token count is the number of
+            // talker conditioning rows the clip encodes to (fixed on the
+            // multilingual variant, spkr row plus the t3 token grid on turbo)
+            if (clip_get_projector_type(ctx->ctx_a) == PROJECTOR_TYPE_CHATTERBOX_SPKENC) {
+                GGML_ASSERT(mel_spec_chunks.size() == 5);
+                const bool mtl = ctx->ctx_gen_a &&
+                    clip_cbx_read_tensor(ctx->ctx_gen_a, "a.gen.t3.speech_pos_emb", nullptr, 0) > 0;
+                const size_t n_tokens = mtl ? 34 : 1 + (size_t) mel_spec_chunks[2].n_len / 4;
+
+                clip_image_f32_batch batch_f32;
+                batch_f32.is_audio = true;
+                for (auto & mel_spec : mel_spec_chunks) {
+                    GGML_ASSERT(mel_spec.n_len <= INT32_MAX && mel_spec.n_len >= 0);
+                    GGML_ASSERT(mel_spec.n_mel <= INT32_MAX && mel_spec.n_mel >= 0);
+                    clip_image_f32 mel_f32;
+                    mel_f32.set_size({(int) mel_spec.n_len, (int) mel_spec.n_mel},
+                                     mel_spec.data.empty(), /* is_audio */ true);
+                    mel_f32.cpy_buf(mel_spec.data);
+                    batch_f32.entries.push_back(std::move(mel_f32));
+                }
+
+                mtmd_audio_tokens_ptr audio_tokens(new mtmd_audio_tokens);
+                audio_tokens->n_tokens  = (uint32_t) n_tokens;
+                audio_tokens->batch_f32 = std::move(batch_f32);
+                audio_tokens->id        = bitmap->id;
+
+                mtmd_input_chunk chunk{
+                    MTMD_INPUT_CHUNK_TYPE_AUDIO,
+                    {}, // text tokens
+                    nullptr, // image tokens
+                    std::move(audio_tokens),
+                };
+                cur.entries.emplace_back(std::move(chunk));
+            } else
             // consider each mel_spec as a separate audio chunk
             // TODO: maybe support batching, but this may come with memory cost
             for (auto & mel_spec : mel_spec_chunks) {
@@ -1993,6 +2059,10 @@ static int32_t mtmd_encode_impl(mtmd_context * ctx, const mtmd_image_tokens * im
     return ok ? 0 : 1;
 }
 
+// defined with the reference chain below; encodes a chatterbox reference
+// chunk into talker conditioning rows and the typed decoder reference outputs
+static int32_t cbx_ref_encode(mtmd_context * ctx, const mtmd_audio_tokens * audio_tokens, std::vector<float> & out_embd);
+
 static int32_t mtmd_encode_chunk_impl(mtmd_context * ctx, const mtmd_input_chunk * chunk, std::vector<float> & out_embd) {
     if (chunk->type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
         LOG_WRN("mtmd_encode_chunk has no effect for text chunks\n");
@@ -2024,6 +2094,9 @@ static int32_t mtmd_encode_chunk_impl(mtmd_context * ctx, const mtmd_input_chunk
             LOG_ERR("%s: audio tokens batch is placeholder\n", __func__);
             return 1;
         }
+        if (clip_get_projector_type(ctx->ctx_a) == PROJECTOR_TYPE_CHATTERBOX_SPKENC) {
+            return cbx_ref_encode(ctx, chunk->tokens_audio.get(), out_embd);
+        }
         int n_mmproj_embd = ctx->n_embd_out();
         out_embd.resize((size_t)chunk->tokens_audio->n_tokens * n_mmproj_embd);
         bool ok = clip_image_batch_encode(
@@ -2040,6 +2113,9 @@ static int32_t mtmd_encode_chunk_impl(mtmd_context * ctx, const mtmd_input_chunk
 
 int32_t mtmd_encode_chunk(mtmd_context * ctx, const mtmd_input_chunk * chunk) {
     // this is the non-batching version
+    ctx->gen_ref_tokens.clear();
+    ctx->gen_ref_feat.clear();
+    ctx->gen_ref_spk.clear();
     try {
         return mtmd_encode_chunk_impl(ctx, chunk, ctx->out_embd);
     } catch (const std::exception & e) {
@@ -2082,12 +2158,378 @@ mtmd_gen_audio_info mtmd_gen_audio_get_info(const mtmd_context * ctx) {
             info.type = MTMD_GEN_AUDIO_TYPE_POCKETTTS;
             info.sample_rate = 24000;
             break;
+        case PROJECTOR_TYPE_CHATTERBOX:
+            info.type = MTMD_GEN_AUDIO_TYPE_CHATTERBOX;
+            info.sample_rate = 24000;
+            break;
         default:
             info.type = MTMD_GEN_AUDIO_TYPE_NONE;
             break;
     }
     return info;
 }
+
+size_t mtmd_gen_audio_read_tensor(mtmd_context * ctx, const char * name, float * out, size_t n_max) {
+    if (!ctx->ctx_gen_a) {
+        return 0;
+    }
+    return clip_cbx_read_tensor(ctx->ctx_gen_a, name, out, n_max);
+}
+
+// raw 192-dim campplus x-vector of the reference clip: the precomputed fbank
+// entry through the CAMPPlus graph of the speaker encoding context
+static bool cbx_ref_xvec(mtmd_context * ctx, const clip_image_f32 & fbank, std::vector<float> & xvec) {
+    if (!ctx->ctx_a || clip_get_projector_type(ctx->ctx_a) != PROJECTOR_TYPE_CHATTERBOX_SPKENC) {
+        LOG_ERR("%s: mmproj has no speaker encoder\n", __func__);
+        return false;
+    }
+    clip_image_f32 mel_img;
+    mel_img.set_size(fbank.get_size(), false, true);
+    mel_img.cpy_buf(fbank.get_ro_buf());
+    clip_image_f32_batch batch;
+    batch.is_audio = true;
+    batch.entries.push_back(std::move(mel_img));
+    xvec.resize(192);
+    if (!clip_image_batch_encode(ctx->ctx_a, ctx->n_threads, &batch, xvec)) {
+        LOG_ERR("%s: speaker encoder failed\n", __func__);
+        return false;
+    }
+    return true;
+}
+
+// s3 speech tokens of a precomputed reference log-mel entry; rows, when
+// requested, receives the speech embedding rows of the codes (with the
+// learned speech positions added on the multilingual variant)
+static int32_t cbx_ref_tokenize(mtmd_context * ctx, const clip_image_f32 & mel,
+                            std::vector<int32_t> & codes, std::vector<float> * rows) {
+    clip_image_f32 mel_img;
+    mel_img.set_size(mel.get_size(), false, true);
+    mel_img.cpy_buf(mel.get_ro_buf());
+
+    clip_image_f32_batch batch;
+    batch.is_audio = true;
+    batch.entries.push_back(std::move(mel_img));
+
+    std::vector<int32_t> out_codes;
+    std::vector<float>   out_embd;
+
+    clip_encode_params params;
+    params.imgs        = &batch;
+    params.n_threads   = ctx->n_threads;
+    params.gen_process = CLIP_GEN_PROCESS_TOKENIZE;
+    params.out_codes     = &out_codes;
+    params.out_code_embd = rows ? &out_embd : nullptr;
+
+    if (!clip_encode(ctx->ctx_gen_a, &params)) {
+        LOG_ERR("%s: clip_encode failed (tokenize)\n", __func__);
+        return 1;
+    }
+
+    codes = std::move(out_codes);
+    if (rows) {
+        *rows = std::move(out_embd);
+    }
+    return 0;
+}
+
+
+// talker conditioning rows of a reference clip: voice encoder chain and
+// speaker projection row; the multilingual variant appends its perceiver
+// output over the reference speech embedding rows and the emotion row
+static int32_t cbx_ref_cond(mtmd_context * ctx, const clip_image_f32 & ve_mel,
+                        const std::vector<float> & pse, std::vector<float> & out_rows) {
+    clip_ctx * ctx_clip = ctx->ctx_a;
+    auto read_t = [&](const char * name, std::vector<float> & v) -> bool {
+        const size_t n = clip_cbx_read_tensor(ctx_clip, name, nullptr, 0);
+        if (n == 0) {
+            return false;
+        }
+        v.resize(n);
+        return clip_cbx_read_tensor(ctx_clip, name, v.data(), n) == n;
+    };
+
+    // voice encoder reference chain (embeds_from_wavs) over the precomputed
+    // power mel entry, already on the 160-frame partial grid: 3-layer lstm
+    // per partial, projected/relu/normalized embeddings averaged into the
+    // utterance embedding
+    const std::vector<float> & mel = ve_mel.get_ro_buf();
+    const int n_mel     = 40;
+    const int n_partial = 160;
+    const int step      = (int) lround((16000.0 / 1.3) / n_partial); // reference rate 1.3
+    const int n_wins    = (ve_mel.nx() - n_partial) / step + 1;
+
+    std::vector<float> w_ih[3], w_hh[3], b_ih[3], b_hh[3];
+    std::vector<float> w_proj, b_proj;
+    for (int l = 0; l < 3; l++) {
+        const std::string s = std::to_string(l);
+        if (!read_t(("a.ve.lstm.weight_ih_l" + s).c_str(), w_ih[l]) ||
+            !read_t(("a.ve.lstm.weight_hh_l" + s).c_str(), w_hh[l]) ||
+            !read_t(("a.ve.lstm.bias_ih_l" + s).c_str(), b_ih[l]) ||
+            !read_t(("a.ve.lstm.bias_hh_l" + s).c_str(), b_hh[l])) {
+            LOG_ERR("%s: model has no voice encoder\n", __func__);
+            return 1;
+        }
+    }
+    if (!read_t("a.ve.proj.weight", w_proj) || !read_t("a.ve.proj.bias", b_proj)) {
+        LOG_ERR("%s: model has no voice encoder projection\n", __func__);
+        return 1;
+    }
+
+    const int n_h = 256;
+    std::vector<float> ve(n_h, 0.0f);
+    std::vector<float> h((size_t) 3 * n_h), c((size_t) 3 * n_h), x(n_h), g((size_t) 4 * n_h);
+    for (int p = 0; p < n_wins; p++) {
+        std::fill(h.begin(), h.end(), 0.0f);
+        std::fill(c.begin(), c.end(), 0.0f);
+        for (int t = 0; t < n_partial; t++) {
+            const float * in = mel.data() + (size_t) (p * step + t) * n_mel;
+            int n_in = n_mel;
+            for (int l = 0; l < 3; l++) {
+                float * hl = h.data() + (size_t) l * n_h;
+                float * cl = c.data() + (size_t) l * n_h;
+                for (int j = 0; j < 4 * n_h; j++) {
+                    double acc = b_ih[l][(size_t) j] + b_hh[l][(size_t) j];
+                    const float * wi = w_ih[l].data() + (size_t) j * n_in;
+                    for (int i = 0; i < n_in; i++) {
+                        acc += (double) wi[i] * in[i];
+                    }
+                    const float * wh = w_hh[l].data() + (size_t) j * n_h;
+                    for (int i = 0; i < n_h; i++) {
+                        acc += (double) wh[i] * hl[i];
+                    }
+                    g[(size_t) j] = (float) acc;
+                }
+                // torch gate order: input, forget, cell, output
+                for (int i = 0; i < n_h; i++) {
+                    const float gi = 1.0f / (1.0f + expf(-g[(size_t) i]));
+                    const float gf = 1.0f / (1.0f + expf(-g[(size_t) i + n_h]));
+                    const float gc = tanhf(g[(size_t) i + 2 * n_h]);
+                    const float go = 1.0f / (1.0f + expf(-g[(size_t) i + 3 * n_h]));
+                    cl[i] = gf * cl[i] + gi * gc;
+                    x[(size_t) i] = go * tanhf(cl[i]);
+                }
+                memcpy(hl, x.data(), (size_t) n_h * sizeof(float));
+                in   = hl;
+                n_in = n_h;
+            }
+        }
+        // projected, relu'd, normalized partial embedding
+        std::vector<float> e(n_h);
+        double norm = 0.0;
+        for (int o = 0; o < n_h; o++) {
+            double acc = b_proj[(size_t) o];
+            const float * w = w_proj.data() + (size_t) o * n_h;
+            const float * hl = h.data() + (size_t) 2 * n_h;
+            for (int i = 0; i < n_h; i++) {
+                acc += (double) w[i] * hl[i];
+            }
+            e[(size_t) o] = (float) std::max(acc, 0.0);
+            norm += (double) e[(size_t) o] * e[(size_t) o];
+        }
+        norm = sqrt(norm);
+        for (int o = 0; o < n_h; o++) {
+            ve[(size_t) o] += (float) (e[(size_t) o] / norm);
+        }
+    }
+    double norm = 0.0;
+    for (float v : ve) {
+        norm += (double) v * v;
+    }
+    norm = sqrt(norm);
+    for (float & v : ve) {
+        v = (float) (v / norm);
+    }
+
+    // speaker projection row
+    std::vector<float> w_spkr, b_spkr;
+    if (!read_t("a.cenc.spkr_enc.weight", w_spkr) || !read_t("a.cenc.spkr_enc.bias", b_spkr)) {
+        LOG_ERR("%s: model has no speaker conditioning projection\n", __func__);
+        return 1;
+    }
+    const int n_e = (int) b_spkr.size();
+    std::vector<float> rows((size_t) n_e);
+    for (int o = 0; o < n_e; o++) {
+        double acc = b_spkr[(size_t) o];
+        const float * w = w_spkr.data() + (size_t) o * n_h;
+        for (int i = 0; i < n_h; i++) {
+            acc += (double) w[i] * ve[(size_t) i];
+        }
+        rows[(size_t) o] = (float) acc;
+    }
+
+    // multilingual variant: [spkr, perceiver x32, emotion] block, the
+    // perceiver runs its shared attention block as cross then self
+    // attention over the reference speech embedding rows
+    std::vector<float> query;
+    if (read_t("a.cenc.perceiver.pre_attention_query", query)) {
+        if (pse.empty()) {
+            LOG_ERR("%s: reference speech embeddings required for the perceiver\n", __func__);
+            return 1;
+        }
+        std::vector<float> ln_w, ln_b, wq, bq, wk, bk, wv, bv, wo, bo, emo;
+        if (!read_t("a.cenc.perceiver.attn.norm.weight", ln_w) || !read_t("a.cenc.perceiver.attn.norm.bias", ln_b) ||
+            !read_t("a.cenc.perceiver.attn.to_q.weight", wq) || !read_t("a.cenc.perceiver.attn.to_q.bias", bq) ||
+            !read_t("a.cenc.perceiver.attn.to_k.weight", wk) || !read_t("a.cenc.perceiver.attn.to_k.bias", bk) ||
+            !read_t("a.cenc.perceiver.attn.to_v.weight", wv) || !read_t("a.cenc.perceiver.attn.to_v.bias", bv) ||
+            !read_t("a.cenc.perceiver.attn.proj_out.weight", wo) || !read_t("a.cenc.perceiver.attn.proj_out.bias", bo) ||
+            !read_t("a.cenc.emotion_adv_fc.weight", emo)) {
+            LOG_ERR("%s: model has an incomplete perceiver\n", __func__);
+            return 1;
+        }
+        const int n_head = 4;
+        const int d_head = n_e / n_head;
+
+        auto layer_norm = [&](const float * in, float * out) {
+            double mean = 0.0, var = 0.0;
+            for (int i = 0; i < n_e; i++) {
+                mean += in[i];
+            }
+            mean /= n_e;
+            for (int i = 0; i < n_e; i++) {
+                var += (in[i] - mean) * (in[i] - mean);
+            }
+            const double sd = sqrt(var / n_e + 1e-5);
+            for (int i = 0; i < n_e; i++) {
+                out[i] = (float) ((in[i] - mean) / sd * ln_w[(size_t) i] + ln_b[(size_t) i]);
+            }
+        };
+        auto linear = [&](const std::vector<float> & w, const std::vector<float> & b,
+                          const std::vector<float> & in, int n_rows, std::vector<float> & out) {
+            out.resize((size_t) n_rows * n_e);
+            for (int r = 0; r < n_rows; r++) {
+                for (int o = 0; o < n_e; o++) {
+                    double acc = b[(size_t) o];
+                    const float * wr = w.data() + (size_t) o * n_e;
+                    const float * ir = in.data() + (size_t) r * n_e;
+                    for (int i = 0; i < n_e; i++) {
+                        acc += (double) wr[i] * ir[i];
+                    }
+                    out[(size_t) r * n_e + o] = (float) acc;
+                }
+            }
+        };
+        auto attn_block = [&](const std::vector<float> & x1, int n1,
+                              const std::vector<float> & x2, int n2, std::vector<float> & out) {
+            std::vector<float> nx1((size_t) n1 * n_e), nx2((size_t) n2 * n_e);
+            for (int r = 0; r < n1; r++) {
+                layer_norm(x1.data() + (size_t) r * n_e, nx1.data() + (size_t) r * n_e);
+            }
+            for (int r = 0; r < n2; r++) {
+                layer_norm(x2.data() + (size_t) r * n_e, nx2.data() + (size_t) r * n_e);
+            }
+            std::vector<float> q, k, v;
+            linear(wq, bq, nx1, n1, q);
+            linear(wk, bk, nx2, n2, k);
+            linear(wv, bv, nx2, n2, v);
+
+            std::vector<float> ctxt((size_t) n1 * n_e);
+            std::vector<double> sc((size_t) n2);
+            for (int hd = 0; hd < n_head; hd++) {
+                const int off = hd * d_head;
+                for (int t = 0; t < n1; t++) {
+                    double mx = -1e30;
+                    for (int s = 0; s < n2; s++) {
+                        double acc = 0.0;
+                        for (int i = 0; i < d_head; i++) {
+                            acc += (double) q[(size_t) t * n_e + off + i] * k[(size_t) s * n_e + off + i];
+                        }
+                        sc[(size_t) s] = acc / sqrt((double) d_head);
+                        mx = std::max(mx, sc[(size_t) s]);
+                    }
+                    double sum = 0.0;
+                    for (int s = 0; s < n2; s++) {
+                        sc[(size_t) s] = exp(sc[(size_t) s] - mx);
+                        sum += sc[(size_t) s];
+                    }
+                    for (int i = 0; i < d_head; i++) {
+                        double acc = 0.0;
+                        for (int s = 0; s < n2; s++) {
+                            acc += sc[(size_t) s] * v[(size_t) s * n_e + off + i];
+                        }
+                        ctxt[(size_t) t * n_e + off + i] = (float) (acc / sum);
+                    }
+                }
+            }
+            linear(wo, bo, ctxt, n1, out);
+            for (size_t i = 0; i < out.size(); i++) {
+                out[i] += x1[i];
+            }
+        };
+
+        const int n_q = (int) (query.size() / n_e);
+        const std::vector<float> & x2 = pse;
+        std::vector<float> pre, p32;
+        attn_block(query, n_q, x2, (int) (pse.size() / (size_t) n_e), pre);
+        attn_block(pre, n_q, pre, n_q, p32);
+
+        rows.insert(rows.end(), p32.begin(), p32.end());
+        const float exaggeration = 0.5f; // reference default
+        for (int i = 0; i < n_e; i++) {
+            rows.push_back(emo[(size_t) i] * exaggeration);
+        }
+    }
+
+    out_rows = std::move(rows);
+    return 0;
+}
+
+// encodes the five DSP entries of a chatterbox reference chunk (fbank, s3
+// log-mels at the flow and t3 caps, s3gen prompt features, voice encoder
+// mel): the primary output is the talker conditioning rows in the backbone
+// embedding space, the flow decoder reference (codes, mel-rate features,
+// speaker vector) lands in the typed side outputs
+static int32_t cbx_ref_encode(mtmd_context * ctx, const mtmd_audio_tokens * audio_tokens, std::vector<float> & out_embd) {
+    if (!ctx->ctx_gen_a) {
+        LOG_ERR("%s: reference encoding needs the audio generation context\n", __func__);
+        return 1;
+    }
+    const auto & entries = audio_tokens->batch_f32.entries;
+    GGML_ASSERT(entries.size() == 5);
+
+    std::vector<float> xvec;
+    if (!cbx_ref_xvec(ctx, entries[0], xvec)) {
+        return 1;
+    }
+
+    std::vector<int32_t> flow_codes, t3_codes;
+    std::vector<float> t3_rows;
+    if (cbx_ref_tokenize(ctx, entries[1], flow_codes, nullptr) != 0 ||
+        cbx_ref_tokenize(ctx, entries[2], t3_codes, &t3_rows) != 0) {
+        return 1;
+    }
+
+    const size_t n_feat = (size_t) entries[3].nx() * 80;
+    if ((size_t) entries[3].nx() != 2 * flow_codes.size()) {
+        LOG_ERR("%s: reference mel length %d does not match %zu codes\n",
+                __func__, entries[3].nx(), flow_codes.size());
+        return 1;
+    }
+
+    // conditioning rows: [spkr] then, multilingual, the perceiver block over
+    // the reference rows, or, turbo, the raw reference rows
+    const bool mtl = clip_cbx_read_tensor(ctx->ctx_a, "a.cenc.perceiver.pre_attention_query", nullptr, 0) > 0;
+    std::vector<float> pse;
+    if (mtl) {
+        pse = std::move(t3_rows);
+    }
+    std::vector<float> rows;
+    if (cbx_ref_cond(ctx, entries[4], pse, rows) != 0) {
+        return 1;
+    }
+    if (!mtl) {
+        rows.insert(rows.end(), t3_rows.begin(), t3_rows.end());
+    }
+    GGML_ASSERT(rows.size() == (size_t) audio_tokens->n_tokens * (size_t) ctx->n_embd_out());
+
+    ctx->gen_ref_tokens = std::move(flow_codes);
+    ctx->gen_ref_feat.assign(entries[3].get_ro_buf().begin(),
+                             entries[3].get_ro_buf().begin() + n_feat);
+    ctx->gen_ref_spk = std::move(xvec);
+
+    out_embd = std::move(rows);
+    return 0;
+}
+
 
 mtmd_gen_inp mtmd_gen_inp_default(const mtmd_context * ctx) {
     mtmd_gen_inp inp{};
@@ -2124,6 +2566,11 @@ struct mtmd_gen_state {
     std::vector<float>   out_embd;  // next-step hidden state fed back to backbone (GEN_CODE)
     std::vector<float>   out_audio; // decoded PCM samples for the current frame (GEN_WAV)
 
+    // voice cloning reference for GEN_WAV, empty selects the default voice of the model (chatterbox)
+    std::vector<int32_t> ref_tokens;
+    std::vector<float>   ref_feat;
+    std::vector<float>   ref_spk;
+
     ~mtmd_gen_state() {
         clip_gen_state_free(clip_state);
     }
@@ -2155,6 +2602,21 @@ void mtmd_gen_state_free(mtmd_gen_state * state) {
 
 void mtmd_gen_state_reset(mtmd_gen_state * state) {
     clip_gen_state_reset(state->clip_state);
+}
+
+int32_t mtmd_gen_state_set_ref(mtmd_context * ctx, mtmd_gen_state * state) {
+    if (!state || state->ctx_clip != ctx->ctx_gen_a) {
+        LOG_ERR("%s: invalid gen state\n", __func__);
+        return 1;
+    }
+    if (ctx->gen_ref_tokens.empty()) {
+        LOG_ERR("%s: the last encode produced no reference data\n", __func__);
+        return 1;
+    }
+    state->ref_tokens = ctx->gen_ref_tokens;
+    state->ref_feat   = ctx->gen_ref_feat;
+    state->ref_spk    = ctx->gen_ref_spk;
+    return 0;
 }
 
 static int32_t mtmd_gen_audio_process_impl(mtmd_context * ctx, mtmd_gen_state * state, const mtmd_gen_inp * inp, mtmd_gen_out * out) {
@@ -2219,6 +2681,45 @@ static int32_t mtmd_gen_audio_process_impl(mtmd_context * ctx, mtmd_gen_state * 
     }
 
     // MTMD_GEN_PROCESS_TYPE_GEN_WAV
+    if (clip_get_projector_type(ctx_clip) == PROJECTOR_TYPE_CHATTERBOX) {
+        if (!inp->codes || inp->n_codes == 0) {
+            LOG_ERR("%s: codes required for gen_wav\n", __func__);
+            return 1;
+        }
+        std::vector<int32_t> in_codes(inp->codes, inp->codes + inp->n_codes);
+
+        // an empty reference selects the precomputed default voice of the model
+        const bool has_ref = !state->ref_tokens.empty();
+
+        // the batch entry is unused, present to satisfy the encode interface
+        clip_image_f32 dummy;
+        dummy.set_size({1, 1}, false, true);
+        dummy.cpy_buf(std::vector<float>(1, 0.0f));
+        clip_image_f32_batch batch;
+        batch.is_audio = true;
+        batch.entries.push_back(std::move(dummy));
+
+        clip_encode_params params;
+        params.imgs        = &batch;
+        params.n_threads   = ctx->n_threads;
+        params.gen_process = CLIP_GEN_PROCESS_TTS;
+        params.codes       = &in_codes;
+        params.out_audio   = &state->out_audio;
+        params.ref_tokens  = has_ref ? &state->ref_tokens : nullptr;
+        params.ref_feat    = has_ref ? &state->ref_feat   : nullptr;
+        params.ref_spk     = has_ref ? &state->ref_spk    : nullptr;
+        params.gen_state   = state->clip_state;
+
+        if (!clip_encode(ctx_clip, &params)) {
+            LOG_ERR("%s: clip_encode failed (gen_wav)\n", __func__);
+            return 1;
+        }
+
+        out->audio     = state->out_audio.data();
+        out->n_samples = state->out_audio.size();
+        return 0;
+    }
+
     const bool has_codes = inp->codes && inp->n_codes > 0;
     const bool has_feats = inp->feats && inp->n_feats > 0;
     if (has_codes == has_feats) {
