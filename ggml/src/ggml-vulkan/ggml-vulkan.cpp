@@ -16492,8 +16492,9 @@ static bool ggml_backend_vk_comm_ensure(ggml_backend_vk_comm_context * comm, siz
     const size_t n   = comm->backends.size();
     const size_t cap  = GGML_PAD(nbytes, comm->align);
     for (size_t i = 0; i < n; i++) {
-        comm->host_ptr[i] = std::aligned_alloc(comm->align, 2 * cap);
-        if (!comm->host_ptr[i]) {
+        // posix_memalign rather than std::aligned_alloc, which Android bionic only has from API 28 on
+        if (posix_memalign(&comm->host_ptr[i], comm->align, 2 * cap) != 0) {
+            comm->host_ptr[i] = nullptr;
             return fail();
         }
         for (size_t j = 0; j < n; j++) {
