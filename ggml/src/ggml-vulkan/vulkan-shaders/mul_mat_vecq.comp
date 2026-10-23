@@ -97,27 +97,37 @@ void compute_outputs(const uint32_t first_row, const uint32_t num_rows) {
 
     const uint b_qs_idx = tid % (32 / K_PER_ITER);
     uint col = tid * K_PER_ITER;
-    while (num_iters >= 4) {
-        // Manually partially unroll the loop
-        [[unroll]] for (uint k = 0; k < 4; ++k) {
+    if (NUM_ROWS >= 8) {
+        // At 8 rows the 8x8 inlined bodies already saturate the scheduler; the extra
+        // 4x unroll only grows live ranges and spills.
+        while (num_iters > 0) {
             iter(temp, first_row, num_rows, col, b_qs_idx);
             col += col_stride;
+            num_iters--;
+        }
+    } else {
+        while (num_iters >= 4) {
+            // Manually partially unroll the loop
+            [[unroll]] for (uint k = 0; k < 4; ++k) {
+                iter(temp, first_row, num_rows, col, b_qs_idx);
+                col += col_stride;
+            }
+
+            num_iters -= 4;
         }
 
-        num_iters -= 4;
-    }
+        if (num_iters >= 2) {
+            // Manually partially unroll the loop
+            iter(temp, first_row, num_rows, col, b_qs_idx);
+            col += col_stride;
+            iter(temp, first_row, num_rows, col, b_qs_idx);
+            col += col_stride;
+            num_iters -= 2;
+        }
 
-    if (num_iters >= 2) {
-        // Manually partially unroll the loop
-        iter(temp, first_row, num_rows, col, b_qs_idx);
-        col += col_stride;
-        iter(temp, first_row, num_rows, col, b_qs_idx);
-        col += col_stride;
-        num_iters -= 2;
-    }
-
-    if (num_iters > 0) {
-        iter(temp, first_row, num_rows, col, b_qs_idx);
+        if (num_iters > 0) {
+            iter(temp, first_row, num_rows, col, b_qs_idx);
+        }
     }
 
     reduce_result(temp, d_offset, first_row, num_rows, tid);
