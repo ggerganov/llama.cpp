@@ -8,9 +8,29 @@
  */
 
 // API utilities
-export { getAuthHeaders, getJsonHeaders, sanitizeHeaders } from './api-headers';
+export {
+	apiChatUrl,
+	apiModelsUrl,
+	apiUrl,
+	getBackend,
+	getBackendBaseUrl,
+	type BackendsSnapshot
+} from './api-base';
+export {
+	getAuthHeaders,
+	getAuthHeadersForBackend,
+	getJsonHeaders,
+	sanitizeHeaders
+} from './api-headers';
 export { ApiError, apiDelete, apiFetch, apiFetchWithParams, apiPost } from './api-fetch';
 export { validateApiKey } from './api-key-validation';
+export {
+	backendChatUrl,
+	backendFaviconUrl,
+	backendModelsUrl,
+	createLocalBackend,
+	parseBackendsSettings
+} from './backend';
 
 // Attachment utilities
 export { getAttachmentDisplayItems, isMcpPrompt, isMcpResource } from './attachment-display';
@@ -52,6 +72,7 @@ export {
 	filterModelOptions,
 	groupFavoriteOptions,
 	groupModelOptions,
+	groupProviderOptions,
 	windowLocalGroups,
 	type GroupedModelOptions,
 	type ModelItem,
@@ -118,6 +139,10 @@ export {
 // Model name utilities
 export { isValidModelName, normalizeModelName, orgOf, repoOf } from './model-names';
 
+// Backend-qualified model option ids
+export { backendIdFromModelId, qualifyModelId, rawModelId } from './model-option-id';
+export { groupModelFamilies, modelFamilyKey, type ModelFamilyGroup } from './model-families';
+
 // Sidecar token utilities
 export {
 	directoryOf,
@@ -155,6 +180,8 @@ export { extractSseDataPayload, parseSseJsonStream, splitSseRecords } from './ss
 
 // Stream session identity (conversation-id based)
 export { streamIdentity } from './stream-identity';
+
+export { buildTimingsFromUsage, usageTokenCounts } from './timings';
 
 // MCP utilities
 export {
@@ -379,7 +406,6 @@ export { remToPx } from './css';
 
 // Audio format helper (used by agentic store and chat service)
 export { getAudioInputFormat } from './audio-format';
-export { groupModelFamilies, modelFamilyKey, type ModelFamilyGroup } from './model-families';
 
 // Svelte actions
 export { nearViewport } from './near-viewport';

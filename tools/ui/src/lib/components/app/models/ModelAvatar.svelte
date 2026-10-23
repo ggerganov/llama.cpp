@@ -1,10 +1,18 @@
 <script lang="ts">
 	import ModelOrgAvatar from './ModelOrgAvatar.svelte';
-	import { HF_BASE_MODEL_TAG_REGEX, SETTINGS_KEYS } from '$lib/constants';
+	import { BackendIcon } from '$lib/components/app/backends';
+	import { Logo } from '$lib/components/app/misc';
+	import {
+		HF_BASE_MODEL_TAG_REGEX,
+		LOCAL_BACKEND_ID,
+		MODEL_ICON,
+		SETTINGS_KEYS
+	} from '$lib/constants';
 	import { HuggingFaceService, ModelsService } from '$lib/services';
 	import { settingsStore } from '$lib/stores';
 	import type { ModelOption } from '$lib/types/models';
 	import { nearViewport, orgOf } from '$lib/utils';
+	import { getBackend } from '$lib/utils/api-base';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -15,8 +23,7 @@
 		quantPositionClass?: string;
 		quantSize?: string;
 		/** Show the base model's org as the main image, the repo (quantizer) org as the
-		 *  corner badge. The base org costs one Hub request per repo. Left unset with
-		 *  {@link showRepoOrgAvatar}, the row follows the family grouping. */
+		 *  corner badge. The base org costs one Hub request per repo. */
 		showBaseModelAvatar?: boolean;
 		/** Show the repo's own org as the main image, skipping the base model.
 		 *  Used inside a heading that already carries the base org. */
@@ -40,6 +47,11 @@
 
 	let parsedId = $derived(ModelsService.parseModelId(option.model));
 	let orgName = $derived(parsedId.orgName);
+	// a model whose id carries no `org/name` is not a Hugging Face repo, so the
+	// provider's own mark identifies it better than an initial
+	let useProviderIcon = $derived(!orgName);
+	// the bundled server has no favicon to resolve, its mark is the llama.cpp logo
+	let isLocal = $derived(getBackend(option.backendId)?.id === LOCAL_BACKEND_ID);
 	// A row names neither flag: a family heading already carries the base org, so a
 	// grouped list shows the repo's own org, and an ungrouped one the base org with the
 	// quantizer badge. A caller that names one of the two keeps control of the avatar.
@@ -87,7 +99,19 @@
 	});
 </script>
 
-{#if orgName && hubEnabled}
+{#if useProviderIcon}
+	<span class={['inline-flex shrink-0', className]}>
+		<BackendIcon backend={getBackend(option.backendId)} class={size}>
+			{#snippet fallback()}
+				{#if isLocal}
+					<Logo class={size} style="--size: 100%" />
+				{:else}
+					<MODEL_ICON class={size} />
+				{/if}
+			{/snippet}
+		</BackendIcon>
+	</span>
+{:else if orgName && hubEnabled}
 	<span
 		use:nearViewport={() => (isNearViewport = true)}
 		class={['inline-flex shrink-0', className]}

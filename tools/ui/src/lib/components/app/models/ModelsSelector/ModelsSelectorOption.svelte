@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ModelLoadHighlight from '../ModelLoadHighlight.svelte';
+	import { modelDraftBadges } from '../ModelsManager/utils';
 	import {
 		ModelAvatar,
 		ModelCapabilities,
@@ -79,7 +80,7 @@
 	<ModelId
 		aliases={option.aliases}
 		class="min-w-0 flex-1"
-		draftSidecars={option.draftSidecars}
+		draftSidecars={modelDraftBadges(option)}
 		hideCapabilities
 		hideModalities
 		{hideOrgName}

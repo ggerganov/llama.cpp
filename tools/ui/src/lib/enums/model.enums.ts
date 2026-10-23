@@ -65,8 +65,9 @@ export enum ModelDownloadConfirmAction {
 	DELETE = 'delete'
 }
 
-/** What a table row group folds: the quants of one repo, or its variants. */
+/** What a table row group folds: the providers of one repo, its quants, or its variants. */
 export enum ModelGroupKind {
+	PROVIDERS = 'providers',
 	QUANTS = 'quants',
 	VARIANTS = 'variants'
 }
@@ -91,4 +92,10 @@ export enum ModelRowDownloadState {
 export enum ModelsTableSortKey {
 	CONTEXT = 'context',
 	NAME = 'name'
+}
+
+/** Kinds a provider block carries on top of the manager's own sections. */
+export enum ModelsTableProviderKind {
+	COMPAT = 'compat',
+	PROVIDER = 'provider'
 }
