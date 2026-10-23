@@ -1788,16 +1788,9 @@ static int execute_op_unary(struct htp_ops_context * octx) {
 
     const size_t src0_elem_size = is_f16 ? sizeof(_Float16) : sizeof(float);
     const size_t dst_elem_size  = (dst->type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
-    const bool flatten = kparams->flatten;
-    const uint32_t src0_ne0 = flatten ? src0->size / src0_elem_size : src0->ne[0];
-    const uint32_t dst_ne0  = flatten ? dst->size  / dst_elem_size  : dst->ne[0];
-    const uint64_t src0_nrows64 = (uint64_t) src0->ne[1] * src0->ne[2] * src0->ne[3];
-    if (!flatten && src0_nrows64 > UINT32_MAX) {
-        return HTP_STATUS_INVAL_PARAMS;
-    }
-    const uint32_t src0_nrows = flatten ? 1 : (uint32_t) src0_nrows64;
-    const size_t src0_data_row_size = src0_ne0 * src0_elem_size;
-    const size_t dst_data_row_size  = dst_ne0  * dst_elem_size;
+    const uint32_t src0_nrows = src0->ne[1] * src0->ne[2] * src0->ne[3];
+    const size_t src0_data_row_size = src0->ne[0] * src0_elem_size;
+    const size_t dst_data_row_size  = dst->ne[0]  * dst_elem_size;
 
     uint32_t row_start = 0;
     uint32_t nrows     = src0_nrows;
@@ -1873,7 +1866,7 @@ static int execute_op_unary(struct htp_ops_context * octx) {
         .dst_vtcm_half_size    = L.dst_bytes >> 1,
 
         .block                 = kparams->block,
-        .nc                    = src0_ne0,
+        .nc                    = src0->ne[0],
         .col_tile              = col_tile,
         .broadcast_weight      = broadcast_weight,
 

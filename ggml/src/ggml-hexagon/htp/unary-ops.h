@@ -12,7 +12,6 @@ struct htp_unary_kernel_params {
     uint32_t  col_tile;
     uint32_t  block;
     uint32_t  broadcast_weight;
-    uint32_t  flatten;
 
     uint32_t  src0_contig;
     uint32_t  src1_contig;
@@ -90,7 +89,8 @@ static inline bool htp_unary_is_elementwise(uint32_t opcode) {
                 ((size_t) (src_nb)[1] == (size_t) (src_ne)[0] * (size_t) (src_nb)[0] &&      \
                  (size_t) (dst_nb)[1] == (size_t) (dst_ne)[0] * (size_t) (dst_nb)[0] &&      \
                  ((src_ne)[0] == 1 ||                                                        \
-                  (uint64_t) (src_ne)[0] * (uint64_t) (src_ne)[1] * (elem_size) <= 128)))) { \
+                  ((size_t) (src_ne)[0] * (elem_size) < 128 &&                               \
+                   (size_t) (src_ne)[0] * (src_ne)[1] * (elem_size) <= 2048))))) {           \
             (src_ne)[0] *= (src_ne)[1];                                                      \
             (src_ne)[1]  = (src_ne)[2];                                                      \
             (src_ne)[2]  = (src_ne)[3];                                                      \

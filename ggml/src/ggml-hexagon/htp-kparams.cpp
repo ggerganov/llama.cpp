@@ -1449,22 +1449,10 @@ static bool htp_kparams_solve_unary_impl(
     }
 
     const size_t elem_size = ggml_type_size(src0->type);
-    const bool flatten = op == HTP_OP_UNARY_SGN && htp_session_mdev_count(sess) <= 1 && src0->ne[0] < 32 && ggml_is_contiguous(src0) && ggml_nelements(src0) <= UINT32_MAX;
 
     struct ggml_tensor src0_c = *src0;
     struct ggml_tensor dst_c  = *dst;
-    if (flatten) {
-        src0_c.ne[0] = (int64_t) ggml_nelements(src0);
-        src0_c.ne[1] = 1;
-        src0_c.ne[2] = 1;
-        src0_c.ne[3] = 1;
-        dst_c.ne[0] = (int64_t) ggml_nelements(dst);
-        dst_c.ne[1] = 1;
-        dst_c.ne[2] = 1;
-        dst_c.ne[3] = 1;
-        src0 = &src0_c;
-        dst  = &dst_c;
-    } else if (htp_unary_is_elementwise(op)) {
+    if (htp_unary_is_elementwise(op)) {
         HTP_UNARY_COLLAPSE_DIMS(src0_c.ne, src0_c.nb, dst_c.ne, dst_c.nb, elem_size);
         src0 = &src0_c;
         dst  = &dst_c;
@@ -1479,7 +1467,6 @@ static bool htp_kparams_solve_unary_impl(
     const size_t   vtcm_size           = htp_session_vtcm_size(sess);
 
     kparams->n_threads = n_threads;
-    kparams->flatten   = flatten;
 
     const bool broadcast_weight = (op == HTP_OP_RMS_NORM_MUL) && (src1->ne[1] * src1->ne[2] * src1->ne[3] == 1);
     kparams->broadcast_weight   = broadcast_weight;
