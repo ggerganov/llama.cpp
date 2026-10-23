@@ -614,7 +614,7 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
         const llama_split_mode split_mode = LLAMA_SPLIT_MODE_LAYER, bool encode = false,
         const llama_model_tensor_buft_override * tensor_buft_overrides = nullptr, const size_t moe_cache_size = 0,
         llama_model_set_tensor_data_t tensor_filler = set_tensor_data, const bool fp8_scales = false,
-        const uint32_t n_ubatch = 64) {
+        const uint32_t n_ubatch = 64, const bool use_extra_bufts = true) {
     GGML_ASSERT((gguf_ctx == nullptr) != (file == nullptr));
     llama_model_params model_params = llama_model_default_params();
     model_params.progress_callback = silent_model_load_progress;
@@ -623,6 +623,7 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
     model_params.devices = devs_copy.data();
     model_params.split_mode = split_mode;
     model_params.tensor_buft_overrides = tensor_buft_overrides;
+    model_params.use_extra_bufts = use_extra_bufts;
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 0;
@@ -760,6 +761,7 @@ static void test_fp8_requantize(const size_t seed, const float stdev) {
         auto model_params = llama_model_default_params();
         model_params.devices = devices;
         model_params.tensor_buft_overrides = overrides;
+        model_params.use_extra_bufts = false;
         model_params.progress_callback = silent_model_load_progress;
         llama_model_ptr model(split ? llama_model_load_from_file(path.c_str(), model_params) :
                                      llama_model_load_from_file_ptr(file.get(), model_params));
