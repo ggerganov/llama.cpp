@@ -2275,6 +2275,9 @@ void llama_kv_cache::state_write_data(llama_io_write_i & io, const cell_ranges_t
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
 
         auto * k = layer.k_stream[cr.strm];
+        if (!k || !k->data) {
+            continue;
+        }
 
         // Write key type
         const int32_t k_type_i = (int32_t) k->type;
@@ -2299,7 +2302,7 @@ void llama_kv_cache::state_write_data(llama_io_write_i & io, const cell_ranges_t
             const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
 
             auto * v = layer.v_stream[cr.strm];
-            if (!v) {
+            if (!v || !v->data) {
                 continue;
             }
 
@@ -2328,7 +2331,7 @@ void llama_kv_cache::state_write_data(llama_io_write_i & io, const cell_ranges_t
             const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
 
             auto * v = layer.v_stream[cr.strm];
-            if (!v) {
+            if (!v || !v->data) {
                 continue;
             }
 
@@ -2598,6 +2601,9 @@ bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t strm, uint32
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa(il);
 
         auto * k = layer.k_stream[strm];
+        if (!k || !k->data) {
+            continue;
+        }
 
         // Read type of key
         int32_t k_type_i_ref;
@@ -2629,7 +2635,7 @@ bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t strm, uint32
             const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
 
             auto * v = layer.v_stream[strm];
-            if (!v) {
+            if (!v || !v->data) {
                 continue;
             }
 
@@ -2663,7 +2669,7 @@ bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t strm, uint32
             const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
 
             auto * v = layer.v_stream[strm];
-            if (!v) {
+            if (!v || !v->data) {
                 continue;
             }
 
