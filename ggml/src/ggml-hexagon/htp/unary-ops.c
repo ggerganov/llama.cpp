@@ -1989,10 +1989,14 @@ int op_unary(struct htp_ops_context * octx) {
                 return execute_op_unary(octx);
             }
 
+            const struct htp_unary_kernel_params * kparams = (const struct htp_unary_kernel_params *) octx->kernel_params;
+
             struct htp_tensor src0_c = *octx->src[0];
             struct htp_tensor dst_c  = *octx->dst;
-            const size_t elem_size = (src0_c.type == HTP_TYPE_F16) ? sizeof(_Float16) : sizeof(float);
-            HTP_UNARY_COLLAPSE_DIMS(src0_c.ne, src0_c.nb, dst_c.ne, dst_c.nb, elem_size);
+            memcpy(src0_c.ne, kparams->ne,      sizeof(src0_c.ne));
+            memcpy(dst_c.ne,  kparams->ne,      sizeof(dst_c.ne));
+            memcpy(src0_c.nb, kparams->src0_nb, sizeof(src0_c.nb));
+            memcpy(dst_c.nb,  kparams->dst_nb,  sizeof(dst_c.nb));
 
             const struct htp_tensor * orig_src0 = octx->src[0];
             const struct htp_tensor * orig_dst  = octx->dst;
