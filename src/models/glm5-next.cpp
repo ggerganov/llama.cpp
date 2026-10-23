@@ -970,14 +970,12 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
         const int64_t n_top_pool = std::min<int64_t>(n_pool, hparams.indexer_top_k / kpool);
         ggml_tensor * top_k = ggml_top_k(ctx0, score, n_top_pool); // [n_top_pool, n_tokens], UNORDERED
 
-        // keep the cells of the live picked pools and the tail, -inf elsewhere
-        // all retained cells are in the token's sequence, so the kq_mask is not needed
+        // keep the kq_mask cells of the live picked pools and the tail, -inf elsewhere
         if (cparams.fused_top_k_mask) {
             ggml_tensor * tail = hparams.indexer_kpool_select_tail ? inp_kpool->tail_idxs : nullptr;
             GGML_ASSERT(kpool*n_top_pool + (tail ? tail->ne[0] : 0) == (int64_t) inp_kpool->n_sel);
 
-            ggml_tensor * keep = ggml_fill(ctx0, ggml_new_tensor_1d(ctx0, kq_mask->type, n_kv), 0.0f);
-            ggml_tensor * sel  = build_fused_top_k_mask(kq_mask, top_k, score, inp_kpool->pool_idxs, tail, il, keep);
+            ggml_tensor * sel = build_fused_top_k_mask(kq_mask, top_k, score, inp_kpool->pool_idxs, tail, il);
             cb(sel, "indexer_sel", il);
 
             return sel;
@@ -1033,7 +1031,7 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
     const size_t row = sel->nb[2];
     sel = ggml_view_4d(ctx0, sel, n_kv, kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3],
             row, row*kq_mask->ne[1], row*kq_mask->ne[1]*kq_mask->ne[2], 0);
-    sel = ggml_cont(ctx0, sel);
+    sel = ggml_add(ctx0, sel, kq_mask);
     cb(sel, "indexer_sel", il);
 
     return sel;
@@ -1088,8 +1086,7 @@ ggml_tensor * llama_model_glm5_next::graph::build_dsa_layer(
     ggml_build_forward_expand(gf, kv_cmpr);
     ggml_build_forward_expand(gf, mctx_mla->cpy_k(ctx0, kv_cmpr, inp_attn->get_k_idxs(), il));
 
-    // the selection replaces the kq_mask and has the same shape
-    // it is not allocated without dense layers reading the kq_mask
+    // The scatter selection already includes the causal mask, and it comes in the mask layout
     GGML_ASSERT(ggml_are_same_shape(sel, kq_mask));
     cb(sel, "kq_mask_dsa", il);
 
