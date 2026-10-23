@@ -1261,6 +1261,26 @@ struct ggml_tensor_extra_gpu {
 #define USE_CUDA_GRAPH
 #endif
 
+struct ggml_cuda_graph_key {
+    const void * first_node_ptr;
+    std::array<int64_t, GGML_MAX_DIMS> ne;
+
+    bool operator==(const ggml_cuda_graph_key & other) const {
+        return first_node_ptr == other.first_node_ptr && ne == other.ne;
+    }
+};
+
+// Boost-style hash combine with a 64-bit golden-ratio constant.
+struct ggml_cuda_graph_key_hash {
+    size_t operator()(const ggml_cuda_graph_key & key) const {
+        size_t hash = (size_t) (uintptr_t) key.first_node_ptr;
+        for (int64_t extent : key.ne) {
+            hash ^= (size_t) extent + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
+        }
+        return hash;
+    }
+};
+
 struct ggml_cuda_graph {
 #ifdef USE_CUDA_GRAPH
     ~ggml_cuda_graph() {
@@ -1275,7 +1295,6 @@ struct ggml_cuda_graph {
     cudaGraphExec_t instance = nullptr;
     size_t num_nodes = 0;
     std::vector<cudaGraphNode_t> nodes;
-    bool disable_due_to_gpu_arch = false;
     bool warmup_complete = false;
     uint64_t uid = 0;
     int64_t last_used_time = 0;
@@ -1289,7 +1308,7 @@ struct ggml_cuda_graph {
 
     bool is_enabled() const {
         static const bool disable_cuda_graphs_due_to_env = (getenv("GGML_CUDA_DISABLE_GRAPHS") != nullptr);
-        return !(disable_due_to_gpu_arch || disable_cuda_graphs_due_to_env);
+        return !disable_cuda_graphs_due_to_env;
     }
 #endif
 };
@@ -1458,13 +1477,19 @@ struct ggml_backend_cuda_context {
     int curr_stream_no = 0;
 
 #ifdef USE_CUDA_GRAPH
-    // Map from first_node_ptr to cuda_graph - allows multiple graphs per context
-    // when the computation is split across CPU/GPU (e.g., with --n-cpu-moe)
-    std::unordered_map<const void *, std::unique_ptr<ggml_cuda_graph>> cuda_graphs;
-
+    // Keep CUDA graph state separate for each first-node pointer and shape. The pointer separates subgraphs (e.g. --n-cpu-moe).
+    // The first-node shape keeps separate graph state when dimensions change.
+    std::unordered_map<ggml_cuda_graph_key, std::unique_ptr<ggml_cuda_graph>, ggml_cuda_graph_key_hash> cuda_graphs;
+    std::unordered_map<ggml_cuda_graph_key, uint16_t, ggml_cuda_graph_key_hash> graph_frequency;
+    std::vector<ggml_cuda_graph_key> graph_history;
+    size_t graph_history_pos = 0;
     int64_t last_graph_eviction_sweep = 0;
 
-    ggml_cuda_graph * cuda_graph(const void * first_node_ptr) {
+    // Decide whether to admit the graph into cuda_graph map and cache. Eviction
+    // is based on frequency of requests. Automatic eviction happens if graph is unused at least 10s.
+    bool cuda_graph_admit(const ggml_cuda_graph_key & key) {
+        constexpr size_t window = 512;
+        constexpr size_t capacity = 8;
         const int64_t time_now = ggml_time_us();
 
         // sweep every 5s, evicting cuda graphs unused for >=10s
@@ -1472,16 +1497,54 @@ struct ggml_backend_cuda_context {
             last_graph_eviction_sweep = time_now;
             for (auto it = cuda_graphs.begin(); it != cuda_graphs.end(); ) {
                 if (time_now - it->second->last_used_time >= 10'000'000) {
+                    if (graph_frequency.at(it->first) == 0) {
+                        graph_frequency.erase(it->first);
+                    }
                     it = cuda_graphs.erase(it);
                 } else {
                     ++it;
                 }
             }
         }
+        ++graph_frequency[key];
+        if (graph_history.size() == window) {
+            const ggml_cuda_graph_key & old = graph_history[graph_history_pos];
+            if (--graph_frequency[old] == 0 && cuda_graphs.find(old) == cuda_graphs.end()) {
+                graph_frequency.erase(old);
+            }
+            graph_history[graph_history_pos] = key;
+        } else {
+            graph_history.push_back(key);
+        }
+        graph_history_pos = (graph_history_pos + 1) % window;
 
-        auto it = cuda_graphs.find(first_node_ptr);
+        if (cuda_graphs.find(key) != cuda_graphs.end()) {
+            return true;
+        }
+
+        // Cache is at capacity, evict based on frequency of use.
+        if (cuda_graphs.size() == capacity) {
+            const auto victim = std::min_element(cuda_graphs.begin(), cuda_graphs.end(), [&](const auto & a, const auto & b) {
+                const auto fa = graph_frequency.at(a.first);
+                const auto fb = graph_frequency.at(b.first);
+                return fa == fb ? a.second->last_used_time < b.second->last_used_time : fa < fb;
+            });
+            if (graph_frequency.at(key) <= graph_frequency.at(victim->first)) {
+                return false;
+            }
+            if (graph_frequency.at(victim->first) == 0) {
+                graph_frequency.erase(victim->first);
+            }
+            cuda_graphs.erase(victim);
+        }
+        return true;
+    }
+
+    ggml_cuda_graph * cuda_graph(const ggml_cuda_graph_key & graph_key) {
+        const int64_t time_now = ggml_time_us();
+        auto it = cuda_graphs.find(graph_key);
         if (it == cuda_graphs.end()) {
-            it = cuda_graphs.emplace(first_node_ptr, std::make_unique<ggml_cuda_graph>()).first;
+            it = cuda_graphs.emplace(graph_key, std::make_unique<ggml_cuda_graph>()).first;
         }
         it->second->last_used_time = time_now;
         return it->second.get();
