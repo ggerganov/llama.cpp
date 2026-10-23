@@ -1230,6 +1230,10 @@ struct ggml_backend_vk_context {
     bool          comm_active = false;
     vk::Semaphore comm_prog_sem = VK_NULL_HANDLE;
     uint64_t      comm_prog_val = 0;
+    // the open compute context holds a folded all-reduce and must signal comm_prog_val when it is submitted
+    bool          comm_open_signal = false;
+    // all contexts of the tensor-parallel group, used to submit their deferred work together on synchronize
+    std::vector<ggml_backend_vk_context *> comm_peers;
 
     size_t semaphore_idx, event_idx;
     ggml_vk_garbage_collector gc;

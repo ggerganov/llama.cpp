@@ -12155,6 +12155,47 @@ void ggml_vk_leaky_relu(ggml_backend_vk_context * ctx, vk_context& subctx, const
     ggml_vk_op_f32(ctx, subctx, src0, nullptr, nullptr, nullptr, dst, GGML_OP_LEAKY_RELU, std::move(p));
 }
 
+// Attach the progress value reserved by a folded all-reduce to the (already ended) context that carries it.
+static void ggml_vk_comm_signal_reserved(ggml_backend_vk_context * ctx, vk_context & subctx) {
+    if (ctx->comm_open_signal && !subctx->seqs.empty()) {
+        subctx->seqs.back().back().signal_semaphores.push_back({ ctx->comm_prog_sem, ctx->comm_prog_val });
+        ctx->comm_open_signal = false;
+    }
+}
+
+// While a tensor-parallel communicator is active, graph_compute leaves its last command buffer open so the
+// all-reduce can append to it. Submit it, signalling a progress value that covers everything recorded so far.
+static uint64_t ggml_vk_comm_flush(ggml_backend_vk_context * ctx) {
+    if (ctx->compute_ctx.expired()) {
+        return ctx->comm_prog_val;
+    }
+    vk_context subctx = ctx->compute_ctx.lock();
+    ggml_vk_ctx_end(subctx);
+    if (!subctx->seqs.empty()) {
+        if (!ctx->comm_open_signal) {
+            ctx->comm_prog_val++;
+            ctx->comm_open_signal = true;
+        }
+        ggml_vk_comm_signal_reserved(ctx, subctx);
+    }
+    for (auto & cpy : subctx->in_memcpys) {
+        memcpy(cpy.dst, cpy.src, cpy.n);
+    }
+    for (auto & mset : subctx->memsets) {
+        memset(mset.dst, mset.val, mset.n);
+    }
+    ggml_vk_submit(subctx, {});
+    ctx->submit_pending = true;
+    for (auto & cpy : subctx->out_memcpys) {
+        memcpy(cpy.dst, cpy.src, cpy.n);
+    }
+    subctx->in_memcpys.clear();
+    subctx->out_memcpys.clear();
+    subctx->memsets.clear();
+    ctx->compute_ctx.reset();
+    return ctx->comm_prog_val;
+}
+
 void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx, vk_context subctx) {
 #if defined(GGML_VULKAN_RUN_TESTS)
     const std::vector<size_t> vals {
@@ -12248,6 +12289,7 @@ void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx, vk_context subct
     if (subctx) {
         // Submit and wait for any pending work before reallocating the buffers
         ggml_vk_ctx_end(subctx);
+        ggml_vk_comm_signal_reserved(ctx, subctx);
         ggml_vk_submit(subctx, {});
         ctx->submit_pending = true;
         ggml_vk_synchronize(ctx);
@@ -12853,13 +12895,10 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
     last_node = true;
 #endif
 
-    if (submit || last_node) {
+    // with an active communicator the last command buffer stays open for the all-reduce (or synchronize) to submit
+    if ((submit || last_node) && !(last_node && ctx->comm_active)) {
         ggml_vk_ctx_end(compute_ctx);
-
-        if (last_node && ctx->comm_active && !compute_ctx->seqs.empty()) {
-            ctx->comm_prog_val++;
-            compute_ctx->seqs.back().back().signal_semaphores.push_back({ ctx->comm_prog_sem, ctx->comm_prog_val });
-        }
+        ggml_vk_comm_signal_reserved(ctx, compute_ctx);
 
         // TODO probably it'd be better to pass a exit_node flag to ggml_vk_compute_forward
         if (last_node) {
@@ -13478,6 +13517,16 @@ static bool ggml_backend_vk_cpy_tensor_async(ggml_backend_t backend_src, ggml_ba
 void ggml_vk_synchronize(ggml_backend_vk_context * ctx) {
     VK_LOG_DEBUG("ggml_vk_synchronize()");
 
+    // The group's devices are synchronized one after another; submit their deferred work first so that the
+    // tail of the graph runs on all of them in parallel instead of in turn.
+    if (ctx->comm_active) {
+        for (ggml_backend_vk_context * peer : ctx->comm_peers) {
+            if (peer != ctx) {
+                ggml_vk_comm_flush(peer);
+            }
+        }
+    }
+
     bool do_transfer = !ctx->compute_ctx.expired();
 
     if (ggml_vk_submit_transfer_ctx(ctx)) {
@@ -13493,6 +13542,7 @@ void ggml_vk_synchronize(ggml_backend_vk_context * ctx) {
         }
 
         ggml_vk_ctx_end(compute_ctx);
+        ggml_vk_comm_signal_reserved(ctx, compute_ctx);
 
         for (auto& cpy : compute_ctx->in_memcpys) {
             memcpy(cpy.dst, cpy.src, cpy.n);
@@ -14355,6 +14405,9 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         std::fill(ctx->query_nodes.begin(), ctx->query_nodes.end(), nullptr);
         std::fill(ctx->query_node_idx.begin(), ctx->query_node_idx.end(), 0);
 
+        if (ctx->comm_active) {
+            ggml_vk_comm_flush(ctx);
+        }
         GGML_ASSERT(ctx->compute_ctx.expired());
         compute_ctx = ggml_vk_get_compute_ctx(ctx);
         ctx->query_idx = 0;
@@ -14374,7 +14427,8 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         ggml_vk_sync_buffers(ctx, compute_ctx);
     }
 
-    if (ctx->comm_active) {
+    // A folded all-reduce already sits in the open context, otherwise wait for the last one to finish.
+    if (ctx->comm_active && !ctx->comm_open_signal) {
         compute_ctx = ggml_vk_get_compute_ctx(ctx);
         compute_ctx->s->wait_semaphores.push_back({ ctx->comm_prog_sem, ctx->comm_prog_val });
     }
@@ -14398,6 +14452,11 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         }
     }
     uint64_t flops_per_submit = std::min(flops_cap, ctx->last_total_flops / 40u);
+    // With tensor parallelism the graph arrives as one small subgraph per all-reduce, so splitting each of them
+    // multiplies the number of submits per token and makes decode CPU-bound. Submit each subgraph once instead.
+    if (ctx->comm_active) {
+        flops_per_submit = 0;
+    }
 
     auto const submit_after = [&](int start, int end) {
         if (ctx->device->serialize_submissions) {
@@ -14442,6 +14501,7 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
             if (flops_per_submit != 0 && submitted_nodes > 0 && batch_flops + node_flops >= flops_per_submit) {
                 vk_context flush_ctx = ggml_vk_get_compute_ctx(ctx);
                 ggml_vk_ctx_end(flush_ctx);
+                ggml_vk_comm_signal_reserved(ctx, flush_ctx);
                 flush_ctx->exit_tensor_idx = -1;
                 ctx->compute_ctx.reset();
                 ggml_vk_compute_forward(ctx, cgraph, cgraph->nodes[submit_node_idx], submit_node_idx, false);
@@ -14758,6 +14818,7 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         GGML_ASSERT(!ctx->compute_ctx.expired());
         compute_ctx = ctx->compute_ctx.lock();
         ggml_vk_ctx_end(compute_ctx);
+        ggml_vk_comm_signal_reserved(ctx, compute_ctx);
 
         ggml_vk_submit(compute_ctx, ctx->device->fence);
         VK_CHECK(ctx->device->device.waitForFences({ ctx->device->fence }, true, UINT64_MAX), "GGML_VULKAN_PERF waitForFences", ctx->device);
@@ -15222,6 +15283,7 @@ static void ggml_backend_vk_event_record(ggml_backend_t backend, ggml_backend_ev
     vkev->tl_semaphore.value++;
     compute_ctx->s->signal_semaphores.push_back(vkev->tl_semaphore);
     ggml_vk_ctx_end(compute_ctx);
+    ggml_vk_comm_signal_reserved(ctx, compute_ctx);
 
     ggml_vk_submit(compute_ctx, {});
     ctx->submit_pending = true;
@@ -16313,6 +16375,7 @@ struct ggml_backend_vk_comm_context {
     std::vector<uint64_t>                   xfer_pool_max_val;
     uint64_t                                ring_round = 0;
     bool                                    ring_last  = false;
+    uint64_t                                fold_round = 0;
     std::vector<ggml_tensor*>               ring_view;
     std::vector<ggml_backend_buffer_t>      up16_buffer;
     std::vector<ggml_backend_buffer_t>      dn16_buffer;
@@ -16479,6 +16542,7 @@ static void * ggml_backend_vk_comm_init(ggml_backend_t * backends, size_t n_back
                 comm->vkctx[i]->comm_prog_sem = comm->prog[i];
                 comm->vkctx[i]->comm_prog_val = 0;
                 comm->vkctx[i]->comm_active   = true;
+                comm->vkctx[i]->comm_peers    = comm->vkctx;
             }
         }
     }
@@ -16504,12 +16568,36 @@ static void ggml_vk_comm_aligned_free(void * ptr) {
 #endif
 }
 
+// Wait on the host until all communication work has finished: the compute queue up to the last reduce and the
+// transfer queue up to the last ring copy, whose completion would otherwise only be implied through a peer.
+static void ggml_vk_comm_wait_idle(ggml_backend_vk_comm_context * comm) {
+    if (!comm->fast) {
+        return;
+    }
+    const size_t n = comm->backends.size();
+    // a folded reduce is only submitted together with the next compute, so submit it first
+    for (size_t i = 0; i < n; i++) {
+        ggml_vk_comm_flush(comm->vkctx[i]);
+    }
+    for (size_t i = 0; i < n; i++) {
+        const vk::Semaphore sems[2] = { comm->prog[i], comm->up[i] };
+        const uint64_t      vals[2] = { comm->last_reduce[i], comm->up_val[i] };
+        vk::SemaphoreWaitInfo wi;
+        wi.semaphoreCount = 2;
+        wi.pSemaphores    = sems;
+        wi.pValues        = vals;
+        (void) comm->device[i]->device.waitSemaphores(wi, UINT64_MAX);
+    }
+}
+
 static void ggml_backend_vk_comm_free(void * comm_ctx) {
     ggml_backend_vk_comm_context * comm = static_cast<ggml_backend_vk_comm_context *>(comm_ctx);
+    ggml_vk_comm_wait_idle(comm);
     for (size_t i = 0; i < comm->vkctx.size(); i++) {
         ggml_backend_synchronize(comm->backends[i]);
         comm->vkctx[i]->comm_active   = false;
         comm->vkctx[i]->comm_prog_sem = VK_NULL_HANDLE;
+        comm->vkctx[i]->comm_peers.clear();
     }
     for (size_t i = 0; i < comm->prog.size(); i++) {
         if (comm->prog[i]) {
@@ -16570,17 +16658,10 @@ static bool ggml_backend_vk_comm_ensure(ggml_backend_vk_comm_context * comm, siz
     const size_t newcap = (nbytes + comm->align - 1) & ~(comm->align - 1);
 
     // Buffers may still be referenced by the previous (async) all-reduce; wait for it before freeing them.
-    for (size_t i = 0; i < n; i++) {
-        if (comm->last_reduce[i] == 0) {
-            continue;
-        }
-        vk::SemaphoreWaitInfo wi;
-        wi.semaphoreCount = 1;
-        wi.pSemaphores    = &comm->prog[i];
-        wi.pValues        = &comm->last_reduce[i];
-        (void) comm->device[i]->device.waitSemaphores(wi, UINT64_MAX);
-    }
+    ggml_vk_comm_wait_idle(comm);
 
+    // the old buffers are gone from here on; a failed reallocation must not leave them looking usable
+    comm->cap = 0;
     for (size_t k = 0; k < n; k++) {
         for (size_t i = 0; i < n; i++) {
             ggml_backend_buffer_free(comm->host_buf[k][i]);
@@ -16664,8 +16745,10 @@ static bool ggml_backend_vk_comm_allreduce_ring(ggml_backend_vk_comm_context * c
 
     std::vector<uint64_t> compute_val(n), reduce_val(n), prev_reduce(n), up_base(n);
     for (size_t i = 0; i < n; i++) {
+        compute_val[i] = ggml_vk_comm_flush(comm->vkctx[i]);
+    }
+    for (size_t i = 0; i < n; i++) {
         prev_reduce[i] = comm->last_reduce[i];
-        compute_val[i] = comm->vkctx[i]->comm_prog_val;
         reduce_val[i]  = compute_val[i] + nprog;
         comm->vkctx[i]->comm_prog_val = reduce_val[i];
         comm->last_reduce[i]          = reduce_val[i];
@@ -16780,8 +16863,18 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
     ggml_backend_vk_comm_context * comm = static_cast<ggml_backend_vk_comm_context *>(comm_ctx);
     const size_t n = comm->backends.size();
 
-    if (!comm->fast || tensors[0]->type != GGML_TYPE_F32) {
+    if (!comm->fast) {
         return false;
+    }
+    // the generic fallback expects the compute to have been submitted
+    auto fallback = [&]() {
+        for (size_t i = 0; i < n; i++) {
+            ggml_vk_comm_flush(comm->vkctx[i]);
+        }
+        return false;
+    };
+    if (tensors[0]->type != GGML_TYPE_F32) {
+        return fallback();
     }
     const int64_t ne = ggml_nelements(tensors[0]);
     if (ne == 0) {
@@ -16790,11 +16883,11 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
     const size_t nbytes = ggml_nbytes(tensors[0]);
     for (size_t i = 0; i < n; i++) {
         if (tensors[i]->type != GGML_TYPE_F32 || ggml_nelements(tensors[i]) != ne || !ggml_is_contiguous(tensors[i])) {
-            return false;
+            return fallback();
         }
     }
     if (!ggml_backend_vk_comm_ensure(comm, nbytes)) {
-        return false;
+        return fallback();
     }
 
     constexpr size_t ring_min = 2u << 20;
@@ -16809,31 +16902,35 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
     }
 
     comm->ring_last = false;
-    std::vector<uint64_t> compute_val(n), gather_val(n), reduce_val(n), prev_reduce(n);
+
+    // Small all-reduce folded into the compute submissions: the gather is appended to the command buffer that
+    // graph_compute left open, and the reduce opens the command buffer the next subgraph is recorded into, so
+    // each subgraph costs a single submit per device. The two host slots alternate between rounds, which makes
+    // a WAR wait unnecessary: before a device overwrites a slot two rounds later, its reduce of the round in
+    // between has waited for every peer's gather, which those peers submit after reducing from that slot.
+    // The slots sit at cap and 3*cap, the ring only uses [0, cap) and [2*cap, 3*cap).
+    const size_t slot_off = (size_t) (2 * (comm->fold_round++ & 1) + 1) * comm->cap;
+
+    std::vector<uint64_t> gather_val(n);
     for (size_t i = 0; i < n; i++) {
-        prev_reduce[i] = comm->last_reduce[i];
-        compute_val[i] = comm->vkctx[i]->comm_prog_val;
-        gather_val[i]  = compute_val[i] + 1;
-        reduce_val[i]  = compute_val[i] + 2;
-        comm->vkctx[i]->comm_prog_val = reduce_val[i];
-        comm->last_reduce[i]          = reduce_val[i];
-        uint64_t done = comm->device[i]->device.getSemaphoreCounterValue(comm->prog[i]);
-        if (done < comm->pool_max_val[i] && comm->cmd_pool[i].buffers_in_use() >= 256) {
-            vk::SemaphoreWaitInfo wi;
-            wi.semaphoreCount = 1;
-            wi.pSemaphores    = &comm->prog[i];
-            wi.pValues        = &comm->pool_max_val[i];
-            (void) comm->device[i]->device.waitSemaphores(wi, UINT64_MAX);
-            done = comm->pool_max_val[i];
+        ggml_backend_vk_context *        ctx = comm->vkctx[i];
+        ggml_backend_vk_buffer_context * hbc = (ggml_backend_vk_buffer_context *) comm->host_buf[i][i]->context;
+        vk_context c = ggml_vk_get_compute_ctx(ctx);
+
+        ggml_vk_sync_buffers(ctx, c);
+        if (tensors[i]->flags & GGML_TENSOR_FLAG_COMPUTE) {
+            ggml_backend_vk_buffer_context * bc = (ggml_backend_vk_buffer_context *) tensors[i]->buffer->context;
+            ggml_vk_buffer_copy_async(c, hbc->dev_buffer, slot_off, bc->dev_buffer,
+                                      vk_tensor_offset(tensors[i]) + tensors[i]->view_offs, nbytes);
+        } else {
+            ggml_vk_buffer_memset_async(c, hbc->dev_buffer, slot_off, 0, nbytes);
         }
-        if (done >= comm->pool_max_val[i]) {
-            ggml_vk_command_pool_cleanup(comm->device[i], comm->cmd_pool[i]);
-        }
-        comm->pool_max_val[i] = reduce_val[i];
+        gather_val[i] = ggml_vk_comm_flush(ctx);
     }
 
     for (size_t i = 0; i < n; i++) {
-        ggml_tensor * tmp = comm->tmp_tensor[i];
+        ggml_backend_vk_context * ctx = comm->vkctx[i];
+        ggml_tensor *             tmp = comm->tmp_tensor[i];
         for (int d = 0; d < GGML_MAX_DIMS; d++) {
             tmp->ne[d] = tensors[i]->ne[d];
         }
@@ -16841,46 +16938,26 @@ static bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor *
         for (int d = 1; d < GGML_MAX_DIMS; d++) {
             tmp->nb[d] = tmp->nb[d - 1] * tmp->ne[d - 1];
         }
-        ggml_backend_vk_buffer_context * hbc = (ggml_backend_vk_buffer_context *) comm->host_buf[i][i]->context;
-        vk_context c = ggml_vk_create_temporary_context(comm->cmd_pool[i]);
-
-        ggml_vk_ctx_begin(comm->device[i], c);
-        c->s->wait_semaphores.push_back({ comm->prog[i], compute_val[i] });
-        for (size_t k = 0; k < n; k++) {
-            if (k != i) {
-                c->s->wait_semaphores.push_back({ comm->peer_prog[i][k], prev_reduce[k] });
-            }
-        }
-        if (tensors[i]->flags & GGML_TENSOR_FLAG_COMPUTE) {
-            ggml_backend_vk_buffer_context * bc = (ggml_backend_vk_buffer_context *) tensors[i]->buffer->context;
-            ggml_vk_buffer_copy_async(c, hbc->dev_buffer, 0, bc->dev_buffer,
-                                      vk_tensor_offset(tensors[i]) + tensors[i]->view_offs, nbytes);
-        } else {
-            ggml_vk_buffer_memset_async(c, hbc->dev_buffer, 0, 0, nbytes);
-        }
-        ggml_vk_ctx_end(c);
-        c->seqs.back().back().signal_semaphores.push_back({ comm->prog[i], gather_val[i] });
-
-        ggml_vk_ctx_begin(comm->device[i], c);
-        c->s->wait_semaphores.push_back({ comm->prog[i], gather_val[i] });
+        vk_context c = ggml_vk_get_compute_ctx(ctx);
         for (size_t k = 0; k < n; k++) {
             if (k != i) {
                 c->s->wait_semaphores.push_back({ comm->peer_prog[i][k], gather_val[k] });
             }
         }
+        // the gather read of tensors[i] was submitted before this command buffer
+        ggml_vk_sync_buffers(ctx, c);
         for (size_t k = 0; k < n; k++) {
             if (k == i) {
                 continue;
             }
             tmp->buffer = comm->host_buf[k][i];
-            tmp->data   = ggml_backend_buffer_get_base(tmp->buffer);
-            ggml_vk_add(comm->vkctx[i], c, tensors[i], tmp, tensors[i]);
-            ggml_vk_sync_buffers(comm->vkctx[i], c);
+            tmp->data   = (char *) ggml_backend_buffer_get_base(tmp->buffer) + slot_off;
+            ggml_vk_add(ctx, c, tensors[i], tmp, tensors[i]);
+            ggml_vk_sync_buffers(ctx, c);
         }
-        ggml_vk_ctx_end(c);
-        c->seqs.back().back().signal_semaphores.push_back({ comm->prog[i], reduce_val[i] });
-
-        ggml_vk_submit(c, {});
+        ctx->comm_prog_val++;
+        ctx->comm_open_signal = true;
+        comm->last_reduce[i]  = ctx->comm_prog_val;
     }
     return true;
 }
