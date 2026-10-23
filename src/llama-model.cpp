@@ -2333,7 +2333,9 @@ const ggml_tensor * llama_model::get_tensor(const char * name) const {
 }
 
 const ggml_tensor * llama_model::get_ovf(const ggml_tensor * w) const {
-    if (w == nullptr) {
+    // debug: GGML_BF16X_NO_OVF=1 runs a lossless GGUF without the corrections
+    static const bool ovf_disabled = getenv("GGML_BF16X_NO_OVF") != nullptr;
+    if (ovf_disabled || w == nullptr) {
         return nullptr;
     }
     auto it = ovf_by_weight.find(w);

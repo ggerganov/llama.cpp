@@ -5,10 +5,15 @@ __global__ void sparse_mm_kernel(
         const float   * __restrict__ b,
         float         * __restrict__ out,
         const int64_t n_rows, const int64_t n_embd, const int64_t n_tokens) {
-    // one warp per (row, token): lanes split the row's entries, then reduce
+    // 8 lanes per row, 4 rows per warp: rows are short (~2% of n_embd), so
+    // packing several rows into a warp keeps the lanes busy
     const int lane = (int) (threadIdx.x & 31);
-    const int64_t warp = ((int64_t) blockIdx.x * blockDim.x + threadIdx.x) >> 5;
-    if (warp >= n_rows * n_tokens) {
+    const int sub  = lane & 7;         // lane within a row group
+    const int grp  = (lane >> 3) & 3;  // 4 rows per warp
+
+    const int64_t warp     = ((int64_t) blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    const int64_t n_groups = (n_rows + 3) >> 2;
+    if (warp >= n_groups * n_tokens) {
         return;
     }
 
@@ -16,24 +21,26 @@ __global__ void sparse_mm_kernel(
     const uint32_t * row_off = hdr + 2;
     const uint16_t * ents    = (const uint16_t *) (row_off + n_rows + 1);
 
-    const int64_t row = warp % n_rows;
-    const int64_t t   = warp / n_rows;
-
-    const uint32_t e0 = row_off[row];
-    const uint32_t e1 = row_off[row + 1];
+    const int64_t row = ((warp % n_groups) << 2) + grp;
+    const int64_t t   = warp / n_groups;
 
     float sum = 0.0f;
-    const float * bt = b + n_embd * t;
-    for (uint32_t e = e0 + lane; e < e1; e += 32) {
-        const uint32_t col = ents[2*e + 0];
-        const float    v   = __uint_as_float((uint32_t) ents[2*e + 1] << 16);
-        sum += v * bt[col];
+    if (row < n_rows) {
+        const uint32_t e0 = row_off[row];
+        const uint32_t e1 = row_off[row + 1];
+        const float * bt = b + n_embd * t;
+        for (uint32_t e = e0 + sub; e < e1; e += 8) {
+            const uint32_t col = ents[2*e + 0];
+            const float    v   = __uint_as_float((uint32_t) ents[2*e + 1] << 16);
+            sum += v * bt[col];
+        }
     }
-#pragma unroll
-    for (int off = 16; off > 0; off >>= 1) {
-        sum += __shfl_down_sync(0xffffffffu, sum, off);
-    }
-    if (lane == 0) {
+
+    sum += __shfl_down_sync(0xffffffffu, sum, 4, 8);
+    sum += __shfl_down_sync(0xffffffffu, sum, 2, 8);
+    sum += __shfl_down_sync(0xffffffffu, sum, 1, 8);
+
+    if (sub == 0 && row < n_rows) {
         out[row + n_rows * t] = sum;
     }
 }
@@ -75,9 +82,10 @@ void ggml_cuda_op_sparse_mm(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
     const int64_t n_embd   = b->ne[0];
     const int64_t n_tokens = b->ne[1] * b->ne[2] * b->ne[3];
 
-    const int64_t total = n_rows * n_tokens;
+    const int64_t n_groups = (n_rows + 3) / 4;
+    const int64_t total    = n_groups * n_tokens * 32;
     const int block = 256;
-    const int grid  = (int) ((total * 32 + block - 1) / block);
+    const int grid  = (int) ((total + block - 1) / block);
 
     sparse_mm_kernel<<<grid, block, 0, ctx.stream()>>>(
         (const uint8_t *) as->data, (const float *) b->data, (float *) dst->data,
