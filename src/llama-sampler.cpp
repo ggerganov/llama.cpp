@@ -18,6 +18,7 @@
 #include <numeric>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <stdexcept>
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
@@ -3656,6 +3657,9 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_vocab * vocab, 
 
     if (dry_enabled && seq_breakers != nullptr && num_breakers > 0) {
         // Process sequence breakers
+        // each distinct breaker costs a full vocabulary scan: drop duplicates and stop at the cap
+        std::unordered_set<std::string> seen_breakers;
+
         for (size_t i = 0; i < num_breakers; ++i) {
             if (seq_breakers[i] == nullptr || std::strlen(seq_breakers[i]) == 0) {
                 LLAMA_LOG_WARN("skipping null or empty DRY sequence breaker at index %zu\n", i);
@@ -3663,14 +3667,19 @@ struct llama_sampler * llama_sampler_init_dry(const struct llama_vocab * vocab, 
             }
 
             std::string sequence_break(seq_breakers[i]);
-            if (sequence_break.empty()) {
-                LLAMA_LOG_WARN("skipping empty DRY sequence breaker\n");
-                continue;
-            }
-
             if (sequence_break.size() > MAX_CHAR_LEN) {
                 LLAMA_LOG_WARN("truncating DRY sequence breaker to %d characters\n", MAX_CHAR_LEN);
                 sequence_break.resize(MAX_CHAR_LEN);
+            }
+
+            if (!seen_breakers.insert(sequence_break).second) {
+                continue;
+            }
+
+            if (seen_breakers.size() > LLAMA_DRY_MAX_SEQ_BREAKERS) {
+                LLAMA_LOG_WARN("ignoring DRY sequence breaker at index %zu: more than %d distinct breakers\n",
+                        i, LLAMA_DRY_MAX_SEQ_BREAKERS);
+                break;
             }
 
             get_overlapping_token_sequences(*vocab, sequence_break, processed_breakers, MAX_SEQ_LEN);
