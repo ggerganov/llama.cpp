@@ -369,6 +369,7 @@ target_link_libraries(${TEST_TARGET} PRIVATE llama)
 if (NOT LLAMA_USE_SYSTEM_GGML)
     # Needs non-public ggml-impl.h
     llama_build_and_test(test-gguf.cpp LINK ggml)
+    llama_build_and_test(test-ue4m3.cpp LINK ggml)
 
     # Needs non-public ggml{,-backend}-impl.h
     llama_build_and_test(test-alloc.cpp LINK ggml)
