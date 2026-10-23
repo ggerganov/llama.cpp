@@ -886,8 +886,8 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_sel(
     ggml_tensor * top_k = ggml_top_k(ctx0, score, n_top_pool); // [n_top_pool, n_tokens], unordered
     cb(top_k, "indexer_top_k", il);
 
-    // keep the cells of the live picked pools and the tail, -inf elsewhere: a token sees only the pools that end
-    // at or before it and the tail up to itself, all of its own sequence, so the selection needs no kq_mask
+    // keep the cells of the live picked pools and the tail, -inf elsewhere
+    // all retained cells are in the token's sequence, so the kq_mask is not needed
     if (cparams.fused_top_k_mask) {
         GGML_ASSERT(kpool*n_top_pool + inp_kpool->tail_idxs->ne[0] == inp_kpool->n_sel);
 
@@ -993,7 +993,8 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
     ggml_tensor * k = mctx_cur->get_k(ctx0, il);
     ggml_tensor * v = mctx_cur->get_v(ctx0, il);
 
-    // QSA reads only the layout of kq_mask, so a graph without dense attention leaves the mask unallocated
+    // the selection replaces the kq_mask and has its row layout, one chunk of rows at a time
+    // it is not allocated without dense layers reading the kq_mask
     const ggml_tensor * kq_mask = inp->get_kq_mask();
     GGML_ASSERT(kq_mask->ne[2] == 1);
 
@@ -1002,7 +1003,7 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
     for (size_t ic = 0; ic < inp_kpool->chunks.size(); ++ic) {
         const auto & chunk = inp_kpool->chunks[ic];
 
-        // the selection is causal on its own, it takes the kq_mask layout, see build_inp_kpool for the streams
+        // see build_inp_kpool for the streams
         ggml_tensor * sel = build_qsa_sel(inp_kpool, q_idx, k_pool, ic, il);
         sel = ggml_reshape_4d(ctx0, sel, kq_mask->ne[0], chunk.n/kq_mask->ne[3], 1, kq_mask->ne[3]);
         cb(sel, "kq_mask_qsa", il);
