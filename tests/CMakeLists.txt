@@ -268,9 +268,10 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
         LABEL main
         ARGS -m "${MODEL_DIR}/qwen4exp-moe.gguf"
     )
+    # no GGML_SCHED_DEBUG_REALLOC: a small ubatch has one chunk, so its graph is planned again by design
     set_tests_properties(test-llama-context-qsa-chunk PROPERTIES
         FIXTURES_REQUIRED generate-models
-        ENVIRONMENT "GGML_SCHED_DEBUG_REALLOC=1;LLAMA_QSA_CHUNK=24"
+        ENVIRONMENT "LLAMA_QSA_CHUNK=24"
     )
 
     llama_build(test-fusion.cpp)
