@@ -1651,6 +1651,25 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp
         return nullptr;
     }
 
+    // check ne[] against the overflow condition asserted in ggml_new_tensor_impl
+    {
+        uint64_t nelems = tensor->ne[0];
+        for (uint32_t i = 0; i < GGML_MAX_DIMS; i++) {
+            if (tensor->ne[i] == 0 || (i > 0 && (uint64_t)INT64_MAX / tensor->ne[i] <= nelems)) {
+                LOG_ERROR("[%s] tensor '%s' has invalid ne[%u]=%" PRIu64 "\n", __func__, tensor->name, i, tensor->ne[i]);
+                return nullptr;
+            }
+            if (i > 0) {
+                nelems *= tensor->ne[i];
+            }
+        }
+    }
+    for (uint32_t i = 0; i < GGML_MAX_DIMS; i++) {
+        if ((uint64_t)tensor->nb[i] > UINT64_MAX / 2) {
+            LOG_ERROR("[%s] tensor '%s' has invalid nb[%u]=%" PRIu64 "\n", __func__, tensor->name, i, tensor->nb[i]);
+            return nullptr;
+        }
+    }
     ggml_tensor * result = ggml_new_tensor_4d(ctx, (ggml_type) tensor->type,
         tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
 
@@ -2065,9 +2084,17 @@ ggml_tensor * rpc_server::create_node(uint64_t id,
     if (result == nullptr) {
         return nullptr;
     }
-    if (result->buffer == nullptr && result->data != nullptr) {
-        LOG_ERROR("[%s] invalid data ptr\n", __func__);
-        return nullptr;
+    if (result->buffer == nullptr) {
+        // no valid backing memory: GGML_OP_NONE is the exception, it is used for
+        // tensors whose buffer lives on a different server and is never dereferenced
+        if (result->data != nullptr) {
+            LOG_ERROR("[%s] invalid data ptr\n", __func__);
+            return nullptr;
+        }
+        if (tensor->view_src == 0 && tensor->op != GGML_OP_NONE) {
+            LOG_ERROR("[%s] tensor '%s' has no buffer and no view_src\n", __func__, tensor->name);
+            return nullptr;
+        }
     }
     tensor_map[id] = result;
     for (int i = 0; i < GGML_MAX_SRC; i++) {
@@ -2100,6 +2127,29 @@ ggml_tensor * rpc_server::create_node(uint64_t id,
         }
     }
     result->view_offs = tensor->view_offs;
+    // the view must lie entirely within view_src's buffer
+    if (result->view_src != nullptr) {
+        uint64_t view_size = (uint64_t) ggml_nbytes(result);
+        uint64_t src_base  = 0;
+        uint64_t src_size  = 0;
+        if (result->view_src->buffer == nullptr) {
+            LOG_ERROR("[%s] view_src (id=%" PRIu64 ") of node id %" PRIu64 " has no buffer\n",
+                           __func__, tensor->view_src, id);
+            return nullptr;
+        }
+        src_base = (uint64_t) ggml_backend_buffer_get_base(result->view_src->buffer);
+        src_size = (uint64_t) ggml_backend_buffer_get_size(result->view_src->buffer);
+        uint64_t src_data = (uint64_t) result->view_src->data;
+        if (tensor->view_offs > src_size ||
+            view_size > src_size ||
+            src_data + tensor->view_offs < src_base ||
+            src_data + tensor->view_offs + view_size > src_base + src_size) {
+            LOG_ERROR("[%s] view (id=%" PRIu64 ") out of bounds: view_offs=%" PRIu64 ", view_size=%" PRIu64
+                           ", src data=0x%" PRIx64 ", src buffer [0x%" PRIx64 ", 0x%" PRIx64 ")\n",
+                           __func__, id, tensor->view_offs, view_size, src_data, src_base, src_base + src_size);
+            return nullptr;
+        }
+    }
     return result;
 }
 
