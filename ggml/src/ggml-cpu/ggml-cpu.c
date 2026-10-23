@@ -1743,6 +1743,86 @@ static void ggml_compute_forward_mul_mat_id(
 
 /////////////////////////////////
 
+// BF16X lossless overflow side tables: sparse corrections.
+// Blob layout (I8 tensor):
+//   u32 n_rows, u32 n_entries, u32 row_off[n_rows+1], { u16 col, u16 bf16_bits }[n_entries]
+
+static inline float ggml_bf16_bits_to_f32(uint16_t bits) {
+    union { uint32_t u; float f; } cv;
+    cv.u = (uint32_t) bits << 16;
+    return cv.f;
+}
+
+static void ggml_compute_forward_sparse_mm(struct ggml_compute_params * params, struct ggml_tensor * dst) {
+    const struct ggml_tensor * as = dst->src[0];
+    const struct ggml_tensor * b  = dst->src[1];
+
+    const int64_t n_rows   = dst->ne[0];
+    const int64_t n_embd   = b->ne[0];
+    const int64_t n_tokens = b->ne[1] * b->ne[2] * b->ne[3];
+
+    const uint8_t  * blob    = (const uint8_t *) as->data;
+    const uint32_t * hdr     = (const uint32_t *) blob;
+    const uint32_t * row_off = hdr + 2;
+    const uint16_t * ents    = (const uint16_t *) (row_off + n_rows + 1);
+
+    const float * b_data = (const float *) b->data;
+    float       * out    = (float *) dst->data;
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int64_t total = n_rows * n_tokens;
+    for (int64_t idx = ith; idx < total; idx += nth) {
+        const int64_t row = idx % n_rows;
+        const int64_t t   = idx / n_rows;
+
+        float acc = 0.0f;
+        for (uint32_t e = row_off[row]; e < row_off[row + 1]; ++e) {
+            const uint32_t col = ents[2*e + 0];
+            const float    v   = ggml_bf16_bits_to_f32(ents[2*e + 1]);
+            acc += v * b_data[col + n_embd * t];
+        }
+        out[row + n_rows * t] = acc;
+    }
+}
+
+static void ggml_compute_forward_sparse_rows(struct ggml_compute_params * params, struct ggml_tensor * dst) {
+    const struct ggml_tensor * as  = dst->src[0];
+    const struct ggml_tensor * ids = dst->src[1];
+
+    const int64_t n_embd = dst->ne[0];
+    const int64_t n_tok  = ids->ne[0];
+
+    const uint8_t  * blob    = (const uint8_t *) as->data;
+    const uint32_t * hdr     = (const uint32_t *) blob;
+    const int64_t    n_rows  = (int64_t) hdr[0];
+    const uint32_t * row_off = hdr + 2;
+    const uint16_t * ents    = (const uint16_t *) (row_off + n_rows + 1);
+
+    const int32_t * ids_data = (const int32_t *) ids->data;
+    float         * out      = (float *) dst->data;
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    for (int64_t t = ith; t < n_tok; t += nth) {
+        float * row_out = out + n_embd * t;
+        for (int64_t c = 0; c < n_embd; ++c) {
+            row_out[c] = 0.0f;
+        }
+        const int32_t row = ids_data[t];
+        if (row < 0 || row >= n_rows) {
+            continue;
+        }
+        for (uint32_t e = row_off[row]; e < row_off[row + 1]; ++e) {
+            row_out[ents[2*e + 0]] += ggml_bf16_bits_to_f32(ents[2*e + 1]);
+        }
+    }
+}
+
+///////////////////////////////
+
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
@@ -1875,6 +1955,14 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         case GGML_OP_MUL_MAT_ID:
             {
                 ggml_compute_forward_mul_mat_id(params, tensor);
+            } break;
+        case GGML_OP_SPARSE_MM:
+            {
+                ggml_compute_forward_sparse_mm(params, tensor);
+            } break;
+        case GGML_OP_SPARSE_ROWS:
+            {
+                ggml_compute_forward_sparse_rows(params, tensor);
             } break;
         case GGML_OP_OUT_PROD:
             {
@@ -2294,6 +2382,8 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_DSV4_HC_COMB:
         case GGML_OP_DSV4_HC_PRE:
         case GGML_OP_DSV4_HC_POST:
+        case GGML_OP_SPARSE_MM:
+        case GGML_OP_SPARSE_ROWS:
             {
                 n_tasks = n_threads;
             } break;

@@ -603,6 +603,9 @@ extern "C" {
 
         GGML_OP_GLU,
 
+        GGML_OP_SPARSE_MM,
+        GGML_OP_SPARSE_ROWS,
+
         GGML_OP_COUNT,
     };
 
@@ -1504,6 +1507,26 @@ extern "C" {
             struct ggml_tensor  * as,
             struct ggml_tensor  * b,
             struct ggml_tensor  * ids);
+
+    // sparse correction matmul used by the lossless BF16X overflow tables:
+    //   a: I8 blob, u32 n_rows, u32 n_entries, u32 row_off[n_rows+1],
+    //      { u16 col, u16 bf16_bits }[n_entries]
+    //   b: (n_embd, n_tokens, ...)
+    //   acc: optional (n_rows, n_tokens, ...) f32 tensor added to the result
+    // result: (n_rows, b->ne[1], b->ne[2], b->ne[3]), f32
+    GGML_API struct ggml_tensor * ggml_sparse_mm(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int64_t               n_rows);
+
+    // sparse row gather correction (same blob layout):
+    //   result[col, t] = sum of bf16 values of entries with row == ids[t]
+    GGML_API struct ggml_tensor * ggml_sparse_rows(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * ids,
+            int64_t               n_embd);
 
     // A: m columns, n rows,
     // B: p columns, n rows,

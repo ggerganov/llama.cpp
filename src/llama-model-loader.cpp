@@ -933,6 +933,13 @@ static bool weight_buft_supported(const llama_hparams & hparams, ggml_tensor * w
         return true;
     }
 
+    // sparse correction side tables (I8, lossless BF16X) are plain byte blobs
+    // consumed by GGML_OP_SPARSE_MM/SPARSE_ROWS; only the plain device buffer
+    // type can host them (CPU repack/extra buffers accept quantization ops only)
+    if (w->type == GGML_TYPE_I8) {
+        return buft == ggml_backend_dev_buffer_type(dev);
+    }
+
     ggml_init_params params = {
         /*.mem_size   =*/ ggml_tensor_overhead()*8,
         /*.mem_buffer =*/ NULL,

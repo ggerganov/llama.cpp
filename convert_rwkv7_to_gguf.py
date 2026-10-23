@@ -346,7 +346,7 @@ def main():
         nel = 1
         for d in ne:
             nel *= d
-        size = (nel // 32) * 46 if gtype == GGML_BF16X else nel * 4
+        size = (nel // 32) * 46 if gtype == GGML_BF16X else (nel if gtype == GGML_I8 else nel * 4)
         offsets.append(off)
         off += size
         off += (-off) % GGUF_ALIGN

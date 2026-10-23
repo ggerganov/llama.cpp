@@ -783,6 +783,11 @@ struct llama_model {
 
     const struct ggml_tensor * get_tensor(const char * name) const;
 
+    // optional lossless BF16X overflow table for a weight tensor
+    const struct ggml_tensor * get_ovf(const struct ggml_tensor * w) const;
+
+    std::unordered_map<const struct ggml_tensor *, struct ggml_tensor *> ovf_by_weight;
+
     float get_rope_freq_base (const llama_cparams & cparams, int il) const;
     float get_rope_freq_scale(const llama_cparams & cparams, int il) const;
 

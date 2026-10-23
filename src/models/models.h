@@ -127,6 +127,9 @@ struct llm_build_rwkv7_base : public llm_graph_context {
 
     virtual ~llm_build_rwkv7_base() = default;
 
+    // mat_mul + optional lossless BF16X overflow correction (out += W_ovf @ cur)
+    ggml_tensor * mm_ovf(ggml_tensor * w, ggml_tensor * cur) const;
+
     // RWKV7-specific graph building methods
     ggml_tensor * build_rwkv7_channel_mix(const llama_layer * layer,
                                           ggml_tensor *       cur,

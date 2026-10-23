@@ -6,6 +6,19 @@ llm_build_rwkv7_base::llm_build_rwkv7_base(const llama_model & model, const llm_
     llm_graph_context(params),
     model(model) {}
 
+// mat_mul with the lossless BF16X overflow correction: ~2% of the quantized
+// weights are clamped by the 3-bit exponent delta and stored exactly in a
+// sparse side table, so add W_ovf @ cur to the mat_mul result.
+ggml_tensor * llm_build_rwkv7_base::mm_ovf(ggml_tensor * w, ggml_tensor * cur) const {
+    ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
+
+    if (const ggml_tensor * ovf = model.get_ovf(w)) {
+        res = ggml_add(ctx0, res, ggml_sparse_mm(ctx0, const_cast<ggml_tensor *>(ovf), cur, w->ne[1]));
+    }
+
+    return res;
+}
+
 ggml_tensor * llm_build_rwkv7_base::build_rwkv7_channel_mix(const llama_layer * layer,
                                                             ggml_tensor *       cur,
                                                             ggml_tensor *       x_prev,
@@ -16,9 +29,9 @@ ggml_tensor * llm_build_rwkv7_base::build_rwkv7_channel_mix(const llama_layer * 
             {
                 ggml_tensor * xk = ggml_add(ctx0, ggml_mul(ctx0, sx, layer->channel_mix_lerp_k), cur);
 
-                ggml_tensor * k = ggml_sqr(ctx0, ggml_relu(ctx0, build_lora_mm(layer->channel_mix_key, xk)));
+                ggml_tensor * k = ggml_sqr(ctx0, ggml_relu(ctx0, mm_ovf(layer->channel_mix_key, xk)));
 
-                cur = build_lora_mm(layer->channel_mix_value, k);
+                cur = mm_ovf(layer->channel_mix_value, k);
             }
             break;
         default:
@@ -63,14 +76,14 @@ ggml_tensor * llm_build_rwkv7_base::build_rwkv7_time_mix(llm_graph_input_rs * in
         has_gating ? ggml_view_2d(ctx0, xxx, n_embd, n_tokens, xxx->nb[1], n_embd * n_tokens * 5 * sizeof(float)) :
                      nullptr;
 
-    ggml_tensor * r = build_lora_mm(layer.time_mix_receptance, xr);
+    ggml_tensor * r = mm_ovf(layer.time_mix_receptance, xr);
     ggml_tensor * w = ggml_add(
-        ctx0, ggml_mul_mat(ctx0, layer.time_mix_w2, ggml_tanh(ctx0, ggml_mul_mat(ctx0, layer.time_mix_w1, xw))),
+        ctx0, mm_ovf(layer.time_mix_w2, ggml_tanh(ctx0, mm_ovf(layer.time_mix_w1, xw))),
         layer.time_mix_w0);
     w = ggml_exp(ctx0, ggml_scale(ctx0, ggml_sigmoid(ctx0, w), -0.606531));
 
-    ggml_tensor * k = build_lora_mm(layer.time_mix_key, xk);
-    ggml_tensor * v = build_lora_mm(layer.time_mix_value, xv);
+    ggml_tensor * k = mm_ovf(layer.time_mix_key, xk);
+    ggml_tensor * v = mm_ovf(layer.time_mix_value, xv);
     if (first_layer_value == nullptr) {
         first_layer_value = v;
     } else {
@@ -78,16 +91,16 @@ ggml_tensor * llm_build_rwkv7_base::build_rwkv7_time_mix(llm_graph_input_rs * in
         v = ggml_add(ctx0, v,
                      ggml_mul(ctx0, ggml_sub(ctx0, first_layer_value, v),
                               ggml_sigmoid(ctx0, ggml_add(ctx0,
-                                                          ggml_mul_mat(ctx0, layer.time_mix_v2,
-                                                                       ggml_mul_mat(ctx0, layer.time_mix_v1, xv)),
+                                                          mm_ovf(layer.time_mix_v2,
+                                                                       mm_ovf(layer.time_mix_v1, xv)),
                                                           layer.time_mix_v0))));
     }
     ggml_tensor * g = nullptr;
     if (layer.time_mix_g1 && layer.time_mix_g2) {
-        g = ggml_mul_mat(ctx0, layer.time_mix_g2, ggml_sigmoid(ctx0, ggml_mul_mat(ctx0, layer.time_mix_g1, xg)));
+        g = mm_ovf(layer.time_mix_g2, ggml_sigmoid(ctx0, mm_ovf(layer.time_mix_g1, xg)));
     }
     ggml_tensor * a = ggml_sigmoid(
-        ctx0, ggml_add(ctx0, ggml_mul_mat(ctx0, layer.time_mix_a2, ggml_mul_mat(ctx0, layer.time_mix_a1, xa)),
+        ctx0, ggml_add(ctx0, mm_ovf(layer.time_mix_a2, mm_ovf(layer.time_mix_a1, xa)),
                        layer.time_mix_a0));
 
     ggml_tensor * kk = ggml_reshape_3d(ctx0, ggml_mul(ctx0, k, layer.time_mix_k_k), head_size, head_count, n_tokens);
@@ -131,7 +144,7 @@ ggml_tensor * llm_build_rwkv7_base::build_rwkv7_time_mix(llm_graph_input_rs * in
     if (has_gating) {
         cur = ggml_mul(ctx0, cur, g);
     }
-    cur = build_lora_mm(layer.time_mix_output, cur);
+    cur = mm_ovf(layer.time_mix_output, cur);
 
     return ggml_reshape_3d(ctx0, cur, n_embd, n_seq_tokens, n_seqs);
 }

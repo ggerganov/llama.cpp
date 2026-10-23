@@ -28,6 +28,7 @@
 #include "ggml-cuda/fattn.cuh"
 #include "ggml-cuda/fwht.cuh"
 #include "ggml-cuda/getrows.cuh"
+#include "ggml-cuda/sparse.cuh"
 #include "ggml-cuda/im2col.cuh"
 #include "ggml-cuda/mmf.cuh"
 #include "ggml-cuda/mmq.cuh"
@@ -2141,6 +2142,12 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             break;
         case GGML_OP_GET_ROWS:
             ggml_cuda_op_get_rows(ctx, dst);
+            break;
+        case GGML_OP_SPARSE_MM:
+            ggml_cuda_op_sparse_mm(ctx, dst);
+            break;
+        case GGML_OP_SPARSE_ROWS:
+            ggml_cuda_op_sparse_rows(ctx, dst);
             break;
         case GGML_OP_GET_ROWS_BACK:
             ggml_cuda_op_get_rows_back(ctx, dst);
@@ -5727,6 +5734,8 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_TRI:
         case GGML_OP_DIAG:
         case GGML_OP_SOLVE_TRI:
+        case GGML_OP_SPARSE_MM:
+        case GGML_OP_SPARSE_ROWS:
             return true;
         case GGML_OP_LIGHTNING_INDEXER:
             return ggml_cuda_lightning_indexer_supported(dev_ctx->device, op);

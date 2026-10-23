@@ -2332,6 +2332,14 @@ const ggml_tensor * llama_model::get_tensor(const char * name) const {
     return it->second;
 }
 
+const ggml_tensor * llama_model::get_ovf(const ggml_tensor * w) const {
+    if (w == nullptr) {
+        return nullptr;
+    }
+    auto it = ovf_by_weight.find(w);
+    return it == ovf_by_weight.end() ? nullptr : it->second;
+}
+
 float llama_model::get_rope_freq_base (const llama_cparams & cparams, int il) const {
     return hparams.is_swa(il) ? hparams.rope_freq_base_train_swa : cparams.rope_freq_base;
 }
