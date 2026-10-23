@@ -41,7 +41,8 @@ void top_k_select(
         int k,
         int base,
         int indexed,
-        local uint * hist) {
+        local uint * hist
+) {
     const int tid = get_local_id(0);
     const int nth = get_local_size(0);
     if (k == ne00) {
@@ -173,7 +174,8 @@ kernel void kernel_top_k_f32(
         int k_max,
         local uint * hist,
         global uint2 * candidates,
-        int tile_width) {
+        int tile_width
+) {
     const ulong row = get_group_id(1);
     const int part = get_group_id(0);
     const int parts = get_num_groups(0);
@@ -196,7 +198,8 @@ kernel void kernel_top_k_merge_f32(
         ulong offsetd,
         int n_candidates,
         int k,
-        local uint * hist) {
+        local uint * hist
+) {
     const ulong row = get_group_id(1);
     candidates += row*n_candidates;
     dst = (global int *) ((global char *) dst + offsetd) + row*k;

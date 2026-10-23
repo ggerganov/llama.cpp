@@ -29,7 +29,8 @@ kernel void kernel_lightning_indexer(
         ulong nbw3,
         ulong nbm1,
         ulong nbm3,
-        int use_shuffle) {
+        int use_shuffle
+) {
     const int tid = get_local_id(0);
     const int lane = tid & (use_shuffle ? 3 : 15);
     const int key = use_shuffle ? get_group_id(0)*16 + tid/4 : get_group_id(0)*4 + tid/16;
