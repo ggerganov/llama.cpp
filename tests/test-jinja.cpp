@@ -3,6 +3,7 @@
 #include <random>
 #include <cstdlib>
 
+#include "jinja/value.h"
 #include "json.h"
 #include "subproc.h"
 
@@ -38,6 +39,7 @@ static void test_stats(testing & t);
 static void test_caps(testing & t);
 static void test_string_parts(testing & t);
 static void test_fuzzing(testing & t);
+static void test_deep_nested_chat_template_kwargs(testing & t);
 
 static bool g_python_mode = false;
 
@@ -74,6 +76,7 @@ int main(int argc, char *argv[]) {
     t.test("string methods", test_string_methods);
     t.test("array methods", test_array_methods);
     t.test("object methods", test_object_methods);
+    t.test("deeply nested chat_template_kwargs", test_deep_nested_chat_template_kwargs);
     if (!g_python_mode) {
         t.test("hasher", test_hasher);
         t.test("stats", test_stats);
@@ -2236,6 +2239,42 @@ static void test_object_methods(testing & t) {
         {{"obj", {{"a", 3}, {"b", 1}}}},
         "{\"a\": 3, \"b\": 1, \"c\": 2}"
     );
+}
+
+// A deeply nested chat_template_kwargs should not cause stack overflow
+// https://github.com/ggml-org/llama.cpp/issues/30834
+static void test_deep_nested_chat_template_kwargs(testing & t) {
+    t.test("deelpy nested chat_template_kwargs array", [] (testing &) {
+        common_json value = common_json::array();
+
+        for (int i = 0; i < 100000; i++) {
+            value = common_json::array({std::move(value)});
+        }
+
+        jinja::context ctx;
+        try {
+            jinja::global_from_json(ctx, value, true);
+        } catch(...) {
+
+        }
+    });
+
+    t.test("deelpy nested chat_template_kwargs object", [] (testing &) {
+        common_json value = common_json::array();
+
+        for (int i = 0; i < 100000; i++) {
+            value = common_json::object({
+                {"o", std::move(value)}
+            });
+        }
+
+        jinja::context ctx;
+        try {
+            jinja::global_from_json(ctx, value, true);
+        } catch(...) {
+
+        }
+    });
 }
 
 static void test_hasher(testing & t) {
