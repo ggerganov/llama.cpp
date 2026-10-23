@@ -728,6 +728,7 @@ struct mtmd_context {
                 } break;
             case PROJECTOR_TYPE_MINICPMV4_6:
             case PROJECTOR_TYPE_MINICPMV4_7:
+            case PROJECTOR_TYPE_MINICPM_OCR_1_0:
                 {
                     slice_tmpl        = MTMD_SLICE_TMPL_MINICPMV_2_6;
                     tok_ov_img_start  = {lookup_token("<image>")};
@@ -738,7 +739,11 @@ struct mtmd_context {
                     tok_row_end_trail = false; // no trailing end-of-row token
                     ov_img_first      = true;
                     use_image_id      = true;
-                    image_preproc     = std::make_unique<mtmd_image_preprocessor_minicpmv>(ctx_v);
+                    if (clip_get_projector_type(ctx_v) == PROJECTOR_TYPE_MINICPM_OCR_1_0) {
+                        image_preproc = std::make_unique<mtmd_image_preprocessor_minicpm_ocr_1_0>(ctx_v);
+                    } else {
+                        image_preproc = std::make_unique<mtmd_image_preprocessor_minicpmv>(ctx_v);
+                    }
                 } break;
             case PROJECTOR_TYPE_QWEN2VL:
             case PROJECTOR_TYPE_QWEN25VL:
@@ -3116,7 +3121,8 @@ struct mtmd_audio_stream {
     std::vector<float> out;     // rows of the last step
     std::vector<float> tok_embd;
 
-    int64_t n_rows = 0; // rows produced so far
+    int64_t n_rows = 0;         // rows produced so far
+    int64_t n_rows_flushed = 0; // rows produced once the audio up to the last flush is consumed
     bool pending_flush = false;
     bool ended = false;
 
@@ -3229,6 +3235,8 @@ int32_t mtmd_audio_stream_flush(mtmd_audio_stream * s, bool end) {
     // align to a whole row, then add the silence the model expects after the audio
     const int64_t n_align = (s->samples_per_tok - s->n_samples % s->samples_per_tok) % s->samples_per_tok;
     mtmd_audio_stream_add_silence(s, n_align + (int64_t) s->n_right_pad * s->samples_per_tok);
+    // one row per samples_per_tok, the left padding included
+    s->n_rows_flushed = s->n_samples / s->samples_per_tok;
     s->pending_flush = true;
     s->ended = end;
     return 0;
@@ -3377,4 +3385,12 @@ int32_t mtmd_audio_stream_step(mtmd_audio_stream * s, llama_token last_token) {
 
 const float * mtmd_audio_stream_get_output_embd(const mtmd_audio_stream * s) {
     return s->out.data();
+}
+
+int64_t mtmd_audio_stream_get_n_rows(const mtmd_audio_stream * s) {
+    return s->n_rows;
+}
+
+int64_t mtmd_audio_stream_get_n_rows_flushed(const mtmd_audio_stream * s) {
+    return s->n_rows_flushed;
 }
