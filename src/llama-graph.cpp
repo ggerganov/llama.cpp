@@ -3384,8 +3384,8 @@ ggml_tensor * llm_graph_context::build_fused_top_k_mask(
         ggml_tensor * score,
         ggml_tensor * blocks,
         ggml_tensor * extra,
-                int   il,
-        ggml_tensor * mask) const {
+        ggml_tensor * mask,
+                int   il) const {
     const int64_t m1 = kq_mask->ne[1];
     const int64_t m2 = kq_mask->ne[2];
     const int64_t m3 = kq_mask->ne[3];
@@ -3434,7 +3434,7 @@ ggml_tensor * llm_graph_context::build_attn(
 
     ggml_tensor * kq_mask_top_k = nullptr;
     if (cparams.fused_top_k_mask) {
-        kq_mask_top_k = build_fused_top_k_mask(kq_mask, top_k, nullptr, nullptr, nullptr, il);
+        kq_mask_top_k = build_fused_top_k_mask(kq_mask, top_k, nullptr, nullptr, nullptr, nullptr, il);
     } else {
         // prepare new kq mask - starts filled with -INFINITY
         ggml_tensor * kq_mask_all = ggml_fill(ctx0, kq_mask, -INFINITY);

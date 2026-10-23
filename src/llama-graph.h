@@ -1344,8 +1344,8 @@ struct llm_graph_context {
             ggml_tensor * score,   // [n_pick, n_tokens], can be null
             ggml_tensor * blocks,  // [n_blk, n_pick], can be null
             ggml_tensor * extra,   // [n_extra, n_tokens], can be null
-                    int   il,
-            ggml_tensor * mask = nullptr) const; // [n_kv], kq_mask if null
+            ggml_tensor * mask,    // [n_kv], kq_mask if null
+                    int   il) const;
 
     llm_graph_input_attn_kv_iswa * build_attn_inp_kv_iswa() const;
 
