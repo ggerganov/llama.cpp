@@ -209,9 +209,69 @@ static __global__ void top_k_radix_gather(
     }
 }
 
+#if defined(GGML_USE_HIP)
+static __global__ void top_k_radix_gather_stable(
+        const float * __restrict__ src,
+        int * __restrict__ dst,
+        const top_k_radix_state * __restrict__ states,
+        int ncols,
+        int k) {
+    const int row = blockIdx.x;
+    const int tid = threadIdx.x;
+    const int warp = tid / 32;
+    const int lane = tid % 32;
+    const uint32_t lane_mask = (uint32_t(1) << lane) - 1;
+    const float * row_src = src + (size_t) row * ncols;
+    int * row_dst = dst + (size_t) row * k;
+    const top_k_radix_state state = states[row];
+    __shared__ int greater_offsets[8];
+    __shared__ int equal_offsets[8];
+    int greater_total = 0;
+    int equal_total = 0;
+
+    for (int base = 0; base < ncols; base += 256) {
+        const int col = base + tid;
+        const uint32_t key = col < ncols ? top_k_float_to_ordered(row_src[col]) : 0;
+        const bool greater = col < ncols && key > state.prefix;
+        const bool equal = col < ncols && key == state.prefix;
+        const uint32_t greater_mask = (uint32_t) __ballot(greater);
+        const uint32_t equal_mask = (uint32_t) __ballot(equal);
+        if (lane == 0) {
+            greater_offsets[warp] = __popc(greater_mask);
+            equal_offsets[warp] = __popc(equal_mask);
+        }
+        __syncthreads();
+        if (tid == 0) {
+            for (int w = 0; w < 8; ++w) {
+                const int greater_count = greater_offsets[w];
+                const int equal_count = equal_offsets[w];
+                greater_offsets[w] = greater_total;
+                equal_offsets[w] = equal_total;
+                greater_total += greater_count;
+                equal_total += equal_count;
+            }
+        }
+        __syncthreads();
+        if (greater) {
+            row_dst[greater_offsets[warp] + __popc(greater_mask & lane_mask)] = col;
+        }
+        if (equal) {
+            const int pos = equal_offsets[warp] + __popc(equal_mask & lane_mask);
+            if (pos < state.rank) {
+                row_dst[k - state.rank + pos] = col;
+            }
+        }
+        __syncthreads();
+    }
+}
+#endif
+
 static void top_k_radix_cuda(
         ggml_cuda_pool & pool,
-        const float * src, int * dst, int ncols, int64_t nrows, int k, cudaStream_t stream) {
+        const float * src, int * dst, int ncols, int64_t nrows, int k, cudaStream_t stream, bool stable = false) {
+#if !defined(GGML_USE_HIP)
+    GGML_UNUSED(stable);
+#endif
     constexpr int BLOCK_SIZE = 256;
     constexpr int RADIX_BITS = 8;
     constexpr int NBINS = 1 << RADIX_BITS;
@@ -239,11 +299,18 @@ static void top_k_radix_cuda(
                 <<<iter_nrows, BLOCK_SIZE, 0, stream>>>(histograms, states, blocks_per_row, shift);
         }
 
-        top_k_radix_reset_counters
-            <<<(iter_nrows + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE, 0, stream>>>(states, iter_nrows);
-        top_k_radix_gather<BLOCK_SIZE>
-            <<<row_grid, BLOCK_SIZE, 0, stream>>>(
-                src, dst, states, ncols, k, blocks_per_row);
+#if defined(GGML_USE_HIP)
+        if (stable) {
+            top_k_radix_gather_stable<<<iter_nrows, BLOCK_SIZE, 0, stream>>>(src, dst, states, ncols, k);
+        } else
+#endif
+        {
+            top_k_radix_reset_counters
+                <<<(iter_nrows + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE, 0, stream>>>(states, iter_nrows);
+            top_k_radix_gather<BLOCK_SIZE>
+                <<<row_grid, BLOCK_SIZE, 0, stream>>>(
+                    src, dst, states, ncols, k, blocks_per_row);
+        }
 
         src += (size_t) ncols * iter_nrows;
         dst += (size_t) k     * iter_nrows;
@@ -295,6 +362,15 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     ggml_cuda_pool & pool  = ctx.pool();
 
     const int device = ggml_cuda_get_device();
+
+#if defined(GGML_USE_HIP)
+    static const bool stable = getenv("GGML_CUDA_TOP_K_STABLE") != nullptr && strcmp(getenv("GGML_CUDA_TOP_K_STABLE"), "1") == 0;
+    if (stable && ncols > 1024 && ncols <= 2048 && k == 512 && nrows >= 1 && nrows <= 256 &&
+        ggml_cuda_info().devices[device].warp_size == 32) {
+        top_k_radix_cuda(pool, src0_d, dst_d, ncols, nrows, k, stream, true);
+        return;
+    }
+#endif
 
 #ifdef CUB_TOP_K_AVAILABLE
     // a single row always uses DeviceTopK if available

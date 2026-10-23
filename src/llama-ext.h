@@ -10,6 +10,33 @@
 #include <map>
 #include <vector>
 
+struct llama_moe_cpu_params {
+    bool enabled = true;
+    int32_t control_cpu = -1;
+    std::vector<int32_t> expert_cpus;
+    ggml_sched_priority priority = GGML_SCHED_PRIO_NORMAL;
+};
+
+class LLAMA_API llama_cpu_affinity_guard {
+public:
+    explicit llama_cpu_affinity_guard(bool enabled);
+    ~llama_cpu_affinity_guard();
+    llama_cpu_affinity_guard(const llama_cpu_affinity_guard &) = delete;
+    llama_cpu_affinity_guard & operator=(const llama_cpu_affinity_guard &) = delete;
+    bool allows(int32_t cpu) const;
+    bool bind(int32_t cpu);
+    bool restore();
+    const std::vector<unsigned long> & mask() const { return saved; }
+
+private:
+    std::vector<unsigned long> saved;
+};
+
+LLAMA_API llama_context * llama_init_from_model_cpu(llama_model * model, llama_context_params params, const llama_moe_cpu_params & cpu);
+LLAMA_API void llama_attach_threadpool_control(llama_context * ctx, ggml_threadpool_t pool);
+LLAMA_API int32_t llama_moe_control_cpu(const llama_context * ctx);
+LLAMA_API void llama_moe_set_learning(llama_context * ctx, bool enabled);
+
 // Reserve a new compute graph. It is valid until the next call to llama_graph_reserve.
 LLAMA_API struct ggml_cgraph * llama_graph_reserve(
         struct llama_context * ctx,

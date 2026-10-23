@@ -15,6 +15,8 @@
 extern "C" {
 #endif
 
+bool ggml_threadpool_get_main_cpu_mask(const struct ggml_threadpool * pool, bool * mask);
+
 struct ggml_compute_params {
     // ith = thread index, nth = number of threads
     int ith, nth;

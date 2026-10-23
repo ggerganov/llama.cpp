@@ -46,7 +46,8 @@ struct llama_context {
     // init scheduler and compute buffers, reserve worst-case graphs
     llama_context(
             const llama_model & model,
-                  llama_context_params params);
+                  llama_context_params params,
+            const llama_moe_cpu_params * cpu = nullptr);
 
     ~llama_context();
 
@@ -59,6 +60,9 @@ struct llama_context {
     void sched_reserve();
 
     void synchronize();
+    void complete_moe();
+    bool failed() const { return moe_cache && moe_cache->failed(); }
+    void moe_set_learning(bool enabled) { moe_learning = enabled; }
 
     const llama_model   & get_model()   const;
     const llama_cparams & get_cparams() const;
@@ -113,6 +117,9 @@ struct llama_context {
 
     void detach_threadpool();
 
+    void attach_threadpool_control(ggml_threadpool_t pool) { threadpool_control = pool; }
+    int32_t control_cpu() const { return cpu_roles.enabled ? cpu_roles.control_cpu : -1; }
+
     void set_n_threads(int32_t n_threads, int32_t n_threads_batch);
 
     void set_abort_callback(bool (*abort_callback)(void * data), void * abort_callback_data);
@@ -143,7 +150,8 @@ struct llama_context {
                 const llama_ubatch & ubatch,
                     llm_graph_type   gtype,
             llama_memory_context_i * mctx,
-                       ggml_status & ret);
+                       ggml_status & ret,
+           llama_cpu_affinity_guard * affinity = nullptr);
 
     int encode(const llama_batch_ext & batch_inp);
     int decode(const llama_batch_ext & batch_inp);
@@ -254,7 +262,7 @@ public:
     llm_graph_result * get_gf_res_reserve() const;
 
     // returns the result of ggml_backend_sched_graph_compute_async execution
-    ggml_status graph_compute(ggml_cgraph * gf, bool batched);
+    ggml_status graph_compute(ggml_cgraph * gf, bool batched, llama_cpu_affinity_guard * affinity = nullptr);
 
     // reserve a graph with a dummy ubatch of the specified size
     ggml_cgraph * graph_reserve(
@@ -278,6 +286,8 @@ private:
 
     // ggml_backend_sched copy callback, copies only the experts used by MUL_MAT_ID and updates the MoE cache
     static bool sched_copy_experts(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph, void * user_data);
+
+    static bool sched_copy_cpu_result(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph, void * user_data);
 
     // ggml_backend_sched realloc callback, counts and traces the graph reallocations of this context
     static void sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph * gf, bool backend_ids_changed, bool graph_size_changed, void * user_data);
@@ -307,7 +317,6 @@ private:
     llama_cross cross; // TODO: tmp for handling cross-attention - need something better probably
 
     llama_memory_ptr memory;
-    llama_moe_cache_ptr moe_cache;
 
     // decode output (2-dimensional array: [n_outputs][n_vocab])
     buffer_view<float> logits = {nullptr, 0};
@@ -394,12 +403,20 @@ private:
 
     ggml_backend_t backend_cpu = nullptr;
     std::vector<ggml_backend_ptr> backends;
+    llama_moe_cache_ptr moe_cache;
 
     // training
     ggml_opt_context_t opt_ctx = nullptr;
 
     ggml_threadpool_t threadpool       = nullptr;
     ggml_threadpool_t threadpool_batch = nullptr;
+    ggml_threadpool_t threadpool_control = nullptr;
+    llama_moe_cpu_params cpu_roles;
+    bool cpu_control_ready = false;
+    bool moe_learning = true;
+    bool moe_single_decode_call = false;
+    uint32_t moe_queued_decode = 0;
+    bool moe_queued_other = false;
 
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;

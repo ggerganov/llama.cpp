@@ -3393,6 +3393,12 @@ struct ggml_threadpool * ggml_threadpool_new(struct ggml_threadpool_params * tpp
     return ggml_threadpool_new_impl(tpp, NULL, NULL);
 }
 
+bool ggml_threadpool_get_main_cpu_mask(const struct ggml_threadpool * pool, bool * mask) {
+    if (!pool || !mask) return false;
+    memcpy(mask, pool->workers[0].cpumask, sizeof(pool->workers[0].cpumask));
+    return true;
+}
+
 enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     ggml_cpu_init();
 
@@ -3443,12 +3449,21 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         }
     } else {
         atomic_store_explicit(&threadpool->n_graph, 1, memory_order_relaxed);
+        ggml_thread_apply_priority(threadpool->prio);
+        if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
+            ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
+        }
         ggml_graph_compute_thread(&threadpool->workers[0]);
     }
 #else
     if (n_threads > threadpool->n_threads) {
         GGML_LOG_WARN("cplan requested more threads (%d) than available (%d)\n", n_threads, threadpool->n_threads);
         n_threads = threadpool->n_threads;
+    }
+
+    ggml_thread_apply_priority(threadpool->prio);
+    if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
+        ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
     }
 
     // Kick all threads to start the new graph

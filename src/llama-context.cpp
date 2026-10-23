@@ -21,6 +21,59 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#if defined(__linux__)
+#include <cerrno>
+#include <sched.h>
+#endif
+
+llama_cpu_affinity_guard::llama_cpu_affinity_guard(bool enabled) {
+#if defined(__linux__)
+    if (enabled) {
+        for (size_t words = 16; words <= 16384; words *= 2) {
+            saved.assign(words, 0);
+            if (sched_getaffinity(0, saved.size()*sizeof(unsigned long), reinterpret_cast<cpu_set_t *>(saved.data())) == 0) return;
+            if (errno != EINVAL) break;
+        }
+        saved.clear();
+    }
+#else
+    GGML_UNUSED(enabled);
+#endif
+}
+
+llama_cpu_affinity_guard::~llama_cpu_affinity_guard() {
+    restore();
+}
+
+bool llama_cpu_affinity_guard::restore() {
+#if defined(__linux__)
+    if (!saved.empty() && sched_setaffinity(0, saved.size()*sizeof(unsigned long), reinterpret_cast<const cpu_set_t *>(saved.data())) != 0) {
+        LLAMA_LOG_WARN("failed to restore caller CPU affinity\n");
+        return false;
+    }
+    return !saved.empty();
+#else
+    return false;
+#endif
+}
+
+bool llama_cpu_affinity_guard::allows(int32_t cpu) const {
+    const size_t bits = 8*sizeof(unsigned long);
+    return cpu >= 0 && size_t(cpu)/bits < saved.size() && (saved[size_t(cpu)/bits] & (1ul << (size_t(cpu)%bits))) != 0;
+}
+
+bool llama_cpu_affinity_guard::bind(int32_t cpu) {
+#if defined(__linux__)
+    if (!allows(cpu)) return false;
+    std::vector<unsigned long> target(saved.size(), 0);
+    target[size_t(cpu)/(8*sizeof(unsigned long))] = 1ul << (size_t(cpu)%(8*sizeof(unsigned long)));
+    if (sched_setaffinity(0, target.size()*sizeof(unsigned long), reinterpret_cast<const cpu_set_t *>(target.data())) != 0) return false;
+    return true;
+#else
+    GGML_UNUSED(cpu);
+    return false;
+#endif
+}
 
 //
 // llama_context
@@ -173,7 +226,8 @@ static const llm_fused_op_probe llm_fused_op_top_k_mask_probe = {
 
 llama_context::llama_context(
         const llama_model & model,
-              llama_context_params params) :
+              llama_context_params params,
+        const llama_moe_cpu_params * cpu) :
     model(model),
     cvec(std::make_unique<llama_adapter_cvec>()),
     loras(std::make_unique<llama_adapter_loras>()),
@@ -183,6 +237,7 @@ llama_context::llama_context(
     // TODO warning when creating llama_context with awkward ctx size that is not a power of 2,
     //     may need to be backend-dependent
     LLAMA_LOG_INFO("%s: constructing llama_context\n", __func__);
+    if (cpu) cpu_roles = *cpu;
 
     t_start_us = model.t_start_us;
     t_load_us  = model.t_load_us;
@@ -559,7 +614,7 @@ llama_context::llama_context(
         }
 
         if (cparams.moe_cache_size > 0) {
-            moe_cache = std::make_unique<llama_moe_cache>(model, backend_ptrs, backend_buft, cparams.moe_cache_size);
+            moe_cache = std::make_unique<llama_moe_cache>(model, backend_ptrs, backend_buft, cparams.moe_cache_size, cpu);
         }
 
         sched_reserve();
@@ -583,6 +638,7 @@ llama_context::llama_context(
 }
 
 llama_context::~llama_context() {
+    if (moe_cache) moe_cache->cancel_single_graph();
     // wait for any pending asynchronous copies into the output buffers before they are freed
     synchronize();
 
@@ -725,10 +781,14 @@ void llama_context::sched_new(size_t max_nodes, bool parallel) {
             backend_ptrs.data(), backend_buft.data(), backend_ptrs.size(), max_nodes, parallel, cparams.op_offload));
 
     ggml_backend_sched_set_copy_callback(sched.get(), sched_copy_experts, this);
+    if (std::getenv("LLAMA_MOE_ASYNC_RETURN")) {
+        ggml_backend_sched_set_copy_async_callback(sched.get(), sched_copy_cpu_result, this);
+    }
     ggml_backend_sched_set_realloc_callback(sched.get(), sched_graph_realloc, this);
 }
 
 void llama_context::sched_reserve() {
+    if (failed()) return;
     if (!sched_need_reserve) {
         return;
     }
@@ -740,6 +800,7 @@ void llama_context::sched_reserve() {
     synchronize();
 
     const int64_t t_start_us = ggml_time_us();
+    if (failed()) return;
 
     const uint32_t n_seqs = cparams.n_seq_max;
     const uint32_t n_tokens = std::min(cparams.n_ctx, cparams.n_ubatch);
@@ -790,6 +851,7 @@ void llama_context::sched_reserve() {
         auto * gf = graph_reserve(n_tokens, n_seqs, n_outputs_pp, mctx.get(),
                 model.hparams.no_alloc, model.hparams.no_alloc ? backend_buf_exp_size.data() : nullptr);
         if (!gf) {
+            if (failed()) return;
             if (cparams.pipeline_parallel) {
                 LLAMA_LOG_WARN("%s: compute buffer allocation failed, retrying without pipeline parallelism\n", __func__);
                 cparams.pipeline_parallel = false;
@@ -817,6 +879,7 @@ void llama_context::sched_reserve() {
     } else {
         auto * gf = graph_reserve(n_seqs, n_seqs, n_seqs, mctx.get(), model.hparams.no_alloc);
         if (!gf) {
+            if (failed()) return;
             throw std::runtime_error("failed to allocate compute tg buffers");
         }
 
@@ -844,6 +907,7 @@ void llama_context::sched_reserve() {
         };
 
         if (!gf) {
+            if (failed()) return;
             throw std::runtime_error("failed to allocate compute pp buffers");
         }
     }
@@ -885,11 +949,15 @@ void llama_context::sched_reserve() {
 }
 
 void llama_context::synchronize() {
+    llama_cpu_affinity_guard affinity(control_cpu() >= 0);
+    if (cpu_control_ready && moe_cache && moe_cache->single_graph_active()) affinity.bind(control_cpu());
     if (!sched) {
         return;
     }
 
     ggml_backend_sched_synchronize(sched.get());
+    complete_moe();
+    if (n_queued_tokens > 0 && moe_cache && moe_cache->single_graph_active()) cpu_control_ready = true;
 
     // FIXME: if multiple single tokens are evaluated without a synchronization,
     // the stats will be added to the prompt evaluation stats
@@ -916,6 +984,21 @@ void llama_context::synchronize() {
 
     n_queued_tokens = 0;
     t_compute_start_us = 0;
+}
+
+void llama_context::complete_moe() {
+    if (moe_cache) {
+        try {
+            moe_cache->check_single_graph(true);
+            moe_cache->observe_completed(moe_queued_decode, !moe_queued_other);
+        } catch (const std::exception & e) {
+            moe_cache->poison(e.what());
+        } catch (...) {
+            moe_cache->poison("decode synchronization failed");
+        }
+    }
+    moe_queued_decode = 0;
+    moe_queued_other = false;
 }
 
 const llama_model & llama_context::get_model() const {
@@ -1303,6 +1386,7 @@ void llama_context::attach_threadpool(
 
     this->threadpool       = threadpool;
     this->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
+    this->threadpool_control = nullptr;
 }
 
 void llama_context::detach_threadpool() {
@@ -1310,6 +1394,7 @@ void llama_context::detach_threadpool() {
 
     this->threadpool       = nullptr;
     this->threadpool_batch = nullptr;
+    this->threadpool_control = nullptr;
 }
 
 void llama_context::set_n_threads(int32_t n_threads, int32_t n_threads_batch) {
@@ -1520,12 +1605,35 @@ bool llama_context::set_adapter_cvec(
     return res;
 }
 
-llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret, llama_cpu_affinity_guard * affinity) {
+    if (affinity && cpu_control_ready && moe_cache && moe_cache->single_graph_active()) affinity->bind(control_cpu());
+    if (moe_single_decode_call && ubatch.n_tokens == 1 && ubatch.n_seqs == 1 && ubatch.n_seqs_unq == 1 && moe_cache && moe_cache->maintenance_pending()) {
+        ggml_backend_sched_synchronize(sched.get());
+        complete_moe();
+        const auto status = moe_cache->maintain(abort_callback, abort_callback_data);
+        if (status != GGML_STATUS_SUCCESS) {
+            ret = status;
+            return nullptr;
+        }
+    }
+    if (failed()) {
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
     if (mctx && !mctx->apply()) {
         LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
         ret = GGML_STATUS_FAILED;
         return nullptr;
     }
+
+    if (moe_cache && moe_cache->prepare_single_graph(ubatch.n_tokens == 1 && !cparams.pipeline_parallel && !cparams.cb_eval && loras->empty() && model.hdmd.rot.empty())) {
+        gf_res_prev_active = nullptr;
+    }
+    if (failed()) {
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
+    if (affinity && (!moe_cache || !moe_cache->single_graph_active())) affinity->restore();
 
     auto * res = get_gf_res_prev();
     auto * gf  = res->get_gf();
@@ -1534,7 +1642,8 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
     // in order to correctly reuse a graph, it's full topology has to be uniquely determined by these parameters
     const auto gparams = graph_params(res, ubatch, mctx, gtype);
 
-    if (!graph_reuse_disable && gf_res_prev_active == res && res->can_reuse(gparams)) {
+    const bool reused = !graph_reuse_disable && gf_res_prev_active == res && res->can_reuse(gparams);
+    if (reused) {
         //LLAMA_LOG_DEBUG("%s: reusing previous graph\n", __func__);
 
         // with pipeline parallelism, the previous graph_compute_async may still be running
@@ -1583,11 +1692,31 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
         //LLAMA_LOG_INFO("graph set inputs time: %.3f ms\n", (ggml_time_us() - t_start_us)/1000.0);
     }
 
-    const auto status = graph_compute(res->get_gf(), ubatch.n_tokens > 1);
+    static const bool input_batch_enabled = [] {
+        const char * value = std::getenv("LLAMA_DECODE_INPUT_BATCH");
+        return value && std::atoi(value) == 1;
+    }();
+    bool input_batch = input_batch_enabled && reused && ubatch.n_tokens == 1 && ubatch.n_seqs == 1 && ubatch.n_seqs_unq == 1 &&
+        moe_cache && moe_cache->single_graph_active() && !cparams.pipeline_parallel && !cparams.cb_eval &&
+        loras->empty() && model.hdmd.rot.empty();
+    for (uint32_t il = 0; input_batch && il < model.hparams.n_layer(); ++il) {
+        input_batch = cvec->tensor_for(il) == nullptr;
+    }
+    ggml_backend_sched_set_input_batch(sched.get(), input_batch);
+    const auto status = graph_compute(res->get_gf(), ubatch.n_tokens > 1, affinity);
+    ggml_backend_sched_set_input_batch(sched.get(), false);
     if (status != GGML_STATUS_SUCCESS) {
         LLAMA_LOG_ERROR("%s: failed to compute graph, compute status: %d\n", __func__, status);
         ret = status;
         return nullptr;
+    }
+
+    if (moe_cache) {
+        if (moe_single_decode_call && ubatch.n_tokens == 1 && ubatch.n_seqs == 1 && ubatch.n_seqs_unq == 1) {
+            if (moe_queued_decode != UINT32_MAX) ++moe_queued_decode;
+        } else {
+            moe_queued_other = true;
+        }
     }
 
     ret = GGML_STATUS_SUCCESS;
@@ -1596,6 +1725,10 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
 }
 
 int llama_context::encode(const llama_batch_ext & batch_inp) {
+    if (failed()) return -3;
+    moe_single_decode_call = false;
+    llama_cpu_affinity_guard affinity(control_cpu() >= 0);
+    if (cpu_control_ready && moe_cache && moe_cache->single_graph_active()) affinity.bind(control_cpu());
     if (batch_inp.tokens.empty()) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0\n", __func__);
         return -1;
@@ -1662,7 +1795,7 @@ int llama_context::encode(const llama_batch_ext & batch_inp) {
     cparams.causal_attn = false;
 
     ggml_status status;
-    const auto * res = process_ubatch(ubatch, LLM_GRAPH_TYPE_ENCODER, nullptr, status);
+    const auto * res = process_ubatch(ubatch, LLM_GRAPH_TYPE_ENCODER, nullptr, status, &affinity);
 
     cparams.causal_attn = causal_attn_org;
 
@@ -1835,6 +1968,10 @@ static bool needs_raw_logits(const llama_ubatch & ubatch, const std::map<llama_s
 }
 
 int llama_context::decode(const llama_batch_ext & batch_inp) {
+    if (failed()) return -3;
+    moe_single_decode_call = moe_learning && !cparams.warmup && batch_inp.tokens.size() == 1 && !cparams.pipeline_parallel && !cparams.cb_eval;
+    llama_cpu_affinity_guard affinity(control_cpu() >= 0);
+    if (cpu_control_ready && moe_cache && moe_cache->single_graph_active()) affinity.bind(control_cpu());
     if (!memory) {
         LLAMA_LOG_DEBUG("%s: cannot decode batches with this context (calling encode() instead)\n", __func__);
         return encode(batch_inp);
@@ -2015,7 +2152,7 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
 
         ggml_status status;
 
-        const auto * res = process_ubatch(ubatch, ctx_type_to_graph_type(cparams.ctx_type), mctx.get(), status);
+        const auto * res = process_ubatch(ubatch, ctx_type_to_graph_type(cparams.ctx_type), mctx.get(), status, &affinity);
 
         if (!res) {
             // the last ubatch failed or was aborted -> remove all positions of that ubatch from the memory module
@@ -2636,6 +2773,9 @@ static void ubatch_prepare_reserve(
 
 ggml_cgraph * llama_context::graph_reserve(
         uint32_t n_tokens, uint32_t n_seqs, uint32_t n_outputs, const llama_memory_context_i * mctx, bool split_only, size_t * sizes) {
+    if (failed()) return nullptr;
+    if (moe_cache) moe_cache->prepare_single_graph(false);
+    if (failed()) return nullptr;
     LLAMA_LOG_DEBUG("%s: reserving a graph for ubatch with n_tokens = %4u, n_seqs = %2u, n_outputs = %4u\n", __func__, n_tokens, n_seqs, n_outputs);
     GGML_ASSERT(n_outputs >= 1);
 
@@ -2746,9 +2886,43 @@ void llama_context::sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph 
 
 ggml_status llama_context::graph_compute(
             ggml_cgraph * gf,
-                   bool   batched) {
+                   bool   batched,
+     llama_cpu_affinity_guard * affinity) {
+    if (failed()) return GGML_STATUS_FAILED;
+    try {
+        if (abort_callback && abort_callback(abort_callback_data)) return GGML_STATUS_ABORTED;
+    } catch (...) {
+        if (moe_cache) moe_cache->poison("abort callback failed before graph launch");
+        return GGML_STATUS_FAILED;
+    }
     int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
     ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;
+
+    bool control = !batched && threadpool_control && cpu_control_ready && affinity &&
+        affinity->allows(control_cpu()) && moe_cache && moe_cache->single_graph_active();
+    for (int i = 0; control && i < ggml_graph_n_nodes(gf); ++i) {
+        auto * node = ggml_graph_node(gf, i);
+        if (ggml_backend_sched_get_tensor_backend(sched.get(), node) != backend_cpu || (node->op == GGML_OP_RESHAPE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE) || node->op == GGML_OP_NONE) continue;
+        control = node->op == GGML_OP_GET_ROWS && node->ne[1] == 1;
+    }
+    if (control && affinity->bind(control_cpu())) {
+        n_threads = 1;
+        tp = threadpool_control;
+    } else if (affinity) {
+        affinity->restore();
+        if (tp && backend_cpu && control_cpu() >= 0) {
+            auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend_cpu));
+            auto get_mask = reinterpret_cast<bool (*)(const ggml_threadpool *, bool *)>(ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_get_main_cpu_mask"));
+            bool mask[GGML_MAX_N_THREADS] = {};
+            if (!get_mask || !get_mask(tp, mask)) return GGML_STATUS_FAILED;
+            for (int32_t cpu = 0; cpu < GGML_MAX_N_THREADS; ++cpu) {
+                if (mask[cpu] && !affinity->allows(cpu)) {
+                    LLAMA_LOG_ERROR("ordinary CPU pool mask exceeds this caller's allowed CPUs\n");
+                    return GGML_STATUS_FAILED;
+                }
+            }
+        }
+    }
 
     if (backend_cpu != nullptr) {
         auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend_cpu));
@@ -2773,6 +2947,12 @@ ggml_status llama_context::graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(sched));
 
     return status;
+}
+
+bool llama_context::sched_copy_cpu_result(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph, void * user_data) {
+    GGML_UNUSED(graph);
+    auto * lctx = static_cast<llama_context *>(user_data);
+    return lctx->moe_cache && lctx->moe_cache->copy_cpu_result_async(backend, src, dst);
 }
 
 bool llama_context::sched_copy_experts(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst, ggml_cgraph * graph, void * user_data) {
@@ -4034,9 +4214,29 @@ llama_context_params llama_context_default_params() {
     return result;
 }
 
-llama_context * llama_init_from_model(
+static llama_context * llama_init_from_model_impl(
                  llama_model * model,
-        llama_context_params   params) {
+        llama_context_params   params,
+        const llama_moe_cpu_params * cpu) {
+    if (cpu && cpu->enabled) {
+        auto * device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+        auto * reg = device ? ggml_backend_dev_backend_reg(device) : nullptr;
+        auto is_numa = reg ? reinterpret_cast<decltype(ggml_is_numa) *>(ggml_backend_reg_get_proc_address(reg, "ggml_backend_cpu_is_numa")) : nullptr;
+        auto get_mask = reg ? ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_get_main_cpu_mask") : nullptr;
+        if (!is_numa || is_numa() || !get_mask) {
+            LLAMA_LOG_ERROR("automatic MoE CPU placement requires a CPU backend without active NUMA placement\n");
+            return nullptr;
+        }
+        llama_cpu_affinity_guard allowed(true);
+        bool used[GGML_MAX_N_THREADS] = {};
+        if (cpu->control_cpu < 0 || cpu->control_cpu >= GGML_MAX_N_THREADS || cpu->expert_cpus.empty() || cpu->expert_cpus.size() > 32) return nullptr;
+        if (!allowed.allows(cpu->control_cpu)) return nullptr;
+        used[cpu->control_cpu] = true;
+        for (int32_t id : cpu->expert_cpus) {
+            if (id < 0 || id >= GGML_MAX_N_THREADS || used[id] || !allowed.allows(id)) return nullptr;
+            used[id] = true;
+        }
+    }
     if (!model) {
         LLAMA_LOG_ERROR("%s: model cannot be NULL\n", __func__);
         return nullptr;
@@ -4124,7 +4324,7 @@ llama_context * llama_init_from_model(
     }
 
     try {
-        auto * ctx = new llama_context(*model, params);
+        auto * ctx = new llama_context(*model, params, cpu);
         const auto & cparams = ctx->get_cparams();
 
         if (cparams.rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN && cparams.rope_freq_scale != model->hparams.rope_freq_scale_train) {
@@ -4139,6 +4339,26 @@ llama_context * llama_init_from_model(
     }
 
     return nullptr;
+}
+
+llama_context * llama_init_from_model(llama_model * model, llama_context_params params) {
+    return llama_init_from_model_impl(model, params, nullptr);
+}
+
+llama_context * llama_init_from_model_cpu(llama_model * model, llama_context_params params, const llama_moe_cpu_params & cpu) {
+    return llama_init_from_model_impl(model, params, &cpu);
+}
+
+void llama_attach_threadpool_control(llama_context * ctx, ggml_threadpool_t pool) {
+    ctx->attach_threadpool_control(pool);
+}
+
+int32_t llama_moe_control_cpu(const llama_context * ctx) {
+    return ctx->control_cpu();
+}
+
+void llama_moe_set_learning(llama_context * ctx, bool enabled) {
+    ctx->moe_set_learning(enabled);
 }
 
 // deprecated
@@ -4233,12 +4453,14 @@ void llama_synchronize(llama_context * ctx) {
 
 float * llama_get_logits(llama_context * ctx) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_logits();
 }
 
 float * llama_get_logits_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     float * res = nullptr;
 
@@ -4253,18 +4475,21 @@ float * llama_get_logits_ith(llama_context * ctx, int32_t i) {
 
 float * llama_get_embeddings(llama_context * ctx) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings();
 }
 
 float * llama_get_embeddings_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings_ith(i);
 }
 
 float * llama_get_embeddings_seq(llama_context * ctx, llama_seq_id seq_id) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings_seq(seq_id);
 }
@@ -4291,18 +4516,21 @@ llama_memory_t llama_get_memory(const struct llama_context * ctx) {
 
 float * llama_get_embeddings_nextn(llama_context * ctx) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings_nextn();
 }
 
 float * llama_get_embeddings_nextn_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings_nextn_ith(i);
 }
 
 float * llama_get_embeddings_layer_inp(llama_context * ctx, uint32_t lid) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_embeddings_layer_inp(lid);
 }
@@ -4313,42 +4541,49 @@ bool llama_set_sampler(llama_context * ctx, llama_seq_id seq_id, llama_sampler *
 
 llama_token llama_get_sampled_token_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return LLAMA_TOKEN_NULL;
 
     return ctx->get_sampled_token_ith(i);
 }
 
 float * llama_get_sampled_probs_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_sampled_probs_ith(i);
 }
 
 float * llama_get_sampled_logits_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return ctx->get_sampled_logits_ith(i);
 }
 
 llama_token * llama_get_sampled_candidates_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return nullptr;
 
     return const_cast<llama_token *>(ctx->get_sampled_candidates_ith(i));
 }
 
 uint32_t llama_get_sampled_candidates_count_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return 0;
 
     return static_cast<uint32_t>(ctx->get_sampled_candidates_count(i));
 }
 
 uint32_t llama_get_sampled_logits_count_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return 0;
 
     return static_cast<uint32_t>(ctx->get_sampled_logits_count(i));
 }
 
 uint32_t llama_get_sampled_probs_count_ith(llama_context * ctx, int32_t i) {
     ctx->synchronize();
+    if (ctx->failed()) return 0;
 
     return static_cast<uint32_t>(ctx->get_sampled_probs_count(i));
 }
@@ -4358,6 +4593,7 @@ struct ggml_cgraph * llama_graph_reserve(
         uint32_t n_tokens,
         uint32_t n_seqs,
         uint32_t n_outputs) {
+    if (ctx->failed()) return nullptr;
     auto memory = ctx->get_memory();
     llama_memory_context_ptr mctx;
     if (memory) {

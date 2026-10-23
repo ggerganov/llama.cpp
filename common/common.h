@@ -80,6 +80,19 @@ struct common_cpu_params {
 int32_t common_cpu_get_num_physical_cores();
 int32_t common_cpu_get_num_math();
 
+struct common_cpu_core {
+    std::vector<int32_t> cpus;
+    int32_t capacity = 0;
+    int32_t frequency = 0;
+};
+
+struct common_cpu_roles {
+    int32_t control = -1;
+    std::vector<int32_t> experts;
+};
+
+common_cpu_roles common_cpu_plan_moe(std::vector<common_cpu_core> cores, int32_t budget, const std::vector<int32_t> & explicit_experts = {}, const std::vector<int32_t> & control_cpus = {});
+
 //
 // Common params
 //
@@ -1042,6 +1055,7 @@ struct common_threadpools {
 private:
     ggml_threadpool * threadpool       = nullptr;
     ggml_threadpool * threadpool_batch = nullptr;
+    ggml_threadpool * threadpool_control = nullptr;
 
     decltype(ggml_threadpool_free) * free_fn = nullptr;
 };
