@@ -1164,7 +1164,10 @@ void llm_graph_input_mem_hybrid::set_input(const llama_ubatch * ubatch) {
     mctx->get_attn()->set_input_k_idxs(inp_attn->self_k_idxs, ubatch);
     mctx->get_attn()->set_input_v_idxs(inp_attn->self_v_idxs, ubatch);
 
-    mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
+    // leave the mask unallocated if all attention layers have their own (e.g. qwen4exp QSA)
+    if (inp_attn->self_kq_mask->buffer) {
+        mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
+    }
 
     if (inp_attn->self_k_rot) {
         mctx->get_attn()->set_input_k_rot(inp_attn->self_k_rot);
@@ -1215,7 +1218,10 @@ bool llm_graph_input_mem_hybrid::can_reuse(const llm_graph_params & params) {
 void llm_graph_input_mem_hybrid_k::set_input(const llama_ubatch * ubatch) {
     mctx->get_attn()->set_input_k_idxs(inp_attn->self_k_idxs, ubatch);
 
-    mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
+    // leave the mask unallocated if all attention layers have their own (e.g. glm5-next DSA)
+    if (inp_attn->self_kq_mask->buffer) {
+        mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
+    }
 
     const int64_t n_rs = mctx->get_recr()->get_n_rs();
 
@@ -3381,7 +3387,8 @@ ggml_tensor * llm_graph_context::build_fused_top_k_mask(
         ggml_tensor * score,
         ggml_tensor * blocks,
         ggml_tensor * extra,
-                int   il) const {
+                int   il,
+        ggml_tensor * mask) const {
     const int64_t m1 = kq_mask->ne[1];
     const int64_t m2 = kq_mask->ne[2];
     const int64_t m3 = kq_mask->ne[3];
@@ -3390,7 +3397,7 @@ ggml_tensor * llm_graph_context::build_fused_top_k_mask(
         return t ? ggml_reshape_4d(ctx0, t, t->ne[0], m1, m2, m3) : nullptr;
     };
 
-    ggml_tensor * cur = ggml_top_k_mask(ctx0, kq_mask, rows(top_k), rows(score), blocks, rows(extra));
+    ggml_tensor * cur = ggml_top_k_mask(ctx0, mask ? mask : kq_mask, rows(top_k), rows(score), blocks, rows(extra));
     res->add_fused_node({LLM_FUSED_OP_TOP_K_MASK, cur, il});
 
     return cur;
