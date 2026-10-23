@@ -396,16 +396,18 @@ static bool htp_kparams_solve_flash_attn(
     kparams->scale         = scale;
     kparams->max_bias      = max_bias;
     kparams->logit_softcap = logit_softcap;
-    kparams->head_split    = (opt_fa_head_split != 0) ? 1 : 0;
+    kparams->head_split    = (opt_fa_split != 0) ? 1 : 0;
     kparams->flags         = 0;
     kparams->G             = G;
 
-    // Size Br for the per-device share of Q-blocks
+    // team-split only when a team has >1 member (n_kv_heads < N_cores)
     const uint32_t mdev_count = htp_session_mdev_count(sess);
     uint32_t fa_teams = 1, fa_team_size = 1;
     if (opt_fa_split && mdev_count > 1) {
-        kparams->flags |= HTP_FA_FLAG_TEAM_SPLIT;
         htp_fa_mdev_teams(n_kv_heads, mdev_count, kparams->head_split != 0, &fa_teams, &fa_team_size);
+        if (fa_team_size > 1) {
+            kparams->flags |= HTP_FA_FLAG_TEAM_SPLIT;
+        }
     }
 
     const uint32_t n_head = q->ne[2];
