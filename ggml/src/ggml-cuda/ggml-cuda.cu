@@ -217,6 +217,7 @@ static int ggml_cuda_parse_id(const char * devName) {
     // A list of possible Target IDs can be found under the rocclr/clr repo in device.cpp
     // these values are not stable so this is susceptible to breakage
     // https://github.com/ROCm/clr/blob/amd-staging/rocclr/device/device.cpp
+    // Extract the base architecture model ("gfx908:sramecc+:xnack-" -> "908")
     std::string archName = devName;
     archName.erase(0, 3);
     archName = archName.substr(0, archName.find(':'));
