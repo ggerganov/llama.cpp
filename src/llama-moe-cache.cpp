@@ -291,10 +291,11 @@ struct llama_moe_cache::impl {
 
     // adaptive: how the cache follows the conversation (measured on gpt-oss-120b, 400 generated tokens: swapping more often and
     // more per round lifts the hit rate from ~32% to 41-45% from any start at no measurable cost in ms/token)
+    // A free slot is worth filling at once: on Qwen3-Coder-Next (16 GB of cache for 36 GB of experts) going from 16 experts a
+    // token to 512 lifts the first 256 generated tokens from 21 to 30 t/s, and anything above 512 gains under 2% more.
     static constexpr int32_t rebalance_every      = 32;  // generated tokens between two rebalances
     static constexpr int32_t rebalance_swaps      = 64;  // swaps at most per rebalance...
-    static constexpr int32_t rebalance_fill_every = 8;   // ...while the cache still has free slots: sooner,
-    static constexpr int32_t rebalance_fill       = 128; // and more
+    static constexpr int32_t rebalance_fill       = 512; // ...while the cache has free slots: every token that missed fills up to this many
     static constexpr float   heat_decay       = 0.998f; // per generated token: a half-life of ~350 tokens
     static constexpr float   swap_margin      = 1.5f;  // an expert comes in when its heat exceeds this times the resident's...
     static constexpr float   swap_min_heat    = 2.0f;  // ...plus this many selections
@@ -308,6 +309,7 @@ struct llama_moe_cache::impl {
     float   heat_inc = 1.0f;                 // the weight of a selection now: it grows, which is how older ones decay
     int32_t steps_since_rebalance = 0;
     bool    decode_seen = false;             // a CPU op of the hybrid ran in the last graph
+    size_t  n_missed = 0;                    // experts the cache lacked in the graphs since the last fill: candidates for the free slots
     std::atomic<bool> mailbox_error{false};  // a hand-over timed out in the last graph, see take_mailbox_error
     size_t  n_swap = 0;
     // mailbox: how long the CPU waited for the GPU's hand-overs (the time the GPU spends before the experts), and how many
@@ -914,6 +916,7 @@ struct llama_moe_cache::impl {
             }
         }
         self.decode_seen = true;
+        self.n_missed += n_cpu;
 
         stats & st = self.stats_small;
         for (stats * s : { &st, &self.stats_layer[h.il] }) {
@@ -969,7 +972,8 @@ struct llama_moe_cache::impl {
             std::atomic_thread_fence(std::memory_order_release);
             *epoch_host = epoch;
         }
-        // adaptive: a generated token has passed since the last graph; every rebalance_every of them, swap
+        // adaptive: a generated token has passed since the last graph; fill the free slots with the experts it missed, and once
+        // none are left, every rebalance_every tokens swap
         if (adaptive && decode_seen) {
             decode_seen = false;
             heat_inc /= heat_decay;
@@ -979,13 +983,19 @@ struct llama_moe_cache::impl {
                 }
                 heat_inc = 1.0f;
             }
-            bool free_slots = false;
+            int32_t n_free = 0;
             for (const group & g : groups) {
-                free_slots = free_slots || (g.n_slots > 0 && std::count(g.slru.key_of.begin(), g.slru.key_of.end(), -1) > 0);
+                n_free += g.n_slots > 0 ? (int32_t) std::count(g.slru.key_of.begin(), g.slru.key_of.end(), -1) : 0;
             }
-            if (++steps_since_rebalance >= (free_slots ? rebalance_fill_every : rebalance_every)) {
+            if (n_free > 0 && n_missed > 0) {
+                const int32_t max_fill = std::min(n_free, rebalance_fill);
+                if (do_rebalance(max_fill, /*eager =*/ false, /*fill_only =*/ true) < max_fill) {
+                    n_missed = 0; // every candidate is in; a full round leaves the rest for the next token
+                }
+            }
+            if (++steps_since_rebalance >= rebalance_every) { // a group that is full swaps even while another still fills
                 steps_since_rebalance = 0;
-                do_rebalance(free_slots ? rebalance_fill : rebalance_swaps, /*eager =*/ false);
+                do_rebalance(rebalance_swaps, /*eager =*/ false);
             }
         }
     }
@@ -997,9 +1007,10 @@ struct llama_moe_cache::impl {
     // adaptive: swap the hottest experts the cache lacks in for the coldest it holds (and into free slots first), at most
     // max_swaps. The device must be idle - the banks and its slot maps change - which it is between two generated tokens;
     // the copies are blocking, ~1.2 ms an expert. A layer the cache holds whole is left alone. eager: no hysteresis.
+    // fill_only: free slots only, nothing is swapped out.
     // A swap rewrites key_of and the slot maps but not the SLRU lists: adaptive implies hybrid, which never calls
     // plan(), so the list order is unused. Anything that mixes the two would have to move() the reused slots.
-    int32_t do_rebalance(int32_t max_swaps, bool eager) {
+    int32_t do_rebalance(int32_t max_swaps, bool eager, bool fill_only = false) {
         if (!adaptive || heat.empty() || max_swaps <= 0) {
             return 0;
         }
@@ -1050,6 +1061,8 @@ struct llama_moe_cache::impl {
                 int32_t s;
                 if (i_free < free_slots.size()) {
                     s = free_slots[i_free++];
+                } else if (fill_only) {
+                    break; // this group is full
                 } else if (i_out < out.size()) {
                     const cand & v = out[i_out];
                     if (!(eager ? c.h > v.h : c.h > swap_margin*v.h + swap_min_heat*heat_inc)) {
@@ -1156,6 +1169,7 @@ struct llama_moe_cache::impl {
             }
         }
         h.self->decode_seen = true;
+        h.self->n_missed += n_cpu;
         if (any_slot < 0) {
             any_slot = 0;          // nothing hit: slot 0, all masked
         }
