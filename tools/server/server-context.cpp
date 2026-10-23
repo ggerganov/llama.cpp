@@ -23,6 +23,7 @@
 #include "base64.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cinttypes>
 #include <deque>
@@ -2470,7 +2471,21 @@ private:
 
         const auto & decision = slot.task->decision;
 
-        if (!decision.labels.empty()) {
+        if (decision.n_classes > 0) {
+            // the pooled output of the sequence, one score per class
+            const float * embd = llama_get_embeddings_seq(slot.ctx_tgt, slot.id);
+            if (embd == nullptr || llama_model_n_embd_out(model_tgt) != decision.n_classes) {
+                send_error(slot, "failed to get the class scores", ERROR_TYPE_SERVER);
+                return;
+            }
+            for (int32_t i = 0; i < decision.n_classes; i++) {
+                if (!std::isfinite(embd[i])) {
+                    send_error(slot, "the model could not evaluate the decision", ERROR_TYPE_SERVER);
+                    return;
+                }
+                res->scores.push_back(embd[i]);
+            }
+        } else if (!decision.labels.empty()) {
             const float * logits = llama_get_logits_ith(slot.ctx_tgt, i_batch);
             if (logits == nullptr) {
                 send_error(slot, "failed to get logits", ERROR_TYPE_SERVER);
@@ -2961,6 +2976,12 @@ private:
             case SERVER_TASK_TYPE_TTS:
             case SERVER_TASK_TYPE_DECISION:
                 {
+                    // without a trained LM head, the fallback output weights must not be used to generate text
+                    if (task.need_sampling() && !decision.can_generate()) {
+                        send_error(task, "This model is a decision model without text generation, use /v1/systemone", ERROR_TYPE_NOT_SUPPORTED);
+                        break;
+                    }
+
                     // special case: if input is provided via CLI, tokenize it first
                     // otherwise, no need to tokenize as it's already done inside the HTTP thread
                     if (task.cli) {
