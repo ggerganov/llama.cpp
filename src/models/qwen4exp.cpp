@@ -771,14 +771,22 @@ llama_model_qwen4exp::llm_graph_input_kpool * llama_model_qwen4exp::graph::build
 
     // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches; the mask streams are not split
     const int64_t n_chunk = qwen4exp_qsa_n_chunk();
-    if (n_chunk == 0 || n_tokens <= n_chunk || kq_mask->ne[1] != n_tokens) {
+    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || kq_mask->ne[1] != n_tokens) {
         inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, inp->tail_idxs });
     } else {
-        for (int64_t t0 = 0; t0 < n_tokens; t0 += n_chunk) {
-            const int64_t n = std::min(n_chunk, n_tokens - t0);
+        // split every ubatch as the reserve split a full one, so the graph keeps the shape the reserve planned
+        // a ubatch with fewer tokens than chunks repeats its last token, build_layer_attn drops the extra rows
+        const int64_t n_split = (cparams.n_ubatch + n_chunk - 1)/n_chunk;
+        for (int64_t i = 0, t0 = 0; i < n_split; ++i) {
+            int64_t n = n_tokens/n_split + (i < n_tokens % n_split);
+            if (n == 0) {
+                t0 = n_tokens - 1;
+                n  = 1;
+            }
             inp->chunks.push_back({ t0, n,
                     ggml_view_2d(ctx0, inp->pool_mask, n_pool,    n, inp->pool_mask->nb[1], t0*inp->pool_mask->nb[1]),
                     ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]) });
+            t0 += n;
         }
     }
 
@@ -1012,6 +1020,9 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
 
         ggml_tensor * out = build_attn_mha(q_chunk, k, v, nullptr, sel, nullptr, nullptr, inp_kpool->n_sel, kq_scale, il);
         cur = cur ? ggml_concat(ctx0, cur, out, 1) : out;
+    }
+    if (inp_kpool->chunks.size() > 1) {
+        cur = ggml_view_2d(ctx0, cur, cur->ne[0], n_tokens, cur->nb[1], 0);
     }
     cb(cur, "kqv_out", il);
 
