@@ -230,10 +230,14 @@ def main():
             types[gid] = 5
         else:
             seen[b] = gid
+    n_ph = 0
     for gid in range(n_vocab):
         if tokens[gid] is None:
             tokens[gid] = f'[UNUSED_{gid}]'
-    print(f'vocab: {n_real} entries, {n_vocab - n_real} placeholders', flush=True)
+            n_ph += 1
+        elif types[gid] == 5:
+            n_ph += 1
+    print(f'vocab: {n_vocab - n_ph} real entries, {n_ph} placeholders', flush=True)
 
     # ---- header + tensor infos (deterministic) ----
     hb = io.BytesIO()
