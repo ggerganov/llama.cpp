@@ -769,24 +769,25 @@ llama_model_qwen4exp::llm_graph_input_kpool * llama_model_qwen4exp::graph::build
     inp->new_pool_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 4*inp->n_new);
     ggml_set_input(inp->new_pool_pos);
 
-    // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches; the mask streams are not split
+    // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches
+    // the mask streams are not split: a split cache with several sequences keeps one chunk, as its reserve does
     const int64_t n_chunk = qwen4exp_qsa_n_chunk();
-    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || kq_mask->ne[1] != n_tokens) {
+    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || !(cparams.kv_unified || cparams.n_seq_max == 1)) {
         inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, inp->tail_idxs });
     } else {
+        GGML_ASSERT(kq_mask->ne[1] == n_tokens);
+
         // split every ubatch as the reserve split a full one, so the graph keeps the shape the reserve planned
-        // a ubatch with fewer tokens than chunks repeats its last token, build_layer_attn drops the extra rows
+        // a ubatch with fewer tokens than chunks repeats its last token, build_attn_qsa drops the extra rows
         const int64_t n_split = (cparams.n_ubatch + n_chunk - 1)/n_chunk;
         for (int64_t i = 0, t0 = 0; i < n_split; ++i) {
-            int64_t n = n_tokens/n_split + (i < n_tokens % n_split);
-            if (n == 0) {
-                t0 = n_tokens - 1;
-                n  = 1;
-            }
-            inp->chunks.push_back({ t0, n,
-                    ggml_view_2d(ctx0, inp->pool_mask, n_pool,    n, inp->pool_mask->nb[1], t0*inp->pool_mask->nb[1]),
-                    ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]) });
-            t0 += n;
+            const int64_t n_i = n_tokens/n_split + (i < n_tokens % n_split);
+            const int64_t t   = std::min(t0, n_tokens - 1);
+            const int64_t n   = std::max<int64_t>(n_i, 1);
+            inp->chunks.push_back({ t, n,
+                    ggml_view_2d(ctx0, inp->pool_mask, n_pool,    n, inp->pool_mask->nb[1], t*inp->pool_mask->nb[1]),
+                    ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t*inp->tail_idxs->nb[1]) });
+            t0 += n_i;
         }
     }
 
