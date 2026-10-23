@@ -4717,7 +4717,7 @@ template <typename BLOC_TYPE, int64_t INTER_SIZE, int64_t NB_COLS, ggml_type PAR
 
         // src1 is chunked only by full planes.
         // When we flatten we need to address dimensions not multiple of the q8 INTER_SIZE
-        // to route them thorugh GEMV.
+        // to route them through GEMV.
         // nchunk1 = ne12 also avoids messing the chunking for models with no 3d tensors
         // to avoid affecting their performance
         int64_t nchunk1 = ne12;

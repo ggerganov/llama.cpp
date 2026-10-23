@@ -985,7 +985,7 @@ static std::ifstream open_ifstream_binary(const std::string & fname) {
 }
 #endif
 
-// in test-mtmd-impl, we include woth common.h and this file, and these functions are duplicated
+// in test-mtmd-impl, we include with common.h and this file, and these functions are duplicated
 // this is a quick fix to avoid compilation errors
 #ifndef DIRECTORY_SEPARATOR
 static std::string string_format(const char * fmt, ...) {

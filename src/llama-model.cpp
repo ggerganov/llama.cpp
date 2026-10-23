@@ -2891,7 +2891,7 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
         case LLM_ARCH_GLM5_NEXT:
             {
                 // KDA layers are recurrent, the DSA layers use a K-only MLA cache plus an indexer cache.
-                // tThe Nextn block is never attended by the trunk graph
+                // The Nextn block is never attended by the trunk graph
                 llama_memory_hybrid_idx::layer_filter_cb filter_attn = [&](uint32_t il) {
                     return il < hparams.n_layer() && !hparams.is_recr(il);
                 };
