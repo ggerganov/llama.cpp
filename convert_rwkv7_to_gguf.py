@@ -4,25 +4,31 @@
 #   python convert_rwkv7_to_gguf.py <pth> <vocab> <out> meta
 #   python convert_rwkv7_to_gguf.py <pth> <vocab> <out> data <first> <last_excl>
 #
+# Add --lossless to also write the sparse overflow side tables (`<tensor>.ovf`,
+# I8) that make BF16X bit-exact w.r.t. the source bf16 weights (~12.1 bpw).
+# They require llama.cpp support for GGML_OP_SPARSE_MM (not merged yet), so the
+# default output stays a plain 11.5 bpw near-lossless GGUF.
+#
 # Matrix tensors (ndim >= 2, ne0 % 32 == 0, >= 64K elements) are written as
 # GGML_TYPE_BF16X (11.5 bpw); all 1-D parameters (norms, lerp vectors,
 # w0/a0/v0, k_k/k_a/r_k) are kept in f32 for numerical safety.
 from __future__ import annotations
 import io
+import json
 import struct
 import sys
 import numpy as np
 import torch
 
 sys.path.insert(0, r"F:\bfloat16x")
-from bf16x_gguf_block import quantize_tensor
+from bf16x_gguf_block import quantize_tensor, pack_ovf
 
 GGUF_MAGIC = 0x46554747
 GGUF_VERSION = 3
 GGUF_ALIGN = 32
 
 T_U32, T_I32, T_F32, T_BOOL, T_STRING, T_ARRAY = 4, 5, 6, 7, 8, 9
-GGML_F32, GGML_BF16X = 0, 43
+GGML_F32, GGML_BF16X, GGML_I8 = 0, 43, 24
 
 def w_str(f, s):
     b = s.encode('utf-8')
@@ -57,7 +63,30 @@ def kv_arr_str(f, k, arr):
     for s in arr:
         w_str(f, s)
 
-def build_plan(sd):
+TRANS = {'time_mix_w1', 'time_mix_w2', 'time_mix_a1', 'time_mix_a2',
+         'time_mix_v1', 'time_mix_v2', 'time_mix_g1', 'time_mix_g2'}
+
+
+def _short(name):
+    n = name[:-4] if name.endswith('.ovf') else name
+    parts = n.split('.')
+    s = '.'.join(parts[2:])
+    return s[:-len('.weight')] if s.endswith('.weight') else s
+
+
+def stored_array(sd, name, pth_key, zeros, shape):
+    """source weight in the tensor's on-disk layout (transposed for LoRA)"""
+    if zeros:
+        return np.zeros(shape, dtype=np.float32)
+    x = sd[pth_key].detach().to(torch.float32).numpy()
+    if _short(name) in TRANS:
+        x = np.ascontiguousarray(x.T)
+    return np.ascontiguousarray(x, dtype=np.float32)
+
+
+USE_OVF = False
+
+def build_plan(sd, ovf_sizes_in=None):
     keys = list(sd.keys())
     n_layer = 1 + max(int(k.split('.')[1]) for k in keys if k.startswith('blocks.'))
     n_embd = int(sd['emb.weight'].shape[1])
@@ -125,7 +154,27 @@ def build_plan(sd):
     hparams = dict(n_layer=n_layer, n_embd=n_embd, n_vocab=n_vocab, n_ff=n_ff,
                    rank_decay=rank_decay, rank_iclr=rank_iclr, rank_v=rank_v,
                    rank_gate=rank_gate)
-    return plan, hparams
+    if not USE_OVF:
+        return plan, hparams, {}
+
+    # Lossless overflow side tables: one I8 tensor per BF16X weight holding the
+    # elements that the 3-bit exponent delta clamps (delta >= 7, ~2% on real
+    # checkpoints). Applying it restores the original bf16 bits exactly.
+    ovf_sizes = {}
+    for name, ne, gtype, pth_key, arr, zeros in list(plan):
+        if gtype != GGML_BF16X:
+            continue
+        rows = int(ne[1]) if len(ne) > 1 else 1
+        cols = int(ne[0])
+        key = name + '.ovf'
+        if ovf_sizes_in is not None and key in ovf_sizes_in:
+            n_bytes = int(ovf_sizes_in[key])
+        else:
+            x = stored_array(sd, name, pth_key, zeros, (rows, cols))
+            n_bytes = len(pack_ovf(x, bf16_exact=True))
+        ovf_sizes[key] = n_bytes
+        plan.append((key, [n_bytes], GGML_I8, pth_key, (rows, cols), zeros))
+    return plan, hparams, ovf_sizes
 
 def lerp_fused_np(sd, key):
     p, names, _ = key
@@ -138,11 +187,21 @@ def lerp_fused_np(sd, key):
     return np.stack(vecs, axis=0)  # (6, n_embd) -> flat = plane-major
 
 def main():
-    argv = sys.argv[1:]
+    global USE_OVF
+    argv = [a for a in sys.argv[1:] if not a.startswith('--')]
+    USE_OVF = '--lossless' in sys.argv
     pth, vocab_file, out_path = argv[0], argv[1], argv[2]
     mode = argv[3] if len(argv) > 3 else 'meta'
     first = int(argv[4]) if len(argv) > 4 else 0
     last = int(argv[5]) if len(argv) > 5 else 10 ** 9
+    sidecar = out_path + '.ovf.json'
+    ovf_sizes = None
+    if USE_OVF and mode != 'meta':
+        try:
+            with open(sidecar) as f:
+                ovf_sizes = json.load(f)
+        except FileNotFoundError:
+            ovf_sizes = None
 
     print(f'loading {pth}...', flush=True)
     if pth.endswith('.safetensors'):
@@ -151,7 +210,7 @@ def main():
         sd = {(k[6:] if k.startswith('rwkv7.') else k): v for k, v in raw.items()}
     else:
         sd = torch.load(pth, map_location='cpu', mmap=True, weights_only=True)
-    plan, hp = build_plan(sd)
+    plan, hp, ovf_sizes_out = build_plan(sd, ovf_sizes)
     n_tensors = len(plan)
     print(f"n_layer={hp['n_layer']} n_embd={hp['n_embd']} n_vocab={hp['n_vocab']} "
           f"n_ff={hp['n_ff']} tensors={n_tensors}", flush=True)
@@ -301,16 +360,15 @@ def main():
             f.write(b'\0' * (D - f.tell()))
         with open(state_file, 'w') as f:
             f.write('0')
+        if USE_OVF:
+            with open(sidecar, 'w') as f:
+                json.dump(ovf_sizes_out, f)
+            print(f'overflow side tables: {len(ovf_sizes_out)} tensors, '
+                  f'{sum(ovf_sizes_out.values())/2**20:.1f} MiB', flush=True)
         print(f'meta written: D={D}, tensors={n_tensors}. now run: data 0 {n_tensors}', flush=True)
         return
 
     # ---- data pass [first, last) with resume from the state file ----
-    # LoRA matrices (w1/w2/a1/a2/v1/v2/g1/g2) are RIGHT-multiply matrices:
-    # torch stores them (C, rank)/(rank, C) row-major, while the ggml tensor
-    # (ne0-fastest) needs the transposed byte order. nn.Linear weights
-    # ((out, in) torch) already match ggml's (in, out) layout directly.
-    TRANS = {'time_mix_w1', 'time_mix_w2', 'time_mix_a1', 'time_mix_a2',
-             'time_mix_v1', 'time_mix_v2', 'time_mix_g1', 'time_mix_g2'}
     with open(state_file) as f:
         done = int(f.read().strip())
     a = max(first, done)
@@ -319,26 +377,21 @@ def main():
 
     def produce(entry):
         name, ne, gtype, pth_key, arr, zeros = entry
-        def maybe_transpose(x):
-            parts = name.split('.')
-            short = '.'.join(parts[2:])
-            if short.endswith('.weight'):
-                short = short[:-len('.weight')]
-            if short in TRANS:
-                return np.ascontiguousarray(x.T)
-            return x
+        if gtype == GGML_I8:
+            x = stored_array(sd, name, pth_key, zeros, arr)
+            return pack_ovf(x, bf16_exact=True)
         if gtype == GGML_BF16X:
             if zeros:
-                x = np.zeros((int(np.prod(ne)),), dtype=np.float32)
+                x = np.zeros((int(ne[1]), int(ne[0])), dtype=np.float32)
             elif pth_key and isinstance(pth_key, str):
-                x = maybe_transpose(sd[pth_key].detach().to(torch.float32).numpy())
+                x = stored_array(sd, name, pth_key, False, None)
             else:  # fused lerp
                 x = lerp_fused_np(sd, pth_key)
             return quantize_tensor(np.ascontiguousarray(x)).reshape(-1).tobytes()
         if zeros:
             return b'\0' * (int(np.prod(ne)) * 4)
         if pth_key and isinstance(pth_key, str):
-            x = maybe_transpose(sd[pth_key].detach().to(torch.float32).numpy())
+            x = stored_array(sd, name, pth_key, False, None)
             return np.ascontiguousarray(x, dtype='<f4').tobytes()
         x = lerp_fused_np(sd, pth_key)
         return np.ascontiguousarray(x, dtype='<f4').tobytes()
