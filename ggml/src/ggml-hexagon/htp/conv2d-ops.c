@@ -39,6 +39,18 @@ struct htp_conv2d_hmx_job {
     uint32_t       n_dot_tiles;
 };
 
+// hvx_vec_f32_to_f16_shuff() on v81 turns an exact 0 into 2^-24, which shows up as a nonzero conv output where the result is 0
+static inline HVX_Vector conv2d_f32_to_f16_shuff(HVX_Vector v0, HVX_Vector v1) {
+    const HVX_Vector zero = Q6_V_vzero();
+    const HVX_Vector q0   = Q6_Vqf32_vadd_VsfVsf(v0, zero);
+    const HVX_Vector q1   = Q6_Vqf32_vadd_VsfVsf(v1, zero);
+    return Q6_Vhf_equals_Wqf32(Q6_W_vcombine_VV(q1, q0));
+}
+
+static inline HVX_Vector conv2d_f32_to_f16(HVX_Vector v0, HVX_Vector v1) {
+    return Q6_Vh_vdeal_Vh(conv2d_f32_to_f16_shuff(v0, v1));
+}
+
 // DMA hangs if a stride is less than the row size, even for a single row
 static inline bool conv2d_dma_push(dma_queue * q, dma_data d, size_t dst_stride, size_t src_stride, size_t row, size_t nrows) {
     if (nrows == 1) {
@@ -464,7 +476,7 @@ static void conv2d_hmx_wpack_thread(unsigned int nth, unsigned int ith, void * d
                 for (uint32_t j = 0; j < hd; j += 64) {
                     HVX_Vector v = zero;
                     if (r < nco && j < kv) {
-                        v = is_f16 ? dv[j / 64] : hvx_vec_f32_to_f16(sv[j / 32], sv[j / 32 + 1]);
+                        v = is_f16 ? dv[j / 64] : conv2d_f32_to_f16(sv[j / 32], sv[j / 32 + 1]);
                         if (kv - j < 64) {
                             v = Q6_V_vmux_QVV(Q6_Q_vsetq_R((kv - j) * sizeof(__fp16)), v, zero);
                         }
@@ -559,10 +571,10 @@ static inline void conv2d_hmx_pack_tile(__fp16 * restrict dst, const float * res
             kw = 0;
             p += wrap;
         }
-        out[i] = hvx_vec_f32_to_f16_shuff(a, b);
+        out[i] = conv2d_f32_to_f16_shuff(a, b);
     }
     if (K & 1) {
-        out[i++] = hvx_vec_f32_to_f16_shuff(hvx_vmemu(p), zero);
+        out[i++] = conv2d_f32_to_f16_shuff(hvx_vmemu(p), zero);
     }
     for (; i < n_vec; i++) {
         out[i] = zero;
@@ -843,7 +855,7 @@ static void conv2d_hmx_wpack_kmajor_thread(unsigned int nth, unsigned int ith, v
                         HVX_Vector     v = zero;
                         if (k < nk) {
                             const HVX_Vector * sv = (const HVX_Vector *) (wraw + (size_t) k * 64 * es);
-                            v = is_f16 ? sv[0] : hvx_vec_f32_to_f16(sv[0], sv[1]);
+                            v = is_f16 ? sv[0] : conv2d_f32_to_f16(sv[0], sv[1]);
                             if (nco < 64) {
                                 v = Q6_V_vmux_QVV(Q6_Q_vsetq_R(nco * sizeof(__fp16)), v, zero);
                             }
@@ -1551,7 +1563,7 @@ static void conv2d_hmx_win_wpack_kmajor(const struct htp_conv2d_win_context * wc
                     c = 0;
                     kw++;
                 }
-                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : conv2d_f32_to_f16_shuff(a, b);
             }
             continue;
         }
@@ -1561,7 +1573,7 @@ static void conv2d_hmx_win_wpack_kmajor(const struct htp_conv2d_win_context * wc
             for (uint32_t p = 0; p < 16; p++) {
                 const HVX_Vector a = 2 * p + 0 < nc ? Q6_V_vmux_QVV(qco, rows[2 * p + 0], zero) : zero;
                 const HVX_Vector b = 2 * p + 1 < nc ? Q6_V_vmux_QVV(qco, rows[2 * p + 1], zero) : zero;
-                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : conv2d_f32_to_f16_shuff(a, b);
             }
         }
     }
@@ -1674,7 +1686,7 @@ static void conv2d_hmx_win_wpack_rows(const struct htp_conv2d_win_context * wc, 
                         c = 0;
                         kw++;
                     }
-                    tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+                    tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : conv2d_f32_to_f16_shuff(a, b);
                 }
             }
             continue;
@@ -1688,7 +1700,7 @@ static void conv2d_hmx_win_wpack_rows(const struct htp_conv2d_win_context * wc, 
                 const uint32_t   p = c / 2;
                 const HVX_Vector a = pc + 0 < nc ? hvx_vmemu(xr + (size_t) ((pc + 0) * T + t) * rstep) : zero;
                 const HVX_Vector b = pc + 1 < nc ? hvx_vmemu(xr + (size_t) ((pc + 1) * T + t) * rstep) : zero;
-                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : hvx_vec_f32_to_f16_shuff(a, b);
+                tile[p] = is_f16 ? Q6_V_lo_W(Q6_W_vshuff_VVR(b, a, -2)) : conv2d_f32_to_f16_shuff(a, b);
             }
         }
     }
@@ -1876,7 +1888,7 @@ static void conv2d_hmx_win_croutons(const struct htp_conv2d_win_context * wc, co
                 const HVX_Vector     a = *(const HVX_Vector *) (stage + (size_t) (2 * k) * span + i * 32);
                 const HVX_Vector     b = 2 * k + 1 < Cin ? *(const HVX_Vector *) (stage + (size_t) (2 * k + 1) * span + i * 32) : zero;
                 const HVX_VectorPred q = Q6_Q_vsetq2_R(2 * k + 1 < Cin ? VLEN : VLEN / 2);
-                Q6_vscatter_QRMVwV(q, dst, HMX_FP16_TILE_SIZE - 1, Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(8 * k)), hvx_vec_f32_to_f16(a, b));
+                Q6_vscatter_QRMVwV(q, dst, HMX_FP16_TILE_SIZE - 1, Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(8 * k)), conv2d_f32_to_f16(a, b));
             }
         }
         if (nb > 0) {
@@ -1895,7 +1907,7 @@ static void conv2d_hmx_win_croutons(const struct htp_conv2d_win_context * wc, co
                 for (uint32_t v = 0; v < 16; v++) {
                     const HVX_Vector a = Q6_V_vmux_QVV(qc, hvx_vmemu(src + (size_t) (2 * v + 0) * Cin), zero);
                     const HVX_Vector b = Q6_V_vmux_QVV(qc, hvx_vmemu(src + (size_t) (2 * v + 1) * Cin), zero);
-                    dst[v] = hvx_vec_f32_to_f16_shuff(a, b);
+                    dst[v] = conv2d_f32_to_f16_shuff(a, b);
                 }
             }
         }
@@ -1915,7 +1927,7 @@ static void conv2d_hmx_win_croutons(const struct htp_conv2d_win_context * wc, co
                     const HVX_Vector a = p[0];
                     const HVX_Vector b = p[sv];
                     p += 2 * sv;
-                    y[k] = hvx_vec_f32_to_f16(a, b);
+                    y[k] = conv2d_f32_to_f16(a, b);
                 }
             } else {
                 #pragma unroll
@@ -1923,7 +1935,7 @@ static void conv2d_hmx_win_croutons(const struct htp_conv2d_win_context * wc, co
                     const HVX_Vector a = 2 * k + 0 < nv ? p[0] : zero;
                     const HVX_Vector b = 2 * k + 1 < nv ? p[sv] : zero;
                     p += 2 * sv;
-                    y[k] = hvx_vec_f32_to_f16(a, b);
+                    y[k] = conv2d_f32_to_f16(a, b);
                 }
             }
             conv2d_xpose_w16(y);
@@ -2040,7 +2052,7 @@ static void conv2d_hmx_win_croutons_fold(const struct htp_conv2d_win_context * w
                     pa = x;
                     continue;
                 }
-                const HVX_Vector y = hvx_vec_f32_to_f16(pa, x);
+                const HVX_Vector y = conv2d_f32_to_f16(pa, x);
                 if (scat) {
                     Q6_vscatter_QRMVwV(Q6_Q_vsetq2_R(VLEN), (size_t) dst, HMX_FP16_TILE_SIZE - 1,
                                        Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(4 * (ch - 1))), y);
@@ -2050,7 +2062,7 @@ static void conv2d_hmx_win_croutons_fold(const struct htp_conv2d_win_context * w
             }
         }
         if (ch & 1) {
-            const HVX_Vector y = hvx_vec_f32_to_f16(pa, zero);
+            const HVX_Vector y = conv2d_f32_to_f16(pa, zero);
             if (scat) {
                 Q6_vscatter_QRMVwV(Q6_Q_vsetq2_R(VLEN / 2), (size_t) dst, HMX_FP16_TILE_SIZE - 1,
                                    Q6_Vw_vadd_VwVw(soff, Q6_V_vsplat_R(4 * (ch - 1))), y);
@@ -2129,7 +2141,7 @@ static void conv2d_hmx_win_croutons_fold_cwhn(const struct htp_conv2d_win_contex
                 }
             }
             if (j & 1) {
-                dst[j / 2] = hvx_vec_f32_to_f16_shuff(pa, x);
+                dst[j / 2] = conv2d_f32_to_f16_shuff(pa, x);
             } else {
                 pa = x;
             }
