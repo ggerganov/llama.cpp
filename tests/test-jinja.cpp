@@ -2244,7 +2244,9 @@ static void test_object_methods(testing & t) {
 // A deeply nested chat_template_kwargs should not cause stack overflow
 // https://github.com/ggml-org/llama.cpp/issues/30834
 static void test_deep_nested_chat_template_kwargs(testing & t) {
-    t.test("deeply nested chat_template_kwargs array", [] (testing & t) {
+    constexpr std::string_view MESSAGE = "from_json: max recursion depth limit reached";
+
+    t.test("deeply nested chat_template_kwargs array", [MESSAGE] (testing & t) {
         common_json array = common_json::array();
 
         for (int i = 0; i < 2000; i++) {
@@ -2256,12 +2258,12 @@ static void test_deep_nested_chat_template_kwargs(testing & t) {
             common_json value = common_json::object({{"a", std::move(array)}});
             jinja::global_from_json(ctx, value, true);
             t.assert_true("recursion depth check not triggered", false);
-        } catch(const std::runtime_error &) {
-
+        } catch(const std::runtime_error & e) {
+            t.assert_equal(MESSAGE, std::string_view{e.what()});
         }
     });
 
-    t.test("deeply nested chat_template_kwargs object", [] (testing & t) {
+    t.test("deeply nested chat_template_kwargs object", [MESSAGE] (testing & t) {
         common_json value = common_json::array();
 
         for (int i = 0; i < 2000; i++) {
@@ -2274,8 +2276,8 @@ static void test_deep_nested_chat_template_kwargs(testing & t) {
         try {
             jinja::global_from_json(ctx, value, true);
             t.assert_true("recursion depth check not triggered", false);
-        } catch(const std::runtime_error &) {
-
+        } catch(const std::runtime_error & e) {
+            t.assert_equal(MESSAGE, std::string_view{e.what()});
         }
     });
 }

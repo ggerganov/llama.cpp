@@ -1464,6 +1464,8 @@ static value from_json(const common_json & j, bool mark_input, size_t depth) {
     constexpr size_t MAX_DEPTH = 1000;
 
     if (depth > MAX_DEPTH) {
+        // also update assert in test_deep_nested_chat_template_kwargs
+        // when updating this exception message
         throw std::runtime_error("from_json: max recursion depth limit reached");
     }
 
