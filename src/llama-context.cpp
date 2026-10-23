@@ -2997,7 +2997,7 @@ public:
             return;
         }
 
-        std::vector<ggml_tensor *> tensors;
+        std::vector<const ggml_tensor *> tensors;
         std::vector<size_t> offsets;
         std::vector<size_t> sizes;
         std::vector<size_t> data_offsets;
