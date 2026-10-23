@@ -389,8 +389,6 @@ function gg_run_qwen3_0_6b {
 
     gg_wget models-mnt/wikitext/ https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
 
-    # produce under a scratch dir local to this runner: $MNT may be shared by
-    # jobs running in parallel on the same machine
     rm -rf $OUT/scratch/qwen3-0.6B $OUT/scratch/wikitext
     mkdir -p $OUT/scratch/qwen3-0.6B
     unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d $OUT/scratch/wikitext/
@@ -411,77 +409,9 @@ function gg_run_qwen3_0_6b {
 
     model_f16="${path_local}/ggml-model-f16.gguf"
     model_bf16="${path_local}/ggml-model-bf16.gguf"
-    model_q8_0="${path_local}/ggml-model-q8_0.gguf"
     model_q4_0="${path_local}/ggml-model-q4_0.gguf"
-    model_q4_1="${path_local}/ggml-model-q4_1.gguf"
-    model_q5_0="${path_local}/ggml-model-q5_0.gguf"
-    model_q5_1="${path_local}/ggml-model-q5_1.gguf"
-    model_q2_k="${path_local}/ggml-model-q2_k.gguf"
-    model_q3_k="${path_local}/ggml-model-q3_k.gguf"
-    model_q4_k="${path_local}/ggml-model-q4_k.gguf"
-    model_q5_k="${path_local}/ggml-model-q5_k.gguf"
-    model_q6_k="${path_local}/ggml-model-q6_k.gguf"
 
     wiki_test="${path_wiki}/wiki.test.raw"
-
-    ./bin/llama-quantize ${model_bf16} ${model_q8_0} q8_0 $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q4_0} q4_0 $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q4_1} q4_1 $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q5_0} q5_0 $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q5_1} q5_1 $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q2_k} q2_k $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q3_k} q3_k $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q4_k} q4_k $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q5_k} q5_k $(nproc)
-    ./bin/llama-quantize ${model_bf16} ${model_q6_k} q6_k $(nproc)
-
-    # publish to the shared cache under $MNT; hardlink is atomic and cheap,
-    # cp -n is a fallback for cross-device layouts
-    for f in ${path_local}/ggml-model-*.gguf; do
-        f2="${path_models}/`basename $f`"
-        [ -e "$f2" ] || ln "$f" "$f2" 2>/dev/null || cp -n "$f" "$f2"
-    done
-
-    (time ./bin/llama-fit-params --model ${model_f16} 2>&1 | tee -a $OUT/${ci}-fp-f16.log)
-
-    (time ./bin/llama-completion -no-cnv --model ${model_f16}  -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
-    (time ./bin/llama-completion -no-cnv --model ${model_bf16} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-bf16.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q8_0} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q4_0} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q4_1} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q5_0} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q5_1} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q2_k} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q3_k} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q4_k} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q5_k} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
-    (time ./bin/llama-completion -no-cnv --model ${model_q6_k} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
-
-    (time ./bin/llama-perplexity --model ${model_f16}  -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
-    if [ -z ${GG_BUILD_NO_BF16} ]; then
-        (time ./bin/llama-perplexity --model ${model_bf16} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-bf16.log
-    fi
-    (time ./bin/llama-perplexity --model ${model_q8_0} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
-    (time ./bin/llama-perplexity --model ${model_q4_0} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
-    (time ./bin/llama-perplexity --model ${model_q4_1} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
-    (time ./bin/llama-perplexity --model ${model_q5_0} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
-    (time ./bin/llama-perplexity --model ${model_q5_1} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
-    (time ./bin/llama-perplexity --model ${model_q2_k} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
-    (time ./bin/llama-perplexity --model ${model_q3_k} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
-    (time ./bin/llama-perplexity --model ${model_q4_k} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
-    (time ./bin/llama-perplexity --model ${model_q5_k} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
-    (time ./bin/llama-perplexity --model ${model_q6_k} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
-
-    (time ./bin/llama-imatrix --model ${model_f16} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
-
-    # TODO: these tests are extremely slow on WebGPU - re-enable when fixed
-    #       https://github.com/ggml-org/llama.cpp/actions/runs/39639985732
-    if [ -z ${GG_BUILD_WEBGPU} ]; then
-        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 10 -c 1024 -fa off --no-op-offload) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
-        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 10 -c 1024 -fa on  --no-op-offload) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
-        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 99 -c 1024 -fa off                ) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
-        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 99 -c 1024 -fa on                 ) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
-    fi
 
     function check_ppl {
         qnt="$1"
@@ -496,20 +426,56 @@ function gg_run_qwen3_0_6b {
         return 0
     }
 
+    for qnt in q8_0 q4_0 q4_1 q5_0 q5_1 q2_k q3_k q4_k q5_k q6_k; do
+        model="${path_local}/ggml-model-${qnt}.gguf"
+
+        ./bin/llama-quantize ${model_bf16} ${model} ${qnt} $(nproc)
+
+        (time ./bin/llama-completion -no-cnv --model ${model} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-${qnt}.log
+        (time ./bin/llama-perplexity --model ${model} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-${qnt}.log
+
+        # note: ppl > 20.0 for q2_k with this model
+        if [ "${qnt}" != "q2_k" ]; then
+            check_ppl "${qnt}" "$(cat $OUT/${ci}-tg-${qnt}.log | grep "^\[1\]")"
+        fi
+
+        if [ "${qnt}" = "q4_0" ]; then
+            # q4_0 is kept for other tests
+            q4_0="${path_models}/ggml-model-q4_0.gguf"
+            ln ${model} "$q4_0" 2>/dev/null || cp -n ${model} "$q4_0"
+        else
+            rm -f ${model}
+        fi
+    done
+
+    (time ./bin/llama-fit-params --model ${model_f16} 2>&1 | tee -a $OUT/${ci}-fp-f16.log)
+
+    (time ./bin/llama-completion -no-cnv --model ${model_f16}  -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/llama-completion -no-cnv --model ${model_bf16} -ngl 99 -c 1024 -s 1234 -n 64 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-bf16.log
+
+    (time ./bin/llama-perplexity --model ${model_f16}  -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    if [ -z ${GG_BUILD_NO_BF16} ]; then
+        (time ./bin/llama-perplexity --model ${model_bf16} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-bf16.log
+    fi
+
+    (time ./bin/llama-imatrix --model ${model_f16} -f ${wiki_test} -ngl 99 -c 1024 -b 512 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
+
+    # TODO: these tests are extremely slow on WebGPU - re-enable when fixed
+    #       https://github.com/ggml-org/llama.cpp/actions/runs/39639985732
+    if [ -z ${GG_BUILD_WEBGPU} ]; then
+        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 10 -c 1024 -fa off --no-op-offload) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
+        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 10 -c 1024 -fa on  --no-op-offload) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
+        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 99 -c 1024 -fa off                ) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
+        (time ./bin/test-llama-context --model ${model_q4_0} -ngl 99 -c 1024 -fa on                 ) 2>&1 | tee -a $OUT/${ci}-test-llama-context.log
+    fi
+
     check_ppl "f16"  "$(cat $OUT/${ci}-tg-f16.log  | grep "^\[1\]")"
     if [ -z ${GG_BUILD_NO_BF16} ]; then
         check_ppl "bf16" "$(cat $OUT/${ci}-tg-bf16.log | grep "^\[1\]")"
     fi
-    check_ppl "q8_0" "$(cat $OUT/${ci}-tg-q8_0.log | grep "^\[1\]")"
-    check_ppl "q4_0" "$(cat $OUT/${ci}-tg-q4_0.log | grep "^\[1\]")"
-    check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")"
-    check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")"
-    check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")"
-   #check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" # note: ppl > 20.0 for this quant and model
-    check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")"
-    check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")"
-    check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")"
-    check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")"
+
+    # scratch is rebuilt on every run; q4_0 is already published to $MNT
+    rm -rf $OUT/scratch/qwen3-0.6B $OUT/scratch/wikitext
 
     set +e
 }
@@ -553,6 +519,8 @@ function gg_run_embd_bge_small {
 
     (time ./bin/llama-embedding --model ${model_f16}  -p "I believe the meaning of life is" -ngl 99 -c 0 --no-op-offload) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
     (time ./bin/llama-embedding --model ${model_q8_0} -p "I believe the meaning of life is" -ngl 99 -c 0 --no-op-offload) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+
+    rm -rf $path_local
 
     set +e
 }
@@ -611,6 +579,8 @@ function gg_run_rerank_tiny {
     check_score "rerank score 0" "$(cat $OUT/${ci}-rk-f16.log | grep "rerank score 0")" "0.00" "0.05" | tee -a $OUT/${ci}-rk-f16.log
     check_score "rerank score 1" "$(cat $OUT/${ci}-rk-f16.log | grep "rerank score 1")" "0.00" "0.05" | tee -a $OUT/${ci}-rk-f16.log
     check_score "rerank score 2" "$(cat $OUT/${ci}-rk-f16.log | grep "rerank score 2")" "0.10" "0.30" | tee -a $OUT/${ci}-rk-f16.log
+
+    rm -rf $path_local
 
     set +e
 }
