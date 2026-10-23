@@ -5515,6 +5515,31 @@ struct test_mul_mat_hadamard : public test_mul_mat {
     }
 };
 
+
+// Regression for ggml-org/llama.cpp#30950: CUDA MMVQ used fp16 for m*s8 on Q4_1/Q5_1/Q8_1.
+// Large block offsets (m ≈ -512) with large activations overflow fp16 and produce NaN logits.
+struct test_mul_mat_mmvq_fp16_scale_overflow : public test_mul_mat {
+    test_mul_mat_mmvq_fp16_scale_overflow(ggml_type type_a, int64_t n = 1)
+        : test_mul_mat(type_a, GGML_TYPE_F32, /*m*/64, n, /*k*/256, {1, 1}, {1, 1}) {
+            GGML_ASSERT(type_a == GGML_TYPE_Q4_1 || type_a == GGML_TYPE_Q5_1);
+            GGML_ASSERT(n >= 1 && n <= 8); // MMVQ path
+        }
+
+    void initialize_tensors(ggml_context * ctx) override {
+        for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+            if (strcmp(t->name, "a") == 0) {
+                // Constant large negatives → Q4_1/Q5_1 block min m ≈ -512 (d ≈ 0).
+                init_tensor_uniform(t, -512.0f, -512.0f);
+            } else if (strcmp(t->name, "b") == 0) {
+                // Large activations → Q8_1 block sum s large enough that |m|*|s| > 65504.
+                init_tensor_uniform(t, 200.0f, 200.0f);
+            } else {
+                init_tensor_uniform(t);
+            }
+        }
+    }
+};
+
 // FP4 W4A8 path (GGML_PREC_Q8 on src1 disallows 4-bit activations)
 struct test_mul_mat_w4a8 : public test_mul_mat {
     test_mul_mat_w4a8(ggml_type type_a = GGML_TYPE_NVFP4, ggml_type type_b = GGML_TYPE_F32,
@@ -11049,6 +11074,14 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         // long enough that the loop wraps, else the stride is never exercised
         test_cases.emplace_back(new test_mul_mat(type_a,    GGML_TYPE_F32, 16,  1, 16*256, { 1,  1}, {1, 1}));
         test_cases.emplace_back(new test_mul_mat(type_a,    GGML_TYPE_F32, 16,  8, 16*256, { 1,  1}, {1, 1}));
+    }
+
+
+    // #30950: MMVQ Q4_1/Q5_1 scale product must not overflow fp16 (m*s8).
+    for (ggml_type type_a : { GGML_TYPE_Q4_1, GGML_TYPE_Q5_1 }) {
+        for (int n = 1; n <= 8; n *= 2) {
+            test_cases.emplace_back(new test_mul_mat_mmvq_fp16_scale_overflow(type_a, n));
+        }
     }
 
     // Multi-column MMVQ coverage for the Q4_K weight-reuse path and a Q5_K control.
