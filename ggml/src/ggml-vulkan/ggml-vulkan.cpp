@@ -8688,7 +8688,10 @@ static vk_conv_shapes ggml_vk_conv_select_shape(ggml_backend_vk_context * ctx, u
 static vk_conv_shapes ggml_vk_conv3d_select_shape(ggml_backend_vk_context * ctx, uint32_t K, uint32_t NPQ) {
     const auto & block = vk_conv_block_sizes[CONV_SHAPE_256x128];
     const uint32_t shader_core_count = ctx->device->shader_core_count;
-    if (ctx->device->coopmat2 && shader_core_count > 0 && K % block.K == 0) {
+    // Slowdowns were observed on DGX Spark with drivers older than R615.
+    const bool driver_supported = ctx->device->driver_id != vk::DriverId::eNvidiaProprietary ||
+                                  (ctx->device->properties.driverVersion >> 22) >= 615;
+    if (ctx->device->coopmat2 && shader_core_count > 0 && K % block.K == 0 && driver_supported) {
         const uint64_t n_tiles = (uint64_t)(K / block.K) * CEIL_DIV((uint64_t)NPQ, block.NPQ);
         // Use the largest cm2 padding and include the dummy Csh[8].
         const uint32_t pad = 8, csh_elems = 8;
