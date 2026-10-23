@@ -185,7 +185,7 @@ fi
 
 ## helpers
 
-# download a file if it does not exist or if it is outdated
+# download a file unless already cached in $MNT
 function gg_wget {
     local out=$1
     local url=$2
@@ -197,20 +197,16 @@ function gg_wget {
     mkdir -p $out
     cd $out
 
-    # should not re-download if file is the same
-    # -N cannot be combined with -O: check timestamps in a temp dir
-    rm -rf $tmp && mkdir $tmp
-    if [ -f $name ]; then
-        touch -r $name $tmp/$name
+    # cache first: HF artifacts are static, HF sends no Last-Modified for -N
+    if [ ! -s $name ]; then
+        # publish with mv: concurrent runners never read partial files
+        rm -rf $tmp && mkdir $tmp
+        (cd $tmp && wget -nv $url)
+        if [ -s $tmp/$name ]; then
+            mv -f $tmp/$name $name
+        fi
+        rm -rf $tmp
     fi
-
-    # runners on the same machine share $MNT: publish with mv so that
-    # concurrent jobs never read a partially downloaded file
-    (cd $tmp && wget -nv -N $url)
-    if [ -s $tmp/$name ]; then
-        mv -f $tmp/$name $name
-    fi
-    rm -rf $tmp
 
     cd $cwd
 }
