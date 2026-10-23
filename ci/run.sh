@@ -191,12 +191,26 @@ function gg_wget {
     local url=$2
 
     local cwd=`pwd`
+    local name=`basename $url`
+    local tmp=.gg-wget.$$.tmp
 
     mkdir -p $out
     cd $out
 
     # should not re-download if file is the same
-    wget -nv -c -N $url
+    # -N cannot be combined with -O: check timestamps in a temp dir
+    rm -rf $tmp && mkdir $tmp
+    if [ -f $name ]; then
+        touch -r $name $tmp/$name
+    fi
+
+    # runners on the same machine share $MNT: publish with mv so that
+    # concurrent jobs never read a partially downloaded file
+    (cd $tmp && wget -nv -N $url)
+    if [ -s $tmp/$name ]; then
+        mv -f $tmp/$name $name
+    fi
+    rm -rf $tmp
 
     cd $cwd
 }
@@ -312,8 +326,8 @@ function gg_run_test_scripts {
 
     set -e
 
-    (cd ./tools/gguf-split && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
-    (cd ./tools/quantize   && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./tools/gguf-split && time bash tests.sh "$SRC/build-ci-release/bin" "$OUT/scratch") 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./tools/quantize   && time bash tests.sh "$SRC/build-ci-release/bin" "$OUT/scratch") 2>&1 | tee -a $OUT/${ci}-scripts.log
 
     set +e
 }
@@ -374,10 +388,16 @@ function gg_run_qwen3_0_6b {
 
 
     gg_wget models-mnt/wikitext/ https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d models-mnt/wikitext/
+
+    # produce under a scratch dir local to this runner: $MNT may be shared by
+    # jobs running in parallel on the same machine
+    rm -rf $OUT/scratch/qwen3-0.6B $OUT/scratch/wikitext
+    mkdir -p $OUT/scratch/qwen3-0.6B
+    unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d $OUT/scratch/wikitext/
 
     path_models="../models-mnt/qwen3/0.6B"
-    path_wiki="../models-mnt/wikitext/wikitext-2-raw"
+    path_local="$OUT/scratch/qwen3-0.6B"
+    path_wiki="$OUT/scratch/wikitext/wikitext-2-raw"
 
     rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
@@ -386,21 +406,21 @@ function gg_run_qwen3_0_6b {
     (cmake -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time cmake --build . --config Release -j$(nproc)) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf  --outtype f16
-    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-bf16.gguf --outtype bf16
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_local}/ggml-model-f16.gguf  --outtype f16
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_local}/ggml-model-bf16.gguf --outtype bf16
 
-    model_f16="${path_models}/ggml-model-f16.gguf"
-    model_bf16="${path_models}/ggml-model-bf16.gguf"
-    model_q8_0="${path_models}/ggml-model-q8_0.gguf"
-    model_q4_0="${path_models}/ggml-model-q4_0.gguf"
-    model_q4_1="${path_models}/ggml-model-q4_1.gguf"
-    model_q5_0="${path_models}/ggml-model-q5_0.gguf"
-    model_q5_1="${path_models}/ggml-model-q5_1.gguf"
-    model_q2_k="${path_models}/ggml-model-q2_k.gguf"
-    model_q3_k="${path_models}/ggml-model-q3_k.gguf"
-    model_q4_k="${path_models}/ggml-model-q4_k.gguf"
-    model_q5_k="${path_models}/ggml-model-q5_k.gguf"
-    model_q6_k="${path_models}/ggml-model-q6_k.gguf"
+    model_f16="${path_local}/ggml-model-f16.gguf"
+    model_bf16="${path_local}/ggml-model-bf16.gguf"
+    model_q8_0="${path_local}/ggml-model-q8_0.gguf"
+    model_q4_0="${path_local}/ggml-model-q4_0.gguf"
+    model_q4_1="${path_local}/ggml-model-q4_1.gguf"
+    model_q5_0="${path_local}/ggml-model-q5_0.gguf"
+    model_q5_1="${path_local}/ggml-model-q5_1.gguf"
+    model_q2_k="${path_local}/ggml-model-q2_k.gguf"
+    model_q3_k="${path_local}/ggml-model-q3_k.gguf"
+    model_q4_k="${path_local}/ggml-model-q4_k.gguf"
+    model_q5_k="${path_local}/ggml-model-q5_k.gguf"
+    model_q6_k="${path_local}/ggml-model-q6_k.gguf"
 
     wiki_test="${path_wiki}/wiki.test.raw"
 
@@ -414,6 +434,13 @@ function gg_run_qwen3_0_6b {
     ./bin/llama-quantize ${model_bf16} ${model_q4_k} q4_k $(nproc)
     ./bin/llama-quantize ${model_bf16} ${model_q5_k} q5_k $(nproc)
     ./bin/llama-quantize ${model_bf16} ${model_q6_k} q6_k $(nproc)
+
+    # publish to the shared cache under $MNT; hardlink is atomic and cheap,
+    # cp -n is a fallback for cross-device layouts
+    for f in ${path_local}/ggml-model-*.gguf; do
+        f2="${path_models}/`basename $f`"
+        [ -e "$f2" ] || ln "$f" "$f2" 2>/dev/null || cp -n "$f" "$f2"
+    done
 
     (time ./bin/llama-fit-params --model ${model_f16} 2>&1 | tee -a $OUT/${ci}-fp-f16.log)
 
@@ -505,6 +532,8 @@ function gg_run_embd_bge_small {
     gg_wget models-mnt/bge-small/1_Pooling https://huggingface.co/BAAI/bge-small-en-v1.5/raw/main/1_Pooling/config.json
 
     path_models="../models-mnt/bge-small"
+    path_local="$OUT/scratch/bge-small"
+    rm -rf $path_local && mkdir -p $path_local
 
     rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
@@ -513,10 +542,10 @@ function gg_run_embd_bge_small {
     (cmake -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time cmake --build . --config Release -j$(nproc)) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_local}/ggml-model-f16.gguf
 
-    model_f16="${path_models}/ggml-model-f16.gguf"
-    model_q8_0="${path_models}/ggml-model-q8_0.gguf"
+    model_f16="${path_local}/ggml-model-f16.gguf"
+    model_q8_0="${path_local}/ggml-model-q8_0.gguf"
 
     ./bin/llama-quantize ${model_f16} ${model_q8_0} q8_0
 
@@ -541,6 +570,8 @@ function gg_run_rerank_tiny {
     gg_wget models-mnt/rerank-tiny/ https://huggingface.co/jinaai/jina-reranker-v1-tiny-en/raw/main/vocab.json
 
     path_models="../models-mnt/rerank-tiny"
+    path_local="$OUT/scratch/rerank-tiny"
+    rm -rf $path_local && mkdir -p $path_local
 
     rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
@@ -549,9 +580,9 @@ function gg_run_rerank_tiny {
     (cmake -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time cmake --build . --config Release -j$(nproc)) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_local}/ggml-model-f16.gguf
 
-    model_f16="${path_models}/ggml-model-f16.gguf"
+    model_f16="${path_local}/ggml-model-f16.gguf"
 
     (time ./bin/llama-fit-params --model ${model_f16} 2>&1 | tee -a $OUT/${ci}-fp-f16.log)
 
@@ -687,11 +718,11 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
     # Create a fresh python3 venv and enter it
-    if ! python3 -m venv "$MNT/venv"; then
-        echo "Error: Failed to create Python virtual environment at $MNT/venv."
+    if ! python3 -m venv "$OUT/venv"; then
+        echo "Error: Failed to create Python virtual environment at $OUT/venv."
         exit 1
     fi
-    source "$MNT/venv/bin/activate"
+    source "$OUT/venv/bin/activate"
 
     pip install -r ${SRC}/requirements.txt --disable-pip-version-check
     pip install --editable gguf-py --disable-pip-version-check
