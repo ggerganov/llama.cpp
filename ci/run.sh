@@ -442,7 +442,7 @@ function gg_run_qwen3_0_6b {
         if [ "${qnt}" = "q4_0" ]; then
             # q4_0 is kept for other tests
             q4_0="${path_models}/ggml-model-q4_0.gguf"
-            ln ${model} "$q4_0" 2>/dev/null || cp -n ${model} "$q4_0"
+            ln ${model} "$q4_0" 2>/dev/null || { cp ${model} $q4_0.tmp.$$ && mv -f $q4_0.tmp.$$ $q4_0; }
         else
             rm -f ${model}
         fi
