@@ -772,20 +772,20 @@ llama_model_qwen4exp::llm_graph_input_kpool * llama_model_qwen4exp::graph::build
     // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches
     // the mask streams are not split: a split cache with several sequences keeps one chunk, as its reserve does
     const int64_t n_chunk = qwen4exp_qsa_n_chunk();
-    if (n_chunk == 0 || n_tokens <= n_chunk || !(cparams.kv_unified || cparams.n_seq_max == 1)) {
+    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || !(cparams.kv_unified || cparams.n_seq_max == 1)) {
         inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, inp->tail_idxs });
     } else {
         GGML_ASSERT(kq_mask->ne[1] == n_tokens);
 
-        // split every large ubatch as the reserve split a full one, so the graph and its largest chunk keep their shape
-        // a small ubatch has one chunk, so the graph changes shape and the allocator plans it again
+        // every ubatch has the chunk count of the reserve, so the graph keeps the planned shape
+        // the chunks past the last token are empty, and the backends skip empty nodes
         const int64_t n_split = (cparams.n_ubatch + n_chunk - 1)/n_chunk;
-        for (int64_t i = 0, t0 = 0; i < n_split; ++i) {
-            const int64_t n = n_tokens/n_split + (i < n_tokens % n_split);
+        for (int64_t i = 0; i < n_split; ++i) {
+            const int64_t t0 = std::min(i*n_chunk, n_tokens);
+            const int64_t n  = std::min(n_chunk, n_tokens - t0);
             inp->chunks.push_back({ t0, n,
                     ggml_view_2d(ctx0, inp->pool_mask, n_pool,    n, inp->pool_mask->nb[1], t0*inp->pool_mask->nb[1]),
                     ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]) });
-            t0 += n;
         }
     }
 
