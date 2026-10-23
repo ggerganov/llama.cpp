@@ -42,6 +42,9 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
             throw std::invalid_argument("invalid character");
         }
         auto result = ((utf8[offset + 0] & 0x1f) << 6) | (utf8[offset + 1] & 0x3f);
+        if (result < 0x80) {
+            throw std::invalid_argument("invalid character");
+        }
         offset += 2;
         return result;
     }
@@ -50,6 +53,9 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
             throw std::invalid_argument("invalid character");
         }
         auto result = ((utf8[offset + 0] & 0x0f) << 12) | ((utf8[offset + 1] & 0x3f) << 6) | (utf8[offset + 2] & 0x3f);
+        if (result < 0x800) {
+            throw std::invalid_argument("invalid character");
+        }
         offset += 3;
         return result;
     }
@@ -58,6 +64,9 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
             throw std::invalid_argument("invalid character");
         }
         auto result = ((utf8[offset + 0] & 0x07) << 18) | ((utf8[offset + 1] & 0x3f) << 12) | ((utf8[offset + 2] & 0x3f) << 6) | (utf8[offset + 3] & 0x3f);
+        if (result < 0x10000 || result > 0x10ffff) {
+            throw std::invalid_argument("invalid character");
+        }
         offset += 4;
         return result;
     }
@@ -189,6 +198,19 @@ static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
             map[unicode_cpt_to_utf8(256 + n)] = ch;
             ++n;
         }
+    }
+    return map;
+}
+
+static std::vector<int> unicode_cpt_to_byte_map() {
+    std::vector<int> map;
+    for (int ch = 0; ch < 256; ++ch) {
+        size_t offset = 0;
+        const uint32_t cpt = unicode_cpt_from_utf8(unicode_byte_to_utf8(ch), offset);
+        if (cpt >= map.size()) {
+            map.resize(cpt + 1, -1);
+        }
+        map[cpt] = ch;
     }
     return map;
 }
@@ -1405,6 +1427,14 @@ std::string unicode_byte_to_utf8(uint8_t byte) {
 uint8_t unicode_utf8_to_byte(const std::string & utf8) {
     static std::unordered_map<std::string, uint8_t> map = unicode_utf8_to_byte_map();
     return map.at(utf8);
+}
+
+uint8_t unicode_cpt_to_byte(uint32_t cpt) {
+    static const std::vector<int> map = unicode_cpt_to_byte_map();
+    if (cpt >= map.size() || map[cpt] < 0) {
+        throw std::out_of_range("unicode_cpt_to_byte: not a byte token code point");
+    }
+    return map[cpt];
 }
 
 uint32_t unicode_tolower(uint32_t cpt) {
