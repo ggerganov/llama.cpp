@@ -8,8 +8,8 @@
 #ifndef CPPHTTPLIB_HTTPLIB_H
 #define CPPHTTPLIB_HTTPLIB_H
 
-#define CPPHTTPLIB_VERSION "0.62.0"
-#define CPPHTTPLIB_VERSION_NUM "0x003e00"
+#define CPPHTTPLIB_VERSION "0.63.0"
+#define CPPHTTPLIB_VERSION_NUM "0x003f00"
 
 #ifdef _WIN32
 #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
@@ -3527,8 +3527,12 @@ private:
 
   // Tracks whether a custom CA store was applied via set_ca_cert_store(),
   // since the store handle itself is owned by ctx_ and leaves no other trace.
-  // Used to keep custom CA configuration exclusive with system CA loading.
   bool ca_cert_store_set_ = false;
+
+  // Set by set_ca_cert_store() and load_ca_cert_store() even when they bring
+  // no certificate, so that a CA that failed to come through fails
+  // verification instead of letting the system CAs in.
+  bool custom_ca_loaded_ = false;
 
   std::function<SSLVerifierResponse(tls::session_t)> session_verifier_;
 
@@ -4793,6 +4797,9 @@ private:
   tls::session_t tls_session_ = nullptr;
   std::string ca_cert_file_path_;
   std::string ca_cert_dir_path_;
+  // Set by set_ca_cert_store() and load_ca_cert_store() even when they bring
+  // no certificate, so that a CA that failed to come through fails
+  // verification instead of letting the system CAs in.
   bool custom_ca_loaded_ = false;
   bool certs_loaded_ = false;
   SystemCAMode system_ca_mode_ = SystemCAMode::Auto;

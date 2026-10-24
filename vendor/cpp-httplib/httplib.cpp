@@ -1104,45 +1104,25 @@ bool is_valid_close_payload(const std::string &payload) {
 
 namespace detail {
 
+// A path a mount point serves: absolute, with no ".", ".." or empty segment
+// except a trailing '/', so the file served is the one that req.path names to
+// the handlers that ran before it.
 bool is_valid_path(const std::string &path) {
-  size_t level = 0;
-  size_t i = 0;
+  if (path.empty() || path[0] != '/') { return false; }
 
-  // Skip slash
-  while (i < path.size() && path[i] == '/') {
-    i++;
-  }
-
-  while (i < path.size()) {
-    // Read component
-    auto beg = i;
-    while (i < path.size() && path[i] != '/') {
-      if (path[i] == '\0') {
-        return false;
-      } else if (path[i] == '\\') {
-        return false;
-      }
-      i++;
+  auto beg = size_t{1};
+  for (auto i = beg; i <= path.size(); i++) {
+    if (i < path.size() && path[i] != '/') {
+      if (path[i] == '\0' || path[i] == '\\') { return false; }
+      continue;
     }
-
     auto len = i - beg;
-    assert(len > 0);
-
-    if (!path.compare(beg, len, ".")) {
-      ;
-    } else if (!path.compare(beg, len, "..")) {
-      if (level == 0) { return false; }
-      level--;
-    } else {
-      level++;
+    if ((len == 0 && i < path.size()) || (len == 1 && path[beg] == '.') ||
+        (len == 2 && path[beg] == '.' && path[beg + 1] == '.')) {
+      return false;
     }
-
-    // Skip slash
-    while (i < path.size() && path[i] == '/') {
-      i++;
-    }
+    beg = i + 1;
   }
-
   return true;
 }
 
@@ -6492,6 +6472,17 @@ bool setup_client_tls_session(
     return false;
   };
 
+  // A TLS failure, whose verification codes name the Error too
+  auto fail_tls = [&](ErrorCode code, uint64_t backend_error) {
+    auto error = Error::SSLConnection;
+    if (code == ErrorCode::CertVerifyFailed) {
+      error = Error::SSLServerVerification;
+    } else if (code == ErrorCode::HostnameMismatch) {
+      error = Error::SSLServerHostnameVerification;
+    }
+    return fail(error, static_cast<int>(code), backend_error);
+  };
+
   if (!ctx) {
     session = nullptr;
     return fail(Error::SSLConnection, 0, 0);
@@ -6507,31 +6498,34 @@ bool setup_client_tls_session(
                            !options.server_certificate_verifier_set;
 #endif
 
+  // The chain, and a host name, are verified during the handshake, so that a
+  // server failing them never gets to see a client certificate. Unless
+  // Schannel verifies the chain instead, this holds for IP hosts too, whose
+  // identity is checked after the handshake by verify_hostname().
+  auto verify_in_handshake =
+      server_certificate_verification && !windows_verifies_chain;
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+  // A session verifier may accept a certificate the built-in check rejects,
+  // and runs only after the handshake
+  verify_in_handshake = verify_in_handshake && !options.session_verifier;
+#endif
+
   {
     std::unique_lock<std::mutex> guard;
     if (options.ctx_mutex) {
       guard = std::unique_lock<std::mutex>(*options.ctx_mutex);
     }
-#if defined(CPPHTTPLIB_MBEDTLS_SUPPORT) || defined(CPPHTTPLIB_WOLFSSL_SUPPORT)
-    // Mbed TLS and wolfSSL need the verification mode set explicitly, on the
-    // context, so under the same lock; OpenSSL uses SSL_VERIFY_NONE and does
-    // all verification post-handshake. Unless Schannel verifies the chain
-    // instead, chain verification happens during the handshake even for IP
-    // hosts; the certificate identity is verified post-handshake via
-    // verify_hostname().
-    set_verify_client(ctx, server_certificate_verification &&
-                               !windows_verifies_chain);
-#endif
+    // The mode is set on the context, so under the same lock
+    set_verify_client(ctx, verify_in_handshake);
     session = create_session(ctx, sock);
   }
   if (!session) { return fail(Error::SSLConnection, 0, get_error()); }
 
   // RFC 6066: SNI must not be set for IP addresses; skip it for IP hosts, so
-  // their identity is checked post-handshake below instead. On Mbed TLS and
-  // wolfSSL, set_sni also drives handshake-time hostname verification, so
-  // options.server_hostname_verification is threaded through here.
+  // their identity is checked post-handshake below instead.
   if (!is_ip_address(host)) {
-    if (!set_sni(session, host.c_str(), options.server_hostname_verification)) {
+    if (!set_sni(session, host.c_str(),
+                 verify_in_handshake && options.server_hostname_verification)) {
       return fail(Error::SSLConnection, 0, get_error());
     }
   }
@@ -6539,13 +6533,7 @@ bool setup_client_tls_session(
   TlsError tls_err;
   if (!connect_nonblocking(session, sock, timeout_sec, timeout_usec,
                            &tls_err)) {
-    auto error = Error::SSLConnection;
-    if (tls_err.code == ErrorCode::CertVerifyFailed) {
-      error = Error::SSLServerVerification;
-    } else if (tls_err.code == ErrorCode::HostnameMismatch) {
-      error = Error::SSLServerHostnameVerification;
-    }
-    return fail(error, static_cast<int>(tls_err.code), tls_err.backend_code);
+    return fail_tls(tls_err.code, tls_err.backend_code);
   }
 
   auto verification_status = SSLVerifierResponse::NoDecisionMade;
@@ -6562,14 +6550,14 @@ bool setup_client_tls_session(
     if (!windows_verifies_chain) {
       auto verify_result = get_verify_result(session);
       if (verify_result != 0) {
-        return fail(Error::SSLServerVerification, 0,
-                    static_cast<uint64_t>(verify_result));
+        return fail_tls(ErrorCode::CertVerifyFailed,
+                        static_cast<uint64_t>(verify_result));
       }
     }
 
     auto server_cert = get_peer_cert(session);
     if (!server_cert) {
-      return fail(Error::SSLServerVerification, 0, get_error());
+      return fail_tls(ErrorCode::CertVerifyFailed, get_error());
     }
     auto cert_guard = detail::scope_exit([&] { free_cert(server_cert); });
 
@@ -6578,8 +6566,7 @@ bool setup_client_tls_session(
     // hostname is bound during the handshake.
     if (options.server_hostname_verification) {
       if (!verify_hostname(server_cert, host.c_str())) {
-        return fail(Error::SSLServerHostnameVerification, 0,
-                    hostname_mismatch_code());
+        return fail_tls(ErrorCode::HostnameMismatch, hostname_mismatch_code());
       }
     }
 
@@ -6594,7 +6581,7 @@ bool setup_client_tls_session(
           !verify_cert_with_windows_schannel(
               der, host, options.server_hostname_verification, wincrypt_error,
               session)) {
-        return fail(Error::SSLServerVerification, 0, wincrypt_error);
+        return fail_tls(ErrorCode::CertVerifyFailed, wincrypt_error);
       }
     }
 #endif
@@ -9479,6 +9466,8 @@ bool Server::read_content_core(
 }
 
 bool Server::handle_file_request(Request &req, Response &res) {
+  if (!detail::is_valid_path(req.path)) { return false; }
+
   for (const auto &entry : base_dirs_) {
     // Prefix match, on a path segment boundary. A mount point of "/mount"
     // covers "/mount" and "/mount/...", but must not swallow "/mountdir/...".
@@ -9489,85 +9478,80 @@ bool Server::handle_file_request(Request &req, Response &res) {
          req.path.size() == entry.mount_point.size() ||
          req.path[entry.mount_point.size()] == '/')) {
       std::string sub_path = "/" + req.path.substr(entry.mount_point.size());
-      if (detail::is_valid_path(sub_path)) {
-        auto path = entry.base_dir + sub_path;
-        if (path.back() == '/') { path += "index.html"; }
+      auto path = entry.base_dir + sub_path;
+      if (path.back() == '/') { path += "index.html"; }
 
-        // Defense-in-depth: is_valid_path blocks ".." traversal in the URL,
-        // but symlinks/junctions can still escape the base directory. A path
-        // that cannot be resolved, which includes one that does not exist, is
-        // not served from here.
-        std::string resolved_path;
-        if (!detail::canonicalize_path(path.c_str(), resolved_path)) {
-          continue;
+      // Defense-in-depth: is_valid_path blocks ".." traversal in the URL,
+      // but symlinks/junctions can still escape the base directory. A path
+      // that cannot be resolved, which includes one that does not exist, is
+      // not served from here.
+      std::string resolved_path;
+      if (!detail::canonicalize_path(path.c_str(), resolved_path)) { continue; }
+      if (!detail::is_path_within_base(resolved_path,
+                                       entry.resolved_base_dir)) {
+        res.status = StatusCode::Forbidden_403;
+        return true;
+      }
+
+      detail::FileStat stat(path);
+
+      if (stat.is_dir()) {
+        // Relative, so "//dir" cannot name another host; "./" keeps a ':'
+        // in the name from reading as a scheme.
+        auto name = req.path.substr(req.path.rfind('/') + 1);
+        res.set_redirect("./" + encode_path_component(name) + "/",
+                         StatusCode::MovedPermanently_301);
+        return true;
+      }
+
+      if (stat.is_file()) {
+        for (const auto &kv : entry.headers) {
+          res.set_header(kv.first, kv.second);
         }
-        if (!detail::is_path_within_base(resolved_path,
-                                         entry.resolved_base_dir)) {
-          res.status = StatusCode::Forbidden_403;
-          return true;
+
+        auto content_type = detail::find_content_type(
+            path, file_extension_and_mimetype_map_, default_file_mimetype_);
+        auto encoding = detail::EncodingType::None;
+        if (static_file_compression_) {
+          encoding = static_file_encoding(req, res, content_type, stat.size());
         }
 
-        detail::FileStat stat(path);
+        // The ETag names the representation actually sent, so a client that
+        // cached the compressed form revalidates against the compressed ETag
+        // and still gets a 304, while one that took identity keeps the plain
+        // ETag.
+        auto etag = detail::compute_etag(
+            stat, encoding == detail::EncodingType::None
+                      ? std::string()
+                      : std::string("-") + detail::encoding_name(encoding));
+        if (!etag.empty()) { res.set_header("ETag", etag); }
 
-        if (stat.is_dir()) {
-          // Relative, so "//dir" cannot name another host; "./" keeps a ':'
-          // in the name from reading as a scheme.
-          auto name = req.path.substr(req.path.rfind('/') + 1);
-          res.set_redirect("./" + encode_path_component(name) + "/",
-                           StatusCode::MovedPermanently_301);
-          return true;
+        auto mtime = stat.mtime();
+
+        auto last_modified = detail::file_mtime_to_http_date(mtime);
+        if (!last_modified.empty()) {
+          res.set_header("Last-Modified", last_modified);
         }
 
-        if (stat.is_file()) {
-          for (const auto &kv : entry.headers) {
-            res.set_header(kv.first, kv.second);
-          }
+        if (check_if_not_modified(req, res, etag, mtime)) { return true; }
 
-          auto content_type = detail::find_content_type(
-              path, file_extension_and_mimetype_map_, default_file_mimetype_);
-          auto encoding = detail::EncodingType::None;
-          if (static_file_compression_) {
-            encoding =
-                static_file_encoding(req, res, content_type, stat.size());
-          }
+        check_if_range(req, etag, mtime);
 
-          // The ETag names the representation actually sent, so a client that
-          // cached the compressed form revalidates against the compressed ETag
-          // and still gets a 304, while one that took identity keeps the plain
-          // ETag.
-          auto etag = detail::compute_etag(
-              stat, encoding == detail::EncodingType::None
-                        ? std::string()
-                        : std::string("-") + detail::encoding_name(encoding));
-          if (!etag.empty()) { res.set_header("ETag", etag); }
-
-          auto mtime = stat.mtime();
-
-          auto last_modified = detail::file_mtime_to_http_date(mtime);
-          if (!last_modified.empty()) {
-            res.set_header("Last-Modified", last_modified);
-          }
-
-          if (check_if_not_modified(req, res, etag, mtime)) { return true; }
-
-          check_if_range(req, etag, mtime);
-
-          auto mm = std::make_shared<detail::mmap>(path.c_str());
-          if (!mm->is_open()) {
-            output_error_log(Error::OpenFile, &req);
-            return false;
-          }
-
-          detail::set_file_content_provider(res, mm, content_type, encoding);
-
-          if (req.method != "HEAD" && file_request_handler_) {
-            file_request_handler_(req, res);
-          }
-
-          return true;
-        } else {
+        auto mm = std::make_shared<detail::mmap>(path.c_str());
+        if (!mm->is_open()) {
           output_error_log(Error::OpenFile, &req);
+          return false;
         }
+
+        detail::set_file_content_provider(res, mm, content_type, encoding);
+
+        if (req.method != "HEAD" && file_request_handler_) {
+          file_request_handler_(req, res);
+        }
+
+        return true;
+      } else {
+        output_error_log(Error::OpenFile, &req);
       }
     }
   }
@@ -10357,10 +10341,15 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
   // An upgrade request has been through pre-routing before it reaches routing()
   auto is_upgrade = detail::is_websocket_upgrade(req);
   if (is_upgrade) {
+    // A response given here leaves the body unread, and it would be parsed as
+    // the next request.
+    auto close_if_answered =
+        close_after_response || detail::has_framed_body(req);
+
     if (pre_routing_handler_ &&
         pre_routing_handler_(req, res) == HandlerResponse::Handled) {
       if (res.status == -1) { res.status = StatusCode::OK_200; }
-      return write_response_with_content(strm, close_after_response, req, res);
+      return write_response_with_content(strm, close_if_answered, req, res);
     }
     // Find matching WebSocket handler
     for (const auto &entry : websocket_handlers_) {
@@ -10369,8 +10358,7 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
         if (pre_request_handler_ &&
             pre_request_handler_(req, res) == HandlerResponse::Handled) {
           if (res.status == -1) { res.status = StatusCode::OK_200; }
-          return write_response_with_content(strm, close_after_response, req,
-                                             res);
+          return write_response_with_content(strm, close_if_answered, req, res);
         }
 
         // Compute accept key
@@ -11084,19 +11072,24 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
     return handle;
   }
 
-  // Same framing check as ClientImpl::process_request(). A HEAD or bodyless
-  // (204/304) response legitimately carries framing headers with no body.
-  if (req.method != "HEAD" &&
-      handle.response->status != StatusCode::NoContent_204 &&
-      handle.response->status != StatusCode::NotModified_304 &&
-      detail::has_conflicting_content_length(handle.response->headers)) {
+  handle.body_reader_.stream = handle.stream_;
+  handle.body_reader_.payload_max_length = payload_max_length_;
+
+  // RFC 9112 6.3: a response to HEAD, and a 204 or 304 response, ends with its
+  // header section, so none of its framing or coding headers apply.
+  if (req.method == "HEAD" ||
+      handle.response->status == StatusCode::NoContent_204 ||
+      handle.response->status == StatusCode::NotModified_304) {
+    handle.body_reader_.eof = true;
+    return handle;
+  }
+
+  // Same framing check as ClientImpl::process_request()
+  if (detail::has_conflicting_content_length(handle.response->headers)) {
     handle.error = Error::Read;
     handle.response.reset();
     return handle;
   }
-
-  handle.body_reader_.stream = handle.stream_;
-  handle.body_reader_.payload_max_length = payload_max_length_;
 
   if (handle.response->has_header("Content-Length")) {
     bool is_invalid = false;
@@ -11520,7 +11513,7 @@ bool ClientImpl::create_redirect_client(
         }
         redirect_client.load_ca_cert_store(pem.data(), pem.size());
         redirect_client.ca_cert_store_set_ = true;
-      } else {
+      } else if (self.custom_ca_loaded_) {
         redirect_client.load_ca_cert_store(ca_cert_pem_.c_str(),
                                            ca_cert_pem_.size());
       }
@@ -13964,8 +13957,10 @@ SSLServer::SSLServer(const PemMemory &pem) {
       last_ssl_error_ = static_cast<int>(get_error());
       free_context(ctx_);
       ctx_ = nullptr;
-    } else if (pem.client_ca_pem && pem.client_ca_pem_len > 0) {
-      if (!load_ca_pem(ctx_, pem.client_ca_pem, pem.client_ca_pem_len)) {
+    } else if (pem.client_ca_pem) {
+      auto ca_len = pem.client_ca_pem_len ? pem.client_ca_pem_len
+                                          : strlen(pem.client_ca_pem);
+      if (!load_ca_pem(ctx_, pem.client_ca_pem, ca_len)) {
         last_ssl_error_ = static_cast<int>(get_error());
         free_context(ctx_);
         ctx_ = nullptr;
@@ -14093,7 +14088,9 @@ bool SSLServer::update_certs_pem(const char *cert_pem,
     return false;
   }
   if (client_ca_pem) {
-    return tls::update_server_client_ca(ctx_, client_ca_pem);
+    if (!tls::update_server_client_ca(ctx_, client_ca_pem)) { return false; }
+    // As in the constructors, a client CA makes client certificates required
+    tls::set_verify_client(ctx_, true);
   }
   return true;
 }
@@ -14361,6 +14358,7 @@ void SSLClient::set_ca_cert_store(tls::ca_store_t ca_cert_store) {
   } else if (ca_cert_store) {
     tls::free_ca_store(ca_cert_store);
   }
+  custom_ca_loaded_ = true;
 }
 
 void
@@ -14393,6 +14391,7 @@ void SSLClient::load_ca_cert_store(const char *ca_cert,
     ca_cert_pem_.append(ca_cert, size);
     tls::load_ca_pem(ctx_, ca_cert, size);
   }
+  custom_ca_loaded_ = true;
 }
 
 bool SSLClient::load_certs() {
@@ -14403,10 +14402,9 @@ bool SSLClient::load_certs() {
   std::call_once(initialize_cert_, [&]() {
     std::lock_guard<std::mutex> guard(ctx_mutex_);
 
-    ret = detail::load_client_ca_config(
-        ctx_, ca_cert_file_path_, ca_cert_dir_path_,
-        !ca_cert_pem_.empty() || ca_cert_store_set_, system_ca_mode_,
-        last_backend_error_);
+    ret = detail::load_client_ca_config(ctx_, ca_cert_file_path_,
+                                        ca_cert_dir_path_, custom_ca_loaded_,
+                                        system_ca_mode_, last_backend_error_);
   });
 
   return ret;
@@ -14432,7 +14430,7 @@ bool SSLClient::initialize_ssl(Socket &socket, Error &error) {
   options.windows_cert_verification =
       enable_windows_cert_verification_ &&
       system_ca_mode_ != SystemCAMode::Disabled && ca_cert_file_path_.empty() &&
-      ca_cert_dir_path_.empty() && ca_cert_pem_.empty() && !ca_cert_store_set_;
+      ca_cert_dir_path_.empty() && !custom_ca_loaded_;
   // Only a verifier set through set_server_certificate_verifier() is seen
   // here, not one installed with tls::set_verify_callback() directly.
   options.server_certificate_verifier_set =
@@ -14866,6 +14864,30 @@ ErrorCode map_ssl_error(int ssl_error, int &out_errno) {
   }
 }
 
+// Fills in a failed SSL_connect(). One that the server certificate's
+// verification stopped reports the verify result, as the other backends and
+// a check after the handshake do.
+void fill_connect_error(SSL *ssl, int ret, TlsError &err) {
+  auto ssl_err = SSL_get_error(ssl, ret);
+  auto error = ERR_get_error();
+  err.code = map_ssl_error(ssl_err, err.sys_errno);
+  err.backend_code = error;
+  if (ssl_err != SSL_ERROR_SSL || ERR_GET_LIB(error) != ERR_LIB_SSL ||
+      ERR_GET_REASON(error) != SSL_R_CERTIFICATE_VERIFY_FAILED) {
+    return;
+  }
+  // A certificate only a verify callback turned down carries no verdict of
+  // its own, and fails as any other handshake does
+  auto verify_result = SSL_get_verify_result(ssl);
+  if (verify_result == X509_V_OK || verify_result == X509_V_ERR_UNSPECIFIED) {
+    return;
+  }
+  err.code = verify_result == X509_V_ERR_HOSTNAME_MISMATCH
+                 ? ErrorCode::HostnameMismatch
+                 : ErrorCode::CertVerifyFailed;
+  err.backend_code = static_cast<uint64_t>(verify_result);
+}
+
 // Helper: Create client CA list from PEM string
 // Returns a new STACK_OF(X509_NAME)* or nullptr on failure
 // Caller takes ownership of returned list
@@ -14941,7 +14963,14 @@ int openssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx) {
   verify_ctx.error_string =
       (error != X509_V_OK) ? X509_verify_cert_error_string(error) : nullptr;
 
-  return run_verify_callback(*callback, verify_ctx) ? 1 : 0;
+  auto accepted = run_verify_callback(*callback, verify_ctx);
+  // A client verifying the server during the handshake, which is what
+  // set_verify_client(ctx, true) asks for there, keeps the built-in verdict
+  if (!SSL_is_server(ssl) &&
+      (SSL_get_verify_mode(ssl) & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)) {
+    accepted = accepted && preverify_ok;
+  }
+  return accepted ? 1 : 0;
 }
 
 // Sets the verify mode from whether the peer's certificate is required and
@@ -15217,14 +15246,18 @@ void free_session(session_t session) {
 }
 
 bool set_sni(session_t session, const char *hostname,
-                    bool /*verify_hostname*/) {
+                    bool verify_hostname) {
   if (!session || !hostname) return false;
 
   auto ssl = static_cast<SSL *>(session);
 
-  // Set SNI (Server Name Indication) only - does not enable verification.
-  // OpenSSL never binds identity checking to SNI (that happens post-
-  // handshake in setup_client_tls_session()), so verify_hostname is unused.
+  // The handshake's chain verification then checks the name as well
+  if (verify_hostname &&
+      X509_VERIFY_PARAM_set1_host(SSL_get0_param(ssl), hostname,
+                                  strlen(hostname)) != 1) {
+    return false;
+  }
+
 #if defined(OPENSSL_IS_BORINGSSL)
   return SSL_set_tlsext_host_name(ssl, hostname) == 1;
 #else
@@ -15244,9 +15277,7 @@ TlsError connect(session_t session) {
   if (ret == 1) {
     err.code = ErrorCode::Success;
   } else {
-    auto ssl_err = SSL_get_error(ssl, ret);
-    err.code = impl::map_ssl_error(ssl_err, err.sys_errno);
-    err.backend_code = ERR_get_error();
+    impl::fill_connect_error(ssl, ret, err);
   }
   return err;
 }
@@ -15302,10 +15333,7 @@ bool connect_nonblocking(session_t session, socket_t sock,
       break;
     default: break;
     }
-    if (err) {
-      err->code = impl::map_ssl_error(ssl_err, err->sys_errno);
-      err->backend_code = ERR_get_error();
-    }
+    if (err) { impl::fill_connect_error(ssl, res, *err); }
     return false;
   }
   if (err) { err->code = ErrorCode::Success; }
@@ -16605,6 +16633,9 @@ TlsError connect(session_t session) {
 }
 
 TlsError accept(session_t session) {
+  // A failed handshake leaves its SNI behind, so start without it
+  impl::mbedpending_sni().clear();
+
   // Same as connect for Mbed TLS - handshake works for both client and server
   auto result = connect(session);
 
@@ -16612,7 +16643,6 @@ TlsError accept(session_t session) {
   if (result.code == ErrorCode::Success && session) {
     auto msession = static_cast<impl::MbedTlsSession *>(session);
     msession->sni_hostname = std::move(impl::mbedpending_sni());
-    impl::mbedpending_sni().clear();
   }
 
   return result;
@@ -16657,6 +16687,9 @@ bool connect_nonblocking(session_t session, socket_t sock,
 bool accept_nonblocking(session_t session, socket_t sock,
                                time_t timeout_sec, time_t timeout_usec,
                                TlsError *err) {
+  // A failed handshake leaves its SNI behind, so start without it
+  impl::mbedpending_sni().clear();
+
   // Same implementation as connect for Mbed TLS
   bool result =
       connect_nonblocking(session, sock, timeout_sec, timeout_usec, err);
@@ -16665,7 +16698,6 @@ bool accept_nonblocking(session_t session, socket_t sock,
   if (result && session) {
     auto msession = static_cast<impl::MbedTlsSession *>(session);
     msession->sni_hostname = std::move(impl::mbedpending_sni());
-    impl::mbedpending_sni().clear();
   }
 
   return result;
@@ -17071,6 +17103,11 @@ std::string error_string(uint64_t code) {
 }
 
 ca_store_t create_ca_store(const char *pem, size_t len) {
+#ifdef CPPHTTPLIB_MBEDTLS_V4
+  // Parsing certificates needs PSA Crypto, and no context may exist yet
+  if (!detail::ensure_mbedtls_psa_crypto()) { return nullptr; }
+#endif
+
   auto *ca_chain = new (std::nothrow) mbedtls_x509_crt;
   if (!ca_chain) { return nullptr; }
 
@@ -17438,7 +17475,13 @@ int wolfssl_verify_callback(int preverify_ok,
     verify_ctx.error_string = nullptr;
   }
 
-  bool accepted = run_verify_callback(*callback, verify_ctx);
+  auto accepted = run_verify_callback(*callback, verify_ctx);
+  // A client verifying the server during the handshake, which is what
+  // set_verify_client(ctx, true) asks for there, keeps the built-in verdict
+  if (!wolfSSL_is_server(ssl) &&
+      (wolfSSL_get_verify_mode(ssl) & WOLFSSL_VERIFY_FAIL_IF_NO_PEER_CERT)) {
+    accepted = accepted && preverify_ok;
+  }
   return accepted ? 1 : 0;
 }
 
@@ -19115,18 +19158,18 @@ void WebSocketClient::set_ca_cert_store(tls::ca_store_t store) {
   if (store && tls_ctx_) {
     // set_ca_store takes ownership of store
     tls::set_ca_store(tls_ctx_, store);
-    custom_ca_loaded_ = true;
   } else if (store) {
     tls::free_ca_store(store);
   }
+  custom_ca_loaded_ = true;
 }
 
 void WebSocketClient::load_ca_cert_store(const char *ca_cert,
                                                 std::size_t size) {
   if (tls_ctx_ && ca_cert && size > 0) {
     tls::load_ca_pem(tls_ctx_, ca_cert, size);
-    custom_ca_loaded_ = true;
   }
+  custom_ca_loaded_ = true;
 }
 
 void
