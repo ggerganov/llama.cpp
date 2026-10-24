@@ -190,7 +190,15 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
         std::vector<llama_device> igpus;
         std::vector<llama_device> rpc_servers;
 
-        if (params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
+        // n_gpu_layers == 0 means the user requested CPU-only inference:
+        // do not register GPU devices, otherwise the scheduler can still
+        // offload compute ops to a GPU backend that holds no weights,
+        // which silently changes numerics on backends whose kernels
+        // disagree with the CPU reference (observed with bf16 MUL_MAT on
+        // Metal / pre-M5 integrated GPUs)
+        const bool use_gpu = params.n_gpu_layers != 0;
+
+        if (use_gpu && params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
             std::vector<ggml_backend_dev_t> devs;
             devs.reserve(ggml_backend_dev_count());
             for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
@@ -231,7 +239,7 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
                         ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
                         if (ggml_backend_reg_name(reg) == std::string("RPC")) {
                             rpc_servers.push_back({false, dev});
-                        } else {
+                        } else if (use_gpu) {
                             // check if there is already a GPU with the same device id
                             ggml_backend_dev_props props;
                             ggml_backend_dev_get_props(dev, &props);
@@ -262,7 +270,7 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
                         // ref: https://github.com/ggml-org/llama.cpp/pull/23897
                         // ggml_backend_dev_backend_reg - allow devices of the same backend regardless if integrated
                         // ref: https://github.com/ggml-org/llama.cpp/pull/23897#issuecomment-5264222997
-                        if (igpus.empty() || ggml_backend_dev_backend_reg(dev) == ggml_backend_dev_backend_reg(igpus.back().dev)) {
+                        if (use_gpu && (igpus.empty() || ggml_backend_dev_backend_reg(dev) == ggml_backend_dev_backend_reg(igpus.back().dev))) {
                             igpus.push_back({false, dev});
                         }
                         break;
