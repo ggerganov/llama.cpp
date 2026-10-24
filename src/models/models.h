@@ -2220,14 +2220,15 @@ struct llama_model_hy_v4 : public llama_model_base {
                 float kq_scale,
                 int il) const;
 
-        // DSA lightning indexer: top-k KV positions for this layer. Only "full" layers compute
-        // it, "shared" layers reuse the last preceding full layer result through last_top_k.
-        ggml_tensor * build_indexer_top_k(
+        // DSA lightning indexer: top-k KV positions for this layer, one query chunk at a time, written to top_k.
+        // Only "full" layers compute it, "shared" layers reuse the last preceding full layer result through last_top_k.
+        llm_top_k_fn build_indexer_top_k(
                 const llama_model & model,
                 llm_graph_input_attn_k_dsa * inp_attn_dsa,
                 ggml_tensor * cur,
                 ggml_tensor * qr,
                 ggml_tensor * inp_pos,
+                std::vector<ggml_tensor *> * top_k,
                 int il) const;
 
         ggml_tensor * build_attention_dsa(
@@ -2235,7 +2236,7 @@ struct llama_model_hy_v4 : public llama_model_base {
                 llm_graph_input_attn_k_dsa * inp_attn_dsa,
                 ggml_tensor * cur,
                 ggml_tensor * inp_pos,
-                ggml_tensor ** last_top_k,
+                std::vector<ggml_tensor *> * last_top_k,
                 float kq_scale,
                 int il) const;
     };

@@ -449,6 +449,15 @@ public:
 
     ggml_tensor * self_k_rot_lid = nullptr;
 
+    // a range of query tokens; the layers share the views, as each view of a host input is a separate upload
+    struct chunk {
+        int64_t       t0;
+        int64_t       n;
+        ggml_tensor * kq_mask_mla; // [n_kv, n], the full mask with one chunk
+        ggml_tensor * kq_mask_lid; // [n_kv, n], the full mask with one chunk
+    };
+    std::vector<chunk> chunks;
+
     const llama_hparams hparams;
     const llama_cparams cparams;
 
@@ -1045,6 +1054,10 @@ using llm_graph_result_ptr = std::unique_ptr<llm_graph_result>;
 // used in build_rs to properly order writes and avoid unnecessary copies
 using llm_graph_get_rows_fn = std::function<ggml_tensor * (ggml_context *, ggml_tensor * states, ggml_tensor * ids)>;
 
+// sparse attention picks of query chunk ic, see llm_graph_input_attn_k_dsa::chunk and llm_graph_input_kpool::chunk
+using llm_top_k_fn      = std::function<ggml_tensor * (size_t ic)>; // [n_top, n]
+using llm_kpool_pick_fn = std::function<std::pair<ggml_tensor *, ggml_tensor *> (size_t ic)>; // top_k and score, see build_kpool_sel
+
 struct llm_graph_qkv {
     ggml_tensor * q; // [n_embd_head, n_head,    n_tokens]
     ggml_tensor * k; // [n_embd_head, n_head_kv, n_tokens]
@@ -1370,7 +1383,7 @@ struct llm_graph_context {
             ggml_tensor * kq_b,
             ggml_tensor * sinks, // [n_head_q]
             ggml_tensor * v_mla, // [n_embd_head_v_mla, n_embd_head_v, n_head_v]
-            ggml_tensor * top_k, // [n_indexer_top_k, n_tokens]
+     const llm_top_k_fn & top_k, // [n_top, n] of query chunk ic, see llm_graph_input_attn_k_dsa::chunk
                   float   kq_scale,
                     int   il) const;
 
@@ -1398,9 +1411,6 @@ struct llm_graph_context {
                     ggml_tensor * score, // [n_pool, n], a pick is live when its score is finite
                          size_t   ic,
                             int   il) const;
-
-    // top_k and score of query chunk ic, see build_kpool_sel
-    using llm_kpool_pick_fn = std::function<std::pair<ggml_tensor *, ggml_tensor *>(size_t ic)>;
 
     // attention over the k-pool selection, one query chunk at a time
     ggml_tensor * build_attn_kpool(

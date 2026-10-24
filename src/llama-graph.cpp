@@ -3439,11 +3439,35 @@ ggml_tensor * llm_graph_context::build_fused_top_k_mask(
     return cur;
 }
 
-// query tokens per k-pool chunk, LLAMA_QSA_CHUNK overrides it for tests, 0 disables the split
-static int64_t llm_kpool_n_chunk() {
+// query tokens per sparse attention chunk, LLAMA_QSA_CHUNK overrides it for tests, 0 disables the split
+static int64_t llm_qchunk_n() {
     static const char * env = getenv("LLAMA_QSA_CHUNK");
     static const int64_t n_chunk = env ? std::max<int64_t>(0, atoll(env)) : 2048;
     return n_chunk;
+}
+
+// the query chunks {t0, n} of the sparse attention: the selection mask of a chunk is [n_kv, n], so split large ubatches
+// the mask streams are not split: a split cache with several sequences keeps one chunk, as its reserve does
+static std::vector<std::pair<int64_t, int64_t>> llm_qchunks(const llama_cparams & cparams, int64_t n_tokens) {
+    const int64_t n_chunk = llm_qchunk_n();
+    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || !(cparams.kv_unified || cparams.n_seq_max == 1)) {
+        return { { 0, n_tokens } };
+    }
+
+    // every ubatch has the chunk count of the reserve, so the graph keeps the planned shape
+    // the chunks past the last token are empty, and the backends skip empty nodes
+    std::vector<std::pair<int64_t, int64_t>> res;
+    const int64_t n_split = (cparams.n_ubatch + n_chunk - 1)/n_chunk;
+    for (int64_t i = 0; i < n_split; ++i) {
+        const int64_t t0 = std::min(i*n_chunk, n_tokens);
+        res.push_back({ t0, std::min(n_chunk, n_tokens - t0) });
+    }
+    return res;
+}
+
+// rows [t0, t0 + n) of a tensor with one row per token
+static ggml_tensor * llm_view_rows(ggml_context * ctx, ggml_tensor * t, int64_t t0, int64_t n) {
+    return ggml_view_2d(ctx, t, t->ne[0], n, t->nb[1], t0*t->nb[1]);
 }
 
 llm_graph_input_kpool * llm_graph_context::build_inp_kpool(
@@ -3493,23 +3517,16 @@ llm_graph_input_kpool * llm_graph_context::build_inp_kpool(
         ggml_set_input(inp->new_pool_pos);
     }
 
-    // the selection mask of a chunk is [n_kv, n_chunk], so split large ubatches
-    // the mask streams are not split: a split cache with several sequences keeps one chunk, as its reserve does
-    const int64_t n_chunk = llm_kpool_n_chunk();
-    if (n_chunk == 0 || cparams.n_ubatch <= n_chunk || !(cparams.kv_unified || cparams.n_seq_max == 1)) {
+    const auto qchunks = llm_qchunks(cparams, n_tokens);
+    if (qchunks.size() == 1) {
         inp->chunks.push_back({ 0, n_tokens, inp->pool_mask, tail ? inp->tail_idxs : nullptr });
     } else {
         GGML_ASSERT(kq_mask->ne[1] == n_tokens);
 
-        // every ubatch has the chunk count of the reserve, so the graph keeps the planned shape
-        // the chunks past the last token are empty, and the backends skip empty nodes
-        const int64_t n_split = (cparams.n_ubatch + n_chunk - 1)/n_chunk;
-        for (int64_t i = 0; i < n_split; ++i) {
-            const int64_t t0 = std::min(i*n_chunk, n_tokens);
-            const int64_t n  = std::min(n_chunk, n_tokens - t0);
-            inp->chunks.push_back({ t0, n,
-                    ggml_view_2d(ctx0, inp->pool_mask, n_pool, n, inp->pool_mask->nb[1], t0*inp->pool_mask->nb[1]),
-                    tail ? ggml_view_2d(ctx0, inp->tail_idxs, kpool - 1, n, inp->tail_idxs->nb[1], t0*inp->tail_idxs->nb[1]) : nullptr });
+        for (const auto & qc : qchunks) {
+            inp->chunks.push_back({ qc.first, qc.second,
+                    llm_view_rows(ctx0, inp->pool_mask, qc.first, qc.second),
+                    tail ? llm_view_rows(ctx0, inp->tail_idxs, qc.first, qc.second) : nullptr });
         }
     }
 
@@ -3640,7 +3657,7 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * kq_b,
         ggml_tensor * sinks,
         ggml_tensor * v_mla,
-        ggml_tensor * top_k,
+        const llm_top_k_fn & top_k,
             float     kq_scale,
             int       il) const {
     // these nodes are added to the graph together so that they are not reordered
@@ -3659,49 +3676,60 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_build_forward_expand(gf, mctx_cur->cpy_k(ctx0, k_cur, k_idxs, il));
     }
 
-    // top_k indexes the cells, and the indexer mask of the same type is built the same way
-    // let's use it, so when no other layer reads the MLA mask is not allocated
-    ggml_tensor * kq_mask = inp->get_kq_mask_mla();
-    if (inp->get_kq_mask_lid()->type == kq_mask->type) {
-        kq_mask = inp->get_kq_mask_lid();
-    }
-
-    ggml_tensor * kq_mask_top_k = nullptr;
-    if (cparams.fused_top_k_mask) {
-        kq_mask_top_k = build_fused_top_k_mask(kq_mask, top_k, nullptr, nullptr, nullptr, nullptr, il);
-    } else {
-        // prepare new kq mask - starts filled with -INFINITY
-        ggml_tensor * kq_mask_all = ggml_fill(ctx0, kq_mask, -INFINITY);
-
-        // reshape KQ mask into tensor with rows of size 1:
-        // [n_kv, n_batch, 1, n_stream] -> [1, n_kv, n_batch, n_stream]
-        kq_mask_all = ggml_view_4d(ctx0, kq_mask_all, 1, kq_mask_all->ne[0], kq_mask_all->ne[1], kq_mask_all->ne[3], kq_mask_all->nb[0], kq_mask_all->nb[1], kq_mask_all->nb[2], 0);
-
-        // reshape top_k indices: [n_top_k, n_batch, 1, n_stream] -> [n_top_k, n_batch, n_stream, 1]
-        ggml_tensor * top_k_3d = ggml_view_4d(ctx0, top_k, top_k->ne[0], top_k->ne[1], top_k->ne[3], 1, top_k->nb[1], top_k->nb[2], top_k->ne[3]*top_k->nb[3], 0);
-
-        // prepare zero-filled tensor with rows of size 1: [1, n_top_k, n_batch, n_stream]
-        // this will be our source of zero values for unmasking top k mask elements
-        ggml_tensor * zeros = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, 1, top_k_3d->ne[0], top_k_3d->ne[1], top_k_3d->ne[2]);
-        zeros = ggml_fill(ctx0, zeros, 0.0f);
-
-        // modify KQ mask by unmasking elements that are in top_k indices
-        // ggml_set_rows([1, n_kv, n_batch, n_stream], [1, n_top_k, n_batch, n_stream], [n_top_k, n_batch, n_stream, 1])
-        kq_mask_top_k = ggml_set_rows(ctx0, kq_mask_all, zeros, top_k_3d);
-
-        // reshape to restore the original shape of KQ mask:
-        // [1, n_kv, n_batch, n_stream] -> [n_kv, n_batch, 1, n_stream]
-        kq_mask_top_k = ggml_view_4d(ctx0, kq_mask_top_k, kq_mask_top_k->ne[1], kq_mask_top_k->ne[2], 1, kq_mask_top_k->ne[3], kq_mask_top_k->nb[2], kq_mask_top_k->nb[3], kq_mask_top_k->nb[3], 0);
-
-        // combine with the original kq mask
-        kq_mask_top_k = ggml_add(ctx0, kq_mask_top_k, kq_mask);
-    }
-
-    ggml_tensor * q = q_cur;
     ggml_tensor * k = mctx_cur->get_k(ctx0, il);
     ggml_tensor * v = ggml_view_4d(ctx0, k, v_cur->ne[0], k->ne[1], k->ne[2], k->ne[3], k->nb[1], k->nb[2], k->nb[3], 0);
 
-    ggml_tensor * cur = build_attn_mha(q, k, v, kq_b, kq_mask_top_k, sinks, v_mla, top_k->ne[0], kq_scale, il);
+    // build_attn_mha expands each query chunk, so the next chunk can reuse the memory of its mask
+    GGML_ASSERT(kq_b == nullptr || inp->chunks.size() == 1);
+    ggml_tensor * cur = nullptr;
+    for (size_t ic = 0; ic < inp->chunks.size(); ++ic) {
+        const auto & chunk = inp->chunks[ic];
+
+        // top_k indexes the cells, and the indexer mask of the same type is built the same way
+        // let's use it, so when no other layer reads the MLA mask is not allocated
+        ggml_tensor * kq_mask = chunk.kq_mask_mla;
+        if (chunk.kq_mask_lid->type == kq_mask->type) {
+            kq_mask = chunk.kq_mask_lid;
+        }
+
+        ggml_tensor * top_k_c = top_k(ic);
+
+        ggml_tensor * kq_mask_top_k = nullptr;
+        if (cparams.fused_top_k_mask) {
+            kq_mask_top_k = build_fused_top_k_mask(kq_mask, top_k_c, nullptr, nullptr, nullptr, nullptr, il);
+        } else {
+            // prepare new kq mask - starts filled with -INFINITY
+            ggml_tensor * kq_mask_all = ggml_fill(ctx0, kq_mask, -INFINITY);
+
+            // reshape KQ mask into tensor with rows of size 1:
+            // [n_kv, n_batch, 1, n_stream] -> [1, n_kv, n_batch, n_stream]
+            kq_mask_all = ggml_view_4d(ctx0, kq_mask_all, 1, kq_mask_all->ne[0], kq_mask_all->ne[1], kq_mask_all->ne[3], kq_mask_all->nb[0], kq_mask_all->nb[1], kq_mask_all->nb[2], 0);
+
+            // reshape top_k indices: [n_top_k, n_batch, 1, n_stream] -> [n_top_k, n_batch, n_stream, 1]
+            ggml_tensor * top_k_3d = ggml_view_4d(ctx0, top_k_c, top_k_c->ne[0], top_k_c->ne[1], top_k_c->ne[3], 1, top_k_c->nb[1], top_k_c->nb[2], top_k_c->ne[3]*top_k_c->nb[3], 0);
+
+            // prepare zero-filled tensor with rows of size 1: [1, n_top_k, n_batch, n_stream]
+            // this will be our source of zero values for unmasking top k mask elements
+            ggml_tensor * zeros = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, 1, top_k_3d->ne[0], top_k_3d->ne[1], top_k_3d->ne[2]);
+            zeros = ggml_fill(ctx0, zeros, 0.0f);
+
+            // modify KQ mask by unmasking elements that are in top_k indices
+            // ggml_set_rows([1, n_kv, n_batch, n_stream], [1, n_top_k, n_batch, n_stream], [n_top_k, n_batch, n_stream, 1])
+            kq_mask_top_k = ggml_set_rows(ctx0, kq_mask_all, zeros, top_k_3d);
+
+            // reshape to restore the original shape of KQ mask:
+            // [1, n_kv, n_batch, n_stream] -> [n_kv, n_batch, 1, n_stream]
+            kq_mask_top_k = ggml_view_4d(ctx0, kq_mask_top_k, kq_mask_top_k->ne[1], kq_mask_top_k->ne[2], 1, kq_mask_top_k->ne[3], kq_mask_top_k->nb[2], kq_mask_top_k->nb[3], kq_mask_top_k->nb[3], 0);
+
+            // combine with the original kq mask
+            kq_mask_top_k = ggml_add(ctx0, kq_mask_top_k, kq_mask);
+        }
+
+        ggml_tensor * q = ggml_view_3d(ctx0, q_cur, q_cur->ne[0], q_cur->ne[1], chunk.n, q_cur->nb[1], q_cur->nb[2], chunk.t0*q_cur->nb[2]);
+
+        ggml_tensor * out = build_attn_mha(q, k, v, kq_b, kq_mask_top_k, sinks, v_mla, top_k_c->ne[0], kq_scale, il);
+        cur = cur ? ggml_concat(ctx0, cur, out, 1) : out;
+    }
     cb(cur, "kqv_out", il);
 
     if (wo) {
@@ -3963,6 +3991,19 @@ static std::unique_ptr<llm_graph_input_attn_k_dsa> build_attn_inp_k_dsa_impl(
         inp->self_kq_mask_lid_cnv = inp->self_kq_mask_lid;
 
         inp->self_k_rot_lid = mctx_cur->get_lid()->build_input_k_rot(ctx0);
+    }
+
+    const auto qchunks = llm_qchunks(cparams, ubatch.n_tokens);
+    if (qchunks.size() == 1) {
+        inp->chunks.push_back({ 0, ubatch.n_tokens, inp->self_kq_mask_mla_cnv, inp->self_kq_mask_lid_cnv });
+    } else {
+        GGML_ASSERT(inp->self_kq_mask_lid->ne[1] == ubatch.n_tokens);
+
+        for (const auto & qc : qchunks) {
+            inp->chunks.push_back({ qc.first, qc.second,
+                    llm_view_rows(ctx0, inp->self_kq_mask_mla_cnv, qc.first, qc.second),
+                    llm_view_rows(ctx0, inp->self_kq_mask_lid_cnv, qc.first, qc.second) });
+        }
     }
 
     return inp;
