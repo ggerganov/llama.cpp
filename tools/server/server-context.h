@@ -159,6 +159,8 @@ struct server_routes {
     server_http_context::handler_t post_rerank;
     server_http_context::handler_t post_tts;
     server_http_context::handler_t post_systemone;
+    server_http_context::handler_t get_cvectors;
+    server_http_context::handler_t post_cvectors;
     server_http_context::handler_t get_lora_adapters;
     server_http_context::handler_t post_lora_adapters;
 
