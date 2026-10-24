@@ -697,7 +697,7 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
 
     // AMD WMMA is faster than the tile kernel if the wide tiles with high arithmetic intensity can be utilized.
     if ((amd_wmma_available(cc) && gqa_opt_applies && Q->ne[0] <= 256) && Q->ne[0] != 40 && Q->ne[0] != 72 &&
-            Q->ne[1] * gqa_ratio_eff > (Q->ne[0] <= 128 ? 8 : 16)) {
+            Q->ne[1] * gqa_ratio_eff > (Q->ne[0] <= 128 && !ggml_is_quantized(K->type) && !ggml_is_quantized(V->type) ? 8 : 16)) {
         return BEST_FATTN_KERNEL_MMA_F16;
     }
 
