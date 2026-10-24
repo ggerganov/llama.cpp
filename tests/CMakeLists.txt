@@ -226,6 +226,9 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     # TODO: after `test-llama-archs` is refactored to not link internal symbols, we can move all related tests out of
     #       this branch and run them on all platforms
     llama_build(test-llama-archs.cpp)
+    if (GGML_CPU)
+        llama_test(test-llama-archs NAME test-fp8-requantize ARGS -a llama -b CPU -s 1)
+    endif()
 
     set(MODEL_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-models/")
     file(MAKE_DIRECTORY "${MODEL_DIR}")
@@ -278,6 +281,12 @@ endif()
 llama_build_and_test(test-chat-peg-parser.cpp peg-parser/simple-tokenize.cpp  LABEL behavior)
 llama_build_and_test(test-jinja.cpp  LABEL behavior)
 llama_test(test-jinja  NAME test-jinja-py  ARGS -py  LABEL "python behavior")
+llama_test_cmd(python3
+    NAME test-conversion-fp8
+    LABEL "python behavior"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    ARGS -m unittest discover -s tests -p test_conversion_fp8.py -v
+)
 llama_build_and_test(test-json-schema.cpp  LABEL behavior)
 llama_build_and_test(test-chat-auto-parser.cpp  LABEL behavior  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 llama_build_and_test(test-chat-template.cpp  LABEL behavior)
