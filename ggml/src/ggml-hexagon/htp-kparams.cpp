@@ -3406,7 +3406,9 @@ static bool htp_kparams_conv2d_tiled(
     const struct ggml_tensor * dst,
     struct htp_conv2d_kernel_params * kp
 ) {
-    const bool hmx = htp_session_n_hmx(sess) > 0;
+    if (htp_session_n_hmx(sess) == 0) {
+        return false;
+    }
 
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
@@ -3457,17 +3459,13 @@ static bool htp_kparams_conv2d_tiled(
     const uint32_t nth   = htp_session_n_threads(sess);
     const size_t   tile  = 2048;
 
-    // HVX_TILES: weight pairs of one rt block must fit in the DDR scratchpad
-    uint32_t rt_block = hmx ? n_rt : (std::min)(n_rt, (uint32_t) (HTP_CONV2D_HVX_W_MAX / (32 * k_pad * sizeof(uint16_t))));
+    uint32_t rt_block = n_rt;
     uint32_t ct       = (std::min)(n_ct, 64u);
     uint32_t seg      = (std::min)(8u, n_owt);
     uint32_t n_stage  = 1;
     uint32_t sr       = 0;
     size_t   stage = 0, ostage = 0, prow = 0, wpack = 0;
     size_t   sc = 0, w_size = 0, act_size = 0, out_size = 0, thr_size = 0, total = 0;
-    if (rt_block == 0) {
-        return false;
-    }
 
     while (true) {
         const uint32_t wb = 32 * seg + (KW - 1) * d0;
@@ -3476,15 +3474,12 @@ static bool htp_kparams_conv2d_tiled(
         ostage = 2 * 32 * (size_t) seg * 32 * sizeof(float);
         prow   = cwhn ? stage / 2 + 256 + 64 * 128 : 0;
         wpack  = kmajor ? (size_t) wk * 64 * sizeof(float) + 96 * 128 : (size_t) 32 * wk * (sizeof(float) + sizeof(uint16_t));
-        if (!hmx) {
-            wpack = (std::max)(wpack, (size_t) 80 * 128);
-        }
         thr_size = hex_round_up((std::max)(stage + ostage + prow, wpack), tile);
         sc       = hex_round_up((size_t) rt_block * HTP_CONV2D_HMX_SCALES_SIZE, tile);
         w_size   = (size_t) rt_block * n_kt * tile;
         act_size = (size_t) ct * n_kt * tile;
-        out_size = hmx ? (size_t) rt_block * ct * tile : 0;
-        total    = sc + w_size + (hmx ? 2 : 1) * act_size + 2 * out_size + nth * thr_size;
+        out_size = (size_t) rt_block * ct * tile;
+        total    = sc + w_size + 2 * act_size + 2 * out_size + nth * thr_size;
         if (total <= htp_session_vtcm_size(sess)) {
             break;
         }
@@ -3505,7 +3500,7 @@ static bool htp_kparams_conv2d_tiled(
     // Skip large stages. They already fill VTCM, and the extra DMA slows HMX.
     {
         const size_t thr2   = hex_round_up((std::max)(2 * stage + ostage + prow, wpack), tile);
-        const size_t total2 = sc + w_size + (hmx ? 2 : 1) * act_size + 2 * out_size + nth * thr2;
+        const size_t total2 = sc + w_size + 2 * act_size + 2 * out_size + nth * thr2;
         if (stage <= 128 * 1024 && total2 <= htp_session_vtcm_size(sess)) {
             n_stage  = 2;
             thr_size = thr2;
@@ -3534,14 +3529,14 @@ static bool htp_kparams_conv2d_tiled(
     kp->off_w        = sc;
     kp->off_act      = kp->off_w + w_size;
     kp->act_size     = act_size;
-    kp->off_out      = kp->off_act + (hmx ? 2 : 1) * act_size;
+    kp->off_out      = kp->off_act + 2 * act_size;
     kp->out_size     = out_size;
     kp->off_thr      = kp->off_out + 2 * out_size;
     kp->thr_size     = thr_size;
     kp->vtcm_size    = total;
     kp->tiled.div_ow_tiles = init_fastdiv_values(n_owt);
     kp->tiled.div_oh       = init_fastdiv_values(OH);
-    kp->kernel_type  = hmx ? HTP_CONV2D_KERNEL_HMX_TILED : HTP_CONV2D_KERNEL_HVX_TILED;
+    kp->kernel_type  = HTP_CONV2D_KERNEL_HMX_TILED;
     return true;
 }
 
@@ -3552,12 +3547,6 @@ static bool htp_kparams_solve_conv2d_unchecked(
 ) {
     memset(kparams, 0, sizeof(*kparams));
 
-    const struct ggml_tensor * src0 = dst->src[0];
-    const int32_t s0 = ggml_get_op_params_i32(dst, 0);
-    const int32_t s1 = ggml_get_op_params_i32(dst, 1);
-    const int32_t d0 = ggml_get_op_params_i32(dst, 4);
-    const int32_t d1 = ggml_get_op_params_i32(dst, 5);
-
     const uint32_t total_rows = (uint32_t) (dst->ne[1] * dst->ne[2] * dst->ne[3]);
     kparams->total_rows = total_rows;
     kparams->n_threads  = total_rows == 0 ? 1 : (std::min)((uint32_t) htp_session_n_threads(sess), total_rows);
@@ -3566,24 +3555,7 @@ static bool htp_kparams_solve_conv2d_unchecked(
         return true;
     }
 
-    if (htp_kparams_conv2d_tiled(sess, dst, kparams)) {
-        return true;
-    }
-
-    const struct ggml_tensor * src1 = dst->src[1];
-    const uint32_t k_size = (uint32_t) (src0->ne[0] * src0->ne[1] * src0->ne[2]);
-    const bool direct_width_layout = src1->nb[0] == (int64_t) sizeof(float) &&
-                                     dst->nb[0] == (int64_t) sizeof(float) &&
-                                     dst->ne[0] >= 32 && k_size <= 4096;
-    const size_t hvx_width_spad = hex_round_up((size_t) k_size * sizeof(float), 128) +
-                                  (src0->type == GGML_TYPE_F16 ? hex_round_up((size_t) k_size * sizeof(ggml_fp16_t), 128) : 0);
-
-    if (s0 == 1 && s1 == 1 && d0 == 1 && d1 == 1 && direct_width_layout && hvx_width_spad <= htp_session_vtcm_size(sess)) {
-        kparams->n_threads = (std::min)(kparams->n_threads, (uint32_t) (htp_session_vtcm_size(sess) / hvx_width_spad));
-        kparams->kernel_type = HTP_CONV2D_KERNEL_HVX_WIDTH;
-        return true;
-    }
-    return false;
+    return htp_kparams_conv2d_tiled(sess, dst, kparams);
 }
 
 static bool htp_kparams_solve_conv2d(

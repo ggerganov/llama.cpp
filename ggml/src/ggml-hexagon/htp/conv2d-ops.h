@@ -8,8 +8,6 @@
 
 enum htp_conv2d_kernel_type {
     HTP_CONV2D_KERNEL_UNSUPPORTED = 0,
-    HTP_CONV2D_KERNEL_HVX_WIDTH,        // direct convolution across the output width
-    HTP_CONV2D_KERNEL_HVX_TILED,        // tiled implicit-GEMM convolution on HVX
     HTP_CONV2D_KERNEL_HMX_WINDOW,       // HMX convolution with sliding-window staging
     HTP_CONV2D_KERNEL_HMX_TILED,        // tiled implicit-GEMM convolution on HMX
 };
@@ -19,9 +17,6 @@ enum htp_conv2d_kernel_type {
 
 // HMX scales of one row tile at the start of VTCM: 32 (scale, bias) fp16 pairs and 128 zero bytes
 #define HTP_CONV2D_HMX_SCALES_SIZE 256
-
-// HVX_TILES keeps fp16 weight pairs in the DDR scratchpad: 32 * rt_block * k_pad * 2 bytes
-#define HTP_CONV2D_HVX_W_MAX (512 * 1024)
 
 struct htp_conv2d_kernel_params {
     uint32_t n_threads;
