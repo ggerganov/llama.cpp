@@ -361,16 +361,9 @@ void llama_model_saver::add_kv_from_model() {
             add_kv(LLM_KV_ATTENTION_INDEXER_CANDIDATE_TOP_K_BLOCKS, hparams.dsv41_cand_topk_blocks);
             add_kv(LLM_KV_ATTENTION_INDEXER_CANDIDATE_BLOCK_SIZE,   hparams.dsv41_cand_block_size);
         }
-        if (!m41->engram_layers.empty()) {
-            add_kv(LLM_KV_PLE_LAYERS,                 std::vector<uint32_t>(m41->engram_layers.begin(), m41->engram_layers.end()));
-            add_kv(LLM_KV_PLE_NGRAM_SIZE,             m41->engram_max_ngram);
-            add_kv(LLM_KV_PLE_HEADS_PER_NGRAM,        m41->engram_n_head);
-            add_kv(LLM_KV_EMBEDDING_LENGTH_PER_LAYER, m41->engram_head_dim);
-            add_kv(LLM_KV_PLE_LAYER_MULTIPLIERS,      m41->engram_mult);
-            add_kv(LLM_KV_PLE_HEAD_OFFSETS,           m41->engram_offsets);
-            add_kv(LLM_KV_PLE_HEAD_VOCAB_SIZES,       m41->engram_primes);
-            add_kv(LLM_KV_ENGRAM_PAD_TOKEN_ID,        m41->engram_pad_id);
-            add_kv(LLM_KV_ENGRAM_TOKEN_MAP,           m41->engram_token_map);
+        if (hparams.ple_n_heads > 0) {
+            add_kv(LLM_KV_ENGRAM_PAD_TOKEN_ID, m41->engram_pad_id);
+            add_kv(LLM_KV_ENGRAM_TOKEN_MAP,    m41->engram_token_map);
         }
     }
 
@@ -390,13 +383,13 @@ void llama_model_saver::add_kv_from_model() {
         add_kv(LLM_KV_EMBEDDING_LENGTH_PER_LAYER, hparams.ple_head_dim);
         add_kv(LLM_KV_PLE_LAYER_MULTIPLIERS, std::vector<uint64_t>(
                 hparams.ple_layer_multipliers.begin(),
-                hparams.ple_layer_multipliers.begin() + hparams.ple_ngram_size));
+                hparams.ple_layer_multipliers.begin() + hparams.ple_n_modules*hparams.ple_ngram_size));
         add_kv(LLM_KV_PLE_HEAD_OFFSETS,      std::vector<uint64_t>(
                 hparams.ple_head_offsets.begin(),
-                hparams.ple_head_offsets.begin() + hparams.ple_n_heads));
+                hparams.ple_head_offsets.begin() + hparams.ple_n_modules*hparams.ple_n_heads));
         add_kv(LLM_KV_PLE_HEAD_VOCAB_SIZES,  std::vector<uint64_t>(
                 hparams.ple_head_vocab_sizes.begin(),
-                hparams.ple_head_vocab_sizes.begin() + hparams.ple_n_heads));
+                hparams.ple_head_vocab_sizes.begin() + hparams.ple_n_modules*hparams.ple_n_heads));
     }
 
     const float rope_scaling_factor = hparams.rope_freq_scale_train == 1.0f ? 0.0f : 1.0f/hparams.rope_freq_scale_train;

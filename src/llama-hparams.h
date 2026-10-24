@@ -10,8 +10,8 @@
 // bump if necessary
 #define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 1024 // Kimi K3
-#define LLAMA_MAX_PLE_NGRAM 8  // qwen4exp
-#define LLAMA_MAX_PLE_HEADS 64 // qwen4exp
+#define LLAMA_MAX_PLE_NGRAM 8  // qwen4exp, deepseek41 (all hash modules)
+#define LLAMA_MAX_PLE_HEADS 64 // qwen4exp, deepseek41 (all hash modules)
 
 enum llama_expert_gating_func_type {
     LLAMA_EXPERT_GATING_FUNC_TYPE_NONE           = 0,
@@ -339,8 +339,6 @@ struct llama_hparams {
     int32_t  dsv41_cand_src         = -1;    // -1 = no candidate block selection
     uint32_t dsv41_cand_topk_blocks = 0;
     uint32_t dsv41_cand_block_size  = 0;
-    bool     dsv41_tok_hist         = false; // KV cells keep token ids for the Engram n-gram history
-    uint32_t dsv41_hist_len         = 0;     // Engram: predecessor tokens an n-gram hash reads (max_ngram - 1)
 
     // 0 = full rank (DeepSeek-V4)
     uint32_t hc_low_rank = 0;
@@ -356,6 +354,10 @@ struct llama_hparams {
     uint32_t ple_eos_token_id    = 0;
     // the id the PLE hash stands in at image positions; 0 makes the loader fall back to EOS
     uint32_t ple_image_token_id  = 0;
+    // the id the KV cells record at embedding (image) positions for the n-gram history; LLAMA_TOKEN_NULL = none
+    llama_token ple_embd_token   = LLAMA_TOKEN_NULL;
+    // hash constant sets, stored back to back: 1 shared by all PLE layers (qwen4exp), or 1 per PLE layer in layer order (deepseek41)
+    uint32_t ple_n_modules       = 1;
     // the file lists PLE layer indices, so this is never a per-layer gguf array and can hold one bit per layer
     std::bitset<LLAMA_MAX_LAYERS> is_ple_impl;
     // the hash multipliers reach ~2e13 and have to stay 64-bit

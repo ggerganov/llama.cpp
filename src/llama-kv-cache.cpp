@@ -1153,8 +1153,7 @@ void llama_kv_cache::apply_ubatch(const slot_info & sinfo, const llama_ubatch & 
 
             cells.pos_set(idx, ubatch.pos[i]);
 
-            // dsv41_tok_hist: embd cells must record LLAMA_TOKEN_NULL (DEAD for Engram), never a stale id
-            if (ubatch.is_pos_2d() || ubatch.token || hparams.ple_n_heads > 0 || hparams.dsv41_tok_hist) {
+            if (ubatch.is_pos_2d() || ubatch.token || hparams.ple_n_heads > 0) {
                 llama_kv_cell_ext ext;
 
                 if (ubatch.is_pos_2d()) {
@@ -1169,9 +1168,7 @@ void llama_kv_cache::apply_ubatch(const slot_info & sinfo, const llama_ubatch & 
                 } else if (hparams.ple_n_heads > 0) {
                     // embd batch (multimodal input) has no token ids, need to pad it with the correct ID for PLE layers
                     // TODO @ngxson : check if we can do the same as gemma 3n / gemma 4
-                    ext.tok = hparams.ple_image_token_id != 0
-                        ? (llama_token) hparams.ple_image_token_id
-                        : (llama_token) hparams.ple_eos_token_id;
+                    ext.tok = hparams.ple_embd_token;
                 }
 
                 cells.ext_set(idx, ext);
@@ -1851,7 +1848,7 @@ void llama_kv_cache::set_input_v_rot(ggml_tensor * dst) const {
 
 bool llama_kv_cache::has_cell_ext() const {
     // M-RoPE needs the 2D position, the PLE / Engram n-gram hashes need the token id
-    return hparams.n_pos_per_embd() > 1 || hparams.ple_n_heads > 0 || hparams.dsv41_tok_hist;
+    return hparams.n_pos_per_embd() > 1 || hparams.ple_n_heads > 0;
 }
 
 void llama_kv_cache::get_prev_tokens(const llama_ubatch & ubatch, uint32_t n, std::vector<llama_token> & res) const {

@@ -1522,8 +1522,8 @@ llama_memory_context_ptr llama_kv_cache_dsv4::init_batch(
             bool embd_all) {
     GGML_UNUSED(embd_all);
 
-    if (hparams_raw.dsv41_tok_hist &&
-        !dsv41_shared_history_ok(balloc.get_batch(), kv_raw->get_swa(), hparams_raw.dsv41_hist_len)) {
+    if (hparams_raw.ple_n_heads > 0 &&
+        !dsv41_shared_history_ok(balloc.get_batch(), kv_raw->get_swa(), hparams_raw.ple_ngram_size - 1)) {
         return std::make_unique<llama_kv_cache_dsv4_context>(LLAMA_MEMORY_STATUS_FAILED_PREPARE);
     }
 
