@@ -15,29 +15,6 @@
 #include <sstream>
 #include <stdexcept>
 
-int32_t llama_dsv41_kv_read_layer(const llama_model & model, int32_t il, bool offload) {
-    const auto & hp = model.hparams;
-    const int32_t src = hp.dsv41_kv_src[il];
-    // LLAMA_DSV41_KV_MIRROR=0: no mirrors, consumers read the source cache across devices
-    static const bool mirror = [] {
-        const char * e = getenv("LLAMA_DSV41_KV_MIRROR");
-        return !(e && atoi(e) == 0);
-    }();
-    if (src < 0 || src == il || !offload || !mirror) {
-        return src;
-    }
-    ggml_backend_dev_t dev = model.dev_layer(il);
-    if (model.dev_layer(src) == dev) {
-        return src;
-    }
-    for (int32_t j = src + 1; j < il; ++j) {
-        if (hp.dsv41_kv_src[j] == src && model.dev_layer(j) == dev) {
-            return j;
-        }
-    }
-    return il;
-}
-
 static constexpr uint32_t DSV4_CSA_RATIO = 4;
 static constexpr uint32_t DSV4_HCA_RATIO = 128;
 
@@ -1357,18 +1334,39 @@ llama_kv_cache_dsv4::llama_kv_cache_dsv4(
     hparams_lid.rope_type          = LLAMA_ROPE_TYPE_NEOX;
     dsv4_make_k_only(hparams_lid);
 
+    // V4.1 cross-layer KV sharing: a compressed layer reads the storage of its kv source or, when the source is on
+    // another device (layer split), of a per-device mirror fed with the source's new rows, so the whole cache never
+    // crosses devices. no mirrors without offload or with LLAMA_DSV41_KV_MIRROR=0
+    const char * env_mirror = getenv("LLAMA_DSV41_KV_MIRROR");
+    const bool mirror = offload && !(env_mirror && atoi(env_mirror) == 0);
+
+    const uint32_t n_layer = model.hparams.n_layer();
+    comp_read.assign(n_layer, -1);
+    comp_kv_src.resize(n_layer);
+    for (uint32_t il = 0; il < n_layer; ++il) {
+        const int32_t src = is_v41 ? model.hparams.dsv41_kv_src[il] : (int32_t) il;
+        comp_kv_src[il] = src >= 0 ? src : (int32_t) il;
+        if (model.hparams.dsv4_compress_ratios[il] == 0) {
+            continue;
+        }
+        comp_read[il] = src;
+        if (src == (int32_t) il || !mirror || model.dev_layer(src) == model.dev_layer(il)) {
+            continue;
+        }
+        // the first layer of this source on this device holds the mirror
+        comp_read[il] = il;
+        for (int32_t j = src + 1; j < (int32_t) il; ++j) {
+            if (comp_read[j] == j && comp_kv_src[j] == src && model.dev_layer(j) == model.dev_layer(il)) {
+                comp_read[il] = j;
+                break;
+            }
+        }
+    }
+
     // compressed-KV storage: kv sources and mirrors; compressor state: kv sources only
     const auto is_comp_owner = [&](int32_t il, uint32_t ratio) {
-        if (model.hparams.dsv4_compress_ratios[il] != ratio) {
-            return false;
-        }
-        return !is_v41 || llama_dsv41_kv_read_layer(model, il, offload) == il;
+        return model.hparams.dsv4_compress_ratios[il] == ratio && comp_read[il] == (int32_t) il;
     };
-
-    comp_kv_src.resize(model.hparams.n_layer());
-    for (uint32_t il = 0; il < model.hparams.n_layer(); ++il) {
-        comp_kv_src[il] = is_v41 && model.hparams.dsv41_kv_src[il] >= 0 ? model.hparams.dsv41_kv_src[il] : (int32_t) il;
-    }
 
     const auto is_state_owner = [&](int32_t il, uint32_t ratio) {
         if (model.hparams.dsv4_compress_ratios[il] != ratio) {
@@ -1888,6 +1886,10 @@ llama_dsv4_comp_state * llama_kv_cache_dsv4::get_lid_state() const {
     return lid_state.get();
 }
 
+int32_t llama_kv_cache_dsv4::get_comp_read_layer(int32_t il) const {
+    return comp_read[il];
+}
+
 uint32_t llama_kv_cache_dsv4::get_n_rs_seq() const {
     return n_rs_seq;
 }
@@ -2205,7 +2207,8 @@ llama_kv_cache_dsv4_context::llama_kv_cache_dsv4_context(
     reserve_plans(true),
     status(llama_memory_status_combine(
                 llama_memory_status_combine(ctx_raw->get_status(), ctx_csa_mem->get_status()),
-                llama_memory_status_combine(ctx_hca_mem->get_status(), ctx_lid_mem->get_status()))) {
+                llama_memory_status_combine(ctx_hca_mem->get_status(), ctx_lid_mem->get_status()))),
+    kv(kv) {
 }
 
 llama_kv_cache_dsv4_context::llama_kv_cache_dsv4_context(
@@ -2230,7 +2233,8 @@ llama_kv_cache_dsv4_context::llama_kv_cache_dsv4_context(
                     llama_memory_status_combine(ctx_raw->get_status(), ctx_csa_mem->get_status()),
                     llama_memory_status_combine(ctx_hca_mem->get_status(), ctx_lid_mem->get_status())),
                 this->sc_info_csa.empty() && this->sc_info_hca.empty() && this->sc_info_lid.empty() ?
-                    LLAMA_MEMORY_STATUS_NO_UPDATE : LLAMA_MEMORY_STATUS_SUCCESS)) {
+                    LLAMA_MEMORY_STATUS_NO_UPDATE : LLAMA_MEMORY_STATUS_SUCCESS)),
+    kv(kv) {
 }
 
 llama_kv_cache_dsv4_context::llama_kv_cache_dsv4_context(
@@ -2275,7 +2279,8 @@ llama_kv_cache_dsv4_context::llama_kv_cache_dsv4_context(
     csa_state(kv->get_csa_state()),
     hca_state(kv->get_hca_state()),
     lid_state(kv->get_lid_state()),
-    status(ctx_raw->get_status()) {
+    status(ctx_raw->get_status()),
+    kv(kv) {
     kv->reset_rs_idx_for_ubatches(this->ubatches);
 }
 
@@ -2368,6 +2373,10 @@ const llama_dsv4_comp_state * llama_kv_cache_dsv4_context::get_lid_state() const
     assert(status == LLAMA_MEMORY_STATUS_SUCCESS);
 
     return lid_state;
+}
+
+int32_t llama_kv_cache_dsv4_context::get_comp_read_layer(int32_t il) const {
+    return kv->get_comp_read_layer(il);
 }
 
 const llama_kv_cache_dsv4_context::comp_plan & llama_kv_cache_dsv4_context::get_csa_plan() const {

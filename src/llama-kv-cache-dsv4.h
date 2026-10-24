@@ -8,11 +8,6 @@
 #include <unordered_map>
 #include <vector>
 
-// DeepSeek-V4.1 cross-layer KV sharing: the layer whose compressed-KV storage `il` reads: its kv source or, when the
-// source is on another device (layer split), a per-device mirror fed with the source's new rows so the whole cache
-// never crosses devices. -1 = no compressed KV. no mirrors when offload == false
-int32_t llama_dsv41_kv_read_layer(const llama_model & model, int32_t il, bool offload);
-
 class llama_dsv4_comp_state {
 public:
     using stream_copy_info = llama_kv_cache::stream_copy_info;
@@ -154,6 +149,9 @@ public:
     llama_dsv4_comp_state * get_hca_state() const;
     llama_dsv4_comp_state * get_lid_state() const;
 
+    // layer whose compressed-KV storage `il` reads, -1 = no compressed KV
+    int32_t get_comp_read_layer(int32_t il) const;
+
     uint32_t get_n_rs_seq() const;
     const std::vector<uint32_t> & get_rs_idx() const;
     void reset_rs_idx_for_ubatches(const std::vector<llama_ubatch> & ubatches);
@@ -171,6 +169,9 @@ private:
 
     // [n_layer] storage layer -> layer whose rows it holds (itself, or the source of a mirror)
     std::vector<int32_t> comp_kv_src;
+
+    // [n_layer] layer -> layer whose compressed-KV storage it reads (itself, its V4.1 kv source or a mirror), -1 = none
+    std::vector<int32_t> comp_read;
 
     std::unique_ptr<llama_kv_cache_iswa> kv_raw;
     std::unique_ptr<llama_kv_cache>      kv_csa;
@@ -383,6 +384,8 @@ public:
     const comp_plan & get_hca_plan(const llama_ubatch & ubatch) const;
     const comp_plan & get_lid_plan(const llama_ubatch & ubatch) const;
 
+    int32_t get_comp_read_layer(int32_t il) const;
+
 private:
     size_t i_next = 0;
 
@@ -415,4 +418,6 @@ private:
     mutable comp_plan reserve_plan_lid;
 
     const llama_memory_status status;
+
+    const llama_kv_cache_dsv4 * kv = nullptr;
 };

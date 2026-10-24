@@ -460,7 +460,7 @@ ggml_tensor * llama_model_deepseek41::graph::build_attention41(
     const auto * comp_ctx   = ratio == 2 ? inp_dsv4->mctx->get_csa()       : inp_dsv4->mctx->get_hca();
     const auto * comp_state = ratio == 2 ? inp_dsv4->mctx->get_csa_state() : inp_dsv4->mctx->get_hca_state();
 
-    const int32_t rd = ratio != 0 ? llama_dsv41_kv_read_layer(model, il, cparams.offload_kqv) : -1;
+    const int32_t rd = inp_dsv4->mctx->get_comp_read_layer(il);
 
     if (ratio != 0) {
         GGML_ASSERT(hparams.dsv41_kv_src[il] >= 0 && (int64_t) comp_state->get_ratio() == ratio);
