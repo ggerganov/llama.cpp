@@ -1921,8 +1921,8 @@ shared int8_t kvalues_mxfp4[16];
 #endif
 
 #if defined(DATA_A_NVFP4) && !defined(USE_OCP_FP4)
-// UE4M3 scales use 7 bits, but any byte is a valid scale (ggml_validate_row_data) and the CPU decoder ignores
-// bit 7, so cover all 256 values: ue4m3_to_fp32_build() masks the exponent the same way.
+// Cover all scale bytes accepted by ggml_validate_row_data.
+// ue4m3_to_fp32_build() masks the exponent and mantissa, but checks the full byte for 0 and 0x7F.
 shared float ue4m3_fp32_lut[256];
 
 float ue4m3_to_fp32_build(uint u) {
