@@ -1551,6 +1551,9 @@ static void * incr_ptr_aligned(void ** p, size_t size, size_t align) {
     return ptr;
 }
 
+// GGML_MMID_CHUNK: rows per chunk of a one-token-per-expert mul_mat_id (0 = one slice per thread)
+static int ggml_cpu_mmid_chunk = 32; // initialized once in ggml_cpu_init(), read-only afterwards
+
 static void ggml_compute_forward_mul_mat_id(
         const struct ggml_compute_params * params,
               struct ggml_tensor * dst) {
@@ -1652,7 +1655,14 @@ static void ggml_compute_forward_mul_mat_id(
             for (int id = 0; id < n_ids; ++id) {
                 const int32_t i02 = *(const int32_t *) ((const char *) ids->data + iid1*ids->nb[1] + id*ids->nb[0]);
 
-                assert(i02 >= 0 && i02 < n_as);
+                // a negative id skips the row: no expert is read for it and its output is zero
+                // (llama.cpp's hybrid MoE cache: the experts the GPU computes are -1 on the CPU's side)
+                if (i02 < 0) {
+                    memset((char *) dst->data + id*nb1 + iid1*nb2, 0, ne0*sizeof(float));
+                    continue;
+                }
+
+                assert(i02 < n_as);
 
                 MMID_MATRIX_ROW(i02, matrix_row_counts[i02]) = (struct mmid_row_mapping) {id, iid1};
                 matrix_row_counts[i02] += 1;
@@ -1695,10 +1705,19 @@ static void ggml_compute_forward_mul_mat_id(
         // disable for NUMA
         const bool disable_chunking = ggml_is_numa();
 
+        // one token per expert (generation): a matrix-vector product per expert, small (a MoE expert is a few hundred to a
+        // few thousand rows). One slice per thread would make every expert wait for the slowest core (a hybrid CPU's
+        // efficiency cores take ~2x as long); several small chunks per thread, taken as they come, let the fast cores do more.
+        // Qwen3-Coder-Next's experts on an i7-13620H, 10 threads: 115-120 -> 92-96 us an op with 32 rows (16: 97)
+        const bool small_chunks = nr1 == 1 && nr0 > 1 && ggml_cpu_mmid_chunk > 0 && !disable_chunking;
+        if (small_chunks) {
+            chunk_size = ggml_cpu_mmid_chunk;
+        }
+
         int64_t nchunk0 = (nr0 + chunk_size - 1) / chunk_size;
         int64_t nchunk1 = (nr1 + chunk_size - 1) / chunk_size;
 
-        if (nchunk0 * nchunk1 < nth * 4 || disable_chunking) {
+        if (!small_chunks && (nchunk0 * nchunk1 < nth * 4 || disable_chunking)) {
             nchunk0 = nr0 > nr1 ? nth : 1;
             nchunk1 = nr0 > nr1 ? 1 : nth;
         }
@@ -3938,6 +3957,13 @@ void ggml_cpu_init(void) {
         {
             const char * env = getenv("GGML_CPU_DISABLE_FUSION");
             ggml_cpu_disable_fusion = (env != NULL && atoi(env) == 1);
+        }
+
+        {
+            const char * env = getenv("GGML_MMID_CHUNK");
+            if (env != NULL) {
+                ggml_cpu_mmid_chunk = atoi(env);
+            }
         }
 
         is_first_call = false;
