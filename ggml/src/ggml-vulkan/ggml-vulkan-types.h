@@ -1343,6 +1343,7 @@ struct vk_instance_t {
     uint32_t host_import_failed = 0;  // bitmask by device->idx, guarded by host_allocations_mutex
 
     bool multi_device = false;
+    bool allreduce_disabled = false;
 };
 
 typedef void (*ggml_vk_func_t)(ggml_backend_vk_context * ctx, vk_context& subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
