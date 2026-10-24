@@ -1317,6 +1317,8 @@ class MODEL_TENSOR(IntEnum):
     DSPARK_MARKOV_W1       = auto()  # markov head: prev-token embed
     DSPARK_MARKOV_W2       = auto()  # markov head: bias projection
     DSPARK_CONF_PROJ       = auto()  # confidence head
+    DSPARK_LOG_SNR_FC1     = auto()
+    DSPARK_LOG_SNR_FC2     = auto()
     DFLASH_ATTN_CONV_BASE  = auto()
     DFLASH_ATTN_CONV_PROJ  = auto()
     DFLASH_FFN_CONV_BASE   = auto()
@@ -2164,6 +2166,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.DSPARK_MARKOV_W1:          "markov_w1",
     MODEL_TENSOR.DSPARK_MARKOV_W2:          "markov_w2",
     MODEL_TENSOR.DSPARK_CONF_PROJ:          "conf_proj",
+    MODEL_TENSOR.DSPARK_LOG_SNR_FC1:        "log_snr_fc1",
+    MODEL_TENSOR.DSPARK_LOG_SNR_FC2:        "log_snr_fc2",
     MODEL_TENSOR.DFLASH_ATTN_CONV_BASE:     "blk.{bid}.attn_conv_base",
     MODEL_TENSOR.DFLASH_ATTN_CONV_PROJ:     "blk.{bid}.attn_conv_proj",
     MODEL_TENSOR.DFLASH_FFN_CONV_BASE:      "blk.{bid}.ffn_conv_base",
