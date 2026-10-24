@@ -9,6 +9,7 @@
 
 // TODO: replace with #include "llama-ext.h" in the future
 #include "../src/llama-arch.h"
+#include "../src/llama-ext.h"
 #include "../src/llama-model-saver.h"
 
 #include <cinttypes>
@@ -176,6 +177,9 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     uint32_t n_layer = 2;
     if (arch == LLM_ARCH_LLAMA4) {
         n_layer = 4; // hparams.n_no_rope_layer_step is hard-coded to 4
+    } else if (arch == LLM_ARCH_GIGACHAT35) {
+        n_head = 8;
+        n_layer = 4; // dense recurrent, MoE MLA, MoE recurrent, MoE MLA
     } else if (arch == LLM_ARCH_MAION_CODER) {
         n_head = 4;
         n_layer = 4; // dense and MoE layers, each with local and full attention
@@ -224,7 +228,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     }
 
     uint32_t n_head_kv = n_head;
-    if (arch == LLM_ARCH_QWEN3) {
+    if (arch == LLM_ARCH_QWEN3 || arch == LLM_ARCH_GIGACHAT35) {
         n_head_kv = 1; // MQA coverage
     } else if (arch == LLM_ARCH_MUSE_GLIMMER || arch == LLM_ARCH_MUSE_SPARK || arch == LLM_ARCH_AFMOE || arch == LLM_ARCH_MAION_CODER ||
             arch == LLM_ARCH_KOLIBRI1) {
@@ -302,6 +306,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
             || arch == LLM_ARCH_KIMI_K3
             || arch == LLM_ARCH_GLM5_NEXT
             || arch == LLM_ARCH_HY_V4
+            || arch == LLM_ARCH_GIGACHAT35
             || arch == LLM_ARCH_MISTRAL4) {
         // GLM5 next MLA is nope only, the cache row is the compressed latent alone.
         ms.add_kv(LLM_KV_ATTENTION_KEY_LENGTH,       arch == LLM_ARCH_GLM5_NEXT ? uint32_t(512) : uint32_t(576));
@@ -578,6 +583,36 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     ms.add_kv(LLM_KV_ACTIVATION_SITU_LINEAR_BETA, 25.0f);
     ms.add_kv(LLM_KV_KDA_GATE_LOWER_BOUND,        -5.0f);
 
+    if (arch == LLM_ARCH_GIGACHAT35) {
+        ms.add_kv(LLM_KV_SSM_INNER_SIZE, uint32_t(128) * n_head);
+        ms.add_kv(LLM_KV_SSM_GROUP_COUNT, uint32_t(4));
+        ms.add_kv(LLM_KV_ATTENTION_RECURRENT_LAYERS, std::vector<uint32_t>{1, 0, 1, 0});
+
+        // These projections take their shapes from tensor metadata.
+        ggml_context_ptr ctx(ggml_init({64 * ggml_tensor_overhead(), nullptr, true}));
+        auto add_projection = [&](const std::string & name, int64_t ne0, int64_t ne1) {
+            ggml_tensor * t = ggml_new_tensor_2d(ctx.get(), GGML_TYPE_F16, ne0, ne1);
+            ggml_set_name(t, name.c_str());
+            gguf_add_tensor(ms.gguf_ctx, t);
+        };
+        auto add_norm_gate = [&](const std::string & name, int64_t dim) {
+            add_projection(name + "_gate_up.weight", dim, 16);
+            add_projection(name + "_gate_down.weight", 16, dim);
+        };
+        add_norm_gate("output_norm", n_embd);
+        for (uint32_t il = 0; il < n_layer; il++) {
+            const std::string prefix = "blk." + std::to_string(il) + ".";
+            for (const char * name : {"attn_norm", "post_attention_norm", "ffn_norm", "post_ffw_norm"}) {
+                add_norm_gate(prefix + name, n_embd);
+            }
+            if (il % 2 == 1) {
+                add_norm_gate(prefix + "attn_q_a_norm", 512);
+                add_norm_gate(prefix + "attn_kv_a_norm", 512);
+                add_projection(prefix + "attn_gate.weight", n_embd, 128 * n_head);
+            }
+        }
+    }
+
     for (uint32_t il = 0; il < n_layer; il++) {
         ggml_tensor t;
         memset(&t, 0, sizeof(ggml_tensor));
@@ -713,6 +748,111 @@ static int32_t get_logits_mixed(
     return 0;
 }
 
+static bool check_gigachat35_hparams() {
+    const struct {
+        uint32_t n_key_heads;
+        uint32_t n_value_heads;
+        bool has_recurrent_layers;
+        bool should_load;
+    } cases[] = {
+        {4, 8, true,  true},
+        {0, 8, true,  false},
+        {4, 0, true,  false},
+        {4, 2, true,  false},
+        {4, 6, true,  false},
+        {4, 8, false, false},
+    };
+    llama_model_params params = llama_model_default_params();
+    params.no_alloc = true;
+    params.n_gpu_layers = 0;
+    for (const auto & tc : cases) {
+        gguf_context_ptr metadata = get_gguf_ctx(LLM_ARCH_GIGACHAT35, true);
+        gguf_set_val_u32(metadata.get(), "gigachat35.ssm.group_count", tc.n_key_heads);
+        gguf_set_val_u32(metadata.get(), "gigachat35.ssm.time_step_rank", tc.n_value_heads);
+        if (!tc.has_recurrent_layers) {
+            GGML_ASSERT(gguf_remove_key(metadata.get(), "gigachat35.attention.recurrent_layers") >= 0);
+        }
+        llama_model_ptr model(llama_model_init_from_user(metadata.get(), nullptr, nullptr, params));
+        if (bool(model) != tc.should_load) {
+            LOG_ERR("%s: unexpected load result for K=%u, V=%u, recurrent mask=%d\n",
+                    __func__, tc.n_key_heads, tc.n_value_heads, tc.has_recurrent_layers);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool check_gigachat35_layer_outputs(llama_model * model, const std::vector<llama_token> & tokens) {
+    std::vector<std::vector<float>> outputs(llama_model_n_layer(model));
+    llama_context_params params = llama_context_default_params();
+    params.n_ctx = 0;
+    params.n_batch = params.n_ubatch = 8;
+    params.n_threads = params.n_threads_batch = 4;
+    params.cb_eval_user_data = &outputs;
+    params.cb_eval = [](ggml_tensor * t, bool ask, void * user_data) {
+        auto & outputs = *static_cast<std::vector<std::vector<float>> *>(user_data);
+        int il = -1;
+        char suffix;
+        const bool match = sscanf(t->name, "l_out-%d%c", &il, &suffix) == 1 && il >= 0 && (size_t) il < outputs.size();
+        if (ask) {
+            return match;
+        }
+        if (match) {
+            GGML_ASSERT(t->type == GGML_TYPE_F32);
+            outputs[il].resize(ggml_nelements(t));
+            ggml_backend_tensor_get(t, outputs[il].data(), 0, outputs[il].size() * sizeof(float));
+        }
+        return true;
+    };
+    llama_context_ptr ctx(llama_init_from_model(model, params));
+    if (!ctx) {
+        return false;
+    }
+    common_batch batch(ctx.get());
+    GGML_ASSERT(tokens.size() >= params.n_batch);
+    for (uint32_t i = 0; i < params.n_batch; i++) {
+        batch.add(tokens[i], i, 0, i == params.n_batch - 1);
+    }
+
+    // Check ordinary decode, masked MTP output, and all-token MTP output.
+    for (int mode = 0; mode < 3; mode++) {
+        llama_memory_clear(llama_get_memory(ctx.get()), true);
+        llama_set_embeddings_nextn(ctx.get(), mode != 0, mode == 1);
+        for (auto & output : outputs) {
+            output.clear();
+        }
+        if (llama_process(ctx.get(), LLAMA_PROCESS_TYPE_DECODE, batch.get()) != 0) {
+            return false;
+        }
+        const auto & last = outputs.back();
+        const size_t n_rows = mode == 2 ? params.n_batch : 1;
+        if (last.size() != n_rows * llama_model_n_embd(model)) {
+            LOG_ERR("%s: expected %zu final layer rows (mode %d)\n", __func__, n_rows, mode);
+            return false;
+        }
+        for (size_t il = 0; il < outputs.size(); il++) {
+            if (outputs[il].empty()) {
+                LOG_ERR("%s: missing l_out-%zu (mode %d)\n", __func__, il, mode);
+                return false;
+            }
+            for (const float value : outputs[il]) {
+                if (!std::isfinite(value)) {
+                    LOG_ERR("%s: non-finite l_out-%zu (mode %d)\n", __func__, il, mode);
+                    return false;
+                }
+            }
+        }
+        if (mode != 0) {
+            const float * h_nextn = llama_get_embeddings_nextn(ctx.get());
+            if (!h_nextn || memcmp(h_nextn, last.data(), last.size() * sizeof(float)) != 0) {
+                LOG_ERR("%s: MTP hidden state differs from the final layer output (mode %d)\n", __func__, mode);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool check_causal_attn_toggle(
         llama_model * model, llama_context * lctx, const std::vector<llama_token> & tokens) {
     const uint32_t n_vocab  = llama_vocab_n_tokens(llama_model_get_vocab(model));
@@ -808,6 +948,7 @@ static bool moe_mandatory(const llm_arch arch) {
         case LLM_ARCH_KIMI_LINEAR:
         case LLM_ARCH_KIMI_K3:
         case LLM_ARCH_GLM5_NEXT:
+        case LLM_ARCH_GIGACHAT35:
         case LLM_ARCH_STEP35:
         case LLM_ARCH_MISTRAL4:
         case LLM_ARCH_MELLUM:
@@ -1098,6 +1239,10 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                 continue;
             }
             const std::string config_name = moe ? "MoE" : "Dense";
+            if (arch == LLM_ARCH_GIGACHAT35 && !check_gigachat35_hparams()) {
+                llama_log_set(ud.log_old.callback, ud.log_old.user_data);
+                return 1;
+            }
             gguf_context_ptr gguf_ctx = get_gguf_ctx(arch, moe);
             if (arch == LLM_ARCH_BAILINGMOE3) {
                 GGML_ASSERT(gguf_remove_key(gguf_ctx.get(), "bailingmoe3.kda.safe_gate") >= 0);
@@ -1175,6 +1320,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                                     status_mixed = "\033[1;31mFAIL\033[0m";
                                 }
                             }
+                        }
+
+                        if (arch == LLM_ARCH_GIGACHAT35 && !check_gigachat35_layer_outputs(model_and_ctx_dev.first.get(), tokens)) {
+                            test_ok = false;
+                            status_nmse = "\033[1;31mFAIL\033[0m (capture)";
                         }
 
                         // runs after the mixed batch check, as it leaves the context with non-causal attention

@@ -483,6 +483,8 @@ void llama_model_saver::add_tensors_from_model() {
     add_tensor(model->tok_norm_b);
     add_tensor(model->output_norm);
     add_tensor(model->output_norm_b);
+    add_tensor(model->output_norm_gate_up);
+    add_tensor(model->output_norm_gate_down);
     add_tensor(model->output);
     add_tensor(model->output_b);
     add_tensor(model->output_norm_enc);
