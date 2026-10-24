@@ -1522,7 +1522,7 @@ struct llama_model_deepseek41 : public llama_model_deepseek4 {
         ggml_tensor * build_engram(
                 const llama_model_deepseek41 & model,
                 ggml_tensor * x,
-                ggml_tensor * ids,
+                ggml_tensor * rows,
                 ggml_tensor * keep,
                 int il) const;
 
