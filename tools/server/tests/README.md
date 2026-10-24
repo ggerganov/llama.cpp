@@ -39,6 +39,14 @@ To run slow tests (will download many models, make sure to set `LLAMA_CACHE` if 
 SLOW_TESTS=1 ./tests.sh
 ```
 
+The speculative-decoding method tests are opt-in because all model pairs use about 48 GiB:
+
+```shell
+SPEC_METHODS=all SPEC_MODEL_DIR=/path/to/model-cache PYTEST_WORKERS=1 ./tests.sh -s -v unit/test_spec_methods.py
+```
+
+Use a comma-separated subset such as `SPEC_METHODS=mtp,dflash` to run selected methods.
+
 To run with stdout/stderr display in real time (verbose output, but useful for debugging):
 
 ```shell

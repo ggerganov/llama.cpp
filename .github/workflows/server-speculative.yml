@@ -1,0 +1,91 @@
+name: Server (speculative decoding)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA1 to build'
+        required: false
+        type: string
+      methods:
+        description: 'Comma-separated methods, or all'
+        required: true
+        default: 'all'
+        type: string
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/server-speculative.yml'
+      - 'common/speculative.*'
+      - 'src/llama-context.*'
+      - 'src/llama-model.*'
+      - 'src/models/**'
+      - 'tools/server/server-context.*'
+      - 'tools/server/server-task.*'
+      - 'tools/server/tests/unit/test_spec_methods.py'
+      - 'tools/server/tests/utils.py'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/server-speculative.yml'
+      - 'common/speculative.*'
+      - 'src/llama-context.*'
+      - 'src/llama-model.*'
+      - 'src/models/**'
+      - 'tools/server/server-context.*'
+      - 'tools/server/server-task.*'
+      - 'tools/server/tests/unit/test_spec_methods.py'
+      - 'tools/server/tests/utils.py'
+
+permissions:
+  contents: read
+
+env:
+  HF_TOKEN: ${{ secrets.HF_TOKEN_CI }}
+  LLAMA_ARG_LOG_COLORS: 1
+  LLAMA_ARG_LOG_PREFIX: 1
+  LLAMA_ARG_LOG_TIMESTAMPS: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  server-speculative:
+    runs-on: "hf-jobs-a100-large:cuda13"
+    timeout-minutes: 120
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake libssl-dev python3 python3-venv python3-pip
+
+      - name: Build
+        run: |
+          cmake -B build -DGGML_CUDA=ON -DGGML_SCHED_NO_REALLOC=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+          cmake --build build --config Release -j $(nproc) --target llama-server
+
+      - name: Python setup
+        run: |
+          cd tools/server/tests
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Test speculative decoding
+        env:
+          SPEC_METHODS: ${{ github.event.inputs.methods || 'all' }}
+          SPEC_MODEL_DIR: ${{ runner.temp }}/spec-models
+          N_GPU_LAYERS: 99
+        run: |
+          cd tools/server/tests
+          source venv/bin/activate
+          PYTEST_WORKERS=1 ./tests.sh -s -v unit/test_spec_methods.py
