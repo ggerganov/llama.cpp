@@ -1656,7 +1656,7 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp
         uint64_t nelems = tensor->ne[0];
         for (uint32_t i = 0; i < GGML_MAX_DIMS; i++) {
             if (tensor->ne[i] == 0 || (i > 0 && (uint64_t)INT64_MAX / tensor->ne[i] <= nelems)) {
-                LOG_ERROR("[%s] tensor '%s' has invalid ne[%u]=%" PRIu64 "\n", __func__, tensor->name, i, tensor->ne[i]);
+                LOG_ERROR("[%s] tensor '%.*s' has invalid ne[%u]=%" PRIu32 "\n", __func__, (int) sizeof(tensor->name), tensor->name, i, tensor->ne[i]);
                 return nullptr;
             }
             if (i > 0) {
@@ -1665,8 +1665,9 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp
         }
     }
     for (uint32_t i = 0; i < GGML_MAX_DIMS; i++) {
-        if ((uint64_t)tensor->nb[i] > UINT64_MAX / 2) {
-            LOG_ERROR("[%s] tensor '%s' has invalid nb[%u]=%" PRIu64 "\n", __func__, tensor->name, i, tensor->nb[i]);
+        if (tensor->nb[i] > 0 && (uint64_t) tensor->ne[i] > INT64_MAX / tensor->nb[i]) {
+            LOG_ERROR("[%s] tensor '%.*s' has invalid nb[%u]=%" PRIu32 " (ne[%u]=%" PRIu32 ")\n",
+                           __func__, (int) sizeof(tensor->name), tensor->name, i, tensor->nb[i], i, tensor->ne[i]);
             return nullptr;
         }
     }
@@ -1694,9 +1695,9 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp
         uint64_t buffer_size = (uint64_t) ggml_backend_buffer_get_size(result->buffer);
         if (tensor->data + tensor_size < tensor->data ||
             tensor->data < buffer_start || tensor->data + tensor_size > buffer_start + buffer_size) {
-            LOG_ERROR("[%s] tensor '%s' (op %s, type %s, ne [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]) "
+            LOG_ERROR("[%s] tensor '%.*s' (op %s, type %s, ne [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]) "
                       "data [0x%" PRIx64 ", 0x%" PRIx64 ") out of buffer bounds [0x%" PRIx64 ", 0x%" PRIx64 ")\n",
-                      __func__, tensor->name, ggml_op_name((ggml_op) tensor->op), ggml_type_name(result->type),
+                      __func__, (int) sizeof(tensor->name), tensor->name, ggml_op_name((ggml_op) tensor->op), ggml_type_name(result->type),
                       result->ne[0], result->ne[1], result->ne[2], result->ne[3],
                       tensor->data, tensor->data + tensor_size, buffer_start, buffer_start + buffer_size);
             return nullptr;
@@ -2092,7 +2093,7 @@ ggml_tensor * rpc_server::create_node(uint64_t id,
             return nullptr;
         }
         if (tensor->view_src == 0 && tensor->op != GGML_OP_NONE) {
-            LOG_ERROR("[%s] tensor '%s' has no buffer and no view_src\n", __func__, tensor->name);
+            LOG_ERROR("[%s] tensor '%.*s' has no buffer and no view_src\n", __func__, (int) sizeof(tensor->name), tensor->name);
             return nullptr;
         }
     }
