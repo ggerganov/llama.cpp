@@ -213,14 +213,15 @@ kernel void kernel_reglu(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float x0 = src0_row[i0];
         const float x1 = src1_row[i0];
 
@@ -239,14 +240,15 @@ kernel void kernel_geglu(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float x0 = src0_row[i0];
         const float x1 = src1_row[i0];
 
@@ -267,14 +269,15 @@ kernel void kernel_swiglu(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float x0 = src0_row[i0];
         const float x1 = src1_row[i0];
 
@@ -295,14 +298,15 @@ kernel void kernel_swiglu_oai(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         float x0 = src0_row[i0];
         float x1 = src1_row[i0];
 
@@ -327,14 +331,15 @@ kernel void kernel_swiglu_clamp(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float gate = min((float) src0_row[i0], args.limit);
         const float up = clamp((float) src1_row[i0], -args.limit, args.limit);
 
@@ -353,14 +358,15 @@ kernel void kernel_geglu_erf(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float x0 = src0_row[i0];
         const float x1 = src1_row[i0];
 
@@ -381,14 +387,15 @@ kernel void kernel_geglu_quick(
         device const char * src0,
         device const char * src1,
         device       char * dst,
-        uint tgpig[[threadgroup_position_in_grid]],
-        uint tpitg[[thread_position_in_threadgroup]],
-        uint   ntg[[threads_per_threadgroup]]) {
-    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig*args.nb01) + args.i00;
-    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig*args.nb11) + args.i10;
-    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig*args.nb1);
+        uint2 tgpig[[threadgroup_position_in_grid]],
+        uint2 tpitg[[thread_position_in_threadgroup]],
+        uint2   ntg[[threads_per_threadgroup]],
+        uint2  ntgs[[threadgroups_per_grid]]) {
+    device const T * src0_row = (device const T *) ((device const char *) src0 + tgpig.y*args.nb01) + args.i00;
+    device const T * src1_row = (device const T *) ((device const char *) src1 + tgpig.y*args.nb11) + args.i10;
+    device       T * dst_row  = (device       T *) ((device       char *) dst  + tgpig.y*args.nb1);
 
-    for (int i0 = tpitg; i0 < args.ne0; i0 += ntg) {
+    for (int i0 = tgpig.x*ntg.x + tpitg.x; i0 < args.ne0; i0 += ntg.x*ntgs.x) {
         const float x0 = src0_row[i0];
         const float x1 = src1_row[i0];
 
