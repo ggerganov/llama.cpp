@@ -9,9 +9,12 @@
 #include "llama-model.h"
 #include "llama-vocab.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 bool llama_model_saver_supports_arch(llm_arch arch) {
     switch (arch) {
@@ -486,8 +489,6 @@ void llama_model_saver::add_tensors_from_model() {
     add_tensor(model->output);
     add_tensor(model->output_b);
     add_tensor(model->output_norm_enc);
-    add_tensor(model->output_s);
-    add_tensor(model->output_in_s);
     add_tensor(model->output_res_score);
     add_tensor(model->nextn_proj_pre);
     add_tensor(model->nextn_proj_post);
@@ -517,6 +518,21 @@ void llama_model_saver::add_tensors_from_model() {
             }
             add_tensor(tensor);
         }
+    }
+
+    std::vector<const struct ggml_tensor *> scales;
+    for (const auto * map : { &model->w_scales.scale, &model->w_scales.input_scale }) {
+        for (const auto & [_, s] : *map) {
+            if (seen.insert(s).second) {
+                scales.push_back(s);
+            }
+        }
+    }
+    std::sort(scales.begin(), scales.end(), [](const ggml_tensor * a, const ggml_tensor * b) {
+        return strcmp(a->name, b->name) < 0;
+    });
+    for (const auto * s : scales) {
+        add_tensor(s);
     }
 }
 

@@ -166,6 +166,7 @@ static std::vector<llama_token> get_tokens(const uint32_t n_tokens, const uint32
 static bool host_experts_test(const llm_arch arch) {
     switch (arch) {
         case LLM_ARCH_DEEPSEEK2:
+        case LLM_ARCH_QWEN3MOE:
             return true;
         default:
             return false;
@@ -208,6 +209,7 @@ static gguf_context_ptr get_gguf_ctx(const llm_arch arch, const bool moe) {
     } else if (arch == LLM_ARCH_QWEN3 || arch == LLM_ARCH_MUSE_GLIMMER || arch == LLM_ARCH_AFMOE) {
         n_head = 4;
     } else if (arch == LLM_ARCH_DEEPSEEK2
+            || arch == LLM_ARCH_QWEN3MOE
             || arch == LLM_ARCH_DEEPSEEK32
             || arch == LLM_ARCH_GLM_DSA
             || arch == LLM_ARCH_DOTS3NOTE
@@ -611,7 +613,8 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
         const std::vector<ggml_backend_dev_t> & devs,
         const llama_split_mode split_mode = LLAMA_SPLIT_MODE_LAYER, bool encode = false,
         const llama_model_tensor_buft_override * tensor_buft_overrides = nullptr, const size_t moe_cache_size = 0,
-        llama_model_set_tensor_data_t tensor_filler = set_tensor_data, const bool fp8_scales = false) {
+        llama_model_set_tensor_data_t tensor_filler = set_tensor_data, const bool fp8_scales = false,
+        const uint32_t n_ubatch = 64, const bool use_extra_bufts = true) {
     GGML_ASSERT((gguf_ctx == nullptr) != (file == nullptr));
     llama_model_params model_params = llama_model_default_params();
     model_params.progress_callback = silent_model_load_progress;
@@ -620,13 +623,14 @@ static std::pair<llama_model_ptr, llama_context_ptr> get_model_and_ctx(
     model_params.devices = devs_copy.data();
     model_params.split_mode = split_mode;
     model_params.tensor_buft_overrides = tensor_buft_overrides;
+    model_params.use_extra_bufts = use_extra_bufts;
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 0;
     ctx_params.n_threads = 4;
     ctx_params.n_threads_batch = 4;
     if (!encode) {
-        ctx_params.n_ubatch = 64;
+        ctx_params.n_ubatch = n_ubatch;
     }
     if (moe_cache_size > 0) {
         // the MoE cache is only used for small ubatches
@@ -757,6 +761,7 @@ static void test_fp8_requantize(const size_t seed, const float stdev) {
         auto model_params = llama_model_default_params();
         model_params.devices = devices;
         model_params.tensor_buft_overrides = overrides;
+        model_params.use_extra_bufts = false;
         model_params.progress_callback = silent_model_load_progress;
         llama_model_ptr model(split ? llama_model_load_from_file(path.c_str(), model_params) :
                                      llama_model_load_from_file_ptr(file.get(), model_params));
@@ -869,6 +874,104 @@ static void test_fp8_requantize(const size_t seed, const float stdev) {
     }
 }
 
+static bool check_moe_scaled_roundtrip(llama_model * model, const std::vector<llama_token> & tokens,
+        const std::vector<ggml_backend_dev_t> & devs,
+        const llama_model_tensor_buft_override * overrides, size_t cache_size, size_t seed, float stdev) {
+    std::unique_ptr<FILE, int (*)(FILE *)> file(tmpfile(), fclose);
+    std::unique_ptr<FILE, int (*)(FILE *)> roundtrip_file(tmpfile(), fclose);
+    if (!file || !roundtrip_file) {
+        return true;
+    }
+    size_t ctx_size = 0;
+    for (const auto & layer : model->layers) {
+        if (const ggml_tensor * w = layer.ffn_down_exps) {
+            ctx_size += ggml_tensor_overhead() + GGML_PAD(w->ne[2]*sizeof(float), GGML_MEM_ALIGN);
+        }
+    }
+    ggml_context_ptr scale_ctx(ggml_init({ ctx_size, nullptr, false }));
+    llama_model_saver ms(model);
+    ms.add_kv_from_model();
+    ms.add_tensors_from_model();
+    for (size_t il = 0; il < model->layers.size(); ++il) {
+        const ggml_tensor * w = model->layers[il].ffn_down_exps;
+        if (w == nullptr) {
+            continue;
+        }
+        ggml_tensor * s = ggml_new_tensor_1d(scale_ctx.get(), GGML_TYPE_F32, w->ne[2]);
+        ggml_set_name(s, LLM_TN(model->arch)(LLM_TENSOR_FFN_DOWN_EXPS, "scale", il).str().c_str());
+        ggml_set_f32(s, 1.0f);
+        ms.add_tensor(s);
+    }
+    ms.save(file.get());
+    rewind(file.get());
+    auto scaled = get_model_and_ctx(nullptr, file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, cache_size);
+    const auto expected = get_logits(scaled.first.get(), scaled.second.get(), tokens);
+
+    llama_model_saver roundtrip_saver(scaled.first.get());
+    roundtrip_saver.add_kv_from_model();
+    roundtrip_saver.add_tensors_from_model();
+    roundtrip_saver.save(roundtrip_file.get());
+    rewind(roundtrip_file.get());
+    auto reloaded = get_model_and_ctx(nullptr, roundtrip_file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, cache_size);
+    const auto actual = get_logits(reloaded.first.get(), reloaded.second.get(), tokens);
+    if (actual != expected) {
+        fprintf(stderr, "MoE scaled roundtrip: logits differ\n");
+        return false;
+    }
+    return true;
+}
+
+static bool check_moe_cache_scales(llama_model * model, const std::vector<llama_token> & tokens,
+        const std::vector<ggml_backend_dev_t> & devs, const llama_model_tensor_buft_override * overrides,
+        size_t cache_size, size_t seed, float stdev) {
+    std::unique_ptr<FILE, int (*)(FILE *)> file(tmpfile(), fclose);
+    if (!file) {
+        return true;
+    }
+    size_t ctx_size = 0;
+    for (const auto & layer : model->layers) {
+        if (const ggml_tensor * w = layer.ffn_down_exps) {
+            ctx_size += ggml_tensor_overhead() + GGML_PAD(w->ne[1]*w->ne[2]*sizeof(float), GGML_MEM_ALIGN);
+        }
+    }
+    for (int granularity = 0; granularity < 3; ++granularity) {
+        ggml_context_ptr scale_ctx(ggml_init({ ctx_size, nullptr, false }));
+        llama_model_saver ms(model);
+        ms.add_kv_from_model();
+        ms.add_tensors_from_model();
+        for (size_t il = 0; il < model->layers.size(); ++il) {
+            const ggml_tensor * w = model->layers[il].ffn_down_exps;
+            if (w == nullptr) {
+                continue;
+            }
+            ggml_tensor * s = granularity == 2 ? ggml_new_tensor_2d(scale_ctx.get(), GGML_TYPE_F32, w->ne[1], w->ne[2]) :
+                ggml_new_tensor_1d(scale_ctx.get(), GGML_TYPE_F32, granularity == 0 ? 1 : w->ne[2]);
+            ggml_set_name(s, LLM_TN(model->arch)(LLM_TENSOR_FFN_DOWN_EXPS, "scale", il).str().c_str());
+            std::vector<float> values(ggml_nelements(s));
+            fill_normal(values, s->name, { seed, 0.25f });
+            for (float & v : values) {
+                v += 1.0f;
+            }
+            memcpy(s->data, values.data(), ggml_nbytes(s));
+            ms.add_tensor(s);
+        }
+        rewind(file.get());
+        ms.save(file.get());
+        rewind(file.get());
+        auto reference = get_model_and_ctx(nullptr, file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, 0, set_tensor_data, false, 2);
+        const auto expected = get_logits(reference.first.get(), reference.second.get(), tokens);
+        rewind(file.get());
+        auto cached = get_model_and_ctx(nullptr, file.get(), seed, stdev, devs, LLAMA_SPLIT_MODE_LAYER, false, overrides, cache_size);
+        const auto actual = get_logits(cached.first.get(), cached.second.get(), tokens);
+        const double error = nmse(expected, actual);
+        if (!(error <= 1e-6)) {
+            fprintf(stderr, "MoE cache scale granularity %d: NMSE %g\n", granularity, error);
+            return false;
+        }
+    }
+    return true;
+}
+
 // entries [n/4, n/2) are embd rows, decoded either as token/embd/token chunks or as one mixed batch
 // returns the llama_process() error code
 static int32_t get_logits_mixed(
@@ -940,7 +1043,7 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             LOG("FP8 attention: tensor split requires flash attention, skipping disabled cases\n");
             continue;
         }
-        for (int scaled : { 1, 2, 3 }) {
+        for (int scaled : { 0, 1, 2, 3 }) {
             const float sk = scaled & 1 ? 0.03125f : 1.0f;
             const float sv = scaled & 2 ? 0.125f : 1.0f;
             ggml_backend_tensor_set(k_scale, &sk, 0, sizeof(sk));
@@ -948,15 +1051,15 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             model->layers[0].k_cache_scale = scaled & 1 ? k_scale : nullptr;
             model->layers[0].v_cache_scale = scaled & 2 ? v_scale : nullptr;
 
-            std::vector<float> tensors[4];
+            std::vector<float> tensors[6];
             auto params = llama_context_default_params();
             params.n_ctx = 256;
             params.n_batch = n_tokens;
             params.n_ubatch = n_tokens;
             params.n_threads = 1;
             params.n_threads_batch = 1;
-            params.type_k = scaled & 1 ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
-            params.type_v = scaled & 2 ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
+            params.type_k = scaled == 0 || (scaled & 1) ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
+            params.type_v = scaled == 0 || (scaled & 2) ? GGML_TYPE_F8_E4M3 : GGML_TYPE_F16;
             params.flash_attn_type = flash;
             params.offload_kqv = offload_kqv;
             if (model->split_mode() == LLAMA_SPLIT_MODE_TENSOR) {
@@ -1002,16 +1105,23 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             }
             params.cb_eval_user_data = tensors;
             params.cb_eval = [](ggml_tensor * t, bool ask, void * user_data) {
-                const char * names[] = { "Qcur-0", "Kcur-0", "Vcur-0", "kqv_out-0" };
-                for (int i = 0; i < 4; ++i) {
+                const char * names[] = { "Qcur-0", "Kcur-0", "Vcur-0", "kqv_out-0", "kq-0", "kqv-0" };
+                for (int i = 0; i < 6; ++i) {
                     if (strcmp(t->name, names[i]) != 0) {
                         continue;
                     }
                     if (!ask) {
-                        GGML_ASSERT(t->type == GGML_TYPE_F32 && ggml_is_contiguous(t));
                         auto & data = static_cast<std::vector<float> *>(user_data)[i];
-                        data.resize(ggml_nelements(t));
-                        ggml_backend_tensor_get(t, data.data(), 0, data.size()*sizeof(float));
+                        ggml_tensor * value = t;
+                        if (i >= 4) {
+                            GGML_ASSERT(t->op == GGML_OP_MUL_MAT);
+                            value = t->src[2];
+                        }
+                        if (value) {
+                            GGML_ASSERT(value->type == GGML_TYPE_F32 && ggml_is_contiguous(value));
+                            data.resize(ggml_nelements(value));
+                            ggml_backend_tensor_get(value, data.data(), 0, data.size()*sizeof(float));
+                        }
                     }
                     return true;
                 }
@@ -1022,8 +1132,12 @@ static void check_fp8_attention(llama_model * model, bool offload_kqv = true) {
             GGML_ASSERT(lctx->get_cparams().flash_attn == (flash == LLAMA_FLASH_ATTN_TYPE_ENABLED));
             get_logits(model, lctx.get(), { 1, 2, 3, 4 });
             llama_synchronize(lctx.get());
-            for (const auto & data : tensors) {
-                GGML_ASSERT(data.size() == (size_t) (head_size*n_head*n_tokens));
+            for (int i = 0; i < 4; ++i) {
+                GGML_ASSERT(tensors[i].size() == (size_t) (head_size*n_head*n_tokens));
+            }
+            if (flash == LLAMA_FLASH_ATTN_TYPE_DISABLED) {
+                GGML_ASSERT(tensors[4] == (params.type_k == GGML_TYPE_F8_E4M3 ? std::vector<float>{ sk } : std::vector<float>{}));
+                GGML_ASSERT(tensors[5] == (params.type_v == GGML_TYPE_F8_E4M3 ? std::vector<float>{ sv } : std::vector<float>{}));
             }
 
             // Round the original K/V independently of the cache write graph.
@@ -1573,8 +1687,10 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                     if (logits_cpu.empty()) {
                         model_and_ctx_cpu = get_model_and_ctx(gguf_ctx.get(), nullptr, seed, stdev, {}, LLAMA_SPLIT_MODE_LAYER, encode);
                         logits_cpu = get_logits(model_and_ctx_cpu.first.get(), model_and_ctx_cpu.second.get(), tokens, encode);
-                        if (arch == LLM_ARCH_LLAMA && !moe) {
+                        if ((arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_GEMMA3) && !moe) {
                             check_fp8_attention(model_and_ctx_cpu.first.get());
+                        }
+                        if (arch == LLM_ARCH_LLAMA && !moe) {
                             check_fp8_context_shift(model_and_ctx_cpu.first.get());
                         }
                     }
@@ -1583,7 +1699,7 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                         model_and_ctx_dev = get_model_and_ctx(gguf_ctx.get(), nullptr, seed, stdev, dc.devs, dc.split_mode, encode, overrides, dc.moe_cache_size);
                         logits_dev = get_logits(model_and_ctx_dev.first.get(), model_and_ctx_dev.second.get(), tokens, encode);
                         const double nmse_val = nmse(logits_cpu, logits_dev);
-                        if (arch == LLM_ARCH_LLAMA && !moe && !dc.devs.empty() && ggml_backend_dev_type(dc.devs[0]) != GGML_BACKEND_DEVICE_TYPE_CPU) {
+                        if ((arch == LLM_ARCH_LLAMA || arch == LLM_ARCH_GEMMA3) && !moe && !dc.devs.empty() && ggml_backend_dev_type(dc.devs[0]) != GGML_BACKEND_DEVICE_TYPE_CPU) {
                             check_fp8_attention(model_and_ctx_dev.first.get());
                             check_fp8_attention(model_and_ctx_dev.first.get(), false);
                         }
@@ -1638,6 +1754,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                         }
                     }
 
+                    if (dc.moe_cache_size > 0 && arch == LLM_ARCH_QWEN3MOE && !check_moe_cache_scales(model_and_ctx_dev.first.get(), tokens, dc.devs, overrides, dc.moe_cache_size, seed, stdev)) {
+                        test_ok = false;
+                        status_nmse = "\033[1;31mFAIL\033[0m (cache scales)";
+                    }
+
                     FILE * file = tmpfile(); // Can be null on Windows without administrator privileges.
                     // FIXME: when adding a tensor to a gguf_context a copy is made, this changes the pointer which the meta backend
                     //     in turn uses to map the tensors to their simple equivalents - this is fundamentally incompatible
@@ -1661,6 +1782,11 @@ static int test_backends(const std::string & arch_filter, const size_t seed, con
                                 status_roundtrip = "\033[1;31mFAIL\033[0m";
                                 break;
                             }
+                        }
+                        if (arch == LLM_ARCH_DEEPSEEK2 && moe &&
+                                !check_moe_scaled_roundtrip(model_and_ctx_dev.first.get(), tokens, dc.devs, overrides, dc.moe_cache_size, seed, stdev)) {
+                            test_ok = false;
+                            status_roundtrip = "\033[1;31mFAIL\033[0m (scaled)";
                         }
                     }
                 }
