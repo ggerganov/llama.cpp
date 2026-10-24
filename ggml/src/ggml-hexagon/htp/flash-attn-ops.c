@@ -2094,7 +2094,27 @@ int hmx_flash_attn_ext(struct htp_ops_context * octx) {
         const uint32_t dst_e_size = (dst->type == HTP_TYPE_F32) ? sizeof(float) : sizeof(__fp16);
         const bool can_split      = htp_tensor_can_row_partition(dst, dst_e_size);
 
-        if (kparams->head_split && can_split && n_kv_heads >= mdev_count && n_kv_heads % mdev_count == 0) {
+        if ((kparams->flags & HTP_FA_FLAG_TEAM_SPLIT) && can_split) {
+            // KV heads split across teams, Q-blocks split within a team
+            const uint32_t team_size   = kparams->u.hmx.team_size;
+            const uint32_t team        = fastdiv(mdev_idx, &kparams->u.hmx.div_team_size);
+            const uint32_t member      = mdev_idx - team * team_size;
+            const uint32_t kv_per_team = kparams->u.hmx.kv_per_team;
+            kv_head_min = team * kv_per_team;
+            kv_head_max = kv_head_min + kv_per_team;
+
+            const uint32_t base  = kparams->u.hmx.q_base;
+            const uint32_t rem   = kparams->u.hmx.q_rem;
+            const uint32_t b0    = member * base + MIN(member, rem);
+            const uint32_t nblk  = base + (member < rem ? 1 : 0);
+
+            if (nblk == 0) {
+                return HTP_STATUS_OK;
+            }
+
+            q_start_min = b0 * Br;
+            q_start_max = MIN((b0 + nblk) * Br, neq1);
+        } else if (kparams->head_split && can_split && n_kv_heads >= mdev_count && n_kv_heads % mdev_count == 0) {
             const uint32_t kv_per_core = n_kv_heads / mdev_count;
             kv_head_min = mdev_idx * kv_per_core;
             kv_head_max = kv_head_min + kv_per_core;

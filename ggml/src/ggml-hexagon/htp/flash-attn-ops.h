@@ -32,9 +32,13 @@ enum htp_fa_kernel_type {
     HTP_FA_KERNEL_HMX
 };
 
+// Multicore: gcd(n_kv_heads, N) teams own the KV heads, team members share the Q-blocks
+#define HTP_FA_FLAG_TEAM_SPLIT 0x01
+
 struct htp_fa_kernel_params {
     uint8_t  kernel_type;        // enum htp_fa_kernel_type
     uint8_t  head_split;         // 1 = partition by KV heads in multicore, 0 = token partition
+    uint8_t  flags;              // HTP_FA_FLAG_*
     uint8_t  n_threads;          // Number of threads to run
 
     // Common parameters
@@ -66,6 +70,11 @@ struct htp_fa_kernel_params {
             int32_t  mask_broadcast;
             int32_t  pipeline;
             struct fastdiv_values div_G;
+            struct fastdiv_values div_team_size;
+            uint16_t team_size;
+            uint16_t kv_per_team;
+            uint16_t q_base;     // Q-blocks per team member
+            uint16_t q_rem;      // first q_rem members get one extra Q-block
         } hmx;
         struct {
             uint32_t size_q_row_padded;
@@ -321,7 +330,8 @@ static inline int hmx_fa_find_chunk_size(size_t * Br_out,
                                          size_t   n_threads,
                                          bool     is_q_fp32,
                                          bool     has_sinks,
-                                         size_t   n_heads) {
+                                         size_t   n_heads,
+                                         size_t   q_split) {
     const size_t T       = HMX_FP16_TILE_N_ROWS;  // 32
     const size_t br_unit = hmx_ceil_div(T, gqa_factor);
     const size_t bc_unit = HMX_FP16_TILE_N_COLS * 2;  // 64
@@ -361,7 +371,8 @@ static inline int hmx_fa_find_chunk_size(size_t * Br_out,
                 const size_t vecs_per_t     = n_use > 0 ? (n_row_vec_cnt + n_use - 1) / n_use : 1;
 
                 const size_t c_iter_actual  = c_iter_base + c_softmax * vecs_per_t;
-                const size_t cost           = q_blocks * (c_q_fixed + kv_blocks * c_iter_actual);
+                const size_t q_blocks_nsp   = hmx_ceil_div(q_blocks, q_split);
+                const size_t cost           = q_blocks_nsp * (c_q_fixed + kv_blocks * c_iter_actual);
                 const size_t mn             = Br * Bc;
 
                 if (cost < best_cost || (cost == best_cost && mn > best_mn)) {
