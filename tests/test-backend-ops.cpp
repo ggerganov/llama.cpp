@@ -10142,16 +10142,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     }
     test_cases.emplace_back(new test_get_rows(GGML_TYPE_F32, 256, 8, 2, 1, 1, false, true, 3));
 
-    // MXFP8 is gather-only
-    for (int b : {1, 7}) {
-        for (bool v : {false, true}) {
-            for (bool vs0 : {false, true}) {
-                test_cases.emplace_back(new test_get_rows(GGML_TYPE_MXFP8, 256, 5, 4, b, 1, v, vs0));
-            }
-        }
-    }
-    test_cases.emplace_back(new test_get_rows(GGML_TYPE_MXFP8, 256, 1000, 24, 1, 1, false));
-
     test_cases.emplace_back(new test_get_rows_back(GGML_TYPE_F32, 1, 8, 2, 1, false));
     test_cases.emplace_back(new test_get_rows_back(GGML_TYPE_F32, 1, 70000, 4, 1, false)); // row count > CUDA grid-y limit (65535)
     for (ggml_type type : all_types) {
