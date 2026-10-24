@@ -226,6 +226,45 @@ def test_cache_vs_nocache_prompt():
     assert res_cache.body["content"] == res_no_cache.body["content"]
 
 
+@pytest.mark.parametrize("trigger_type", [-1, 4, 99])
+def test_completion_invalid_grammar_trigger_type(trigger_type: int):
+    global server
+    server.start()
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_predict": 1,
+        "grammar_triggers": [{"type": trigger_type, "value": "x"}],
+    })
+    assert res.status_code == 400
+    assert "grammar_triggers" in res.body["error"]["message"]
+    # the server must still serve requests after rejecting the invalid trigger
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_predict": 1,
+    })
+    assert res.status_code == 200
+
+
+def test_completion_valid_grammar_trigger_types():
+    global server
+    server.start()
+    res = server.make_request("POST", "/completion", data={
+        "prompt": "I believe the meaning of life is",
+        "n_predict": 4,
+        "temperature": 0.0,
+        "grammar": 'root ::= "a"+',
+        "grammar_lazy": True,
+        "grammar_triggers": [
+            {"type": 0, "value": "<s>", "token": 1},
+            {"type": 1, "value": "meaning of life"},
+            {"type": 2, "value": "life"},
+            {"type": 3, "value": "life"},
+        ],
+    })
+    assert res.status_code == 200
+    assert res.body["timings"]["predicted_n"] == 4
+
+
 def test_nocache_long_input_prompt():
     global server
     server.start()
