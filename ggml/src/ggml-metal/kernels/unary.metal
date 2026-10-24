@@ -20,7 +20,7 @@ kernel void kernel_unary_impl(
     int i0;
 
     if (FC_CNT) {
-        i0 = tgpig.x;
+        i0 = tgpig.x*ntg.x + tpitg.x;
 
         src0_ptr = (device const T0 *) (src0);
         dst_ptr  = (device       T  *) (dst);
@@ -41,6 +41,10 @@ kernel void kernel_unary_impl(
 
         if (!FC_CNT) {
             if (i0 >= args.ne0) {
+                return;
+            }
+        } else {
+            if (i0 >= args.ne00*args.ne01*args.ne02*args.ne03) {
                 return;
             }
         }
