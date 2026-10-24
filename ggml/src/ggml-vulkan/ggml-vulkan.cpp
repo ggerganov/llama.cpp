@@ -14394,7 +14394,7 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     }
     const uint64_t flops_floor = std::min<uint64_t>(100'000'000ULL, flops_cap);
     uint64_t flops_per_submit = std::clamp(ctx->last_total_flops / 40u, flops_floor, flops_cap);
-    // Small graphs (e.g. tensor parallel decode slices) gain nothing from splitting, but every submit costs CPU time
+    // small graphs gain nothing from splitting, each submit costs CPU time
     if (ctx->last_total_flops < 1'000'000'000ULL) {
         flops_per_submit = 0;
     }

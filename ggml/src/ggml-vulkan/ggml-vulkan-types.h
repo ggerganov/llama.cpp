@@ -1086,7 +1086,7 @@ struct vk_submission {
     vk_command_buffer* buffer = nullptr;
     std::vector<vk_semaphore> wait_semaphores;
     std::vector<vk_semaphore> signal_semaphores;
-    // submit only once *ready >= ready_value (semaphores imported by another thread)
+    // submit waits until *ready >= ready_value
     const std::atomic<uint64_t> * ready = nullptr;
     uint64_t ready_value = 0;
 };

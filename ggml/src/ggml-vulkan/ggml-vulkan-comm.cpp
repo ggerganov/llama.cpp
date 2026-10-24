@@ -111,7 +111,6 @@ static bool ggml_backend_vk_comm_ensure(ggml_backend_vk_comm_context * comm, siz
     const size_t cap = GGML_PAD(nbytes, comm->align);
     for (size_t i = 0; i < n; i++) {
         vk_comm_device & d = comm->devs[i];
-        // posix_memalign rather than std::aligned_alloc, which Android bionic only has from API 28 on
         if (posix_memalign(&d.host_ptr, comm->align, 2 * cap) != 0) {
             d.host_ptr = nullptr;
             return fail();
@@ -167,7 +166,7 @@ static void ggml_vk_comm_notify_submitted(ggml_backend_vk_comm_context * comm, u
     }
 }
 
-// spin, then sleep until the main thread wakes us; false on stop
+// false on stop
 static bool ggml_vk_comm_wait_submitted(ggml_backend_vk_comm_context * comm, uint64_t r) {
     using clock = std::chrono::steady_clock;
     for (const auto t0 = clock::now(); comm->submitted.load() < r;) {
@@ -188,9 +187,7 @@ static bool ggml_vk_comm_wait_submitted(ggml_backend_vk_comm_context * comm, uin
     return true;
 }
 
-// host bridge path
-
-// release each device as soon as all of its peers are done: poll, then block on a pending peer; false on stop
+// signals go[i] once all peers of i are done; false on stop
 static bool ggml_vk_comm_bridge_release(ggml_backend_vk_comm_context * comm, uint64_t r, std::vector<uint64_t> & seen, std::vector<bool> & sent) {
     using clock = std::chrono::steady_clock;
     const size_t n = comm->devs.size();
@@ -286,11 +283,8 @@ static void ggml_vk_comm_bridge_wait(ggml_backend_vk_comm_context * comm, size_t
     c->s->buffer->buf.pipelineBarrier(vk::PipelineStageFlagBits::eHost, c->p->q->stage_flags, {}, { from_host }, {}, {});
 }
 
-// sync_fd path
-
 static bool ggml_vk_comm_sfd_supported(vk_comm_device & d) {
     const vk_device & dev = d.ctx->device;
-    // Mesa drivers on kernel syncobjs
     const bool mesa = dev->driver_id == vk::DriverId::eMesaRadv ||
                       dev->driver_id == vk::DriverId::eIntelOpenSourceMESA ||
                       dev->driver_id == vk::DriverId::eMesaNvk;
@@ -310,7 +304,7 @@ static bool ggml_vk_comm_sfd_supported(vk_comm_device & d) {
            (esp.compatibleHandleTypes & vk::ExternalSemaphoreHandleTypeFlagBits::eSyncFd);
 }
 
-// Mesa moves a queue to its submit thread on the first wait-before-signal, which takes the CS ioctls off this thread
+// Mesa moves a queue to its submit thread on the first wait-before-signal, taking the CS ioctls off this thread
 static void ggml_vk_comm_sfd_enable_submit_thread(const vk_device & dev) {
     vk::SemaphoreTypeCreateInfo stci{ vk::SemaphoreType::eTimeline, 0 };
     vk::SemaphoreCreateInfo     sci{};
@@ -421,11 +415,9 @@ static void ggml_vk_comm_sfd_wait(ggml_backend_vk_comm_context * comm, size_t i,
     c->s->ready_value = round;
 }
 
-// comm interface
-
 void ggml_backend_vk_comm_free(void * comm_ctx) {
     ggml_backend_vk_comm_context * comm = static_cast<ggml_backend_vk_comm_context *>(comm_ctx);
-    // the thread has to keep running until every pending reduction has been released
+    // pending reductions need the thread
     for (vk_comm_device & d : comm->devs) {
         ggml_backend_synchronize(d.backend);
     }
@@ -583,7 +575,7 @@ bool ggml_backend_vk_comm_allreduce_tensor(void * comm_ctx, ggml_tensor ** tenso
             ggml_vk_add(ctx, c, tensors[i], comm->slot, tensors[i]);
             ggml_vk_sync_buffers(ctx, c);
         }
-        // Small reductions stay open and go out with the next graph's first submit
+        // small reductions go out with the next graph's first submit
         if (wire != GGML_TYPE_F32 || vk_perf_logger_enabled) {
             ggml_vk_comm_submit(ctx, c, {}, 0);
         }
