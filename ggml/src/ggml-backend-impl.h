@@ -68,6 +68,11 @@ extern "C" {
         void         (*clear)        (ggml_backend_buffer_t buffer, uint8_t value);
         // (optional) reset any internal state due to tensor initialization, such as tensor extras
         void         (*reset)        (ggml_backend_buffer_t buffer);
+        // (optional) batched tensor data copies
+        void         (*set_tensor_n) (ggml_backend_buffer_t buffer, const struct ggml_tensor * const * tensors, const void * const * data, const size_t * offsets, const size_t * sizes, size_t n_tensors);
+        void         (*get_tensor_n) (ggml_backend_buffer_t buffer, const struct ggml_tensor * const * tensors,       void * const * data, const size_t * offsets, const size_t * sizes, size_t n_tensors);
+        // (optional) batched tensor copies: returns true if all copies were performed, false if unsupported and no copies were performed
+        bool         (*cpy_tensor_n) (ggml_backend_buffer_t buffer, const struct ggml_tensor * const * srcs, struct ggml_tensor * const * dsts, size_t n_tensors);
     };
 
     struct ggml_backend_buffer {
@@ -154,6 +159,7 @@ extern "C" {
 
         // (optional) sort/optimize the nodes in the graph
         void                      (*graph_optimize)    (ggml_backend_t backend, struct ggml_cgraph * cgraph, struct ggml_backend_graph_optimize_params * params);
+
     };
 
     struct ggml_backend {
