@@ -1921,8 +1921,9 @@ shared int8_t kvalues_mxfp4[16];
 #endif
 
 #if defined(DATA_A_NVFP4) && !defined(USE_OCP_FP4)
-// UE4M3 scale in NVFP4 blocks use only 7 bits; sign (bit 7) is always zero.
-shared float ue4m3_fp32_lut[128];
+// UE4M3 scales use 7 bits, but any byte is a valid scale (ggml_validate_row_data) and the CPU decoder ignores
+// bit 7, so cover all 256 values: ue4m3_to_fp32_build() masks the exponent the same way.
+shared float ue4m3_fp32_lut[256];
 
 float ue4m3_to_fp32_build(uint u) {
     if (u == 0u || u == 127u) {
@@ -1947,7 +1948,7 @@ void init_iq_shmem(uvec3 wgsize)
         kvalues_mxfp4[i] = kvalues_mxfp4_const[i];
     }
 #if defined(DATA_A_NVFP4)
-    for (uint i = gl_LocalInvocationIndex.x; i < 128u; i += wgsize.x) {
+    for (uint i = gl_LocalInvocationIndex.x; i < 256u; i += wgsize.x) {
         ue4m3_fp32_lut[i] = ue4m3_to_fp32_build(i);
     }
 #endif
