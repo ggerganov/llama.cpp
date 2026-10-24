@@ -23,6 +23,9 @@ static const size_t DECISION_LEV_N_RATINGS = 9;
 // a longer state keeps its head and its tail
 static const size_t DECISION_H2O_MAX_STATE_TOKENS = 32000;
 
+// the value head has one score per class: [inconsistent, consistent]
+static const int32_t OCR_JEV_N_CLASSES = 2;
+
 static std::string decision_meta_str(const llama_model * model, const std::string & key) {
     char buf[256];
     const int32_t n = llama_model_meta_val_str(model, key.c_str(), buf, sizeof(buf));
@@ -201,6 +204,13 @@ void server_decision_context::init(const llama_model * model) {
         }
         n_options_max   = labels.size();
         noul_true_first = true;
+    } else if (model_type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+        // one score per class
+        if (llama_model_n_embd_out(model) != OCR_JEV_N_CLASSES) {
+            throw std::runtime_error(string_format("decision model must output %d class scores, got %d", OCR_JEV_N_CLASSES, llama_model_n_embd_out(model)));
+        }
+        n_options_max = OCR_JEV_N_CLASSES;
+        choice_sorted = true;
     } else {
         throw std::runtime_error("unsupported decision model type: " + type_name);
     }
@@ -228,6 +238,20 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
     if (!body.contains("questions") || !body.at("questions").is_object() || body.at("questions").empty()) {
         throw std::invalid_argument("\"questions\" must be a non-empty object");
     }
+    if (type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+        // the OCR text goes in the prompt as is, so it must not be read as special tokens
+        const json & state = body.at("state");
+        if (!state.is_string()) {
+            throw std::invalid_argument("\"state\" must be the OCR text");
+        }
+        const std::string text = state.get<std::string>();
+        if (server_decision_escape_special_tokens(text) != text || text.find(get_media_marker()) != std::string::npos) {
+            throw std::invalid_argument("\"state\" must not contain special tokens or media markers");
+        }
+        if (body.at("questions").size() != 1) {
+            throw std::invalid_argument("this model answers exactly one question");
+        }
+    }
 
     std::vector<server_decision_question> questions;
     for (const auto & [id, q] : body.at("questions").items()) {
@@ -241,7 +265,9 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
         // h2o-lightning: the instructions can be left out, the template has a default, and the type defaults to choice
         const bool is_h2o = type == COMMON_DECISION_TYPE_H2O_LIGHTNING;
         const json instructions = q.contains("instructions") ? q.at("instructions") : (is_h2o ? json(std::string()) : json());
-        if (instructions.is_null() && type != COMMON_DECISION_TYPE_VLLM_D3 && !is_h2o) {
+        // minicpm-ocr-jev answers one fixed question, the prompt is entirely in the template
+        const bool is_ocr_jev = type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV;
+        if (instructions.is_null() && type != COMMON_DECISION_TYPE_VLLM_D3 && !is_h2o && !is_ocr_jev) {
             throw err("\"instructions\" must be provided");
         }
         if (strict_payload && (!decision_is_payload(instructions) || instructions == "")) {
@@ -319,6 +345,22 @@ std::vector<server_decision_question> server_decision_context::parse_questions(c
             throw err("\"type\" must be one of: choice, score, noul");
         }
 
+        // the classes are fixed: "0" is inconsistent, "1" is consistent
+        if (type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+            if (question.type == SERVER_DECISION_QUESTION_CHOICE) {
+                const auto & opts = question.options;
+                if (opts.size() != 2 || opts[0].key != "0" || opts[1].key != "1" || !opts[0].description.is_null() || !opts[1].description.is_null()) {
+                    throw err("\"criteria\" must be {\"0\": null, \"1\": null}");
+                }
+            } else if (question.type == SERVER_DECISION_QUESTION_NOUL) {
+                if (!criteria.is_null()) {
+                    throw err("\"criteria\" is not supported for a noul question");
+                }
+            } else {
+                throw err("only choice and noul questions are supported");
+            }
+        }
+
         if (question.options.size() > n_options_max) {
             throw err(string_format("too many options (%zu), this model supports at most %zu", question.options.size(), n_options_max));
         }
@@ -371,6 +413,11 @@ json server_decision_context::parse_state(const json & body, std::vector<raw_buf
         for (const auto & url : body.at(key)) {
             decision_load_image(url, files);
         }
+    }
+
+    // the prompt has the original image, then the image rendered from the OCR text
+    if (type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV && files.size() != 2) {
+        throw std::invalid_argument(string_format("this model needs exactly 2 images (the original, then the rendered one), got %zu", files.size()));
     }
 
     const json & state = body.at("state");
@@ -1073,6 +1120,17 @@ void server_decision_context::fill_task(
     }
 
     const std::string prompt = render(state, questions, question, variant, files.size());
+
+    if (type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+        // the class scores are the pooled output, computed at the last token of the prompt
+        task.tokens = process_mtmd_prompt(mctx, prompt, files, init_opt);
+        if (task.n_tokens() == 0 || task.tokens[task.n_tokens() - 1] == LLAMA_TOKEN_NULL) {
+            throw std::runtime_error("unexpected layout of the decision prompt");
+        }
+        task.decision.n_classes          = OCR_JEV_N_CLASSES;
+        task.decision.classification_pos = task.n_tokens() - 1;
+        return;
+    }
 
     if (type == COMMON_DECISION_TYPE_OPENJEV || type == COMMON_DECISION_TYPE_GRANITE_SWITCH || type == COMMON_DECISION_TYPE_LEV || type == COMMON_DECISION_TYPE_NIMBLE || type == COMMON_DECISION_TYPE_PPLX_DECIDER || type == COMMON_DECISION_TYPE_VLLM_D3 ||
         type == COMMON_DECISION_TYPE_H2O_LIGHTNING) {

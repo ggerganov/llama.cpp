@@ -1181,6 +1181,7 @@ static const std::map<common_decision_type, std::string> COMMON_DECISION_TYPE_NA
     { COMMON_DECISION_TYPE_LFM2_D1_OMNI,   "lfm2-d1-omni"  },
     { COMMON_DECISION_TYPE_GRANITE_SWITCH, "granite-switch"},
     { COMMON_DECISION_TYPE_H2O_LIGHTNING,  "h2o-lightning" },
+    { COMMON_DECISION_TYPE_MINICPM_OCR_JEV, "openbmb-minicpm-ocr-jev" },
     // for future models, ALWAYS add org name prefix to avoid name collisions, e.g. "orgname-modelname"
 };
 
@@ -1312,6 +1313,20 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
         cparams.n_outputs_max_per_seq = 1;
 
         LOG_INF("%s", "decision model reads the embeddings output, enabling embedding mode\n");
+    }
+
+    // the class scores are the pooled output of the last token, the LM head is skipped
+    if (decision_type == COMMON_DECISION_TYPE_MINICPM_OCR_JEV) {
+        params.embedding    = true;
+        params.pooling_type = LLAMA_POOLING_TYPE_LAST;
+
+        cparams.embeddings   = true;
+        cparams.pooling_type = LLAMA_POOLING_TYPE_LAST;
+        // same output limits as --embedding, every prompt token is an output
+        cparams.n_outputs_max         = cparams.n_batch;
+        cparams.n_outputs_max_per_seq = 1;
+
+        LOG_INF("%s", "decision model reads the pooled embeddings output, enabling embedding mode with last pooling\n");
     }
 
     // embeddings need the whole batch in one ubatch, so n_batch must not be larger than n_ubatch

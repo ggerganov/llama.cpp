@@ -3,6 +3,8 @@
 #include "../tools/server/server-common.h"
 #include "../tools/server/server-decision.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <regex>
 #include <string>
@@ -464,6 +466,44 @@ static void test_rerank_template(testing & t) {
     }
 }
 
+//
+// server_decision_context::format_answer, 2 class scores (minicpm-ocr-jev)
+//
+
+static void test_decision_class_scores(testing & t) {
+    server_decision_context ctx;
+    ctx.type = COMMON_DECISION_TYPE_MINICPM_OCR_JEV;
+
+    const server_decision_question choice = {"q", SERVER_DECISION_QUESTION_CHOICE, json(), {{"0", json()}, {"1", json()}}};
+    const server_decision_question noul   = {"q", SERVER_DECISION_QUESTION_NOUL,   json(), {{"false", json()}, {"true", json()}}};
+
+    const std::vector<std::pair<float, float>> cases = {
+        {0.0f, 0.0f}, {-1.5f, 2.25f}, {3.0f, -0.5f}, {80.0f, -80.0f}, {1000.0f, 1001.0f},
+    };
+    for (const auto & [z0, z1] : cases) {
+        const double p1  = 1.0 / (1.0 + std::exp((double) z0 - (double) z1));
+        const json   a   = ctx.format_answer(choice, {{z0, z1}});
+        const double ap0 = a.at("probabilities").at("0").get<double>();
+        const double ap1 = a.at("probabilities").at("1").get<double>();
+        t.assert_true("p1", std::fabs(ap1 - p1) <= 1e-6);
+        t.assert_true("sum", std::fabs(ap0 + ap1 - 1.0) <= 1e-9);
+        // a tie picks the first class
+        t.assert_equal("choice", std::string(z1 > z0 ? "1" : "0"), a.at("choice").get<std::string>());
+        t.assert_true("confidence", std::fabs(a.at("confidence").get<double>() - (2.0 * std::max(ap0, ap1) - 1.0)) <= 1e-9);
+
+        const json n = ctx.format_answer(noul, {{z0, z1}});
+        t.assert_true("noul is p1", n.at("noul").get<double>() == ap1);
+    }
+
+    bool thrown = false;
+    try {
+        ctx.format_answer(choice, {{std::nanf(""), 0.0f}});
+    } catch (const std::exception &) {
+        thrown = true;
+    }
+    t.assert_true("nan", thrown);
+}
+
 int main(int argc, char ** argv) {
     testing t;
 
@@ -484,6 +524,7 @@ int main(int argc, char ** argv) {
     t.test("server_pipe",   test_server_pipe);
     t.test("decision_escape", test_decision_escape);
     t.test("rerank_template", test_rerank_template);
+    t.test("decision_class_scores", test_decision_class_scores);
 
     return t.summary();
 }
