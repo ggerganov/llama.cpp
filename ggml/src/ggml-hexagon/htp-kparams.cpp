@@ -1492,11 +1492,6 @@ static void htp_collapse_dims(struct ggml_tensor ** tensors, size_t n_tensors, s
     }
 }
 
-static void htp_unary_collapse_dims(struct ggml_tensor * src, struct ggml_tensor * dst, size_t elem_size, uint32_t n_threads) {
-    struct ggml_tensor * tensors[2] = { src, dst };
-    htp_collapse_dims(tensors, 2, elem_size, n_threads);
-}
-
 static bool htp_kparams_solve_unary_impl(
     const struct ggml_hexagon_session * sess,
     uint32_t op,
