@@ -171,6 +171,7 @@ TEXT_MODEL_MAP: dict[str, str] = {
     "D1OmniModel": "lfm2",
     "Lfm2Model": "lfm2",
     "Lfm2MoeForCausalLM": "lfm2",
+    "LimiteForCausalLM": "limite",
     "Llama4ForCausalLM": "llama",
     "Llama4ForConditionalGeneration": "llama",
     "LlamaBidirectionalModel": "llama",
