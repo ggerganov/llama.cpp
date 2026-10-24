@@ -1488,7 +1488,7 @@ static bool dsv41_shared_history_ok(const llama_batch & batch, const llama_kv_ca
                 return it->second;
             }
         }
-        return kv ? kv->seq_pos_tok_le(seq_id, p) : LLAMA_TOKEN_NULL;
+        return kv ? kv->get_cells(seq_id).seq_pos_tok_le(seq_id, p) : LLAMA_TOKEN_NULL;
     };
 
     for (int32_t i = 0; i < batch.n_tokens; ++i) {

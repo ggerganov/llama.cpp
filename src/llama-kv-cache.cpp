@@ -1913,14 +1913,6 @@ void llama_kv_cache::get_prev_tokens(const llama_ubatch & ubatch, uint32_t n, st
     }
 }
 
-llama_token llama_kv_cache::seq_pos_tok_le(llama_seq_id seq_id, llama_pos p) const {
-    if (!has_cell_ext() || seq_id < 0 || (size_t) seq_id >= seq_to_stream.size() || p < 0) {
-        return LLAMA_TOKEN_NULL;
-    }
-
-    return v_cells[seq_to_stream[seq_id]].seq_pos_tok_le(seq_id, p);
-}
-
 size_t llama_kv_cache::total_size() const {
     size_t size = 0;
 
